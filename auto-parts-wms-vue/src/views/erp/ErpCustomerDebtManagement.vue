@@ -1,0 +1,71 @@
+<template>
+  <div class="page-shell">
+    <div class="page-header">
+      <h2 class="page-title">{{ $t('page.erpCustomerDebtManagement') }}</h2>
+      <div class="table-toolbar">
+        <div class="table-filters">
+          <el-input
+            v-model="searchQuery"
+            :placeholder="$t('field.customer')"
+            class="table-search"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-body">
+        <el-table :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')">
+          <el-table-column type="index" :label="$t('table.index')" width="70" />
+          <el-table-column prop="customerName" :label="$t('field.customer')" min-width="180" />
+          <el-table-column prop="totalDebt" :label="$t('field.customerDebtTotal')" min-width="160">
+            <template #default="{ row }">
+              {{ formatAmount(row.totalDebt) }}
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from 'vue';
+import request from '@/utils/request';
+import { useApiError } from '@/composables/useApiError';
+
+const { notifyError } = useApiError();
+
+const tableData = ref<Array<{ customerId: number; customerName: string; totalDebt: number }>>([]);
+const searchQuery = ref('');
+
+const formatAmount = (value: number | string) => {
+  const num = Number(value || 0);
+  if (Number.isNaN(num)) return '0.00';
+  return num.toFixed(2);
+};
+
+const fetchData = async () => {
+  try {
+    const res: any = await request.get('/erp/finance/customer-debts', {
+      params: { keyword: searchQuery.value || undefined }
+    });
+    if (res.data.code === 200) {
+      tableData.value = res.data.data || [];
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const handleSearch = () => {
+  fetchData();
+};
+
+onMounted(() => {
+  fetchData();
+});
+</script>

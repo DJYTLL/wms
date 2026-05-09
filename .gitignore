@@ -1,0 +1,17 @@
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+.idea/
+.vscode/
+
+# Frontend build artifacts
+auto-parts-wms-vue/node_modules/
+auto-parts-wms-vue/dist/
+auto-parts-wms-vue/.eslintcache
+
+# Backend build artifacts
+wms-backend/target/
+
+# OS / logs
+*.log

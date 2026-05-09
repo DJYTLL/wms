@@ -1,0 +1,874 @@
+package com.example.wms.service.erp.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpPaymentAllocationRequest;
+import com.example.wms.dto.erp.ErpPaymentCreateRequest;
+import com.example.wms.dto.erp.ErpPaymentDetail;
+import com.example.wms.dto.erp.ErpPaymentPayableView;
+import com.example.wms.dto.erp.ErpPaymentView;
+import com.example.wms.entity.SystemConfig;
+import com.example.wms.entity.erp.ErpAccountsPayable;
+import com.example.wms.entity.erp.ErpSupplier;
+import com.example.wms.entity.erp.ErpPayment;
+import com.example.wms.entity.erp.ErpPaymentPayable;
+import com.example.wms.entity.erp.ErpPurchaseOrder;
+import com.example.wms.mapper.SystemConfigMapper;
+import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
+import com.example.wms.mapper.erp.ErpSupplierMapper;
+import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
+import com.example.wms.mapper.erp.ErpPaymentMapper;
+import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
+import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
+import com.example.wms.service.erp.ErpPaymentService;
+import com.example.wms.tenant.TenantContext;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+// ERP付款单服务实现
+@Service
+public class ErpPaymentServiceImpl implements ErpPaymentService {
+    private static final String PAYMENT_ORDER_TYPE = "PAYMENT";
+    private static final String STATUS_DRAFT = "DRAFT";
+    private static final String STATUS_APPROVED = "APPROVED";
+    private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
+    private final ErpPaymentMapper erpPaymentMapper;
+    private final ErpPaymentPayableMapper erpPaymentPayableMapper;
+    private final ErpSupplierMapper erpSupplierMapper;
+    private final ErpAccountsPayableMapper erpAccountsPayableMapper;
+    private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
+    private final ErpOrderSequenceMapper erpOrderSequenceMapper;
+    private final SystemConfigMapper systemConfigMapper;
+
+    public ErpPaymentServiceImpl(ErpPaymentMapper erpPaymentMapper,
+                                 ErpPaymentPayableMapper erpPaymentPayableMapper,
+                                 ErpSupplierMapper erpSupplierMapper,
+                                 ErpAccountsPayableMapper erpAccountsPayableMapper,
+                                 ErpPurchaseOrderMapper erpPurchaseOrderMapper,
+                                 ErpOrderSequenceMapper erpOrderSequenceMapper,
+                                 SystemConfigMapper systemConfigMapper) {
+        this.erpPaymentMapper = erpPaymentMapper;
+        this.erpPaymentPayableMapper = erpPaymentPayableMapper;
+        this.erpSupplierMapper = erpSupplierMapper;
+        this.erpAccountsPayableMapper = erpAccountsPayableMapper;
+        this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
+        this.erpOrderSequenceMapper = erpOrderSequenceMapper;
+        this.systemConfigMapper = systemConfigMapper;
+    }
+
+    @Override
+    public List<ErpPaymentView> listAll(String keyword, String status, Long supplierId, Long payableId, Instant startAt, Instant endAt) {
+        QueryWrapper<ErpPayment> wrapper = baseWrapper(keyword, status, supplierId, payableId, startAt, endAt);
+        wrapper.orderByDesc("created_at");
+        List<ErpPayment> items = erpPaymentMapper.selectList(wrapper);
+        return mapViews(items);
+    }
+
+    @Override
+    public PageResponse<ErpPaymentView> page(long page, long size, String keyword, String status, Long supplierId, Long payableId, Instant startAt, Instant endAt) {
+        Page<ErpPayment> pageReq = Page.of(page, size);
+        QueryWrapper<ErpPayment> wrapper = baseWrapper(keyword, status, supplierId, payableId, startAt, endAt);
+        wrapper.orderByDesc("created_at");
+        Page<ErpPayment> result = erpPaymentMapper.selectPage(pageReq, wrapper);
+        List<ErpPaymentView> views = mapViews(result.getRecords());
+        return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), views);
+    }
+
+    @Override
+    public ErpPaymentDetail getDetail(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPayment receipt = erpPaymentMapper.selectOne(new QueryWrapper<ErpPayment>()
+            .eq("tenant_id", tenantId)
+            .eq("id", id));
+        if (receipt == null) {
+            throw new IllegalArgumentException("付款单不存在");
+        }
+        return buildDetail(tenantId, receipt);
+    }
+
+    @Override
+    public String nextPaymentNo() {
+        Long tenantId = TenantContext.requireTenantId();
+        return generatePaymentNo(tenantId);
+    }
+
+    @Override
+    @Transactional
+    public ErpPaymentDetail create(ErpPaymentCreateRequest request) {
+        Long tenantId = TenantContext.requireTenantId();
+        BigDecimal amount = request.amount() == null ? BigDecimal.ZERO : request.amount();
+        BigDecimal discountAmount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
+        if (amount.compareTo(BigDecimal.ZERO) < 0 || discountAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("金额不能小于0");
+        }
+
+        List<Long> payableIds = new ArrayList<>();
+        if (request.payableIds() != null) {
+            for (Long id : request.payableIds()) {
+                if (id != null) {
+                    payableIds.add(id);
+                }
+            }
+        }
+        if (payableIds.isEmpty() && request.payableId() != null) {
+            payableIds.add(request.payableId());
+        }
+        if (payableIds.isEmpty() && request.allocations() != null) {
+            for (var alloc : request.allocations()) {
+                if (alloc != null && alloc.payableId() != null) {
+                    payableIds.add(alloc.payableId());
+                }
+            }
+        }
+        if (payableIds.isEmpty()) {
+            throw new IllegalArgumentException("请选择应付单");
+        }
+
+        List<ErpAccountsPayable> payables = erpAccountsPayableMapper.selectList(new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .in("id", payableIds));
+        if (payables.size() != payableIds.size()) {
+            throw new IllegalArgumentException("应付单不存在");
+        }
+        for (ErpAccountsPayable payable : payables) {
+            if ("RED_FLUSHED".equals(payable.getStatus())) {
+                throw new IllegalArgumentException("红冲应付单不可付款");
+            }
+            BigDecimal totalAmount = payable.getTotalAmount() == null ? BigDecimal.ZERO : payable.getTotalAmount();
+            if (totalAmount.compareTo(BigDecimal.ZERO) == 0) {
+                throw new IllegalArgumentException("金额为0的应付单不可付款");
+            }
+        }
+
+        Long supplierId = request.supplierId();
+        Long purchaseOrderId = request.purchaseOrderId();
+        Long firstPayableId = payables.get(0).getId();
+        Long resolvedSupplierId = payables.get(0).getSupplierId();
+        boolean samePurchaseOrder = true;
+        Long resolvedPurchaseOrderId = payables.get(0).getPurchaseOrderId();
+        for (ErpAccountsPayable payable : payables) {
+            if (!Objects.equals(payable.getSupplierId(), resolvedSupplierId)) {
+                throw new IllegalArgumentException("应付单供应商不一致");
+            }
+            if (!Objects.equals(payable.getPurchaseOrderId(), resolvedPurchaseOrderId)) {
+                samePurchaseOrder = false;
+            }
+        }
+        if (supplierId == null) {
+            supplierId = resolvedSupplierId;
+        }
+        if (!Objects.equals(supplierId, resolvedSupplierId)) {
+            throw new IllegalArgumentException("供应商与应付单不一致");
+        }
+        if (purchaseOrderId == null && samePurchaseOrder) {
+            purchaseOrderId = resolvedPurchaseOrderId;
+        }
+        if (supplierId == null) {
+            throw new IllegalArgumentException("请选择供应商");
+        }
+
+        List<ErpPaymentPayable> allocations = null;
+        if (request.allocations() != null && !request.allocations().isEmpty()) {
+            allocations = buildAllocationsFromRequest(tenantId, payables, request.allocations());
+            BigDecimal sumAmount = allocations.stream()
+                .map(ErpPaymentPayable::getAllocatedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal sumDiscount = allocations.stream()
+                .map(ErpPaymentPayable::getAllocatedDiscount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            amount = sumAmount;
+            discountAmount = sumDiscount;
+        }
+        BigDecimal totalAllocate = amount.add(discountAmount);
+        if (totalAllocate.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("付款金额或优惠金额必须大于0");
+        }
+
+        ErpPayment receipt = new ErpPayment();
+        receipt.setTenantId(tenantId);
+        receipt.setPayableId(firstPayableId);
+        receipt.setPurchaseOrderId(purchaseOrderId);
+        receipt.setPaymentNo(resolvePaymentNo(tenantId, request.paymentNo()));
+        receipt.setSupplierId(supplierId);
+        receipt.setAmount(amount);
+        receipt.setDiscountAmount(discountAmount);
+        receipt.setSettlementMethod(request.settlementMethod());
+        receipt.setPaymentMethodCode(request.paymentMethodCode());
+        receipt.setStatus(STATUS_DRAFT);
+        receipt.setPaidAt(parsePaidAt(request.paidAt()));
+        receipt.setRemark(request.remark());
+        receipt.setCreatedAt(Instant.now());
+        receipt.setUpdatedAt(Instant.now());
+        erpPaymentMapper.insert(receipt);
+
+        if (allocations == null) {
+            allocations = buildAllocations(tenantId, receipt.getId(), payables, amount, discountAmount);
+        } else {
+            for (ErpPaymentPayable allocation : allocations) {
+                allocation.setPaymentId(receipt.getId());
+                allocation.setTenantId(tenantId);
+                allocation.setCreatedAt(Instant.now());
+            }
+        }
+        for (ErpPaymentPayable allocation : allocations) {
+            erpPaymentPayableMapper.insert(allocation);
+        }
+
+        // 草稿不影响应付金额，审核时更新
+
+        return buildDetail(tenantId, receipt);
+    }
+
+    @Override
+    @Transactional
+    public ErpPaymentDetail update(Long id, ErpPaymentCreateRequest request) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPayment receipt = loadPayment(tenantId, id);
+        if (!STATUS_DRAFT.equals(receipt.getStatus())) {
+            throw new IllegalArgumentException("仅草稿状态可修改");
+        }
+
+        BigDecimal amount = request.amount() == null ? BigDecimal.ZERO : request.amount();
+        BigDecimal discountAmount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
+        if (amount.compareTo(BigDecimal.ZERO) < 0 || discountAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("金额不能小于0");
+        }
+
+        List<Long> payableIds = new ArrayList<>();
+        if (request.payableIds() != null) {
+            for (Long rid : request.payableIds()) {
+                if (rid != null) {
+                    payableIds.add(rid);
+                }
+            }
+        }
+        if (payableIds.isEmpty() && request.payableId() != null) {
+            payableIds.add(request.payableId());
+        }
+        if (payableIds.isEmpty() && request.allocations() != null) {
+            for (var alloc : request.allocations()) {
+                if (alloc != null && alloc.payableId() != null) {
+                    payableIds.add(alloc.payableId());
+                }
+            }
+        }
+        if (payableIds.isEmpty()) {
+            throw new IllegalArgumentException("请选择应付单");
+        }
+
+        List<ErpAccountsPayable> payables = erpAccountsPayableMapper.selectList(new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .in("id", payableIds));
+        if (payables.size() != payableIds.size()) {
+            throw new IllegalArgumentException("应付单不存在");
+        }
+        for (ErpAccountsPayable payable : payables) {
+            if ("RED_FLUSHED".equals(payable.getStatus())) {
+                throw new IllegalArgumentException("红冲应付单不可付款");
+            }
+            BigDecimal totalAmount = payable.getTotalAmount() == null ? BigDecimal.ZERO : payable.getTotalAmount();
+            if (totalAmount.compareTo(BigDecimal.ZERO) == 0) {
+                throw new IllegalArgumentException("金额为0的应付单不可付款");
+            }
+        }
+
+        Long supplierId = request.supplierId();
+        Long purchaseOrderId = request.purchaseOrderId();
+        Long firstPayableId = payables.get(0).getId();
+        Long resolvedSupplierId = payables.get(0).getSupplierId();
+        boolean samePurchaseOrder = true;
+        Long resolvedPurchaseOrderId = payables.get(0).getPurchaseOrderId();
+        for (ErpAccountsPayable payable : payables) {
+            if (!Objects.equals(payable.getSupplierId(), resolvedSupplierId)) {
+                throw new IllegalArgumentException("应付单供应商不一致");
+            }
+            if (!Objects.equals(payable.getPurchaseOrderId(), resolvedPurchaseOrderId)) {
+                samePurchaseOrder = false;
+            }
+        }
+        if (supplierId == null) {
+            supplierId = resolvedSupplierId;
+        }
+        if (!Objects.equals(supplierId, resolvedSupplierId)) {
+            throw new IllegalArgumentException("供应商与应付单不一致");
+        }
+        if (purchaseOrderId == null && samePurchaseOrder) {
+            purchaseOrderId = resolvedPurchaseOrderId;
+        }
+        if (supplierId == null) {
+            throw new IllegalArgumentException("请选择供应商");
+        }
+
+        List<ErpPaymentPayable> allocations = null;
+        if (request.allocations() != null && !request.allocations().isEmpty()) {
+            allocations = buildAllocationsFromRequest(tenantId, payables, request.allocations());
+            BigDecimal sumAmount = allocations.stream()
+                .map(ErpPaymentPayable::getAllocatedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal sumDiscount = allocations.stream()
+                .map(ErpPaymentPayable::getAllocatedDiscount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            amount = sumAmount;
+            discountAmount = sumDiscount;
+        }
+        BigDecimal totalAllocate = amount.add(discountAmount);
+        if (totalAllocate.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("付款金额或优惠金额必须大于0");
+        }
+
+        receipt.setPayableId(firstPayableId);
+        receipt.setPurchaseOrderId(purchaseOrderId);
+        receipt.setSupplierId(supplierId);
+        receipt.setAmount(amount);
+        receipt.setDiscountAmount(discountAmount);
+        receipt.setSettlementMethod(request.settlementMethod());
+        receipt.setPaymentMethodCode(request.paymentMethodCode());
+        receipt.setPaidAt(parsePaidAt(request.paidAt()));
+        receipt.setRemark(request.remark());
+        receipt.setUpdatedAt(Instant.now());
+        erpPaymentMapper.updateById(receipt);
+
+        erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
+            .eq("tenant_id", tenantId)
+            .eq("payment_id", receipt.getId()));
+        if (allocations == null) {
+            allocations = buildAllocations(tenantId, receipt.getId(), payables, amount, discountAmount);
+        } else {
+            for (ErpPaymentPayable allocation : allocations) {
+                allocation.setPaymentId(receipt.getId());
+                allocation.setTenantId(tenantId);
+                allocation.setCreatedAt(Instant.now());
+            }
+        }
+        for (ErpPaymentPayable allocation : allocations) {
+            erpPaymentPayableMapper.insert(allocation);
+        }
+
+        return buildDetail(tenantId, receipt);
+    }
+
+    private QueryWrapper<ErpPayment> baseWrapper(String keyword, String status, Long supplierId, Long payableId, Instant startAt, Instant endAt) {
+        QueryWrapper<ErpPayment> wrapper = new QueryWrapper<ErpPayment>()
+            .eq("tenant_id", TenantContext.requireTenantId());
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.like("payment_no", keyword.trim());
+        }
+        if (status != null && !status.isBlank()) {
+            wrapper.eq("status", status.trim());
+        }
+        if (supplierId != null) {
+            wrapper.eq("supplier_id", supplierId);
+        }
+        if (payableId != null) {
+            wrapper.eq("payable_id", payableId);
+        }
+        if (startAt != null) {
+            wrapper.ge("created_at", startAt);
+        }
+        if (endAt != null) {
+            wrapper.le("created_at", endAt);
+        }
+        wrapper.ge("amount", BigDecimal.ZERO);
+        return wrapper;
+    }
+
+    private List<ErpPaymentView> mapViews(List<ErpPayment> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> supplierIds = items.stream()
+            .map(ErpPayment::getSupplierId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Map<Long, String> supplierNameMap = new HashMap<>();
+        if (!supplierIds.isEmpty()) {
+            List<ErpSupplier> suppliers = erpSupplierMapper.selectBatchIds(supplierIds);
+            for (ErpSupplier supplier : suppliers) {
+                supplierNameMap.put(supplier.getId(), supplier.getName());
+            }
+        }
+        return items.stream()
+            .map(item -> new ErpPaymentView(
+                item.getId(),
+                item.getPaymentNo(),
+                item.getSupplierId(),
+                supplierNameMap.getOrDefault(item.getSupplierId(), "-"),
+                item.getPayableId(),
+                item.getAmount(),
+                item.getDiscountAmount(),
+                item.getStatus(),
+                item.getCreatedAt(),
+                item.getRemark()
+            ))
+            .toList();
+    }
+
+    private String resolvePaymentNo(Long tenantId, String provided) {
+        if (provided == null || provided.isBlank()) {
+            return generatePaymentNo(tenantId);
+        }
+        String trimmed = provided.trim();
+        ErpPayment existing = erpPaymentMapper.selectOne(new QueryWrapper<ErpPayment>()
+            .eq("tenant_id", tenantId)
+            .eq("payment_no", trimmed));
+        if (existing != null) {
+            throw new IllegalArgumentException("付款单号已存在");
+        }
+        return trimmed;
+    }
+
+    private String generatePaymentNo(Long tenantId) {
+        String prefix = readConfig("erp.order.no.payment.prefix", "PY");
+        String dateFormat = readConfig("erp.order.no.date-format", "yyyyMMdd");
+        int seqLength = readIntConfig("erp.order.no.seq-length", 4);
+        String dateKey = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(dateFormat));
+        erpOrderSequenceMapper.insertIgnore(tenantId, PAYMENT_ORDER_TYPE, dateKey);
+        Long seq = erpOrderSequenceMapper.incrementAndGet(tenantId, PAYMENT_ORDER_TYPE, dateKey);
+        String seqStr = String.format("%0" + seqLength + "d", seq == null ? 1 : seq);
+        return prefix + dateKey + seqStr;
+    }
+
+    private String readConfig(String key, String fallback) {
+        SystemConfig config = systemConfigMapper.findByKey(key);
+        if (config == null || config.getConfigValue() == null || config.getConfigValue().isBlank()) {
+            return fallback;
+        }
+        return config.getConfigValue().trim();
+    }
+
+    private int readIntConfig(String key, int fallback) {
+        String value = readConfig(key, String.valueOf(fallback));
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
+    }
+
+    private Instant parsePaidAt(String value) {
+        if (value == null || value.isBlank()) {
+            return Instant.now();
+        }
+        String trimmed = value.trim();
+        if (trimmed.matches("^\\d+$")) {
+            return Instant.ofEpochMilli(Long.parseLong(trimmed));
+        }
+        if (trimmed.contains("T")) {
+            return Instant.parse(trimmed);
+        }
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        return LocalDateTime.parse(trimmed, formatter).atZone(ZoneId.systemDefault()).toInstant();
+    }
+
+    @Override
+    @Transactional
+    public ErpPaymentDetail approve(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPayment receipt = loadPayment(tenantId, id);
+        if (!STATUS_DRAFT.equals(receipt.getStatus())) {
+            throw new IllegalArgumentException("仅草稿状态可审核");
+        }
+        receipt.setStatus(STATUS_APPROVED);
+        receipt.setUpdatedAt(Instant.now());
+        erpPaymentMapper.updateById(receipt);
+
+        List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, receipt.getId());
+        if (allocations != null && !allocations.isEmpty()) {
+            for (ErpPaymentPayable allocation : allocations) {
+                applyPayablePaidAmount(
+                    tenantId,
+                    allocation.getPayableId(),
+                    allocation.getAllocatedAmount(),
+                    allocation.getAllocatedDiscount()
+                );
+            }
+        } else {
+            BigDecimal amountDelta = receipt.getAmount() == null ? BigDecimal.ZERO : receipt.getAmount();
+            BigDecimal discountDelta = receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount();
+            applyPayablePaidAmount(tenantId, receipt.getPayableId(), amountDelta, discountDelta);
+        }
+        return buildDetail(tenantId, receipt);
+    }
+
+    @Override
+    @Transactional
+    public ErpPaymentDetail redFlush(Long id, String reason) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPayment receipt = loadPayment(tenantId, id);
+        if (!STATUS_APPROVED.equals(receipt.getStatus())) {
+            throw new IllegalArgumentException("仅已审核状态可红冲");
+        }
+        String reasonText = reason == null ? "" : reason.trim();
+        if (reasonText.isEmpty()) {
+            throw new IllegalArgumentException("请填写红冲原因");
+        }
+        receipt.setStatus(STATUS_RED_FLUSHED);
+        String originRemark = receipt.getRemark();
+        if (originRemark == null || originRemark.isBlank()) {
+            receipt.setRemark("红冲原因：" + reasonText);
+        } else {
+            receipt.setRemark(originRemark + " | 红冲原因：" + reasonText);
+        }
+        receipt.setUpdatedAt(Instant.now());
+        erpPaymentMapper.updateById(receipt);
+
+        ErpPayment redPayment = new ErpPayment();
+        redPayment.setTenantId(tenantId);
+        redPayment.setPayableId(receipt.getPayableId());
+        redPayment.setPurchaseOrderId(receipt.getPurchaseOrderId());
+        redPayment.setPaymentNo(generatePaymentNo(tenantId));
+        redPayment.setSupplierId(receipt.getSupplierId());
+        redPayment.setAmount(receipt.getAmount().negate());
+        redPayment.setDiscountAmount(receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount().negate());
+        redPayment.setSettlementMethod(receipt.getSettlementMethod());
+        redPayment.setPaymentMethodCode(receipt.getPaymentMethodCode());
+        redPayment.setStatus(STATUS_APPROVED);
+        redPayment.setPaidAt(Instant.now());
+        redPayment.setRemark("红冲付款单：" + reasonText);
+        redPayment.setCreatedAt(Instant.now());
+        redPayment.setUpdatedAt(Instant.now());
+        erpPaymentMapper.insert(redPayment);
+
+        List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, receipt.getId());
+        if (allocations != null && !allocations.isEmpty()) {
+            for (ErpPaymentPayable allocation : allocations) {
+                ErpPaymentPayable redAllocation = new ErpPaymentPayable();
+                redAllocation.setTenantId(tenantId);
+                redAllocation.setPaymentId(redPayment.getId());
+                redAllocation.setPayableId(allocation.getPayableId());
+                redAllocation.setAllocatedAmount(allocation.getAllocatedAmount().negate());
+                redAllocation.setAllocatedDiscount(allocation.getAllocatedDiscount().negate());
+                redAllocation.setAllocatedTotal(allocation.getAllocatedTotal().negate());
+                redAllocation.setCreatedAt(Instant.now());
+                erpPaymentPayableMapper.insert(redAllocation);
+                applyPayablePaidAmount(
+                    tenantId,
+                    allocation.getPayableId(),
+                    allocation.getAllocatedAmount().negate(),
+                    allocation.getAllocatedDiscount().negate()
+                );
+            }
+        } else {
+            BigDecimal amountDelta = receipt.getAmount() == null ? BigDecimal.ZERO : receipt.getAmount();
+            BigDecimal discountDelta = receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount();
+            applyPayablePaidAmount(tenantId, receipt.getPayableId(), amountDelta.negate(), discountDelta.negate());
+        }
+        return buildDetail(tenantId, receipt);
+    }
+
+    private ErpPayment loadPayment(Long tenantId, Long id) {
+        ErpPayment receipt = erpPaymentMapper.selectOne(new QueryWrapper<ErpPayment>()
+            .eq("tenant_id", tenantId)
+            .eq("id", id));
+        if (receipt == null) {
+            throw new IllegalArgumentException("付款单不存在");
+        }
+        return receipt;
+    }
+
+    private ErpPaymentDetail buildDetail(Long tenantId, ErpPayment receipt) {
+        String supplierName = "-";
+        if (receipt.getSupplierId() != null) {
+            ErpSupplier supplier = erpSupplierMapper.selectById(receipt.getSupplierId());
+            if (supplier != null) {
+                supplierName = supplier.getName();
+            }
+        }
+        String orderNo = null;
+        if (receipt.getPurchaseOrderId() != null) {
+            ErpPurchaseOrder order = erpPurchaseOrderMapper.selectOne(new QueryWrapper<ErpPurchaseOrder>()
+                .eq("tenant_id", tenantId)
+                .eq("id", receipt.getPurchaseOrderId()));
+            if (order != null) {
+                orderNo = order.getOrderNo();
+            }
+        }
+        List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, receipt.getId());
+        List<ErpAccountsPayable> payables = loadPayables(tenantId, receipt, allocations);
+        List<ErpPaymentPayableView> payableViews = buildPayableViews(payables, allocations);
+        String payableNo = payableViews.isEmpty() ? null : payableViews.get(0).orderNo();
+        return new ErpPaymentDetail(receipt, supplierName, orderNo, payableNo, payableViews);
+    }
+
+    private List<ErpAccountsPayable> loadPayables(Long tenantId,
+                                                        ErpPayment receipt,
+                                                        List<ErpPaymentPayable> allocations) {
+        List<Long> ids = new ArrayList<>();
+        if (allocations != null && !allocations.isEmpty()) {
+            for (ErpPaymentPayable allocation : allocations) {
+                if (allocation.getPayableId() != null) {
+                    ids.add(allocation.getPayableId());
+                }
+            }
+        }
+        if (ids.isEmpty() && receipt.getPayableId() != null) {
+            ids.add(receipt.getPayableId());
+        }
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return erpAccountsPayableMapper.selectList(new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .in("id", ids));
+    }
+
+    private List<ErpPaymentPayableView> buildPayableViews(List<ErpAccountsPayable> payables,
+                                                                List<ErpPaymentPayable> allocations) {
+        if (payables == null || payables.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, ErpAccountsPayable> payableMap = payables.stream()
+            .collect(Collectors.toMap(ErpAccountsPayable::getId, item -> item));
+        List<ErpPaymentPayableView> views = new ArrayList<>();
+        if (allocations != null && !allocations.isEmpty()) {
+            for (ErpPaymentPayable allocation : allocations) {
+                Long payableId = allocation.getPayableId();
+                ErpAccountsPayable payable = payableMap.get(payableId);
+                String orderNo = payable == null ? null : payable.getOrderNo();
+                views.add(new ErpPaymentPayableView(
+                    payableId,
+                    orderNo,
+                    allocation.getAllocatedAmount(),
+                    allocation.getAllocatedDiscount(),
+                    allocation.getAllocatedTotal()
+                ));
+            }
+            return views;
+        }
+        for (ErpAccountsPayable payable : payables) {
+            views.add(new ErpPaymentPayableView(
+                payable.getId(),
+                payable.getOrderNo(),
+                null,
+                null,
+                null
+            ));
+        }
+        return views;
+    }
+
+    private void applyPayablePaidAmount(Long tenantId, Long payableId, BigDecimal amountDelta, BigDecimal discountDelta) {
+        if (payableId == null || amountDelta == null || discountDelta == null) {
+            return;
+        }
+        ErpAccountsPayable payable = erpAccountsPayableMapper.selectOne(new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .eq("id", payableId));
+        if (payable == null) {
+            return;
+        }
+        BigDecimal paid = payable.getPaidAmount() == null ? BigDecimal.ZERO : payable.getPaidAmount();
+        BigDecimal discount = payable.getDiscountAmount() == null ? BigDecimal.ZERO : payable.getDiscountAmount();
+        BigDecimal total = payable.getTotalAmount() == null ? BigDecimal.ZERO : payable.getTotalAmount();
+        BigDecimal newPaid = paid.add(amountDelta);
+        BigDecimal newDiscount = discount.add(discountDelta);
+        if (newPaid.compareTo(BigDecimal.ZERO) < 0) {
+            newPaid = BigDecimal.ZERO;
+        }
+        if (newDiscount.compareTo(BigDecimal.ZERO) < 0) {
+            newDiscount = BigDecimal.ZERO;
+        }
+        BigDecimal totalApplied = newPaid.add(newDiscount);
+        if (totalApplied.compareTo(total) > 0) {
+            BigDecimal overflow = totalApplied.subtract(total);
+            if (newDiscount.compareTo(overflow) >= 0) {
+                newDiscount = newDiscount.subtract(overflow);
+            } else {
+                newPaid = newPaid.subtract(overflow.subtract(newDiscount));
+                if (newPaid.compareTo(BigDecimal.ZERO) < 0) {
+                    newPaid = BigDecimal.ZERO;
+                }
+                newDiscount = BigDecimal.ZERO;
+            }
+        }
+        BigDecimal unpaid = total.subtract(newPaid.add(newDiscount));
+        if (unpaid.compareTo(BigDecimal.ZERO) < 0) {
+            unpaid = BigDecimal.ZERO;
+        }
+        payable.setPaidAmount(newPaid);
+        payable.setDiscountAmount(newDiscount);
+        payable.setUnpaidAmount(unpaid);
+        if (!"RED_FLUSHED".equals(payable.getStatus())) {
+            payable.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? "SETTLED" : "OPEN");
+        }
+        payable.setUpdatedAt(Instant.now());
+        erpAccountsPayableMapper.updateById(payable);
+    }
+
+    private List<ErpPaymentPayable> buildAllocations(Long tenantId,
+                                                        Long receiptId,
+                                                        List<ErpAccountsPayable> payables,
+                                                        BigDecimal amount,
+                                                        BigDecimal discountAmount) {
+        int count = payables.size();
+        BigDecimal totalAllocate = amount.add(discountAmount);
+        List<BigDecimal> weights = new ArrayList<>(count);
+        List<BigDecimal> capacities = new ArrayList<>(count);
+        BigDecimal totalUnpaid = BigDecimal.ZERO;
+        for (ErpAccountsPayable payable : payables) {
+            BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
+            weights.add(unpaid);
+            capacities.add(unpaid);
+            totalUnpaid = totalUnpaid.add(unpaid);
+        }
+
+        if (totalUnpaid.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("未付金额为0，无法付款");
+        }
+        if (totalAllocate.compareTo(totalUnpaid) > 0) {
+            throw new IllegalArgumentException("付款金额不能大于未付金额");
+        }
+
+        List<BigDecimal> totalAllocations = distributeByWeight(totalAllocate, weights, capacities);
+        List<BigDecimal> amountAllocations = distributeByWeight(amount, totalAllocations, totalAllocations);
+        List<BigDecimal> discountAllocations = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            discountAllocations.add(totalAllocations.get(i).subtract(amountAllocations.get(i)));
+        }
+        List<ErpPaymentPayable> allocations = new ArrayList<>();
+        for (int i = 0; i < payables.size(); i++) {
+            ErpAccountsPayable payable = payables.get(i);
+            BigDecimal allocAmount = amountAllocations.get(i);
+            BigDecimal allocDiscount = discountAllocations.get(i);
+            BigDecimal allocTotal = totalAllocations.get(i);
+            BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
+            if (allocTotal.compareTo(unpaid) > 0) {
+                throw new IllegalArgumentException("付款金额不能大于未付金额");
+            }
+            ErpPaymentPayable allocation = new ErpPaymentPayable();
+            allocation.setTenantId(tenantId);
+            allocation.setPaymentId(receiptId);
+            allocation.setPayableId(payable.getId());
+            allocation.setAllocatedAmount(allocAmount);
+            allocation.setAllocatedDiscount(allocDiscount);
+            allocation.setAllocatedTotal(allocTotal);
+            allocation.setCreatedAt(Instant.now());
+            allocations.add(allocation);
+        }
+        return allocations;
+    }
+
+    private List<ErpPaymentPayable> buildAllocationsFromRequest(Long tenantId,
+                                                                   List<ErpAccountsPayable> payables,
+                                                                   List<ErpPaymentAllocationRequest> allocationRequests) {
+        Map<Long, ErpPaymentAllocationRequest> allocationMap = new HashMap<>();
+        for (ErpPaymentAllocationRequest request : allocationRequests) {
+            if (request == null || request.payableId() == null) {
+                continue;
+            }
+            if (allocationMap.containsKey(request.payableId())) {
+                throw new IllegalArgumentException("应付单分摊重复");
+            }
+            allocationMap.put(request.payableId(), request);
+        }
+        if (allocationMap.isEmpty()) {
+            throw new IllegalArgumentException("请填写分摊金额");
+        }
+        List<ErpPaymentPayable> allocations = new ArrayList<>();
+        for (ErpAccountsPayable payable : payables) {
+            ErpPaymentAllocationRequest request = allocationMap.get(payable.getId());
+            if (request == null) {
+                throw new IllegalArgumentException("应付单分摊不完整");
+            }
+            BigDecimal amount = request.amount() == null ? BigDecimal.ZERO : request.amount();
+            BigDecimal discount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
+            if (amount.compareTo(BigDecimal.ZERO) < 0 || discount.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("分摊金额不能小于0");
+            }
+            BigDecimal allocTotal = amount.add(discount);
+            BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
+            if (allocTotal.compareTo(unpaid) > 0) {
+                throw new IllegalArgumentException("分摊金额不能大于未付金额");
+            }
+            ErpPaymentPayable allocation = new ErpPaymentPayable();
+            allocation.setPayableId(payable.getId());
+            allocation.setAllocatedAmount(amount);
+            allocation.setAllocatedDiscount(discount);
+            allocation.setAllocatedTotal(allocTotal);
+            allocations.add(allocation);
+        }
+        return allocations;
+    }
+
+    private List<BigDecimal> distributeByWeight(BigDecimal total,
+                                                List<BigDecimal> weights,
+                                                List<BigDecimal> capacities) {
+        int count = weights.size();
+        List<BigDecimal> results = new ArrayList<>(count);
+        if (total == null || total.compareTo(BigDecimal.ZERO) == 0) {
+            for (int i = 0; i < count; i++) {
+                results.add(BigDecimal.ZERO.setScale(2, RoundingMode.DOWN));
+            }
+            return results;
+        }
+        BigDecimal sumWeight = BigDecimal.ZERO;
+        for (BigDecimal weight : weights) {
+            if (weight != null && weight.compareTo(BigDecimal.ZERO) > 0) {
+                sumWeight = sumWeight.add(weight);
+            }
+        }
+        if (sumWeight.compareTo(BigDecimal.ZERO) <= 0) {
+            BigDecimal per = total.divide(BigDecimal.valueOf(count), 2, RoundingMode.DOWN);
+            for (int i = 0; i < count; i++) {
+                results.add(per);
+            }
+        } else {
+            for (BigDecimal weight : weights) {
+                if (weight == null || weight.compareTo(BigDecimal.ZERO) <= 0) {
+                    results.add(BigDecimal.ZERO.setScale(2, RoundingMode.DOWN));
+                    continue;
+                }
+                BigDecimal alloc = total.multiply(weight)
+                    .divide(sumWeight, 2, RoundingMode.DOWN);
+                results.add(alloc);
+            }
+        }
+
+        BigDecimal allocated = BigDecimal.ZERO;
+        for (BigDecimal value : results) {
+            allocated = allocated.add(value);
+        }
+        BigDecimal remainder = total.subtract(allocated);
+        BigDecimal cent = new BigDecimal("0.01");
+        int guard = 0;
+        while (remainder.compareTo(cent) >= 0 && guard < 10000) {
+            boolean assigned = false;
+            for (int i = 0; i < count && remainder.compareTo(cent) >= 0; i++) {
+                BigDecimal capacity = capacities == null ? null : capacities.get(i);
+                if (capacity != null) {
+                    BigDecimal remainCap = capacity.subtract(results.get(i));
+                    if (remainCap.compareTo(cent) < 0) {
+                        continue;
+                    }
+                }
+                results.set(i, results.get(i).add(cent));
+                remainder = remainder.subtract(cent);
+                assigned = true;
+            }
+            if (!assigned) {
+                break;
+            }
+            guard++;
+        }
+        if (remainder.compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException("付款金额不能大于未付金额");
+        }
+        return results;
+    }
+}

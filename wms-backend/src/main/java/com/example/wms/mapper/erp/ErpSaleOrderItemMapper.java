@@ -1,0 +1,116 @@
+package com.example.wms.mapper.erp;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.example.wms.dto.erp.ErpSaleOrderHistoryItem;
+import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
+import com.example.wms.entity.erp.ErpSaleOrderItem;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
+
+// 销售单明细 Mapper（ERP进销存）
+@Mapper
+public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
+    // 查询订单明细
+    @Select("SELECT * FROM erp_sale_order_item WHERE tenant_id = #{tenantId} AND order_id = #{orderId} ORDER BY sort_no, id")
+    List<ErpSaleOrderItem> findByOrderId(@Param("tenantId") Long tenantId, @Param("orderId") Long orderId);
+
+    @Select("""
+        SELECT o.id AS orderId,
+               o.order_no AS orderNo,
+               o.created_at AS orderAt,
+               i.product_id AS productId,
+               i.qty AS qty,
+               i.price AS price
+        FROM erp_sale_order o
+        JOIN erp_sale_order_item i
+          ON i.order_id = o.id
+         AND i.tenant_id = o.tenant_id
+        WHERE o.tenant_id = #{tenantId}
+          AND o.customer_id = #{customerId}
+          AND i.product_id = #{productId}
+          AND o.status = 'APPROVED'
+        ORDER BY o.created_at DESC NULLS LAST, o.id DESC
+        LIMIT #{limit}
+        """)
+    List<ErpSaleOrderRecentItem> findRecentItems(@Param("tenantId") Long tenantId,
+                                                 @Param("customerId") Long customerId,
+                                                 @Param("productId") Long productId,
+                                                 @Param("limit") int limit);
+
+    @Select("""
+        <script>
+        SELECT COUNT(1)
+        FROM erp_sale_order o
+        JOIN erp_customer c
+          ON c.id = o.customer_id
+         AND c.tenant_id = o.tenant_id
+        JOIN erp_sale_order_item i
+          ON i.order_id = o.id
+         AND i.tenant_id = o.tenant_id
+        WHERE o.tenant_id = #{tenantId}
+          <if test='customerId != null'>AND o.customer_id = #{customerId}</if>
+          AND i.product_id = #{productId}
+          AND o.status = 'APPROVED'
+          <if test='keyword != null and keyword != \"\"'>
+            AND (
+              LOWER(c.name) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+              OR LOWER(o.order_no) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+            )
+          </if>
+          <if test='startAt != null'>AND o.created_at <![CDATA[>=]]> #{startAt}</if>
+          <if test='endAt != null'>AND o.created_at <![CDATA[<=]]> #{endAt}</if>
+        </script>
+        """)
+    long countProductHistory(@Param("tenantId") Long tenantId,
+                             @Param("customerId") Long customerId,
+                             @Param("productId") Long productId,
+                             @Param("keyword") String keyword,
+                             @Param("startAt") java.time.Instant startAt,
+                             @Param("endAt") java.time.Instant endAt);
+
+    @Select("""
+        <script>
+        SELECT o.id AS orderId,
+               o.order_no AS orderNo,
+               o.created_at AS orderAt,
+               i.product_id AS productId,
+               i.qty AS qty,
+               i.price AS price,
+               i.price_incl_tax AS priceInclTax,
+               o.customer_id AS customerId,
+               c.name AS customerName
+        FROM erp_sale_order o
+        JOIN erp_customer c
+          ON c.id = o.customer_id
+         AND c.tenant_id = o.tenant_id
+        JOIN erp_sale_order_item i
+          ON i.order_id = o.id
+         AND i.tenant_id = o.tenant_id
+        WHERE o.tenant_id = #{tenantId}
+          <if test='customerId != null'>AND o.customer_id = #{customerId}</if>
+          AND i.product_id = #{productId}
+          AND o.status = 'APPROVED'
+          <if test='keyword != null and keyword != \"\"'>
+            AND (
+              LOWER(c.name) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+              OR LOWER(o.order_no) LIKE CONCAT('%', LOWER(#{keyword}), '%')
+            )
+          </if>
+          <if test='startAt != null'>AND o.created_at <![CDATA[>=]]> #{startAt}</if>
+          <if test='endAt != null'>AND o.created_at <![CDATA[<=]]> #{endAt}</if>
+        ORDER BY o.created_at DESC NULLS LAST, o.id DESC
+        LIMIT #{size} OFFSET #{offset}
+        </script>
+        """)
+    List<ErpSaleOrderHistoryItem> findProductHistoryPage(@Param("tenantId") Long tenantId,
+                                                         @Param("customerId") Long customerId,
+                                                         @Param("productId") Long productId,
+                                                         @Param("keyword") String keyword,
+                                                         @Param("startAt") java.time.Instant startAt,
+                                                         @Param("endAt") java.time.Instant endAt,
+                                                         @Param("size") int size,
+                                                         @Param("offset") long offset);
+}

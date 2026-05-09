@@ -1,0 +1,23 @@
+package com.example.wms.dto.erp;
+
+import jakarta.validation.constraints.NotBlank;
+
+// 新增供应商请求（ERP进销存）
+public record ErpSupplierCreateRequest(
+    @NotBlank String code,
+    @NotBlank String name,
+    String shortName,
+    String contact,
+    String phone,
+    String mobile,
+    String email,
+    String address,
+    String taxNo,
+    String bankName,
+    String bankAccount,
+    String paymentTerms,
+    String contacts,
+    Boolean enabled,
+    String remark
+) {
+}

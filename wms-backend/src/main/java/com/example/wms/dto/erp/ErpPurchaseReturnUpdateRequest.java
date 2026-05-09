@@ -1,0 +1,21 @@
+package com.example.wms.dto.erp;
+
+import jakarta.validation.constraints.NotEmpty;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+// 更新采购退货请求（ERP进销存）
+public record ErpPurchaseReturnUpdateRequest(
+    String orderNo,
+    String orderAt,
+    String returnType,
+    Long supplierId,
+    Long purchaseOrderId,
+    String settlementMethod,
+    BigDecimal paidAmount,
+    BigDecimal discountAmount,
+    @NotEmpty List<ErpPurchaseReturnItemRequest> items,
+    String remark
+) {
+}
