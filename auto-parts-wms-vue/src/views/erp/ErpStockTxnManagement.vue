@@ -1,32 +1,34 @@
 ﻿<template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpStockTxnManagement') }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
-          <el-input
-            v-model="bizIdFilter"
-            :placeholder="$t('field.bizId')"
-            class="table-search"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
-          <el-input
-            v-model="bizTypeFilter"
-            :placeholder="$t('field.bizType')"
-            class="table-search"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
-          <FuzzyProductSelect
-            v-model="productFilter"
-            :options="productOptions"
-            :placeholder="$t('field.product')"
-            class="table-search"
-            @change="handleSearch"
-          />
+      <div class="page-title">{{ $t('page.erpStockTxnManagement') }}</div>
+      <div class="page-toolbar-card">
+        <div class="table-toolbar inventory-toolbar">
+          <div class="table-filters inventory-filters inventory-filters--stock-txn">
+            <el-input
+              v-model="bizIdFilter"
+              :placeholder="$t('field.bizId')"
+              class="inventory-field--wide"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <el-input
+              v-model="bizTypeFilter"
+              :placeholder="$t('field.bizType')"
+              class="inventory-field--wide"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <FuzzyProductSelect
+              v-model="productFilter"
+              :options="productOptions"
+              :placeholder="$t('field.product')"
+              class="inventory-field--wide"
+              @change="handleSearch"
+            />
+          </div>
         </div>
       </div>
     </div>

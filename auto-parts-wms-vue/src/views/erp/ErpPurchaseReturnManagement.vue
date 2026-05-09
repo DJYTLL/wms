@@ -498,20 +498,20 @@ watch(
 }
 
 :deep(.erp-toolbar__date-range) {
-  width: 336px;
+  width: 380px;
 }
 
 :deep(.table-date-range--compact) {
-  flex: 0 0 336px;
+  flex: 0 0 380px;
 }
 
 :deep(.table-date-range--compact.el-range-editor) {
-  width: 336px !important;
-  min-width: 336px !important;
+  width: 380px !important;
+  min-width: 380px !important;
 }
 
 :deep(.table-date-range--compact .el-range-input) {
-  width: 112px;
+  width: 132px;
 }
 
 .sale-approved-card .table-body {
@@ -537,7 +537,7 @@ watch(
 
 .table-filters {
   display: grid;
-  grid-template-columns: 220px 220px 336px;
+  grid-template-columns: 220px 220px 380px;
   align-items: center;
   justify-content: start;
   gap: 12px;
@@ -562,7 +562,7 @@ watch(
   }
 
   .table-filters {
-    grid-template-columns: 200px 200px 320px;
+    grid-template-columns: 200px 200px 360px;
   }
 
   .table-actions {
@@ -574,16 +574,16 @@ watch(
   }
 
   :deep(.erp-toolbar__date-range) {
-    width: 320px;
+    width: 360px;
   }
 
   :deep(.table-date-range--compact) {
-    flex-basis: 320px;
+    flex-basis: 360px;
   }
 
   :deep(.table-date-range--compact.el-range-editor) {
-    width: 320px !important;
-    min-width: 320px !important;
+    width: 360px !important;
+    min-width: 360px !important;
   }
 }
 

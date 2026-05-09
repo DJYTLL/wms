@@ -1,18 +1,19 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpAssembleOrderManagement') }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
+      <div class="page-title">{{ $t('page.erpAssembleOrderManagement') }}</div>
+      <div class="page-toolbar-card">
+        <div class="table-toolbar inventory-toolbar">
+          <div class="table-filters inventory-filters inventory-filters--assembly">
           <el-input
             v-model="searchQuery"
             :placeholder="$t('action.search')"
-            class="table-search"
+            class="inventory-field--wide"
             clearable
             @clear="handleSearch"
             @keyup.enter="handleSearch"
           />
-          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search" clearable @change="handleSearch">
+          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="inventory-field--narrow" clearable @change="handleSearch">
             <el-option :label="$t('filter.all')" value="" />
             <el-option :label="$t('status.draft')" value="DRAFT" />
             <el-option :label="$t('status.approved')" value="APPROVED" />
@@ -21,20 +22,23 @@
             v-model="dateRange"
             type="datetimerange"
             value-format="x"
-            format="YYYY-MM-DD HH:mm:ss"
+            format="YYYY-MM-DD HH:mm"
             :start-placeholder="$t('field.startTime')"
             :end-placeholder="$t('field.endTime')"
-            class="table-search table-date-range table-date-range--compact"
+            class="inventory-date-range"
             @change="handleSearch"
           />
+          </div>
+          <div class="table-actions inventory-actions">
+            <el-button
+              type="primary"
+              v-permission="'erp-assembly:add'"
+              @click="openCreatePage"
+            >
+              {{ $t('action.add') }}
+            </el-button>
+          </div>
         </div>
-        <el-button
-          type="primary"
-          v-permission="'erp-assembly:add'"
-          @click="openCreatePage"
-        >
-          {{ $t('action.add') }}
-        </el-button>
       </div>
     </div>
 

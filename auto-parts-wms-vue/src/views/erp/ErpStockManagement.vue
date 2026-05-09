@@ -1,19 +1,24 @@
 ﻿<template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpStockManagement') }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
-          <el-select v-model="productFilter" :placeholder="$t('field.product')" class="table-search" clearable @change="handleSearch">
-            <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
-          </el-select>
-          <el-select v-model="warehouseFilter" :placeholder="$t('field.warehouse')" class="table-search" clearable @change="handleSearch">
-            <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
-          </el-select>
-          <el-select v-model="locationFilter" :placeholder="$t('field.location')" class="table-search" clearable @change="handleSearch">
-            <el-option :label="$t('field.unassigned')" :value="-1" />
-            <el-option v-for="item in getLocationOptions(warehouseFilter || undefined)" :key="item.id" :label="item.name" :value="item.id" />
-          </el-select>
+      <div class="page-title">{{ $t('page.erpStockManagement') }}</div>
+      <div class="page-toolbar-card">
+        <div class="table-toolbar inventory-toolbar">
+          <div class="table-filters inventory-filters inventory-filters--stock">
+            <el-select v-model="productFilter" :placeholder="$t('field.product')" class="inventory-field--narrow" clearable @change="handleSearch">
+              <el-option :label="$t('filter.all')" :value="null" />
+              <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
+            </el-select>
+            <el-select v-model="warehouseFilter" :placeholder="$t('field.warehouse')" class="inventory-field--narrow" clearable @change="handleSearch">
+              <el-option :label="$t('filter.all')" :value="null" />
+              <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
+            </el-select>
+            <el-select v-model="locationFilter" :placeholder="$t('field.location')" class="inventory-field--narrow" clearable @change="handleSearch">
+              <el-option :label="$t('filter.all')" :value="null" />
+              <el-option :label="$t('field.unassigned')" :value="-1" />
+              <el-option v-for="item in getLocationOptions(warehouseFilter || undefined)" :key="item.id" :label="item.name" :value="item.id" />
+            </el-select>
+          </div>
         </div>
       </div>
     </div>

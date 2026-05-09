@@ -1,27 +1,31 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpCustomerManagement') }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
+      <div class="page-title">{{ $t('page.erpCustomerManagement') }}</div>
+      <div class="page-toolbar-card">
+        <div class="erp-basic-toolbar">
+          <div class="erp-basic-filters erp-basic-filters--3">
           <el-input
             v-model="searchQuery"
             :placeholder="$t('action.search')"
-            class="table-search"
+            class="table-search erp-basic-field--wide"
             clearable
             @clear="handleSearch"
             @keyup.enter="handleSearch"
           />
-          <el-select v-model="categoryFilter" :placeholder="$t('field.customerCategory')" class="table-search" clearable @change="handleSearch">
+          <el-select v-model="categoryFilter" :placeholder="$t('field.customerCategory')" class="table-search erp-basic-field--narrow" clearable @change="handleSearch">
             <el-option v-for="item in categoryOptions" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
-          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search" @change="handleSearch">
+          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search erp-basic-field--narrow" @change="handleSearch">
             <el-option :label="$t('filter.all')" value="all" />
             <el-option :label="$t('status.active')" value="enabled" />
             <el-option :label="$t('status.inactive')" value="disabled" />
           </el-select>
+          </div>
+          <div class="erp-basic-actions">
+            <el-button type="primary" v-permission="'erp-customer:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
+          </div>
         </div>
-        <el-button type="primary" v-permission="'erp-customer:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
       </div>
     </div>
 

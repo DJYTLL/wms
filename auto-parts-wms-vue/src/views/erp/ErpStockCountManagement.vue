@@ -1,26 +1,30 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ pageTitle }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
-          <el-input
-            v-model="searchQuery"
-            :placeholder="$t('action.search')"
-            class="table-search"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
-          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search" @change="handleSearch">
-            <el-option :label="$t('filter.all')" value="all" />
-            <el-option :label="$t('status.draft')" value="DRAFT" />
-            <el-option :label="$t('status.approved')" value="APPROVED" />
-            <el-option :label="$t('status.cancelled')" value="CANCELLED" />
-            <el-option :label="$t('status.redFlushed')" value="RED_FLUSHED" />
-          </el-select>
+      <div class="page-title">{{ pageTitle }}</div>
+      <div class="page-toolbar-card">
+        <div class="table-toolbar inventory-toolbar">
+          <div class="table-filters inventory-filters inventory-filters--count">
+            <el-input
+              v-model="searchQuery"
+              :placeholder="$t('action.search')"
+              class="inventory-field--wide"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="inventory-field--narrow" @change="handleSearch">
+              <el-option :label="$t('filter.all')" value="all" />
+              <el-option :label="$t('status.draft')" value="DRAFT" />
+              <el-option :label="$t('status.approved')" value="APPROVED" />
+              <el-option :label="$t('status.cancelled')" value="CANCELLED" />
+              <el-option :label="$t('status.redFlushed')" value="RED_FLUSHED" />
+            </el-select>
+          </div>
+          <div class="table-actions inventory-actions">
+            <el-button type="primary" v-permission="permAdd" @click="openAddModal">{{ $t('action.add') }}</el-button>
+          </div>
         </div>
-        <el-button type="primary" v-permission="permAdd" @click="openAddModal">{{ $t('action.add') }}</el-button>
       </div>
     </div>
 

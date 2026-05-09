@@ -1,50 +1,56 @@
 <template>
-  <div class="page-shell purchase-theme" :class="{ 'purchase-theme--paper': themeMode === 'paper' }">
+  <div class="page-shell page-shell--system purchase-theme" :class="{ 'purchase-theme--paper': themeMode === 'paper' }">
     <div class="page-header">
-      <h2 class="page-title">{{ pageTitle }}</h2>
-      <div class="table-toolbar">
-        <div v-if="!isReadOnly" class="theme-switch">
-          <span class="theme-switch__label">{{ $t('field.theme') }}</span>
-          <el-select v-model="themeMode" class="theme-switch__select">
-            <el-option :label="$t('theme.default')" value="default" />
-            <el-option :label="$t('theme.paper')" value="paper" />
-          </el-select>
+      <div class="page-title">{{ pageTitle }}</div>
+      <div class="page-toolbar-card purchase-form-toolbar">
+        <div class="table-toolbar purchase-form-toolbar__inner">
+          <div class="purchase-form-toolbar__meta">
+            <div v-if="!isReadOnly" class="theme-switch">
+              <span class="theme-switch__label">{{ $t('field.theme') }}</span>
+              <el-select v-model="themeMode" class="theme-switch__select">
+                <el-option :label="$t('theme.default')" value="default" />
+                <el-option :label="$t('theme.paper')" value="paper" />
+              </el-select>
+            </div>
+          </div>
+          <div class="table-actions purchase-form-toolbar__actions">
+            <el-button @click="handleBack">{{ $t('action.back') }}</el-button>
+            <el-button
+              v-if="canCopy"
+              type="primary"
+              @click="handleCopy"
+            >
+              {{ $t('action.copy') }}
+            </el-button>
+            <el-button
+              v-if="canPrint"
+              type="primary"
+              @click="handlePrint"
+            >
+              {{ $t('action.print') }}
+            </el-button>
+            <el-button
+              v-if="canRedFlush"
+              type="danger"
+              plain
+              class="action-button action-button--danger"
+              @click="handleRedFlush"
+            >
+              {{ $t('action.redFlush') }}
+            </el-button>
+            <el-button
+              v-if="canApprove"
+              type="success"
+              plain
+              class="action-button action-button--success"
+              @click="handleApprove"
+            >
+              {{ $t('action.approve') }}
+            </el-button>
+            <el-button v-if="!isReadOnly" @click="handleSave">{{ $t('action.save') }}</el-button>
+            <el-button v-if="!isReadOnly" type="primary" @click="handleSaveAndBack">{{ $t('action.saveAndBack') }}</el-button>
+          </div>
         </div>
-        <el-button @click="handleBack">{{ $t('action.back') }}</el-button>
-        <el-button
-          v-if="canCopy"
-          type="primary"
-          @click="handleCopy"
-        >
-          {{ $t('action.copy') }}
-        </el-button>
-        <el-button
-          v-if="canPrint"
-          type="primary"
-          @click="handlePrint"
-        >
-          {{ $t('action.print') }}
-        </el-button>
-        <el-tag
-          v-if="canRedFlush"
-          type="danger"
-          size="small"
-          class="action-tag action-tag--danger"
-          @click="handleRedFlush"
-        >
-          {{ $t('action.redFlush') }}
-        </el-tag>
-        <el-tag
-          v-if="canApprove"
-          type="success"
-          size="small"
-          class="action-tag action-tag--success"
-          @click="handleApprove"
-        >
-          {{ $t('action.approve') }}
-        </el-tag>
-        <el-button v-if="!isReadOnly" @click="handleSave">{{ $t('action.save') }}</el-button>
-        <el-button v-if="!isReadOnly" type="primary" @click="handleSaveAndBack">{{ $t('action.saveAndBack') }}</el-button>
       </div>
     </div>
 
@@ -826,45 +832,95 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
+.purchase-form-toolbar {
+  width: 100%;
+}
+
+.purchase-form-toolbar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.purchase-form-toolbar__meta {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  min-width: 0;
+}
+
+.purchase-form-toolbar__actions {
+  margin-left: auto;
+}
+
 .theme-switch {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(64, 158, 255, 0.08);
-  margin-right: 8px;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .theme-switch__label {
   font-size: 12px;
-  color: #409eff;
+  color: #606266;
   font-weight: 600;
   white-space: nowrap;
+  letter-spacing: 0.02em;
 }
 
 .theme-switch__select {
-  width: 140px;
+  width: 136px;
 }
 
-.action-tag {
-  cursor: pointer;
-  user-select: none;
-  border-radius: 999px;
-  padding: 0 10px;
-  line-height: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
+.theme-switch :deep(.el-select__wrapper) {
+  min-height: 30px;
+  border-radius: 8px;
+  box-shadow: none;
+  background: #ffffff;
+}
+
+.theme-switch :deep(.el-select__placeholder),
+.theme-switch :deep(.el-select__selected-item) {
+  color: #303133;
+  font-weight: 500;
+}
+
+.action-button {
+  min-width: 72px;
   font-weight: 600;
 }
 
-.action-tag--danger:hover {
-  filter: brightness(0.95);
+.action-button--success {
+  background: #f0f9eb;
+  border-color: #b7e1a1;
+  color: #4e8f2b;
 }
 
-.action-tag--success:hover {
-  filter: brightness(0.95);
+.action-button--success:hover,
+.action-button--success:focus-visible {
+  background: #e3f4d8;
+  border-color: #95d475;
+  color: #3f7d21;
+}
+
+.action-button--danger {
+  background: #fef0f0;
+  border-color: #f3b3b3;
+  color: #c45656;
+}
+
+.action-button--danger:hover,
+.action-button--danger:focus-visible {
+  background: #fde2e2;
+  border-color: #f08a8a;
+  color: #b43c3c;
 }
 
 .purchase-theme--paper {
@@ -1114,12 +1170,20 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.page-header + .table-card {
+.table-card + .table-card {
   margin-top: 12px;
 }
 
-.table-card + .table-card {
-  margin-top: 12px;
+@media (max-width: 768px) {
+  .purchase-form-toolbar__meta,
+  .purchase-form-toolbar__actions {
+    width: 100%;
+  }
+
+  .purchase-form-toolbar__actions {
+    justify-content: flex-end;
+    margin-left: 0;
+  }
 }
 
 .order-time-picker {

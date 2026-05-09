@@ -124,6 +124,29 @@ page-shell 左内边距 20px
 - 该容器必须 `width: 100%`，并使用 `padding: 16px 18px`。
 - 不能把 `table-toolbar` 直接作为 `page-header` 的第二个子元素，否则第一个输入框横向起点会比审计日志少 `18px`。
 
+## 0.2 日期时间范围被遮挡的根因
+
+销售管理、采购管理及关联列表页这次出现“时间显示不完整、尾部被遮挡”，根因不是弹层层级，也不是外部容器 `overflow` 裁剪，而是日期范围框本身被规定得过窄。
+
+问题组合如下：
+
+- 页面使用了 `type="datetimerange"`
+- 显示格式使用了 `YYYY-MM-DD HH:mm:ss`
+- 旧规范把日期范围框宽度限制在 `336px`
+- 同时把内部两个时间输入框宽度限制在 `112px`
+
+这组数值对“只显示到分钟”的格式还能勉强容纳，但对“显示到秒”的格式已经不够。结果就是：
+
+- 外层范围框宽度不够，两个子输入框被继续压缩
+- 秒位或尾部字符在可视区域内放不下
+- 中文、英文、不同浏览器字体渲染下都会出现不同程度的遮挡
+
+结论：
+
+- 根因是“日期范围组件宽度规范不足”，不是业务页面单独写错
+- 只要页面使用 `datetimerange + YYYY-MM-DD HH:mm:ss`，就必须使用更大的统一基线宽度
+- 禁止再把秒级日期范围框压回 `336px/112px` 这一组旧值
+
 ## 1. 页面骨架
 
 系统页必须使用以下结构：
@@ -258,50 +281,50 @@ page-shell 左内边距 20px
 
 - 关键词输入框宽度：`220px`
 - 普通下拉宽度：`140px`
-- 日期范围框宽度：`336px`
+- 日期范围框宽度：`380px`
 - 筛选项之间水平间距：`12px`
 
 ```css
 .table-filters {
   display: grid;
-  grid-template-columns: 220px 140px 140px 140px 336px;
+  grid-template-columns: 220px 140px 140px 140px 380px;
   gap: 12px;
 }
 ```
 
 解释：
-- “时间选择框多长” = `336px`
+- “时间选择框多长” = `380px`
 - “input 框之间距离多宽” = `12px`
 
 ### 3.4 日期范围选择框
 
-日期范围框必须满足“带年份且完整显示”：
+日期范围框必须满足“带年份、带秒且完整显示”：
 
-- 显示格式：`YYYY-MM-DD HH:mm`
-- 外层宽度：`336px`
-- 内部两个输入框宽度：`112px`
+- 显示格式：`YYYY-MM-DD HH:mm:ss`
+- 外层宽度：`380px`
+- 内部两个输入框宽度：`132px`
 - 内部字号：`12px`
 
 ```vue
 <el-date-picker
   type="datetimerange"
-  format="YYYY-MM-DD HH:mm"
+  format="YYYY-MM-DD HH:mm:ss"
   class="table-date-range audit-toolbar__date-range"
 />
 ```
 
 ```css
 :deep(.audit-toolbar__date-range) {
-  width: 336px;
+  width: 380px;
 }
 
 :deep(.audit-toolbar__date-range.el-range-editor) {
-  width: 336px !important;
-  min-width: 336px !important;
+  width: 380px !important;
+  min-width: 380px !important;
 }
 
 :deep(.audit-toolbar__date-range .el-range-input) {
-  width: 112px;
+  width: 132px;
   font-size: 12px;
 }
 ```
@@ -309,6 +332,7 @@ page-shell 左内边距 20px
 约束说明：
 - 禁止为了省空间把显示格式改成每页都不一样
 - 禁止不同系统页出现第二套日期框宽度
+- 禁止 `YYYY-MM-DD HH:mm:ss` 继续复用旧的 `336px / 112px` 配置
 - 如果必须展示更长内容，优先拆成两个独立时间框，而不是继续挤压
 
 ## 4. 操作按钮区
@@ -381,7 +405,7 @@ page-shell 左内边距 20px
 - 主布局改为单列
 - 按钮区左对齐
 - 关键词输入框改为 `200px`
-- 日期范围框改为 `320px`
+- 日期范围框改为 `360px`
 
 ```css
 @media (max-width: 1280px) {
@@ -394,7 +418,7 @@ page-shell 左内边距 20px
   }
 
   .table-filters {
-    grid-template-columns: 200px 140px 140px 140px 320px;
+    grid-template-columns: 200px 140px 140px 140px 360px;
   }
 }
 ```

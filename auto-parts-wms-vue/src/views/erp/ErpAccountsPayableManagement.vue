@@ -251,15 +251,15 @@ onActivated(() => {
 
 <style scoped>
 :deep(.table-date-range--compact) {
-  flex: 0 0 280px;
+  flex: 0 0 380px;
 }
 
 :deep(.table-date-range--compact.el-range-editor) {
-  width: 280px !important;
-  min-width: 280px !important;
+  width: 380px !important;
+  min-width: 380px !important;
 }
 
 :deep(.table-date-range--compact .el-range-input) {
-  width: 86px;
+  width: 132px;
 }
 </style>

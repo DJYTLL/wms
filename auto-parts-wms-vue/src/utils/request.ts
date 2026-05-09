@@ -49,6 +49,14 @@ const buildIdempotencyKey = (config: any) => {
   return hashString(`${method}:${url}:${data}`)
 }
 
+const resolveResponseErrorMessage = (data: any) => {
+  if (!data) return ''
+  if (typeof data === 'string') return data.trim()
+  if (typeof data.message === 'string' && data.message.trim()) return data.message.trim()
+  if (typeof data.errorMessage === 'string' && data.errorMessage.trim()) return data.errorMessage.trim()
+  return ''
+}
+
 // 请求拦截器：自动带上 token
 request.interceptors.request.use(
   (config) => {
@@ -138,6 +146,11 @@ request.interceptors.response.use(
       } finally {
         isRefreshing = false
       }
+    }
+
+    const apiMessage = resolveResponseErrorMessage(error.response?.data)
+    if (apiMessage) {
+      error.message = apiMessage
     }
 
     console.error('Request Error:', error)

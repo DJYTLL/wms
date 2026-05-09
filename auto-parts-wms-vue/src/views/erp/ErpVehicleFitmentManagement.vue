@@ -1,31 +1,32 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpVehicleFitmentManagement') }}</h2>
-    </div>
-
-    <el-tabs v-model="activeTab" class="vehicle-tabs">
-      <el-tab-pane :label="$t('field.vehicleBrand')" name="brands">
-        <div class="table-toolbar">
-          <div class="table-filters">
+      <div class="page-title">{{ $t('page.erpVehicleFitmentManagement') }}</div>
+      <div class="page-toolbar-card page-toolbar-card--tabs">
+        <el-tabs v-model="activeTab" class="vehicle-tabs">
+          <el-tab-pane :label="$t('field.vehicleBrand')" name="brands">
+            <div class="erp-basic-toolbar vehicle-tab-toolbar">
+              <div class="erp-basic-filters erp-basic-filters--2">
             <el-input
               v-model="brandSearch"
               :placeholder="$t('action.search')"
-              class="table-search"
+              class="table-search erp-basic-field--wide"
               clearable
               @clear="handleBrandSearch"
               @keyup.enter="handleBrandSearch"
             />
-            <el-select v-model="brandStatus" :placeholder="$t('field.status')" class="table-search" @change="handleBrandSearch">
+            <el-select v-model="brandStatus" :placeholder="$t('field.status')" class="table-search erp-basic-field--narrow" @change="handleBrandSearch">
               <el-option :label="$t('filter.all')" value="all" />
               <el-option :label="$t('status.active')" value="enabled" />
               <el-option :label="$t('status.inactive')" value="disabled" />
             </el-select>
-          </div>
-          <el-button type="primary" v-permission="'erp-vehicle-brand:add'" @click="openBrandAdd">
-            {{ $t('action.add') }}
-          </el-button>
-        </div>
+              </div>
+              <div class="erp-basic-actions">
+                <el-button type="primary" v-permission="'erp-vehicle-brand:add'" @click="openBrandAdd">
+                  {{ $t('action.add') }}
+                </el-button>
+              </div>
+            </div>
 
         <div class="table-card">
           <div class="table-body">
@@ -66,31 +67,33 @@
             />
           </div>
         </div>
-      </el-tab-pane>
-      <el-tab-pane :label="$t('field.vehicleSeries')" name="series">
-        <div class="table-toolbar">
-          <div class="table-filters">
+          </el-tab-pane>
+          <el-tab-pane :label="$t('field.vehicleSeries')" name="series">
+            <div class="erp-basic-toolbar vehicle-tab-toolbar">
+              <div class="erp-basic-filters erp-basic-filters--3">
             <el-input
               v-model="seriesSearch"
               :placeholder="$t('action.search')"
-              class="table-search"
+              class="table-search erp-basic-field--wide"
               clearable
               @clear="handleSeriesSearch"
               @keyup.enter="handleSeriesSearch"
             />
-            <el-select v-model="seriesBrandFilter" :placeholder="$t('field.vehicleBrand')" class="table-search" clearable @change="handleSeriesSearch">
+            <el-select v-model="seriesBrandFilter" :placeholder="$t('field.vehicleBrand')" class="table-search erp-basic-field--narrow" clearable @change="handleSeriesSearch">
               <el-option v-for="item in brandOptions" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
-            <el-select v-model="seriesStatus" :placeholder="$t('field.status')" class="table-search" @change="handleSeriesSearch">
+            <el-select v-model="seriesStatus" :placeholder="$t('field.status')" class="table-search erp-basic-field--narrow" @change="handleSeriesSearch">
               <el-option :label="$t('filter.all')" value="all" />
               <el-option :label="$t('status.active')" value="enabled" />
               <el-option :label="$t('status.inactive')" value="disabled" />
             </el-select>
-          </div>
-          <el-button type="primary" v-permission="'erp-vehicle-series:add'" @click="openSeriesAdd">
-            {{ $t('action.add') }}
-          </el-button>
-        </div>
+              </div>
+              <div class="erp-basic-actions">
+                <el-button type="primary" v-permission="'erp-vehicle-series:add'" @click="openSeriesAdd">
+                  {{ $t('action.add') }}
+                </el-button>
+              </div>
+            </div>
 
         <div class="table-card">
           <div class="table-body">
@@ -136,19 +139,19 @@
             />
           </div>
         </div>
-      </el-tab-pane>
-      <el-tab-pane :label="$t('field.vehicleModel')" name="models">
-        <div class="table-toolbar">
-          <div class="table-filters">
+          </el-tab-pane>
+          <el-tab-pane :label="$t('field.vehicleModel')" name="models">
+            <div class="erp-basic-toolbar vehicle-tab-toolbar">
+              <div class="erp-basic-filters erp-basic-filters--3">
             <el-input
               v-model="modelSearch"
               :placeholder="$t('action.search')"
-              class="table-search"
+              class="table-search erp-basic-field--wide"
               clearable
               @clear="handleModelSearch"
               @keyup.enter="handleModelSearch"
             />
-            <el-select v-model="modelSeriesFilter" :placeholder="$t('field.vehicleSeries')" class="table-search" clearable @change="handleModelSearch">
+            <el-select v-model="modelSeriesFilter" :placeholder="$t('field.vehicleSeries')" class="table-search erp-basic-field--narrow" clearable @change="handleModelSearch">
               <el-option
                 v-for="item in seriesOptions"
                 :key="item.id"
@@ -156,16 +159,18 @@
                 :value="item.id"
               />
             </el-select>
-            <el-select v-model="modelStatus" :placeholder="$t('field.status')" class="table-search" @change="handleModelSearch">
+            <el-select v-model="modelStatus" :placeholder="$t('field.status')" class="table-search erp-basic-field--narrow" @change="handleModelSearch">
               <el-option :label="$t('filter.all')" value="all" />
               <el-option :label="$t('status.active')" value="enabled" />
               <el-option :label="$t('status.inactive')" value="disabled" />
             </el-select>
-          </div>
-          <el-button type="primary" v-permission="'erp-vehicle-model:add'" @click="openModelAdd">
-            {{ $t('action.add') }}
-          </el-button>
-        </div>
+              </div>
+              <div class="erp-basic-actions">
+                <el-button type="primary" v-permission="'erp-vehicle-model:add'" @click="openModelAdd">
+                  {{ $t('action.add') }}
+                </el-button>
+              </div>
+            </div>
 
         <div class="table-card">
           <div class="table-body">
@@ -223,11 +228,11 @@
             />
           </div>
         </div>
-      </el-tab-pane>
-      <el-tab-pane :label="$t('field.productFitment')" name="fitments">
-        <div class="table-toolbar">
-          <div class="table-filters">
-            <el-select v-model="fitmentProductFilter" :placeholder="$t('field.product')" class="table-search" clearable @change="fetchFitmentList">
+          </el-tab-pane>
+          <el-tab-pane :label="$t('field.productFitment')" name="fitments">
+            <div class="erp-basic-toolbar vehicle-tab-toolbar">
+              <div class="erp-basic-filters erp-basic-filters--2">
+            <el-select v-model="fitmentProductFilter" :placeholder="$t('field.product')" class="table-search erp-basic-field--wide" clearable @change="fetchFitmentList">
               <el-option
                 v-for="item in productOptions"
                 :key="item.id"
@@ -235,7 +240,7 @@
                 :value="item.id"
               />
             </el-select>
-            <el-select v-model="fitmentModelFilter" :placeholder="$t('field.vehicleModel')" class="table-search" clearable @change="fetchFitmentList">
+            <el-select v-model="fitmentModelFilter" :placeholder="$t('field.vehicleModel')" class="table-search erp-basic-field--narrow" clearable @change="fetchFitmentList">
               <el-option
                 v-for="item in modelOptions"
                 :key="item.id"
@@ -243,11 +248,13 @@
                 :value="item.id"
               />
             </el-select>
-          </div>
-          <el-button type="primary" v-permission="'erp-product-fitment:add'" @click="openFitmentAdd">
-            {{ $t('action.add') }}
-          </el-button>
-        </div>
+              </div>
+              <div class="erp-basic-actions">
+                <el-button type="primary" v-permission="'erp-product-fitment:add'" @click="openFitmentAdd">
+                  {{ $t('action.add') }}
+                </el-button>
+              </div>
+            </div>
 
         <div class="table-card">
           <div class="table-body">
@@ -277,8 +284,10 @@
             </el-table>
           </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </div>
 
     <el-dialog v-model="showBrandModal" :title="brandEditing ? $t('action.edit') : $t('action.add')" width="520px" @closed="resetBrandForm">
       <el-form :model="brandForm" label-width="110px">
@@ -1004,11 +1013,15 @@ onActivated(() => {
 </script>
 
 <style scoped>
+.page-toolbar-card--tabs {
+  padding-top: 0;
+}
+
 .vehicle-tabs :deep(.el-tab-pane) {
   margin-top: 8px;
 }
 
-.table-toolbar {
+.vehicle-tab-toolbar {
   margin-bottom: 12px;
 }
 
@@ -1024,5 +1037,11 @@ onActivated(() => {
 
 .span-2 {
   grid-column: span 2;
+}
+
+@media (max-width: 1280px) {
+  .page-toolbar-card--tabs {
+    padding-top: 0;
+  }
 }
 </style>

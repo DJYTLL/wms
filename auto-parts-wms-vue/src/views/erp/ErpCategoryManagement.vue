@@ -1,24 +1,28 @@
 ﻿<template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpCategoryManagement') }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
+      <div class="page-title">{{ $t('page.erpCategoryManagement') }}</div>
+      <div class="page-toolbar-card">
+        <div class="erp-basic-toolbar">
+          <div class="erp-basic-filters erp-basic-filters--2">
           <el-input
             v-model="searchQuery"
             :placeholder="$t('action.search')"
-            class="table-search"
+            class="table-search erp-basic-field--wide"
             clearable
             @clear="handleSearch"
             @keyup.enter="handleSearch"
           />
-          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search" @change="handleSearch">
+          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search erp-basic-field--narrow" @change="handleSearch">
             <el-option :label="$t('filter.all')" value="all" />
             <el-option :label="$t('status.active')" value="enabled" />
             <el-option :label="$t('status.inactive')" value="disabled" />
           </el-select>
+          </div>
+          <div class="erp-basic-actions">
+            <el-button type="primary" v-permission="'erp-category:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
+          </div>
         </div>
-        <el-button type="primary" v-permission="'erp-category:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
       </div>
     </div>
 

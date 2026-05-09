@@ -25,7 +25,7 @@
           <ul class="menu-root">
             <li v-for="item in filteredMenuData" :key="item.id" class="menu-item-l1">
 
-              <div class="menu-label l1" @click="toggleMenu(item)" :class="{ 'is-active': isPathActive(item.path) }">
+              <div class="menu-label l1" @click="toggleMenu(item)" :class="{ 'is-active': isMenuItemActive(item) }">
                 <span class="icon-box" v-html="item.icon"></span>
                 <span class="label-text">{{ menuLabel(item) }}</span>
                 <svg v-if="hasChildren(item)" class="chevron" :class="{ 'rotated': item.isOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -35,7 +35,7 @@
                 <ul v-if="hasChildren(item) && item.isOpen" class="submenu-l2">
                   <li v-for="subItem in item.children" :key="subItem.id">
 
-                    <div class="menu-label l2" @click="handleMenuClick(subItem)" :class="{ 'is-active': route.path === subItem.path }">
+                    <div class="menu-label l2" @click="handleMenuClick(subItem)" :class="{ 'is-active': isMenuItemActive(subItem) }">
                       <span class="dot" v-if="!hasChildren(subItem)"></span>
                       <span class="label-text">{{ menuLabel(subItem) }}</span>
                       <svg v-if="hasChildren(subItem)" class="chevron" :class="{ 'rotated': subItem.isOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -44,7 +44,7 @@
                     <transition name="slide-down">
                       <ul v-if="hasChildren(subItem) && subItem.isOpen" class="submenu-l3">
                         <li v-for="leaf in subItem.children" :key="leaf.id">
-                          <div class="menu-label l3" @click="handleMenuClick(leaf)" :class="{ 'is-active': route.path === leaf.path }">
+                          <div class="menu-label l3" @click="handleMenuClick(leaf)" :class="{ 'is-active': isMenuItemActive(leaf) }">
                             <span class="label-text">{{ menuLabel(leaf) }}</span>
                           </div>
                         </li>
@@ -217,10 +217,28 @@ const decorateMenus = (items: MenuItem[]): MenuItem[] => {
   }));
 };
 
+const flattenRedundantRootMenus = (items: MenuItem[]): MenuItem[] => {
+  return items.flatMap((item) => {
+    const children = item.children || [];
+    const shouldFlattenWarehouseRoot = item.key === 'warehouse' && !item.path && children.length > 0;
+
+    if (!shouldFlattenWarehouseRoot) {
+      return item.key === 'outbound' ? [] : [item];
+    }
+
+    return children
+      .filter(child => child.key !== 'outbound')
+      .map((child) => ({
+        ...child,
+        icon: child.icon || item.icon,
+      }));
+  });
+};
+
 const refreshMenus = async (force = false) => {
   try {
     await menuStore.fetchMenus(force);
-    menuData.value = decorateMenus(menuStore.menus);
+    menuData.value = flattenRedundantRootMenus(decorateMenus(menuStore.menus));
     findAndExpand(menuData.value);
   } catch (error) {
     notifyError(error);
@@ -346,50 +364,30 @@ const findAndToggle = (items: MenuItem[], id: number): boolean => {
   return false;
 };
 
-const findFirstNavigablePath = (item: MenuItem): string | null => {
-  if (item.path) {
-    return item.path;
-  }
-  if (!hasChildren(item)) {
-    return null;
-  }
-  for (const child of item.children || []) {
-    const path = findFirstNavigablePath(child);
-    if (path) {
-      return path;
-    }
-  }
-  return null;
-};
-
 const toggleMenu = (item: MenuItem) => {
-    if (hasChildren(item)) {
-      findAndToggle(menuData.value, item.id);
-      const firstPath = findFirstNavigablePath(item);
-      if (firstPath && route.path !== firstPath) {
-        router.push(firstPath);
-      }
+  if (hasChildren(item)) {
+    findAndToggle(menuData.value, item.id);
   } else if (item.path) {
     router.push(item.path);
   }
 };
 
 const handleMenuClick = (item: MenuItem) => {
-    if (hasChildren(item)) {
-      findAndToggle(menuData.value, item.id);
-      const firstPath = findFirstNavigablePath(item);
-      if (firstPath && route.path !== firstPath) {
-        router.push(firstPath);
-      }
+  if (hasChildren(item)) {
+    findAndToggle(menuData.value, item.id);
   } else if (item.path) {
     router.push(item.path);
   }
 };
 
-// 检查路径是否激活（用于一级菜单高亮）
-const isPathActive = (path?: string) => {
-  if (!path) return false;
-  return route.path === path;
+const isMenuItemActive = (item: MenuItem): boolean => {
+  if (item.path && route.path === item.path) {
+    return true;
+  }
+  if (!hasChildren(item)) {
+    return false;
+  }
+  return (item.children || []).some(child => isMenuItemActive(child));
 };
 
 // --- 3. 标签页 (Multi-Tabs) 逻辑 ---

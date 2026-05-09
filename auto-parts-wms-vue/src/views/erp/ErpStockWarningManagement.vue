@@ -1,17 +1,19 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpStockWarningManagement') }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
-          <el-input
-            v-model="keyword"
-            :placeholder="$t('action.search')"
-            class="table-search"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
+      <div class="page-title">{{ $t('page.erpStockWarningManagement') }}</div>
+      <div class="page-toolbar-card">
+        <div class="table-toolbar inventory-toolbar">
+          <div class="table-filters inventory-filters inventory-filters--stock-warning">
+            <el-input
+              v-model="keyword"
+              :placeholder="$t('action.search')"
+              class="inventory-field--wide"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+          </div>
         </div>
       </div>
     </div>

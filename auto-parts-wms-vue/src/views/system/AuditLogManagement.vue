@@ -7,13 +7,13 @@
           <div class="table-filters">
             <el-input
               v-model="keyword"
-              class="table-search audit-toolbar__search--wide"
+              class="table-search table-search--wide"
               :placeholder="t('placeholder.keyword')"
               clearable
             />
             <el-select
               v-model="action"
-              class="table-search audit-toolbar__search--narrow"
+              class="table-search table-search--narrow"
               :placeholder="t('field.action')"
               clearable
             >
@@ -26,7 +26,7 @@
             </el-select>
             <el-select
               v-model="status"
-              class="table-search audit-toolbar__search--narrow"
+              class="table-search table-search--narrow"
               :placeholder="t('field.result')"
               clearable
             >
@@ -36,7 +36,7 @@
             <el-select
               v-if="isSuperAdmin"
               v-model="tenantId"
-              class="table-search audit-toolbar__search--narrow"
+              class="table-search table-search--narrow"
               :placeholder="t('field.tenant')"
               clearable
             >
@@ -54,7 +54,7 @@
               :start-placeholder="t('field.startTime')"
               :end-placeholder="t('field.endTime')"
               format="YYYY-MM-DD HH:mm"
-              class="table-date-range audit-toolbar__date-range"
+              class="table-date-range table-date-range--compact"
             />
           </div>
           <div class="table-actions">
@@ -68,49 +68,49 @@
         <div v-if="showAdvancedFilters" class="audit-toolbar__advanced">
           <el-input
             v-model="actorUsername"
-            class="table-search audit-toolbar__search--wide"
+            class="table-search table-search--wide"
             :placeholder="t('field.actor')"
             clearable
           />
           <el-input
             v-model="requestId"
-            class="table-search audit-toolbar__search--wide"
+            class="table-search table-search--wide"
             :placeholder="t('field.requestId')"
             clearable
           />
           <el-input
             v-model="method"
-            class="table-search audit-toolbar__search--narrow"
+            class="table-search table-search--narrow"
             :placeholder="t('field.method')"
             clearable
           />
           <el-input
             v-model="path"
-            class="table-search audit-toolbar__search--wide"
+            class="table-search table-search--wide"
             :placeholder="t('field.path')"
             clearable
           />
           <el-input
             v-model="errorCode"
-            class="table-search audit-toolbar__search--narrow"
+            class="table-search table-search--narrow"
             :placeholder="t('field.errorCode')"
             clearable
           />
           <el-input
             v-model="errorMessage"
-            class="table-search audit-toolbar__search--wide"
+            class="table-search table-search--wide"
             :placeholder="t('field.errorMessage')"
             clearable
           />
           <el-input
             v-model.number="httpStatus"
-            class="table-search audit-toolbar__search--narrow"
+            class="table-search table-search--narrow"
             :placeholder="t('field.httpStatus')"
             clearable
           />
           <el-select
             v-model="entityType"
-            class="table-search audit-toolbar__search--narrow"
+            class="table-search table-search--narrow"
             :placeholder="t('field.entityType')"
             clearable
           >
@@ -543,7 +543,7 @@ onMounted(() => {
 
 .table-filters {
   display: grid;
-  grid-template-columns: 220px 140px 140px 140px 336px;
+  grid-template-columns: 220px 140px 140px 140px 280px;
   align-items: center;
   justify-content: start;
   gap: 12px;
@@ -569,28 +569,6 @@ onMounted(() => {
   border-top: 1px solid #eef1f4;
 }
 
-:deep(.audit-toolbar__search--wide) {
-  width: 220px;
-}
-
-:deep(.audit-toolbar__search--narrow) {
-  width: 140px;
-}
-
-:deep(.audit-toolbar__date-range) {
-  width: 336px;
-}
-
-:deep(.audit-toolbar__date-range.el-range-editor) {
-  width: 336px !important;
-  min-width: 336px !important;
-}
-
-:deep(.audit-toolbar__date-range .el-range-input) {
-  width: 112px;
-  font-size: 12px;
-}
-
 .table-card {
   min-height: 0;
 }
@@ -610,24 +588,11 @@ onMounted(() => {
   }
 
   .table-filters {
-    grid-template-columns: 200px 140px 140px 140px 320px;
+    grid-template-columns: 200px 140px 140px 140px 260px;
   }
 
   .table-actions {
     justify-content: flex-start;
-  }
-
-  :deep(.audit-toolbar__search--wide) {
-    width: 200px;
-  }
-
-  :deep(.audit-toolbar__date-range) {
-    width: 320px;
-  }
-
-  :deep(.audit-toolbar__date-range.el-range-editor) {
-    width: 320px !important;
-    min-width: 320px !important;
   }
 }
 
@@ -639,14 +604,6 @@ onMounted(() => {
   .table-actions {
     width: 100%;
     justify-content: flex-end;
-  }
-
-  :deep(.audit-toolbar__search--wide),
-  :deep(.audit-toolbar__search--narrow),
-  :deep(.audit-toolbar__date-range),
-  :deep(.audit-toolbar__date-range.el-range-editor) {
-    width: 100% !important;
-    min-width: 100% !important;
   }
 }
 </style>
