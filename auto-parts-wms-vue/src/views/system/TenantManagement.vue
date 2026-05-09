@@ -165,7 +165,7 @@ import { ref, computed, reactive, onMounted, onActivated, nextTick, watch } from
 import { useRouter } from 'vue-router';
 import { ElMessageBox, type ElTree } from 'element-plus';
 import { useI18n } from 'vue-i18n';
-import request from '@/utils/request';
+import request, { setTokens } from '@/utils/request';
 import { useAuthStore } from '@/stores/auth';
 import { useApiError } from '@/composables/useApiError';
 import { normalizeMenuKey } from '@/utils/i18n';
@@ -455,6 +455,10 @@ const handleSwitch = async (row: Tenant) => {
   try {
     const res: any = await request.post('/tenants/switch', { tenantCode: row.code });
     if (res.data.code === 200) {
+      const newToken = res.data?.data?.token;
+      if (typeof newToken === 'string' && newToken) {
+        setTokens(newToken);
+      }
       notifySuccess();
       router.push('/');
     }

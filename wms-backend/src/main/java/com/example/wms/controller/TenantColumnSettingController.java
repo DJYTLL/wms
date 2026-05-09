@@ -20,6 +20,7 @@ public class TenantColumnSettingController {
 
     // 查询租户列配置
     @GetMapping("/{pageKey}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<TenantColumnSettingResponse>> get(@PathVariable String pageKey) {
         return ResponseEntity.ok(ApiResponse.ok(tenantColumnSettingService.getByPageKey(pageKey)));
     }

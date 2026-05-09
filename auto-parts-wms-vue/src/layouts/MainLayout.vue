@@ -80,6 +80,10 @@
         </div>
 
         <div class="user-actions-group">
+          <div class="tenant-indicator" :title="`${t('field.tenant')}: ${currentTenantCode}`">
+            <span class="tenant-indicator__label">{{ t('field.tenant') }}</span>
+            <span class="tenant-indicator__value">{{ currentTenantCode }}</span>
+          </div>
           <!-- Theme Switcher -->
           <div class="theme-dropdown-wrapper">
             <button @click="toggleThemeDropdown" class="action-btn" :title="$t('action.selectTheme')">
@@ -174,6 +178,7 @@ const isEmbedded = computed(() => {
   const embed = route.query.embed;
   return embed === '1' || embed === 'true';
 });
+const currentTenantCode = computed(() => authStore.tenantCode || '-');
 const handleCloseTagEvent = (event: Event) => {
   const customEvent = event as CustomEvent<{ path?: string }>;
   const targetPath = customEvent.detail?.path || route.path;
@@ -1311,6 +1316,30 @@ const handleSearchShortcut = (event: KeyboardEvent) => {
 
 }
 
+.tenant-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(0, 113, 227, 0.18);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(0, 113, 227, 0.08), rgba(0, 113, 227, 0.03));
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.tenant-indicator__label {
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.tenant-indicator__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--active-blue);
+}
+
 
 
 .action-btn {
@@ -1441,5 +1470,15 @@ const handleSearchShortcut = (event: KeyboardEvent) => {
 
 .check-icon {
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+
+@media (max-width: 900px) {
+  .tenant-indicator {
+    padding: 0 10px;
+  }
+
+  .tenant-indicator__label {
+    display: none;
+  }
 }
 </style>

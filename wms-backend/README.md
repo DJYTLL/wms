@@ -1,13 +1,83 @@
-﻿# WMS Backend
+# WMS Backend
 
-Spring Boot backend with JWT auth scaffold.
+Spring Boot backend for the WMS/ERP system.
 
 ## Run
+
+```powershell
+cd D:\project\wms-backend
 mvn spring-boot:run
+```
 
-## Auth
-POST /api/auth/login
+## Authentication
 
-Default user:
-- username: admin
-- password: admin123
+Current login endpoint:
+
+- `POST /api/login`
+
+Request body:
+
+```json
+{
+  "tenantCode": "default",
+  "username": "admin",
+  "password": "password"
+}
+```
+
+Notes:
+
+- Login now uses `tenantCode + username + password`
+- Username is unique only inside the current tenant
+- The same username may exist in multiple tenants
+
+## Tenant Model
+
+The backend distinguishes between two tenant types.
+
+### System tenant
+
+- Default tenant code: `default`
+- Controlled by `app.tenant.code`, default value is `default`
+- This is the only tenant allowed to keep the `super_admin` role
+- Platform capabilities such as tenant management, system configuration, global menu management, and cross-tenant switching belong to this tenant
+
+### Regular tenant
+
+- Created by a `super_admin`
+- Has its own local `admin` role and tenant administrator account
+- Cannot keep or assign the `super_admin` role
+- Can only manage users, roles, permissions, column settings, and business data inside its own tenant
+
+## Role Boundaries
+
+### `super_admin`
+
+- Exists only in the system tenant
+- Is the system-wide super administrator
+- Can switch across tenants
+- Can access platform permissions such as `tenant:*` and `system-config:*`
+
+### `admin`
+
+- Exists in every tenant
+- Is valid only inside the current tenant
+- Manages local users, local roles, local configuration, and local business data
+- Cannot cross tenants
+- Cannot hold platform-level permissions
+
+## Initialization
+
+`DataInitializer` ensures the following on startup:
+
+- The system tenant exists
+- The system tenant has the default admin user
+- Every tenant has an `admin` role
+- Only the system tenant keeps the `super_admin` role
+- Legacy `super_admin` roles in non-system tenants are cleaned up during startup
+
+Default account in a fresh system:
+
+- tenant code: `default`
+- username: `admin`
+- password: `password`

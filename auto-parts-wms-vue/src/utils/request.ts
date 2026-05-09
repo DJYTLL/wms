@@ -3,6 +3,7 @@ import axios, { type AxiosError, type AxiosInstance } from 'axios'
 const request: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 10000,
+  withCredentials: true,
 })
 
 const TOKEN_KEY = 'token'
@@ -57,6 +58,13 @@ const resolveResponseErrorMessage = (data: any) => {
   return ''
 }
 
+const isAuthEndpoint = (url?: string) => {
+  if (!url) return false
+  return url.includes('/login')
+    || url.includes('/refresh')
+    || url.includes('/logout')
+}
+
 // 请求拦截器：自动带上 token
 request.interceptors.request.use(
   (config) => {
@@ -67,9 +75,7 @@ request.interceptors.request.use(
     }
     const method = (config.method || 'get').toLowerCase()
     const url = config.url || ''
-    const skipIdempotency = url.includes('/login')
-      || url.includes('/refresh')
-      || url.includes('/logout')
+    const skipIdempotency = isAuthEndpoint(url)
       || url.includes('/system-configs')
     if (!skipIdempotency && method !== 'get' && method !== 'head' && method !== 'options') {
       config.headers = config.headers || {}
@@ -108,7 +114,7 @@ request.interceptors.response.use(
     const original = error.config as any
     const status = error.response?.status
 
-    if (status === 401 && original && !original._retry) {
+    if (status === 401 && original && !original._retry && !isAuthEndpoint(original.url)) {
       original._retry = true
 
       if (isRefreshing) {
@@ -123,7 +129,7 @@ request.interceptors.response.use(
 
       isRefreshing = true
       try {
-        const refreshRes = await axios.post('/api/refresh', {})
+        const refreshRes = await axios.post('/api/refresh', {}, { withCredentials: true })
 
         const refreshData: any = refreshRes.data
         if (!refreshData || refreshData.code !== 200) {

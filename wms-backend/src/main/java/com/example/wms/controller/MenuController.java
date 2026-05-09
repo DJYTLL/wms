@@ -32,6 +32,7 @@ public class MenuController {
 
     // 获取当前用户可见菜单
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<MenuResponse>>> listVisibleMenus() {
         return ResponseEntity.ok(ApiResponse.ok(menuService.listVisibleMenus()));
     }

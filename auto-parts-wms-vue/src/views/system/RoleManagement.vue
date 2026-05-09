@@ -189,7 +189,7 @@ const page = ref(1);
 const size = ref(20);
 const total = ref(0);
 const { bindPageSizeSync } = useSystemConfig();
-const canUseTenantPermissions = computed(() => authStore.hasPermission('tenant:view'));
+const canUsePlatformPermissions = computed(() => authStore.hasRole('super_admin'));
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 
 const defaultColumns = ['name', 'code', 'description', 'status'];
@@ -218,9 +218,11 @@ const filteredData = computed(() => roleList.value);
 const permissionTreeData = computed(() => {
   const groupMap: Record<string, any[]> = {};
   
-  const visiblePermissions = canUseTenantPermissions.value
+  const visiblePermissions = canUsePlatformPermissions.value
     ? permissionList.value
-    : permissionList.value.filter(p => !p.code.startsWith('tenant:'));
+    : permissionList.value.filter(
+      p => !p.code.startsWith('tenant:') && !p.code.startsWith('system-config:')
+    );
 
   visiblePermissions.forEach(p => {
     const groupName = p.code.includes(':') ? (p.code.split(':')[0] || 'Other') : 'Other';
