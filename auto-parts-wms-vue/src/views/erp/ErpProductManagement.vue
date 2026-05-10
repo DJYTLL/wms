@@ -634,7 +634,7 @@ const fetchUnits = async () => {
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses', { params: { enabled: true } });
+    const res: any = await request.get('/erp/warehouses/options');
     warehouseOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);
@@ -643,7 +643,7 @@ const fetchWarehouses = async () => {
 
 const fetchLocations = async () => {
   try {
-    const res: any = await request.get('/erp/locations', { params: { enabled: true } });
+    const res: any = await request.get('/erp/locations/options');
     locationOptions.value = res.data.data || [];
     syncDefaultLocation();
   } catch (error) {

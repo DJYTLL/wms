@@ -42,6 +42,8 @@ import java.util.List;
 // 仓库服务实现（ERP进销存）
 @Service
 public class ErpWarehouseServiceImpl implements ErpWarehouseService {
+    private static final String STATUS_DRAFT = "DRAFT";
+
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpLocationMapper erpLocationMapper;
     private final ErpProductMapper erpProductMapper;
@@ -144,6 +146,9 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         ErpWarehouse existing = erpWarehouseMapper.findByCode(tenantId, normalizedCode);
         if (existing != null && !existing.getId().equals(id)) {
             throw new IllegalArgumentException("仓库编码已存在");
+        }
+        if (Boolean.FALSE.equals(request.enabled())) {
+            ensureWarehouseCanDisable(tenantId, id);
         }
         applyRequest(warehouse, request, normalizedCode);
         if (request.enabled() != null) {
@@ -263,6 +268,85 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
             .eq("warehouse_id", warehouseId)) > 0) {
             throw new IllegalArgumentException("仓库已被库存流水引用，不能删除");
         }
+    }
+
+    private void ensureWarehouseCanDisable(Long tenantId, Long warehouseId) {
+        if (erpLocationMapper.selectCount(new QueryWrapper<ErpLocation>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .eq("is_enabled", true)) > 0) {
+            throw new IllegalArgumentException("仓库下仍有启用库位，不能停用");
+        }
+        if (erpProductMapper.selectCount(new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", tenantId)
+            .eq("default_warehouse_id", warehouseId)) > 0) {
+            throw new IllegalArgumentException("仓库仍被商品设为默认仓库，不能停用");
+        }
+        if (erpPurchaseOrderItemMapper.selectCount(new QueryWrapper<ErpPurchaseOrderItem>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .inSql("order_id", draftOrderSubquery("erp_purchase_order", tenantId))) > 0) {
+            throw new IllegalArgumentException("仓库仍被未完成采购单引用，不能停用");
+        }
+        if (erpPurchaseReturnItemMapper.selectCount(new QueryWrapper<ErpPurchaseReturnItem>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .inSql("order_id", draftOrderSubquery("erp_purchase_return", tenantId))) > 0) {
+            throw new IllegalArgumentException("仓库仍被未完成采购退货单引用，不能停用");
+        }
+        if (erpSaleOrderItemMapper.selectCount(new QueryWrapper<ErpSaleOrderItem>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .inSql("order_id", draftOrderSubquery("erp_sale_order", tenantId))) > 0) {
+            throw new IllegalArgumentException("仓库仍被未完成销售单引用，不能停用");
+        }
+        if (erpSaleReturnItemMapper.selectCount(new QueryWrapper<ErpSaleReturnItem>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .inSql("order_id", draftOrderSubquery("erp_sale_return", tenantId))) > 0) {
+            throw new IllegalArgumentException("仓库仍被未完成销售退货单引用，不能停用");
+        }
+        if (erpAssemblyOrderMapper.selectCount(new QueryWrapper<ErpAssemblyOrder>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .eq("status", STATUS_DRAFT)) > 0) {
+            throw new IllegalArgumentException("仓库仍被未完成组装/拆分单引用，不能停用");
+        }
+        if (erpAssemblyOrderItemMapper.selectCount(new QueryWrapper<ErpAssemblyOrderItem>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .inSql("order_id", draftOrderSubquery("erp_assembly_order", tenantId))) > 0) {
+            throw new IllegalArgumentException("仓库仍被未完成组装/拆分明细引用，不能停用");
+        }
+        if (erpStockCountMapper.selectCount(new QueryWrapper<ErpStockCount>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .eq("status", STATUS_DRAFT)) > 0) {
+            throw new IllegalArgumentException("仓库仍被未完成盘点单引用，不能停用");
+        }
+        if (erpStockCountItemMapper.selectCount(new QueryWrapper<ErpStockCountItem>()
+            .eq("tenant_id", tenantId)
+            .eq("warehouse_id", warehouseId)
+            .inSql("count_id", draftStockCountSubquery(tenantId))) > 0) {
+            throw new IllegalArgumentException("仓库仍被未完成盘点明细引用，不能停用");
+        }
+    }
+
+    private String draftOrderSubquery(String tableName, Long tenantId) {
+        return String.format(
+            "SELECT id FROM %s WHERE tenant_id = %d AND status = '%s'",
+            tableName,
+            tenantId,
+            STATUS_DRAFT
+        );
+    }
+
+    private String draftStockCountSubquery(Long tenantId) {
+        return String.format(
+            "SELECT id FROM erp_stock_count WHERE tenant_id = %d AND status = '%s'",
+            tenantId,
+            STATUS_DRAFT
+        );
     }
 
     private String normalizeRequiredText(String value, String message) {

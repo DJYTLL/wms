@@ -31,6 +31,13 @@ public class ErpWarehouseController {
         return ResponseEntity.ok(ApiResponse.ok(erpWarehouseService.listAll(keyword, enabled)));
     }
 
+    // 业务选项：仅返回启用仓库
+    @GetMapping("/options")
+    @PreAuthorize("hasAuthority('PERM_erp-warehouse:view')")
+    public ResponseEntity<ApiResponse<List<ErpWarehouse>>> options() {
+        return ResponseEntity.ok(ApiResponse.ok(erpWarehouseService.listAll(null, true)));
+    }
+
     // 分页查询仓库
     @GetMapping("/page")
     @PreAuthorize("hasAuthority('PERM_erp-warehouse:view')")

@@ -463,8 +463,8 @@ const fetchOptions = async () => {
   try {
     const [productsRes, warehousesRes, locationsRes] = await Promise.all([
       request.get('/erp/products'),
-      request.get('/erp/warehouses', { params: { enabled: true } }),
-      request.get('/erp/locations', { params: { enabled: true } })
+      request.get('/erp/warehouses/options'),
+      request.get('/erp/locations/options')
     ]);
     productOptions.value = productsRes.data.data || [];
     warehouseOptions.value = warehousesRes.data.data || [];

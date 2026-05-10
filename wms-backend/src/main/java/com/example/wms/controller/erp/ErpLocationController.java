@@ -32,6 +32,13 @@ public class ErpLocationController {
         return ResponseEntity.ok(ApiResponse.ok(erpLocationService.listAll(keyword, enabled, warehouseId)));
     }
 
+    // 业务选项：仅返回启用库位
+    @GetMapping("/options")
+    @PreAuthorize("hasAuthority('PERM_erp-location:view')")
+    public ResponseEntity<ApiResponse<List<ErpLocation>>> options(@RequestParam(required = false) Long warehouseId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpLocationService.listAll(null, true, warehouseId)));
+    }
+
     // 分页查询库位
     @GetMapping("/page")
     @PreAuthorize("hasAuthority('PERM_erp-location:view')")

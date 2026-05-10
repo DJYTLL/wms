@@ -112,6 +112,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
@@ -172,7 +173,7 @@ const getWarehouseName = (id?: number) => warehouseOptions.value.find(item => it
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses', { params: { enabled: true } });
+    const res: any = await request.get('/erp/warehouses/options');
     warehouseOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);
@@ -251,12 +252,22 @@ const resetForm = () => {
 };
 
 const saveData = async () => {
-  if (!formData.code || !formData.name || !formData.warehouseId) {
+  const code = formData.code.trim();
+  const name = formData.name.trim();
+  if (!code || !name || !formData.warehouseId) {
     notifyWarning(t('message.required'));
     return;
   }
   try {
-    const payload = { ...formData };
+    const payload = {
+      ...formData,
+      code,
+      name,
+      aisle: formData.aisle.trim(),
+      rack: formData.rack.trim(),
+      bin: formData.bin.trim(),
+      remark: formData.remark.trim()
+    };
     const res: any = isEditing.value && currentId.value
       ? await request.put(`/erp/locations/${currentId.value}`, payload)
       : await request.post('/erp/locations', payload);
@@ -273,11 +284,22 @@ const saveData = async () => {
 
 const handleDelete = async (row: ErpLocation) => {
   try {
+    await ElMessageBox.confirm(
+      `确认删除库位“${row.name || row.code}”吗？若该库位已被库存、商品或业务单据引用，系统会阻止删除。`,
+      t('action.delete'),
+      {
+        type: 'warning',
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel')
+      }
+    );
     await request.delete(`/erp/locations/${row.id}`);
     notifySuccess();
     fetchList();
   } catch (error) {
-    notifyError(error);
+    if (error !== 'cancel') {
+      notifyError(error);
+    }
   }
 };
 
