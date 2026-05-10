@@ -70,13 +70,15 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
     public ErpPrintTemplate getDefaultByDocType(String docType) {
         String normalized = normalizeDocType(docType);
         Long tenantId = TenantContext.requireTenantId();
-        return erpPrintTemplateMapper.findDefault(tenantId, normalized);
+        ErpPrintTemplate template = erpPrintTemplateMapper.findDefault(tenantId, normalized);
+        return template != null ? template : erpPrintTemplateMapper.findFirstEnabled(tenantId, normalized);
     }
 
     @Override
     public ErpPrintTemplate create(ErpPrintTemplateCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
         String normalizedDocType = normalizeDocType(request.docType());
+        validateDefaultEnabled(request.isDefault(), request.enabled());
         ErpPrintTemplate existing = erpPrintTemplateMapper.findByCode(tenantId, request.code());
         if (existing != null) {
             throw new IllegalArgumentException("模板编码已存在");
@@ -101,6 +103,7 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
             throw new IllegalArgumentException("打印模板不存在");
         }
         String normalizedDocType = normalizeDocType(request.docType());
+        validateDefaultEnabled(request.isDefault(), request.enabled());
         ErpPrintTemplate existing = erpPrintTemplateMapper.findByCode(tenantId, request.code());
         if (existing != null && !existing.getId().equals(template.getId())) {
             throw new IllegalArgumentException("模板编码已存在");
@@ -193,6 +196,12 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
                 .ne("id", template.getId() == null ? -1 : template.getId())
                 .set("is_default", false)
                 .set("updated_at", Instant.now()));
+        }
+    }
+
+    private void validateDefaultEnabled(Boolean isDefault, Boolean enabled) {
+        if (Boolean.TRUE.equals(isDefault) && Boolean.FALSE.equals(enabled)) {
+            throw new IllegalArgumentException("默认模板必须为启用状态");
         }
     }
 

@@ -12,6 +12,7 @@ public final class RequestAuditContext {
     private Long authTenantId;
     private String authTenantCode;
     private Boolean crossTenant;
+    private String deleteReason;
     private long startNanos;
 
     public static void set(RequestAuditContext context) {
@@ -88,6 +89,14 @@ public final class RequestAuditContext {
 
     public void setCrossTenant(Boolean crossTenant) {
         this.crossTenant = crossTenant;
+    }
+
+    public String getDeleteReason() {
+        return deleteReason;
+    }
+
+    public void setDeleteReason(String deleteReason) {
+        this.deleteReason = deleteReason;
     }
 
     public long getStartNanos() {

@@ -1,6 +1,8 @@
 package com.example.wms.controller.erp;
 
+import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpUnitCreateRequest;
 import com.example.wms.dto.erp.ErpUnitUpdateRequest;
@@ -66,8 +68,11 @@ public class ErpUnitController {
     // 删除单位
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-unit:delete')")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        erpUnitService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
+                                                    @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            erpUnitService.delete(id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

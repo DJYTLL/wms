@@ -48,7 +48,7 @@ const zh = {
         erpSupplier: '供应商管理',
         erpWarehouse: '仓库管理',
         erpLocation: '库位管理',
-        erpCategory: '分类管理',
+        erpCategory: '商品分类',
         erpUnit: '单位管理',
         erpSettlementMethod: '结算方式',
         erpPaymentMethod: '付款方式',
@@ -104,7 +104,7 @@ const zh = {
         erpSupplierManagement: '供应商管理',
         erpWarehouseManagement: '仓库管理',
         erpLocationManagement: '库位管理',
-        erpCategoryManagement: '分类管理',
+        erpCategoryManagement: '商品分类',
         erpUnitManagement: '单位管理',
         erpSettlementMethodManagement: '结算方式管理',
         erpPaymentMethodManagement: '付款方式管理',
@@ -182,6 +182,7 @@ const zh = {
         copy: '复制',
         print: '打印',
         detail: '详情',
+        deleteReason: '删除原因',
         history: '历史',
         productHistory: '商品历史',
         localPrint: '本地打印',
@@ -661,7 +662,7 @@ const zh = {
         success: '成功',
         networkError: '网络错误',
         required: '请填写必填项',
-        deleteConfirm: '确认删除该项吗？',
+        deleteConfirm: '确认逻辑删除该项吗？删除后前端不可恢复。',
         confirmLogout: '确认退出登录吗？',
         defaultTenantDeleteDisabled: '默认租户不允许删除',
         saleOrderNotFound: '销售单不存在',
@@ -722,4 +723,3 @@ const zh = {
 };
 
 export default zh;
-

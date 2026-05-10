@@ -3,6 +3,11 @@
   box-sizing: border-box;
 }
 
+.el-message,
+.el-notification {
+  z-index: 6000 !important;
+}
+
 .page-shell--system {
   display: flex;
   flex-direction: column;

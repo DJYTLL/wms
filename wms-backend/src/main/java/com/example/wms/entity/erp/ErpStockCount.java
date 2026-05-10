@@ -1,24 +1,14 @@
 package com.example.wms.entity.erp;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.example.wms.entity.base.TenantAuditableSoftDeleteEntity;
 
 import java.time.Instant;
 
 // 库存盘点单实体（ERP进销存）
 @TableName("erp_stock_count")
-public class ErpStockCount {
-    // 主键
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
-    // 租户ID
-    @TableField("tenant_id")
-    private Long tenantId;
-
+public class ErpStockCount extends TenantAuditableSoftDeleteEntity {
     // 盘点单号
     @TableField("count_no")
     private String countNo;
@@ -53,14 +43,6 @@ public class ErpStockCount {
     @TableField("last_printed_at")
     private Instant lastPrintedAt;
 
-    // 创建时间
-    @TableField("created_at")
-    private Instant createdAt;
-
-    // 更新时间
-    @TableField("updated_at")
-    private Instant updatedAt;
-
     // 审核人
     @TableField("approved_by")
     private String approvedBy;
@@ -76,26 +58,6 @@ public class ErpStockCount {
     // 作废时间
     @TableField("cancelled_at")
     private Instant cancelledAt;
-
-    @TableLogic(value = "null", delval = "now()")
-    @TableField("deleted_at")
-    private Instant deletedAt;
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Long getTenantId() {
-        return tenantId;
-    }
-
-    public void setTenantId(Long tenantId) {
-        this.tenantId = tenantId;
-    }
 
     public String getCountNo() {
         return countNo;
@@ -169,22 +131,6 @@ public class ErpStockCount {
         this.lastPrintedAt = lastPrintedAt;
     }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
     public String getApprovedBy() {
         return approvedBy;
     }
@@ -217,11 +163,4 @@ public class ErpStockCount {
         this.cancelledAt = cancelledAt;
     }
 
-    public Instant getDeletedAt() {
-        return deletedAt;
-    }
-
-    public void setDeletedAt(Instant deletedAt) {
-        this.deletedAt = deletedAt;
-    }
 }

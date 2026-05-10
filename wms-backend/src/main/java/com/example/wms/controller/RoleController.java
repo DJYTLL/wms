@@ -1,6 +1,8 @@
 package com.example.wms.controller;
 
+import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.RoleCreateRequest;
 import com.example.wms.dto.RolePermissionUpdateRequest;
 import com.example.wms.dto.RoleUpdateRequest;
@@ -90,8 +92,11 @@ public class RoleController {
     // 删除角色
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_role:delete')")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        roleService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
+                                                    @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            roleService.delete(id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
@@ -141,8 +146,11 @@ public class RoleController {
     @DeleteMapping("/{id}/permissions/{permissionId}")
     @PreAuthorize("hasAuthority('PERM_role:edit')")
     public ResponseEntity<ApiResponse<Void>> removePermission(@PathVariable Long id,
-                                                              @PathVariable Long permissionId) {
-        rolePermissionService.removePermission(id, permissionId);
+                                                              @PathVariable Long permissionId,
+                                                              @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            rolePermissionService.removePermission(id, permissionId);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

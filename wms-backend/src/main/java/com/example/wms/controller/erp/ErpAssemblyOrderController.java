@@ -1,6 +1,8 @@
 package com.example.wms.controller.erp;
 
+import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpAssemblyOrderCreateRequest;
 import com.example.wms.dto.erp.ErpAssemblyOrderDetail;
@@ -82,8 +84,11 @@ public class ErpAssemblyOrderController {
 
     @PreAuthorize("hasAuthority('PERM_erp-assembly:edit')")
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        erpAssemblyOrderService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
+                                                    @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            erpAssemblyOrderService.delete(id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 

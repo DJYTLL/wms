@@ -1,10 +1,8 @@
 package com.example.wms.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.example.wms.entity.base.TenantAuditableSoftDeleteEntity;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -12,15 +10,7 @@ import java.util.Set;
 
 // 登录用户实体：用于 JWT 与权限体系
 @TableName("app_user")
-public class UserAccount {
-    // 主键
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
-    // 租户 ID
-    @TableField("tenant_id")
-    private Long tenantId;
-
+public class UserAccount extends TenantAuditableSoftDeleteEntity {
     // 登录名
     @TableField("username")
     private String username;
@@ -69,19 +59,6 @@ public class UserAccount {
     @TableField("last_login_at")
     private Instant lastLoginAt;
 
-    // 创建时间
-    @TableField("created_at")
-    private Instant createdAt;
-
-    // 更新时间
-    @TableField("updated_at")
-    private Instant updatedAt;
-
-    // 软删除时间
-    @TableField("deleted_at")
-    @TableLogic(value = "null", delval = "now()")
-    private Instant deletedAt;
-
     // 备注
     @TableField("remark")
     private String remark;
@@ -89,22 +66,6 @@ public class UserAccount {
     // 用户拥有的角色（非表字段）
     @TableField(exist = false)
     private Set<Role> roles = new HashSet<>();
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Long getTenantId() {
-        return tenantId;
-    }
-
-    public void setTenantId(Long tenantId) {
-        this.tenantId = tenantId;
-    }
 
     public String getUsername() {
         return username;
@@ -200,30 +161,6 @@ public class UserAccount {
 
     public void setLastLoginAt(Instant lastLoginAt) {
         this.lastLoginAt = lastLoginAt;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public Instant getDeletedAt() {
-        return deletedAt;
-    }
-
-    public void setDeletedAt(Instant deletedAt) {
-        this.deletedAt = deletedAt;
     }
 
     public String getRemark() {

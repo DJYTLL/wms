@@ -1,6 +1,8 @@
 package com.example.wms.controller.erp;
 
+import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.erp.ErpProductFitmentCreateRequest;
 import com.example.wms.dto.erp.ErpProductFitmentUpdateRequest;
 import com.example.wms.entity.erp.ErpProductFitment;
@@ -50,8 +52,11 @@ public class ErpProductFitmentController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-product-fitment:delete')")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        erpProductFitmentService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
+                                                    @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            erpProductFitmentService.delete(id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

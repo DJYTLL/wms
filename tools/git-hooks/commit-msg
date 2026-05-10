@@ -1,0 +1,3 @@
+#!/bin/sh
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools/git-hooks/commit-msg.ps1" "$1"

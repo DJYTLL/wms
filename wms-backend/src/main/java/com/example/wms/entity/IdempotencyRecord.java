@@ -1,19 +1,14 @@
 package com.example.wms.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.example.wms.entity.base.SoftDeleteEntity;
 
 import java.time.Instant;
 
 // 幂等记录实体
 @TableName("app_idempotency")
-public class IdempotencyRecord {
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
+public class IdempotencyRecord extends SoftDeleteEntity {
     @TableField("idempotency_key")
     private String idempotencyKey;
 
@@ -34,18 +29,6 @@ public class IdempotencyRecord {
 
     @TableField("expires_at")
     private Instant expiresAt;
-
-    @TableLogic(value = "null", delval = "now()")
-    @TableField("deleted_at")
-    private Instant deletedAt;
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
 
     public String getIdempotencyKey() {
         return idempotencyKey;
@@ -103,11 +86,4 @@ public class IdempotencyRecord {
         this.expiresAt = expiresAt;
     }
 
-    public Instant getDeletedAt() {
-        return deletedAt;
-    }
-
-    public void setDeletedAt(Instant deletedAt) {
-        this.deletedAt = deletedAt;
-    }
 }

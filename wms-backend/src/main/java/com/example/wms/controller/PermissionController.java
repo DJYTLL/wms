@@ -1,6 +1,8 @@
 package com.example.wms.controller;
 
+import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PermissionCreateRequest;
 import com.example.wms.dto.PermissionUpdateRequest;
 import com.example.wms.dto.PageResponse;
@@ -79,8 +81,11 @@ public class PermissionController {
     // 删除权限
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('super_admin')")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        permissionService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
+                                                    @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            permissionService.delete(id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

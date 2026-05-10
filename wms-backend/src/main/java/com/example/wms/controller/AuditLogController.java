@@ -81,7 +81,7 @@ public class AuditLogController {
         response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=\"audit-logs.csv\"");
         StringBuilder builder = new StringBuilder();
-        builder.append("id,tenantId,tenantCode,authTenantId,authTenantCode,crossTenant,actorUsername,action,entityType,entityId,detail,status,requestId,clientIp,userAgent,method,path,httpStatus,errorCode,errorMessage,durationMs,createdAt\n");
+        builder.append("id,tenantId,tenantCode,authTenantId,authTenantCode,crossTenant,actorUsername,action,entityType,entityId,detail,deleteReason,status,requestId,clientIp,userAgent,method,path,httpStatus,errorCode,errorMessage,durationMs,createdAt\n");
         for (AuditLogResponse log : logs) {
             builder.append(value(log.id()))
                 .append(',')
@@ -104,6 +104,8 @@ public class AuditLogController {
                 .append(escapeCsv(log.entityId()))
                 .append(',')
                 .append(escapeCsv(log.detail()))
+                .append(',')
+                .append(escapeCsv(log.deleteReason()))
                 .append(',')
                 .append(escapeCsv(log.status()))
                 .append(',')

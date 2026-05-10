@@ -9,7 +9,7 @@ import java.time.Instant;
 public interface AuditLogService {
     // 写入审计日志
     default void record(String action, String entityType, String entityId, String detail) {
-        record(action, entityType, entityId, detail, "SUCCESS", 200, null, null, null);
+        record(action, entityType, entityId, detail, null, "SUCCESS", 200, null, null, null);
     }
 
     // 写入审计日志（增强字段）
@@ -17,6 +17,7 @@ public interface AuditLogService {
                 String entityType,
                 String entityId,
                 String detail,
+                String deleteReason,
                 String status,
                 Integer httpStatus,
                 Long durationMs,

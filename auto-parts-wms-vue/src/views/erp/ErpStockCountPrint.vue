@@ -49,13 +49,8 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-
-interface TemplateConfig {
-  headerFields: string[];
-  detailColumns: string[];
-  showTotals: boolean;
-  columnWidths?: Record<string, number>;
-}
+import { fetchPrintTemplate, parsePrintTemplateConfig, readPrintTemplatePreview, resolvePreviewConfigKey, resolveTemplateId, type PrintTemplateConfig as TemplateConfig } from '@/utils/printTemplate';
+import { directPrintWindow } from '@/utils/directPrint';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -222,29 +217,21 @@ const buildDefaultConfig = (): TemplateConfig => ({
 });
 
 const applyTemplate = (tpl?: any) => {
-  const defaults = buildDefaultConfig();
-  if (!tpl || !tpl.fieldConfig) {
-    headerFields.value = [...defaults.headerFields];
-    detailColumnKeys.value = [...defaults.detailColumns];
-    columnWidths.value = { ...(defaults.columnWidths || {}) };
-    return;
-  }
-  try {
-    const parsed = JSON.parse(tpl.fieldConfig);
-    headerFields.value = Array.isArray(parsed.headerFields) ? parsed.headerFields : defaults.headerFields;
-    detailColumnKeys.value = Array.isArray(parsed.detailColumns) ? parsed.detailColumns : defaults.detailColumns;
-    columnWidths.value = normalizeColumnWidths(parsed.columnWidths, detailColumnKeys.value, defaults.columnWidths || {});
-  } catch {
-    headerFields.value = [...defaults.headerFields];
-    detailColumnKeys.value = [...defaults.detailColumns];
-    columnWidths.value = { ...(defaults.columnWidths || {}) };
-  }
+  const resolved = parsePrintTemplateConfig(tpl?.fieldConfig, buildDefaultConfig());
+  headerFields.value = [...resolved.headerFields];
+  detailColumnKeys.value = [...resolved.detailColumns];
+  columnWidths.value = { ...resolved.columnWidths };
 };
 
 const fetchTemplate = async () => {
   try {
-    const res: any = await request.get('/erp/print-templates/default', { params: { docType: 'STOCK_COUNT' } });
-    template.value = res.data.data;
+    const previewTemplate = readPrintTemplatePreview(resolvePreviewConfigKey(route.query.previewConfigKey));
+    if (previewTemplate) {
+      template.value = previewTemplate;
+      applyTemplate(template.value);
+      return;
+    }
+    template.value = await fetchPrintTemplate('STOCK_COUNT', resolveTemplateId(route.query.templateId));
     applyTemplate(template.value);
   } catch {
     template.value = null;
@@ -285,7 +272,8 @@ const recordPrint = async () => {
 const triggerPrint = async () => {
   if (!count.value) return;
   await recordPrint();
-  window.print();
+  const printed = await directPrintWindow(window, { removeSelectors: ['.print-toolbar'] });
+  if (!printed) window.print();
 };
 
 const closeWindow = () => {
@@ -315,21 +303,6 @@ onMounted(() => {
   init();
 });
 
-const normalizeColumnWidths = (
-  input: Record<string, number> | undefined,
-  columns: string[],
-  defaults: Record<string, number>
-) => {
-  const safe: Record<string, number> = {};
-  columns.forEach((key) => {
-    const value = input && typeof input[key] === 'number' ? input[key] : defaults[key];
-    if (value) {
-      safe[key] = value;
-    }
-  });
-  return safe;
-};
-
 const columnStyle = (col: { width?: number }) => {
   if (!col.width) return undefined;
   return { width: `${col.width}ch` };
@@ -339,9 +312,10 @@ const columnStyle = (col: { width?: number }) => {
 <style scoped>
 .print-page {
   min-height: auto;
-  background: #f3f1ed;
-  padding: 16px;
-  font-family: "Courier New", Courier, monospace;
+  background: #fff;
+  padding: 0;
+  font-family: "SimSun", "宋体", "Microsoft YaHei", sans-serif;
+  color: #000;
 }
 
 .print-toolbar {
@@ -358,10 +332,10 @@ const columnStyle = (col: { width?: number }) => {
 
 .print-paper {
   background: #fff;
-  padding: 18px 20px 24px;
-  border: 1px dashed #9b9b9b;
-  border-radius: 6px;
-  box-shadow: 0 12px 32px rgba(30, 30, 30, 0.1);
+  padding: 4mm 5mm 5mm;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .print-paper--loading {
@@ -370,27 +344,27 @@ const columnStyle = (col: { width?: number }) => {
 
 .paper-header {
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .paper-title {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
 }
 
 .paper-subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #5c5c5c;
+  margin-top: 2px;
+  font-size: 10px;
+  color: #000;
 }
 
 .paper-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 18px;
-  margin-bottom: 14px;
-  font-size: 12px;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+  font-size: 10px;
 }
 
 .meta-item {
@@ -399,8 +373,8 @@ const columnStyle = (col: { width?: number }) => {
 }
 
 .meta-label {
-  color: #4d4d4d;
-  min-width: 80px;
+  color: #000;
+  min-width: 58px;
 }
 
 .meta-value {
@@ -411,26 +385,33 @@ const columnStyle = (col: { width?: number }) => {
 .paper-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  table-layout: fixed;
+  font-size: 10px;
 }
 
 .paper-table th,
 .paper-table td {
   border: 1px solid #b3b3b3;
-  padding: 6px 8px;
+  padding: 3px 4px;
   text-align: left;
+  word-break: break-all;
 }
 
 .paper-table th {
-  background: #f0ede7;
+  background: #fff;
 }
 
 .paper-footer {
-  margin-top: 16px;
-  font-size: 12px;
-  color: #4d4d4d;
-  border-top: 1px dashed #b3b3b3;
-  padding-top: 8px;
+  margin-top: 10px;
+  font-size: 10px;
+  color: #000;
+  border-top: 1px solid #b3b3b3;
+  padding-top: 6px;
+}
+
+@page {
+  size: auto;
+  margin: 4mm 5mm;
 }
 
 @media print {

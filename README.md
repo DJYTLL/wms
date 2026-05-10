@@ -30,6 +30,13 @@
 - 业务查询默认排除已删除数据，客户欠款、供应商欠款、库存预警、收付款详情、历史成交、租户菜单、角色权限等联表查询已补 `deleted_at IS NULL` 过滤，避免墓碑数据继续参与展示、汇总和唯一性占用。
 - 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q -DskipTests compile`，并复查运行期 Java 代码中的 `deleteById`、`mapper.delete(...)`、`@Delete`、`DELETE FROM` 路径，确认业务删除语义均落到逻辑删除。
 
+### 删除治理与审计补强
+
+- 所有后端删除接口现在统一要求提交 `DeleteRequest.reason`，并通过审计切面把删除原因写入审计日志明细；删除人继续使用现有审计日志 `actor` 字段记录。
+- ERP 删除接口已与系统管理删除接口统一，不再允许“无原因删除”；同时明确不提供前端恢复入口，也不暴露后端 `restore` 风格接口。
+- 新增实体公共基类 `entity/base/*`，把主键、审计字段、逻辑删除字段、租户字段收敛到统一模型，新的业务实体默认复用这些基类。
+- 新增删除治理回归测试，覆盖删除原因上下文、删除接口必须带 `DeleteRequest`、控制器不得暴露恢复路由，以及核心逻辑删除实体必须复用公共基类。
+
 ### 进销存仓库/库位主数据治理补强
 
 - 仓库、库位删除增加引用保护，若已被库存、默认主数据或业务单据引用，将禁止物理删除。
@@ -720,6 +727,9 @@ ERP 代码数量最多，但组织非常标准，按业务对象横向展开。
 - 新增数据库字段或表时，必须补充 `db/migration` 脚本，不要直接改线上库。
 - 新增页面时，前端应同步补充路由、菜单、权限码。
 - 新增接口时，后端应同步补充 DTO、Service、Mapper、Controller。
+- 新增业务表默认包含 `deleted_at`，业务删除统一走逻辑删除；如存在唯一键冲突风险，优先使用活动态唯一索引。
+- 面向租户的外部查询表默认补 `(tenant_id, deleted_at)` 组合索引，并在自定义 SQL 中显式过滤 `deleted_at IS NULL`。
+- 技术性状态表与追加型流水表要单独建模：刷新令牌优先用撤销/过期字段，审计日志与库存流水默认只追加不做恢复接口。
 - 建议后续把旧的零散文档合并，避免多份 README 内容不一致。
 
 ## 9. 业务完成收口规范
@@ -837,6 +847,18 @@ git config core.hooksPath tools/git-hooks
 - 本次变更：将后端系统管理与 ERP 全业务域的运行期删除语义统一改为逻辑删除，并补齐已删除数据的默认过滤。
 - 影响范围：`README.md`、`wms-backend/src/main/resources/db/migration/V55__logical_delete_support.sql`、`wms-backend/src/main/resources/db/migration/V56__logical_delete_relations_and_finance.sql`，以及后端系统管理/ERP 实体、Mapper、部分服务实现。
 - 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q -DskipTests compile`，并复查运行期代码中保留的 `deleteById`/`mapper.delete(...)` 调用目标均已接入 `@TableLogic`。
+
+### 2026-05-10 完善删除治理规范
+
+- 本次变更：补齐 ERP 删除接口的删除原因入参与审计联动，新增逻辑删除治理测试，并把公共实体基类、逻辑删除建模、索引规范和“禁止恢复接口”要求固化到文档。
+- 影响范围：`README.md`、`wms-backend/docs/Flyway_Template.sql`、`wms-backend/src/main/java/com/example/wms/controller/erp/*`、`wms-backend/src/main/java/com/example/wms/entity/base/*`、`wms-backend/src/test/java/com/example/wms/LogicalDeleteGovernanceTests.java`。
+- 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q -DskipTests compile`，并执行 `mvn -q -Dtest=LogicalDeleteGovernanceTests test` 校验删除接口约束和实体基类约束。
+
+### 2026-05-10 删除元数据与前端约束补强
+
+- 本次变更：新增 `V57__logical_delete_metadata_and_indexes.sql`，给逻辑删除核心表补 `deleted_by`、`delete_reason` 和 `(tenant_id, deleted_at)` 组合索引，并把默认项唯一索引改成活动态唯一索引；后端补 `AuditMetaObjectHandler` 自动填充删除人和删除原因；前端在 `request.delete` 统一要求填写删除原因，审计日志页增加删除原因可视化列。
+- 影响范围：`README.md`、`wms-backend/src/main/resources/db/migration/V57__logical_delete_metadata_and_indexes.sql`、`wms-backend/src/main/java/com/example/wms/config/AuditMetaObjectHandler.java`、`wms-backend/src/main/java/com/example/wms/security/CurrentActor.java`、部分 ERP 实体、`auto-parts-wms-vue/src/utils/request.ts`、`auto-parts-wms-vue/src/views/system/AuditLogManagement.vue`、前端中英文语言包，以及后端逻辑删除回归测试。
+- 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q -DskipTests compile` 和 `mvn -q -Dtest=LogicalDeleteGovernanceTests,AuditMetaObjectHandlerTests,ErpMasterDataGovernanceTests test`；前端构建在当前环境因审批额度限制未执行。
 
 ## 10. 快速定位指南
 

@@ -1,20 +1,12 @@
 package com.example.wms.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
-
-import java.time.Instant;
+import com.example.wms.entity.base.AuditableSoftDeleteEntity;
 
 // 权限实体：细粒度权限点
 @TableName("app_permission")
-public class Permission {
-    // 主键
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
+public class Permission extends AuditableSoftDeleteEntity {
     // 权限编码
     @TableField("code")
     private String code;
@@ -30,27 +22,6 @@ public class Permission {
     // 是否启用
     @TableField("is_enabled")
     private boolean enabled = true;
-
-    // 创建时间
-    @TableField("created_at")
-    private Instant createdAt;
-
-    // 更新时间
-    @TableField("updated_at")
-    private Instant updatedAt;
-
-    // 删除时间
-    @TableLogic(value = "null", delval = "now()")
-    @TableField("deleted_at")
-    private Instant deletedAt;
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
 
     public String getCode() {
         return code;
@@ -84,27 +55,4 @@ public class Permission {
         this.enabled = enabled;
     }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public Instant getDeletedAt() {
-        return deletedAt;
-    }
-
-    public void setDeletedAt(Instant deletedAt) {
-        this.deletedAt = deletedAt;
-    }
 }

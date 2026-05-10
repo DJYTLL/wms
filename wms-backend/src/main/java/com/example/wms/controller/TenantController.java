@@ -1,6 +1,8 @@
 package com.example.wms.controller;
 
+import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.TenantCreateRequest;
 import com.example.wms.dto.TenantMenuResponse;
 import com.example.wms.dto.TenantMenuUpdateRequest;
@@ -89,8 +91,11 @@ public class TenantController {
     // 删除租户（软删除，超级管理员）
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('super_admin')")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        tenantService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
+                                                    @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            tenantService.delete(id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 

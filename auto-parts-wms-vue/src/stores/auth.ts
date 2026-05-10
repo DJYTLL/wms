@@ -15,7 +15,7 @@ let listenersRegistered = false;
 export const useAuthStore = defineStore('auth', () => {
   const router = useRouter();
   
-  // JWT Token 仅保存在内存中。
+  // JWT Token 优先从持久化存储恢复，保证打印页和 iframe 可复用登录态。
   const token = ref<string | null>(getToken());
   
   // 已认证用户对象的响应式状态。

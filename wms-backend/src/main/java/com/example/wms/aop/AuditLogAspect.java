@@ -19,6 +19,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.example.wms.audit.RequestAuditContext;
 
 // 审计日志切面：基于注解自动记录
 @Aspect
@@ -55,6 +56,11 @@ public class AuditLogAspect {
             Object[] args = joinPoint.getArgs();
             String entityId = resolveValue(auditLog.entityId(), args, result);
             String detail = resolveValue(auditLog.detail(), args, result);
+            RequestAuditContext requestContext = RequestAuditContext.get();
+            String deleteReason = null;
+            if (requestContext != null && "DELETE".equalsIgnoreCase(requestContext.getMethod())) {
+                deleteReason = truncate(requestContext.getDeleteReason(), 400);
+            }
             if (error != null) {
                 String suffix = "error=" + error.getClass().getSimpleName() + ":" + error.getMessage();
                 detail = (detail == null || detail.isBlank()) ? suffix : (detail + " | " + suffix);
@@ -64,6 +70,7 @@ public class AuditLogAspect {
                 auditLog.entityType(),
                 entityId,
                 detail,
+                deleteReason,
                 status,
                 httpStatus,
                 durationMs,

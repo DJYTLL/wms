@@ -145,7 +145,8 @@
           />
           <el-table-column v-if="canShow('entityType')" prop="entityType" :label="t('field.entityType')" min-width="120" />
           <el-table-column v-if="canShow('entityId')" prop="entityId" :label="t('field.entityId')" min-width="120" />
-          <el-table-column v-if="canShow('detail')" prop="detail" :label="t('field.detail')" min-width="220" />
+          <el-table-column v-if="canShow('detail')" prop="detail" :label="t('field.detail')" min-width="220" show-overflow-tooltip />
+          <el-table-column v-if="canShow('deleteReason')" prop="deleteReason" :label="t('field.deleteReason')" min-width="180" show-overflow-tooltip />
           <el-table-column v-if="canShow('status')" prop="status" :label="t('field.result')" min-width="100">
             <template #default="{ row }">
               <el-tag :type="row.status === 'FAIL' ? 'danger' : 'success'" size="small">
@@ -207,6 +208,7 @@ type AuditLogItem = {
   entityType: string;
   entityId: string;
   detail: string;
+  deleteReason?: string | null;
   status?: string | null;
   requestId?: string | null;
   clientIp?: string | null;
@@ -367,6 +369,7 @@ const defaultColumns = [
   'entityType',
   'entityId',
   'detail',
+  'deleteReason',
   'status',
   'requestId',
   'clientIp',
@@ -387,6 +390,7 @@ const columnPermissionMap: Record<string, string> = {
   entityType: 'column:audit-logs:entityType',
   entityId: 'column:audit-logs:entityId',
   detail: 'column:audit-logs:detail',
+  deleteReason: 'column:audit-logs:detail',
   status: 'column:audit-logs:status',
   requestId: 'column:audit-logs:requestId',
   clientIp: 'column:audit-logs:clientIp',

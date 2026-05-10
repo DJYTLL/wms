@@ -1,6 +1,8 @@
 package com.example.wms.controller.erp;
 
+import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPrintTemplateCreateRequest;
 import com.example.wms.dto.erp.ErpPrintTemplateUpdateRequest;
@@ -74,8 +76,11 @@ public class ErpPrintTemplateController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-print-template:delete')")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        erpPrintTemplateService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
+                                                    @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            erpPrintTemplateService.delete(id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

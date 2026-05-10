@@ -1,0 +1,18 @@
+[
+  {
+    "description": "Trust WMS self-signed certificate",
+    "type": "ca",
+    "phase": "certgen",
+    "os": "windows",
+    "arch": "x86_64",
+    "data": "self-signed.crt"
+  },
+  {
+    "description": "Whitelist WMS QZ business certificate",
+    "type": "cert",
+    "phase": "startup",
+    "os": "windows",
+    "arch": "x86_64",
+    "data": "digital-certificate.txt"
+  }
+]

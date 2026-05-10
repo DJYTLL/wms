@@ -1,5 +1,6 @@
 package com.example.wms.entity.erp;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -35,6 +36,12 @@ public class ErpReceiptReceivable {
 
     @TableField("created_at")
     private Instant createdAt;
+
+    @TableField(value = "deleted_by", fill = FieldFill.UPDATE)
+    private String deletedBy;
+
+    @TableField(value = "delete_reason", fill = FieldFill.UPDATE)
+    private String deleteReason;
 
     @TableLogic(value = "null", delval = "now()")
     @TableField("deleted_at")
@@ -102,6 +109,22 @@ public class ErpReceiptReceivable {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getDeletedBy() {
+        return deletedBy;
+    }
+
+    public void setDeletedBy(String deletedBy) {
+        this.deletedBy = deletedBy;
+    }
+
+    public String getDeleteReason() {
+        return deleteReason;
+    }
+
+    public void setDeleteReason(String deleteReason) {
+        this.deleteReason = deleteReason;
     }
 
     public Instant getDeletedAt() {

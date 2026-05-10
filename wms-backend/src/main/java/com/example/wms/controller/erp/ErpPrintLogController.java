@@ -23,7 +23,7 @@ public class ErpPrintLogController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-purchase:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-purchase:view','PERM_erp-sale-return:view','PERM_erp-purchase-return:view','PERM_erp-receipt:view','PERM_erp-payment:view','PERM_erp-ar:view','PERM_erp-ap:view','PERM_erp-stock-count:view','PERM_erp-stock-init:view')")
     public ResponseEntity<ApiResponse<ErpPrintLog>> record(@Valid @RequestBody ErpPrintLogCreateRequest request,
                                                            HttpServletRequest httpServletRequest) {
         String ip = httpServletRequest.getRemoteAddr();
@@ -32,7 +32,7 @@ public class ErpPrintLogController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-purchase:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-purchase:view','PERM_erp-sale-return:view','PERM_erp-purchase-return:view','PERM_erp-receipt:view','PERM_erp-payment:view','PERM_erp-ar:view','PERM_erp-ap:view','PERM_erp-stock-count:view','PERM_erp-stock-init:view')")
     public ResponseEntity<ApiResponse<List<ErpPrintLog>>> list(@RequestParam String docType,
                                                                @RequestParam Long docId) {
         return ResponseEntity.ok(ApiResponse.ok(erpPrintLogService.listByDoc(docType, docId)));

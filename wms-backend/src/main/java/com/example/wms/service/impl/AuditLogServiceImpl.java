@@ -29,6 +29,7 @@ public class AuditLogServiceImpl implements AuditLogService {
                        String entityType,
                        String entityId,
                        String detail,
+                       String deleteReason,
                        String status,
                        Integer httpStatus,
                        Long durationMs,
@@ -41,6 +42,7 @@ public class AuditLogServiceImpl implements AuditLogService {
         log.setEntityType(entityType);
         log.setEntityId(entityId);
         log.setDetail(detail);
+        log.setDeleteReason(deleteReason);
         log.setStatus(status == null ? "SUCCESS" : status);
         log.setHttpStatus(httpStatus);
         log.setErrorCode(errorCode);
@@ -137,6 +139,7 @@ public class AuditLogServiceImpl implements AuditLogService {
             log.getEntityType(),
             log.getEntityId(),
             log.getDetail(),
+            log.getDeleteReason(),
             log.getStatus(),
             log.getRequestId(),
             log.getClientIp(),

@@ -1,6 +1,8 @@
 package com.example.wms.controller.erp;
 
+import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSupplierCreateRequest;
 import com.example.wms.dto.erp.ErpSupplierUpdateRequest;
@@ -66,8 +68,11 @@ public class ErpSupplierController {
     // 删除供应商
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-supplier:delete')")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        erpSupplierService.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
+                                                    @Valid @RequestBody DeleteRequest request) {
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            erpSupplierService.delete(id);
+        }
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

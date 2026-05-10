@@ -1,23 +1,15 @@
 package com.example.wms.entity.erp;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.example.wms.entity.base.TenantAuditableSoftDeleteEntity;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 
 // 应付单实体（ERP进销存）
 @TableName("erp_accounts_payable")
-public class ErpAccountsPayable {
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
-    @TableField("tenant_id")
-    private Long tenantId;
-
+public class ErpAccountsPayable extends TenantAuditableSoftDeleteEntity {
     @TableField("purchase_order_id")
     private Long purchaseOrderId;
 
@@ -56,32 +48,6 @@ public class ErpAccountsPayable {
 
     @TableField("last_printed_at")
     private Instant lastPrintedAt;
-
-    @TableField("created_at")
-    private Instant createdAt;
-
-    @TableField("updated_at")
-    private Instant updatedAt;
-
-    @TableLogic(value = "null", delval = "now()")
-    @TableField("deleted_at")
-    private Instant deletedAt;
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Long getTenantId() {
-        return tenantId;
-    }
-
-    public void setTenantId(Long tenantId) {
-        this.tenantId = tenantId;
-    }
 
     public Long getPurchaseOrderId() {
         return purchaseOrderId;
@@ -187,27 +153,4 @@ public class ErpAccountsPayable {
         this.lastPrintedAt = lastPrintedAt;
     }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public Instant getDeletedAt() {
-        return deletedAt;
-    }
-
-    public void setDeletedAt(Instant deletedAt) {
-        this.deletedAt = deletedAt;
-    }
 }

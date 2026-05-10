@@ -13,11 +13,11 @@ public interface AuditLogMapper {
     // 写入审计日志
         @Insert("""
         INSERT INTO app_audit_log (
-            tenant_id, auth_tenant_id, auth_tenant_code, is_cross_tenant, actor_username, action, entity_type, entity_id, detail,
+            tenant_id, auth_tenant_id, auth_tenant_code, is_cross_tenant, actor_username, action, entity_type, entity_id, detail, delete_reason,
             status, request_id, client_ip, user_agent, method, path, http_status, error_code, error_message, duration_ms, created_at
         )
         VALUES (
-            #{tenantId}, #{authTenantId}, #{authTenantCode}, #{crossTenant}, #{actorUsername}, #{action}, #{entityType}, #{entityId}, #{detail},
+            #{tenantId}, #{authTenantId}, #{authTenantCode}, #{crossTenant}, #{actorUsername}, #{action}, #{entityType}, #{entityId}, #{detail}, #{deleteReason},
             #{status}, #{requestId}, #{clientIp}, #{userAgent}, #{method}, #{path}, #{httpStatus}, #{errorCode}, #{errorMessage}, #{durationMs}, NOW()
         )
         """)
@@ -38,6 +38,7 @@ public interface AuditLogMapper {
                a.entity_type,
                a.entity_id,
                a.detail,
+               a.delete_reason,
                a.status,
                a.request_id,
                a.client_ip,
@@ -62,6 +63,7 @@ public interface AuditLogMapper {
             OR a.entity_type ILIKE CONCAT('%', #{keyword}, '%')
             OR a.entity_id ILIKE CONCAT('%', #{keyword}, '%')
             OR a.detail ILIKE CONCAT('%', #{keyword}, '%')
+            OR a.delete_reason ILIKE CONCAT('%', #{keyword}, '%')
           )
         </if>
         <if test="action != null and action != ''">
@@ -137,6 +139,7 @@ public interface AuditLogMapper {
             OR a.entity_type ILIKE CONCAT('%', #{keyword}, '%')
             OR a.entity_id ILIKE CONCAT('%', #{keyword}, '%')
             OR a.detail ILIKE CONCAT('%', #{keyword}, '%')
+            OR a.delete_reason ILIKE CONCAT('%', #{keyword}, '%')
           )
         </if>
         <if test="action != null and action != ''">
@@ -206,6 +209,7 @@ public interface AuditLogMapper {
                a.entity_type,
                a.entity_id,
                a.detail,
+               a.delete_reason,
                a.status,
                a.request_id,
                a.client_ip,
@@ -230,6 +234,7 @@ public interface AuditLogMapper {
             OR a.entity_type ILIKE CONCAT('%', #{keyword}, '%')
             OR a.entity_id ILIKE CONCAT('%', #{keyword}, '%')
             OR a.detail ILIKE CONCAT('%', #{keyword}, '%')
+            OR a.delete_reason ILIKE CONCAT('%', #{keyword}, '%')
           )
         </if>
         <if test="action != null and action != ''">

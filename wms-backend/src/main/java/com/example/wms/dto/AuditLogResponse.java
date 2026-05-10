@@ -15,6 +15,7 @@ public record AuditLogResponse(
     String entityType,
     String entityId,
     String detail,
+    String deleteReason,
     String status,
     String requestId,
     String clientIp,

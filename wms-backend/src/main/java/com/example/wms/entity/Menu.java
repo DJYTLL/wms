@@ -1,19 +1,12 @@
 package com.example.wms.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
-
-import java.time.Instant;
+import com.example.wms.entity.base.AuditableSoftDeleteEntity;
 
 // 菜单实体（全局菜单定义）
 @TableName("app_menu")
-public class Menu {
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
+public class Menu extends AuditableSoftDeleteEntity {
     @TableField("code")
     private String code;
 
@@ -40,24 +33,6 @@ public class Menu {
 
     @TableField("is_enabled")
     private boolean enabled = true;
-
-    @TableField("created_at")
-    private Instant createdAt;
-
-    @TableField("updated_at")
-    private Instant updatedAt;
-
-    @TableLogic(value = "null", delval = "now()")
-    @TableField("deleted_at")
-    private Instant deletedAt;
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
 
     public String getCode() {
         return code;
@@ -131,27 +106,4 @@ public class Menu {
         this.enabled = enabled;
     }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public Instant getDeletedAt() {
-        return deletedAt;
-    }
-
-    public void setDeletedAt(Instant deletedAt) {
-        this.deletedAt = deletedAt;
-    }
 }

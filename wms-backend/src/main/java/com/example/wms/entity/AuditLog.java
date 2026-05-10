@@ -15,6 +15,7 @@ public class AuditLog {
     private String entityType;
     private String entityId;
     private String detail;
+    private String deleteReason;
     private String status;
     private String requestId;
     private String clientIp;
@@ -113,6 +114,14 @@ public class AuditLog {
 
     public void setDetail(String detail) {
         this.detail = detail;
+    }
+
+    public String getDeleteReason() {
+        return deleteReason;
+    }
+
+    public void setDeleteReason(String deleteReason) {
+        this.deleteReason = deleteReason;
     }
 
     public String getStatus() {

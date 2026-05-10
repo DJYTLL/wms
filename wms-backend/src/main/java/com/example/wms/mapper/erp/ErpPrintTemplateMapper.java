@@ -14,6 +14,9 @@ public interface ErpPrintTemplateMapper extends BaseMapper<ErpPrintTemplate> {
     ErpPrintTemplate findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
 
     // 查询默认模板
-    @Select("SELECT * FROM erp_print_template WHERE tenant_id = #{tenantId} AND doc_type = #{docType} AND is_default = true AND deleted_at IS NULL LIMIT 1")
+    @Select("SELECT * FROM erp_print_template WHERE tenant_id = #{tenantId} AND doc_type = #{docType} AND is_default = true AND is_enabled = true AND deleted_at IS NULL LIMIT 1")
     ErpPrintTemplate findDefault(@Param("tenantId") Long tenantId, @Param("docType") String docType);
+
+    @Select("SELECT * FROM erp_print_template WHERE tenant_id = #{tenantId} AND doc_type = #{docType} AND is_enabled = true AND deleted_at IS NULL ORDER BY sort_no ASC, updated_at DESC LIMIT 1")
+    ErpPrintTemplate findFirstEnabled(@Param("tenantId") Long tenantId, @Param("docType") String docType);
 }

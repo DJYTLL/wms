@@ -29,6 +29,8 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
+import { fetchPrintTemplate } from '@/utils/printTemplate';
+import { directPrintWindow } from '@/utils/directPrint';
 
 interface Props {
   modelValue: boolean;
@@ -44,6 +46,8 @@ interface Props {
     | 'STOCK_COUNT'
     | 'STOCK_INIT';
   docId?: number | null;
+  templateId?: number | null;
+  previewConfigKey?: string | null;
   title?: string;
 }
 
@@ -77,14 +81,21 @@ const previewUrl = computed(() => {
     STOCK_INIT: 'stock-inits'
   };
   const prefix = prefixMap[props.docType] || 'sale-orders';
-  return `/erp/${prefix}/${props.docId}/print?preview=1`;
+  const query = new URLSearchParams({ preview: '1' });
+  if (props.templateId) {
+    query.set('templateId', String(props.templateId));
+  }
+  if (props.previewConfigKey) {
+    query.set('previewConfigKey', props.previewConfigKey);
+  }
+  return `/erp/${prefix}/${props.docId}/print?${query.toString()}`;
 });
 
 const fetchTemplate = async () => {
   if (!props.docType) return;
   try {
-    const res: any = await request.get('/erp/print-templates/default', { params: { docType: props.docType } });
-    templateId.value = res.data.data?.id || null;
+    const template = await fetchPrintTemplate(props.docType, props.templateId);
+    templateId.value = template?.id || null;
   } catch {
     templateId.value = null;
   }
@@ -107,8 +118,11 @@ const handlePrint = async () => {
   }
   const frame = frameRef.value?.contentWindow;
   if (frame) {
-    frame.focus();
-    frame.print();
+    const printed = await directPrintWindow(frame, { removeSelectors: ['.print-toolbar'] });
+    if (!printed) {
+      frame.focus();
+      frame.print();
+    }
   } else {
     ElMessage.error(t('message.printContentEmpty'));
   }

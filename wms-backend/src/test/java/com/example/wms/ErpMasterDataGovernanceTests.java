@@ -118,6 +118,16 @@ class ErpMasterDataGovernanceTests {
     }
 
     @Test
+    void warehouseDeleteUsesLogicalDeleteWhenUnreferenced() {
+        ErpWarehouseServiceImpl service = warehouseServiceImpl();
+        when(warehouseMapper.selectOne(any())).thenReturn(warehouse(1L, "WH-001", true));
+
+        service.delete(1L);
+
+        verify(warehouseMapper).deleteById(1L);
+    }
+
+    @Test
     void warehouseDisableBlocksWhenReferencedByDefaultProduct() {
         ErpWarehouseServiceImpl service = warehouseServiceImpl();
         when(warehouseMapper.selectOne(any())).thenReturn(warehouse(1L, "WH-001", true));
@@ -178,6 +188,16 @@ class ErpMasterDataGovernanceTests {
         assertThatThrownBy(() -> service.delete(2L))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("库位仍有关联库存，不能删除");
+    }
+
+    @Test
+    void locationDeleteUsesLogicalDeleteWhenUnreferenced() {
+        ErpLocationServiceImpl service = locationServiceImpl();
+        when(locationMapper.selectOne(any())).thenReturn(location(2L, 8L, "LOC-001", true));
+
+        service.delete(2L);
+
+        verify(locationMapper).deleteById(2L);
     }
 
     @Test
