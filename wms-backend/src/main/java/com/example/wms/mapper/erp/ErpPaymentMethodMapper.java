@@ -10,10 +10,10 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface ErpPaymentMethodMapper extends BaseMapper<ErpPaymentMethod> {
     // 按编码查询
-    @Select("SELECT * FROM erp_payment_method WHERE tenant_id = #{tenantId} AND code = #{code}")
+    @Select("SELECT * FROM erp_payment_method WHERE tenant_id = #{tenantId} AND code = #{code} AND deleted_at IS NULL")
     ErpPaymentMethod findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
 
     // 查询默认付款方式
-    @Select("SELECT * FROM erp_payment_method WHERE tenant_id = #{tenantId} AND is_default = true LIMIT 1")
+    @Select("SELECT * FROM erp_payment_method WHERE tenant_id = #{tenantId} AND is_default = true AND deleted_at IS NULL LIMIT 1")
     ErpPaymentMethod findDefault(@Param("tenantId") Long tenantId);
 }

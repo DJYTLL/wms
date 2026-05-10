@@ -10,6 +10,6 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface ErpPurchaseOrderMapper extends BaseMapper<ErpPurchaseOrder> {
     // 按单号查询
-    @Select("SELECT * FROM erp_purchase_order WHERE tenant_id = #{tenantId} AND order_no = #{orderNo}")
+    @Select("SELECT * FROM erp_purchase_order WHERE tenant_id = #{tenantId} AND order_no = #{orderNo} AND deleted_at IS NULL")
     ErpPurchaseOrder findByOrderNo(@Param("tenantId") Long tenantId, @Param("orderNo") String orderNo);
 }

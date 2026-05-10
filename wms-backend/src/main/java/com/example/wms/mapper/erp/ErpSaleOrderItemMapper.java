@@ -14,7 +14,7 @@ import java.util.List;
 @Mapper
 public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
     // 查询订单明细
-    @Select("SELECT * FROM erp_sale_order_item WHERE tenant_id = #{tenantId} AND order_id = #{orderId} ORDER BY sort_no, id")
+    @Select("SELECT * FROM erp_sale_order_item WHERE tenant_id = #{tenantId} AND order_id = #{orderId} AND deleted_at IS NULL ORDER BY sort_no, id")
     List<ErpSaleOrderItem> findByOrderId(@Param("tenantId") Long tenantId, @Param("orderId") Long orderId);
 
     @Select("""
@@ -29,6 +29,8 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
           ON i.order_id = o.id
          AND i.tenant_id = o.tenant_id
         WHERE o.tenant_id = #{tenantId}
+          AND o.deleted_at IS NULL
+          AND i.deleted_at IS NULL
           AND o.customer_id = #{customerId}
           AND i.product_id = #{productId}
           AND o.status = 'APPROVED'
@@ -51,6 +53,9 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
           ON i.order_id = o.id
          AND i.tenant_id = o.tenant_id
         WHERE o.tenant_id = #{tenantId}
+          AND o.deleted_at IS NULL
+          AND c.deleted_at IS NULL
+          AND i.deleted_at IS NULL
           <if test='customerId != null'>AND o.customer_id = #{customerId}</if>
           AND i.product_id = #{productId}
           AND o.status = 'APPROVED'
@@ -90,6 +95,9 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
           ON i.order_id = o.id
          AND i.tenant_id = o.tenant_id
         WHERE o.tenant_id = #{tenantId}
+          AND o.deleted_at IS NULL
+          AND c.deleted_at IS NULL
+          AND i.deleted_at IS NULL
           <if test='customerId != null'>AND o.customer_id = #{customerId}</if>
           AND i.product_id = #{productId}
           AND o.status = 'APPROVED'

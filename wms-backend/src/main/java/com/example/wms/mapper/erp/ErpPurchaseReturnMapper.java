@@ -9,6 +9,6 @@ import org.apache.ibatis.annotations.Select;
 // 采购退货单 Mapper
 @Mapper
 public interface ErpPurchaseReturnMapper extends BaseMapper<ErpPurchaseReturn> {
-    @Select("SELECT * FROM erp_purchase_return WHERE tenant_id = #{tenantId} AND order_no = #{orderNo}")
+    @Select("SELECT * FROM erp_purchase_return WHERE tenant_id = #{tenantId} AND order_no = #{orderNo} AND deleted_at IS NULL")
     ErpPurchaseReturn findByOrderNo(@Param("tenantId") Long tenantId, @Param("orderNo") String orderNo);
 }

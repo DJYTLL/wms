@@ -3,6 +3,7 @@ package com.example.wms.entity.erp;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.time.Instant;
@@ -75,6 +76,10 @@ public class ErpStockCount {
     // 作废时间
     @TableField("cancelled_at")
     private Instant cancelledAt;
+
+    @TableLogic(value = "null", delval = "now()")
+    @TableField("deleted_at")
+    private Instant deletedAt;
 
     public Long getId() {
         return id;
@@ -210,5 +215,13 @@ public class ErpStockCount {
 
     public void setCancelledAt(Instant cancelledAt) {
         this.cancelledAt = cancelledAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }

@@ -12,7 +12,7 @@ import java.util.List;
 @Mapper
 public interface RoleMapper extends BaseMapper<Role> {
     // 按角色编码查询
-    @Select("SELECT * FROM app_role WHERE tenant_id = #{tenantId} AND code = #{code}")
+    @Select("SELECT * FROM app_role WHERE tenant_id = #{tenantId} AND code = #{code} AND deleted_at IS NULL")
     Role findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
 
     // 查询用户拥有的角色
@@ -22,8 +22,10 @@ public interface RoleMapper extends BaseMapper<Role> {
         JOIN app_user_role ur ON r.id = ur.role_id
         WHERE ur.tenant_id = #{tenantId}
           AND ur.user_id = #{userId}
+          AND ur.deleted_at IS NULL
           AND r.tenant_id = #{tenantId}
           AND r.is_enabled = TRUE
+          AND r.deleted_at IS NULL
         """)
     List<Role> findByUserId(@Param("tenantId") Long tenantId, @Param("userId") Long userId);
 }

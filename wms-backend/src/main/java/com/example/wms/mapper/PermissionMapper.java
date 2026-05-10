@@ -12,7 +12,7 @@ import java.util.List;
 @Mapper
 public interface PermissionMapper extends BaseMapper<Permission> {
     // 按权限编码查询
-    @Select("SELECT * FROM app_permission WHERE code = #{code}")
+    @Select("SELECT * FROM app_permission WHERE code = #{code} AND deleted_at IS NULL")
     Permission findByCode(@Param("code") String code);
 
     // 根据角色列表批量查询权限
@@ -25,7 +25,9 @@ public interface PermissionMapper extends BaseMapper<Permission> {
         <foreach item="id" collection="roleIds" open="(" separator="," close=")">
             #{id}
         </foreach>
+          AND rp.deleted_at IS NULL
           AND p.is_enabled = TRUE
+          AND p.deleted_at IS NULL
         </script>
         """)
     List<Permission> findByRoleIds(@Param("roleIds") List<Long> roleIds);
@@ -36,6 +38,7 @@ public interface PermissionMapper extends BaseMapper<Permission> {
         FROM app_permission
         WHERE code LIKE CONCAT(#{prefix}, '%')
           AND is_enabled = TRUE
+          AND deleted_at IS NULL
         ORDER BY id
         """)
     List<Permission> findByCodePrefix(@Param("prefix") String prefix);

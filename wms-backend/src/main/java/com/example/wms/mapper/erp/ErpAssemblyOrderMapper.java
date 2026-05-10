@@ -9,6 +9,6 @@ import org.apache.ibatis.annotations.Select;
 // Assembly order mapper
 @Mapper
 public interface ErpAssemblyOrderMapper extends BaseMapper<ErpAssemblyOrder> {
-    @Select("SELECT * FROM erp_assembly_order WHERE tenant_id = #{tenantId} AND order_no = #{orderNo}")
+    @Select("SELECT * FROM erp_assembly_order WHERE tenant_id = #{tenantId} AND order_no = #{orderNo} AND deleted_at IS NULL")
     ErpAssemblyOrder findByOrderNo(@Param("tenantId") Long tenantId, @Param("orderNo") String orderNo);
 }

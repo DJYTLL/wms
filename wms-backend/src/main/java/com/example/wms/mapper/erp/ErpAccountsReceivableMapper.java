@@ -17,6 +17,7 @@ public interface ErpAccountsReceivableMapper extends BaseMapper<ErpAccountsRecei
         WHERE tenant_id = #{tenantId}
           AND sale_order_id = #{saleOrderId}
           AND total_amount >= 0
+          AND deleted_at IS NULL
         ORDER BY id DESC
         LIMIT 1
         """)
@@ -31,7 +32,9 @@ public interface ErpAccountsReceivableMapper extends BaseMapper<ErpAccountsRecei
           ON ar.customer_id = c.id
          AND ar.tenant_id = #{tenantId}
          AND ar.status <> 'RED_FLUSHED'
+         AND ar.deleted_at IS NULL
         WHERE c.tenant_id = #{tenantId}
+          AND c.deleted_at IS NULL
           AND (COALESCE(CAST(#{keyword} AS TEXT), '') = ''
                OR LOWER(c.name) LIKE CONCAT('%', LOWER(CAST(#{keyword} AS TEXT)), '%'))
         GROUP BY c.id, c.name

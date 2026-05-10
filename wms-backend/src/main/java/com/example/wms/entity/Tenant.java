@@ -3,6 +3,7 @@ package com.example.wms.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.time.Instant;
@@ -29,6 +30,7 @@ public class Tenant {
     private Instant updatedAt;
 
     @TableField("deleted_at")
+    @TableLogic(value = "null", delval = "now()")
     private Instant deletedAt;
 
     public Long getId() {

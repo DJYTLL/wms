@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Select;
 // 车型车系 Mapper（ERP进销存）
 @Mapper
 public interface ErpVehicleSeriesMapper extends BaseMapper<ErpVehicleSeries> {
-    @Select("SELECT * FROM erp_vehicle_series WHERE tenant_id = #{tenantId} AND brand_id = #{brandId} AND code = #{code}")
+    @Select("SELECT * FROM erp_vehicle_series WHERE tenant_id = #{tenantId} AND brand_id = #{brandId} AND code = #{code} AND deleted_at IS NULL")
     ErpVehicleSeries findByCode(@Param("tenantId") Long tenantId,
                                 @Param("brandId") Long brandId,
                                 @Param("code") String code);

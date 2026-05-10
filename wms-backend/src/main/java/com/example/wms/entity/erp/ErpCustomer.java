@@ -3,6 +3,7 @@ package com.example.wms.entity.erp;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.example.wms.mybatis.JsonbTypeHandler;
@@ -104,6 +105,11 @@ public class ErpCustomer {
     // 更新时间
     @TableField("updated_at")
     private Instant updatedAt;
+
+    // 删除时间
+    @TableLogic(value = "null", delval = "now()")
+    @TableField("deleted_at")
+    private Instant deletedAt;
 
     public Long getId() {
         return id;
@@ -287,5 +293,13 @@ public class ErpCustomer {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }

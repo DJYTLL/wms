@@ -10,6 +10,6 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface ErpCustomerMapper extends BaseMapper<ErpCustomer> {
     // 按编码查询
-    @Select("SELECT * FROM erp_customer WHERE tenant_id = #{tenantId} AND code = #{code}")
+    @Select("SELECT * FROM erp_customer WHERE tenant_id = #{tenantId} AND code = #{code} AND deleted_at IS NULL")
     ErpCustomer findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
 }

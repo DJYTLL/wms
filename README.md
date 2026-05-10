@@ -23,6 +23,13 @@
 
 ## 1.1 近期业务变更
 
+### 全仓逻辑删除收口
+
+- 后端系统管理与 ERP 业务域的运行期删除路径已统一收口为逻辑删除，角色、权限、菜单、租户菜单、用户角色、角色权限、幂等记录，以及 ERP 主数据、单据头、单据明细、收付款分摊、应收应付、盘点等对象不再直接物理删除。
+- 新增数据库迁移 `V55__logical_delete_support.sql` 与 `V56__logical_delete_relations_and_finance.sql`，统一补充 `deleted_at`、活动态唯一索引，并把平台关联表从复合主键模型调整为支持逻辑删除的代理主键模型。
+- 业务查询默认排除已删除数据，客户欠款、供应商欠款、库存预警、收付款详情、历史成交、租户菜单、角色权限等联表查询已补 `deleted_at IS NULL` 过滤，避免墓碑数据继续参与展示、汇总和唯一性占用。
+- 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q -DskipTests compile`，并复查运行期 Java 代码中的 `deleteById`、`mapper.delete(...)`、`@Delete`、`DELETE FROM` 路径，确认业务删除语义均落到逻辑删除。
+
 ### 进销存仓库/库位主数据治理补强
 
 - 仓库、库位删除增加引用保护，若已被库存、默认主数据或业务单据引用，将禁止物理删除。
@@ -825,9 +832,11 @@ git config core.hooksPath tools/git-hooks
 
 ### 9.7 业务变更记录
 
-当前暂无按本规范登记的业务记录。
+### 2026-05-10 全仓逻辑删除收口
 
-首次使用时，请将本节追加为真实业务记录，不要保留模板占位内容。
+- 本次变更：将后端系统管理与 ERP 全业务域的运行期删除语义统一改为逻辑删除，并补齐已删除数据的默认过滤。
+- 影响范围：`README.md`、`wms-backend/src/main/resources/db/migration/V55__logical_delete_support.sql`、`wms-backend/src/main/resources/db/migration/V56__logical_delete_relations_and_finance.sql`，以及后端系统管理/ERP 实体、Mapper、部分服务实现。
+- 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q -DskipTests compile`，并复查运行期代码中保留的 `deleteById`/`mapper.delete(...)` 调用目标均已接入 `@TableLogic`。
 
 ## 10. 快速定位指南
 

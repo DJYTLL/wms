@@ -333,7 +333,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
 
     private String draftOrderSubquery(String tableName, Long tenantId) {
         return String.format(
-            "SELECT id FROM %s WHERE tenant_id = %d AND status IN (%s)",
+            "SELECT id FROM %s WHERE tenant_id = %d AND status IN (%s) AND deleted_at IS NULL",
             tableName,
             tenantId,
             ErpMasterDataRules.pendingStatusSqlList()
@@ -342,7 +342,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
 
     private String draftStockCountSubquery(Long tenantId) {
         return String.format(
-            "SELECT id FROM erp_stock_count WHERE tenant_id = %d AND status IN (%s)",
+            "SELECT id FROM erp_stock_count WHERE tenant_id = %d AND status IN (%s) AND deleted_at IS NULL",
             tenantId,
             ErpMasterDataRules.pendingStatusSqlList()
         );

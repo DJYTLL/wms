@@ -10,10 +10,10 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface ErpSettlementMethodMapper extends BaseMapper<ErpSettlementMethod> {
     // 按编码查询
-    @Select("SELECT * FROM erp_settlement_method WHERE tenant_id = #{tenantId} AND code = #{code}")
+    @Select("SELECT * FROM erp_settlement_method WHERE tenant_id = #{tenantId} AND code = #{code} AND deleted_at IS NULL")
     ErpSettlementMethod findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
 
     // 查询默认结算方式
-    @Select("SELECT * FROM erp_settlement_method WHERE tenant_id = #{tenantId} AND is_default = true LIMIT 1")
+    @Select("SELECT * FROM erp_settlement_method WHERE tenant_id = #{tenantId} AND is_default = true AND deleted_at IS NULL LIMIT 1")
     ErpSettlementMethod findDefault(@Param("tenantId") Long tenantId);
 }

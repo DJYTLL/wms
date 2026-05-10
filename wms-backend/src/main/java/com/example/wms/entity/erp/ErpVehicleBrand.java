@@ -3,6 +3,7 @@ package com.example.wms.entity.erp;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.time.Instant;
@@ -33,6 +34,10 @@ public class ErpVehicleBrand {
 
     @TableField("updated_at")
     private Instant updatedAt;
+
+    @TableLogic(value = "null", delval = "now()")
+    @TableField("deleted_at")
+    private Instant deletedAt;
 
     public Long getId() {
         return id;
@@ -96,5 +101,13 @@ public class ErpVehicleBrand {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }

@@ -10,10 +10,10 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface ErpPrintTemplateMapper extends BaseMapper<ErpPrintTemplate> {
     // 按编码查询
-    @Select("SELECT * FROM erp_print_template WHERE tenant_id = #{tenantId} AND code = #{code}")
+    @Select("SELECT * FROM erp_print_template WHERE tenant_id = #{tenantId} AND code = #{code} AND deleted_at IS NULL")
     ErpPrintTemplate findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
 
     // 查询默认模板
-    @Select("SELECT * FROM erp_print_template WHERE tenant_id = #{tenantId} AND doc_type = #{docType} AND is_default = true LIMIT 1")
+    @Select("SELECT * FROM erp_print_template WHERE tenant_id = #{tenantId} AND doc_type = #{docType} AND is_default = true AND deleted_at IS NULL LIMIT 1")
     ErpPrintTemplate findDefault(@Param("tenantId") Long tenantId, @Param("docType") String docType);
 }

@@ -3,6 +3,7 @@ package com.example.wms.entity.erp;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 import java.math.BigDecimal;
@@ -34,6 +35,10 @@ public class ErpReceiptReceivable {
 
     @TableField("created_at")
     private Instant createdAt;
+
+    @TableLogic(value = "null", delval = "now()")
+    @TableField("deleted_at")
+    private Instant deletedAt;
 
     public Long getId() {
         return id;
@@ -97,5 +102,13 @@ public class ErpReceiptReceivable {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }

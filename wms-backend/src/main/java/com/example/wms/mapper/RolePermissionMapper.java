@@ -1,11 +1,11 @@
 package com.example.wms.mapper;
 
 import com.example.wms.entity.Permission;
-import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -14,8 +14,8 @@ import java.util.List;
 public interface RolePermissionMapper {
     // 插入关联记录，冲突时忽略
     @Insert("""
-        INSERT INTO app_role_permission (tenant_id, role_id, permission_id, created_at)
-        VALUES (#{tenantId}, #{roleId}, #{permissionId}, NOW())
+        INSERT INTO app_role_permission (tenant_id, role_id, permission_id, created_at, updated_at)
+        VALUES (#{tenantId}, #{roleId}, #{permissionId}, NOW(), NOW())
         ON CONFLICT DO NOTHING
         """)
     int insertIgnore(@Param("tenantId") Long tenantId,
@@ -23,26 +23,36 @@ public interface RolePermissionMapper {
                      @Param("permissionId") Long permissionId);
 
     // 删除指定角色下的指定权限
-    @Delete("""
-        DELETE FROM app_role_permission
+    @Update("""
+        UPDATE app_role_permission
+        SET deleted_at = NOW(), updated_at = NOW()
         WHERE tenant_id = #{tenantId}
           AND role_id = #{roleId}
           AND permission_id = #{permissionId}
+          AND deleted_at IS NULL
         """)
     int deleteByRoleIdAndPermissionId(@Param("tenantId") Long tenantId,
                                       @Param("roleId") Long roleId,
                                       @Param("permissionId") Long permissionId);
 
     // 删除角色下全部权限
-    @Delete("DELETE FROM app_role_permission WHERE tenant_id = #{tenantId} AND role_id = #{roleId}")
+    @Update("""
+        UPDATE app_role_permission
+        SET deleted_at = NOW(), updated_at = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND role_id = #{roleId}
+          AND deleted_at IS NULL
+        """)
     int deleteByRoleId(@Param("tenantId") Long tenantId, @Param("roleId") Long roleId);
 
     // 删除角色下的指定权限
-    @Delete("""
+    @Update("""
         <script>
-        DELETE FROM app_role_permission
+        UPDATE app_role_permission
+        SET deleted_at = NOW(), updated_at = NOW()
         WHERE tenant_id = #{tenantId}
           AND role_id = #{roleId}
+          AND deleted_at IS NULL
           AND permission_id IN
         <foreach item="id" collection="permissionIds" open="(" separator="," close=")">
             #{id}
@@ -54,11 +64,21 @@ public interface RolePermissionMapper {
                                        @Param("permissionIds") List<Long> permissionIds);
 
     // 删除权限关联
-    @Delete("DELETE FROM app_role_permission WHERE permission_id = #{permissionId}")
+    @Update("""
+        UPDATE app_role_permission
+        SET deleted_at = NOW(), updated_at = NOW()
+        WHERE permission_id = #{permissionId}
+          AND deleted_at IS NULL
+        """)
     int deleteByPermissionId(@Param("permissionId") Long permissionId);
 
     // 查询拥有某权限的角色 ID
-    @Select("SELECT tenant_id, role_id FROM app_role_permission WHERE permission_id = #{permissionId}")
+    @Select("""
+        SELECT tenant_id, role_id
+        FROM app_role_permission
+        WHERE permission_id = #{permissionId}
+          AND deleted_at IS NULL
+        """)
     List<RoleTenantPair> findRoleTenantPairsByPermissionId(@Param("permissionId") Long permissionId);
 
     // 查询角色拥有的权限
@@ -68,6 +88,8 @@ public interface RolePermissionMapper {
         JOIN app_role_permission rp ON p.id = rp.permission_id
         WHERE rp.tenant_id = #{tenantId}
           AND rp.role_id = #{roleId}
+          AND rp.deleted_at IS NULL
+          AND p.deleted_at IS NULL
         ORDER BY p.id
         """)
     List<Permission> findPermissionsByRoleId(@Param("tenantId") Long tenantId, @Param("roleId") Long roleId);

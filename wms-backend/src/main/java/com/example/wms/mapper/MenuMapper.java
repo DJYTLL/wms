@@ -10,12 +10,12 @@ import java.util.List;
 // 菜单 Mapper
 @Mapper
 public interface MenuMapper extends BaseMapper<Menu> {
-    @Select("SELECT * FROM app_menu WHERE code = #{code}")
+    @Select("SELECT * FROM app_menu WHERE code = #{code} AND deleted_at IS NULL")
     Menu findByCode(String code);
 
-    @Select("SELECT * FROM app_menu WHERE is_enabled = TRUE ORDER BY sort ASC, id ASC")
+    @Select("SELECT * FROM app_menu WHERE is_enabled = TRUE AND deleted_at IS NULL ORDER BY sort ASC, id ASC")
     List<Menu> listEnabled();
 
-    @Select("SELECT * FROM app_menu ORDER BY sort ASC, id ASC")
+    @Select("SELECT * FROM app_menu WHERE deleted_at IS NULL ORDER BY sort ASC, id ASC")
     List<Menu> listAllOrdered();
 }

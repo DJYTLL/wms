@@ -11,10 +11,22 @@ import java.util.List;
 // ERP应付单 Mapper
 @Mapper
 public interface ErpAccountsPayableMapper extends BaseMapper<ErpAccountsPayable> {
-    @Select("SELECT * FROM erp_accounts_payable WHERE tenant_id = #{tenantId} AND purchase_order_id = #{purchaseOrderId}")
+    @Select("""
+        SELECT *
+        FROM erp_accounts_payable
+        WHERE tenant_id = #{tenantId}
+          AND purchase_order_id = #{purchaseOrderId}
+          AND deleted_at IS NULL
+        """)
     ErpAccountsPayable findByPurchaseOrderId(@Param("tenantId") Long tenantId, @Param("purchaseOrderId") Long purchaseOrderId);
 
-    @Select("SELECT * FROM erp_accounts_payable WHERE tenant_id = #{tenantId} AND purchase_return_id = #{purchaseReturnId}")
+    @Select("""
+        SELECT *
+        FROM erp_accounts_payable
+        WHERE tenant_id = #{tenantId}
+          AND purchase_return_id = #{purchaseReturnId}
+          AND deleted_at IS NULL
+        """)
     ErpAccountsPayable findByPurchaseReturnId(@Param("tenantId") Long tenantId, @Param("purchaseReturnId") Long purchaseReturnId);
 
     @Select("""
@@ -26,7 +38,9 @@ public interface ErpAccountsPayableMapper extends BaseMapper<ErpAccountsPayable>
           ON ap.supplier_id = s.id
          AND ap.tenant_id = #{tenantId}
          AND ap.status <> 'RED_FLUSHED'
+         AND ap.deleted_at IS NULL
         WHERE s.tenant_id = #{tenantId}
+          AND s.deleted_at IS NULL
           AND (COALESCE(CAST(#{keyword} AS TEXT), '') = ''
                OR LOWER(s.name) LIKE CONCAT('%', LOWER(CAST(#{keyword} AS TEXT)), '%'))
         GROUP BY s.id, s.name

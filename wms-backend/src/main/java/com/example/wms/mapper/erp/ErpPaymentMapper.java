@@ -9,6 +9,13 @@ import org.apache.ibatis.annotations.Select;
 // ERP付款单 Mapper
 @Mapper
 public interface ErpPaymentMapper extends BaseMapper<ErpPayment> {
-    @Select("SELECT * FROM erp_payment WHERE tenant_id = #{tenantId} AND purchase_order_id = #{purchaseOrderId} LIMIT 1")
+    @Select("""
+        SELECT *
+        FROM erp_payment
+        WHERE tenant_id = #{tenantId}
+          AND purchase_order_id = #{purchaseOrderId}
+          AND deleted_at IS NULL
+        LIMIT 1
+        """)
     ErpPayment findByPurchaseOrderId(@Param("tenantId") Long tenantId, @Param("purchaseOrderId") Long purchaseOrderId);
 }

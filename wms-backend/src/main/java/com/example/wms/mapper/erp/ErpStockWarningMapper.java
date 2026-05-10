@@ -35,16 +35,21 @@ public interface ErpStockWarningMapper {
         LEFT JOIN erp_category c
           ON c.tenant_id = p.tenant_id
          AND c.id = p.category_id
+         AND c.deleted_at IS NULL
         LEFT JOIN erp_unit u
           ON u.tenant_id = p.tenant_id
          AND u.id = p.unit_id
+         AND u.deleted_at IS NULL
         LEFT JOIN erp_warehouse w
           ON w.tenant_id = p.tenant_id
          AND w.id = p.default_warehouse_id
+         AND w.deleted_at IS NULL
         LEFT JOIN erp_location l
           ON l.tenant_id = p.tenant_id
          AND l.id = p.default_location_id
+         AND l.deleted_at IS NULL
         WHERE p.tenant_id = #{tenantId}
+          AND p.deleted_at IS NULL
           AND (COALESCE(CAST(#{keyword} AS TEXT), '') = ''
                OR LOWER(p.name) LIKE CONCAT('%', LOWER(CAST(#{keyword} AS TEXT)), '%')
                OR LOWER(p.code) LIKE CONCAT('%', LOWER(CAST(#{keyword} AS TEXT)), '%'))

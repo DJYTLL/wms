@@ -13,13 +13,17 @@ public interface IdempotencyMapper {
     @Select("""
         SELECT *
         FROM app_idempotency
-        WHERE idempotency_key = #{key} AND expires_at > NOW()
+        WHERE idempotency_key = #{key}
+          AND expires_at > NOW()
+          AND deleted_at IS NULL
         """)
     IdempotencyRecord findValid(@Param("key") String key);
 
     @Update("""
-        DELETE FROM app_idempotency
+        UPDATE app_idempotency
+        SET deleted_at = NOW()
         WHERE idempotency_key = #{key} AND expires_at <= NOW()
+          AND deleted_at IS NULL
         """)
     int deleteExpired(@Param("key") String key);
 

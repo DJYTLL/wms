@@ -8,12 +8,12 @@ import org.apache.ibatis.annotations.Update;
 
 // 客户类别Mapper
 public interface ErpCustomerCategoryMapper extends BaseMapper<ErpCustomerCategory> {
-    @Select("SELECT * FROM erp_customer_category WHERE tenant_id = #{tenantId} AND code = #{code}")
+    @Select("SELECT * FROM erp_customer_category WHERE tenant_id = #{tenantId} AND code = #{code} AND deleted_at IS NULL")
     ErpCustomerCategory findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
 
     @Update("UPDATE erp_customer_category SET is_default = FALSE WHERE tenant_id = #{tenantId} AND is_default = TRUE AND id <> #{excludeId}")
     void clearDefault(@Param("tenantId") Long tenantId, @Param("excludeId") Long excludeId);
 
-    @Select("SELECT * FROM erp_customer_category WHERE tenant_id = #{tenantId} AND is_default = TRUE LIMIT 1")
+    @Select("SELECT * FROM erp_customer_category WHERE tenant_id = #{tenantId} AND is_default = TRUE AND deleted_at IS NULL LIMIT 1")
     ErpCustomerCategory findDefault(@Param("tenantId") Long tenantId);
 }

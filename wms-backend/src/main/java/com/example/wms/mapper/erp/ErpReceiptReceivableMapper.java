@@ -11,9 +11,21 @@ import java.util.List;
 // ERP收款单-应收分摊 Mapper
 @Mapper
 public interface ErpReceiptReceivableMapper extends BaseMapper<ErpReceiptReceivable> {
-    @Select("SELECT * FROM erp_receipt_receivable WHERE tenant_id = #{tenantId} AND receipt_id = #{receiptId}")
+    @Select("""
+        SELECT *
+        FROM erp_receipt_receivable
+        WHERE tenant_id = #{tenantId}
+          AND receipt_id = #{receiptId}
+          AND deleted_at IS NULL
+        """)
     List<ErpReceiptReceivable> findByReceiptId(@Param("tenantId") Long tenantId, @Param("receiptId") Long receiptId);
 
-    @Select("SELECT * FROM erp_receipt_receivable WHERE tenant_id = #{tenantId} AND receivable_id = #{receivableId}")
+    @Select("""
+        SELECT *
+        FROM erp_receipt_receivable
+        WHERE tenant_id = #{tenantId}
+          AND receivable_id = #{receivableId}
+          AND deleted_at IS NULL
+        """)
     List<ErpReceiptReceivable> findByReceivableId(@Param("tenantId") Long tenantId, @Param("receivableId") Long receivableId);
 }
