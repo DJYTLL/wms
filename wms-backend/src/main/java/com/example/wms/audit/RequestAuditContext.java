@@ -9,6 +9,9 @@ public final class RequestAuditContext {
     private String userAgent;
     private String method;
     private String path;
+    private Long authTenantId;
+    private String authTenantCode;
+    private Boolean crossTenant;
     private long startNanos;
 
     public static void set(RequestAuditContext context) {
@@ -61,6 +64,30 @@ public final class RequestAuditContext {
 
     public void setPath(String path) {
         this.path = path;
+    }
+
+    public Long getAuthTenantId() {
+        return authTenantId;
+    }
+
+    public void setAuthTenantId(Long authTenantId) {
+        this.authTenantId = authTenantId;
+    }
+
+    public String getAuthTenantCode() {
+        return authTenantCode;
+    }
+
+    public void setAuthTenantCode(String authTenantCode) {
+        this.authTenantCode = authTenantCode;
+    }
+
+    public Boolean getCrossTenant() {
+        return crossTenant;
+    }
+
+    public void setCrossTenant(Boolean crossTenant) {
+        this.crossTenant = crossTenant;
     }
 
     public long getStartNanos() {

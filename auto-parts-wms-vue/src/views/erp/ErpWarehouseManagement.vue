@@ -99,6 +99,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
@@ -214,12 +215,22 @@ const resetForm = () => {
 };
 
 const saveData = async () => {
-  if (!formData.code || !formData.name) {
+  const code = formData.code.trim();
+  const name = formData.name.trim();
+  if (!code || !name) {
     notifyWarning(t('message.required'));
     return;
   }
   try {
-    const payload = { ...formData };
+    const payload = {
+      ...formData,
+      code,
+      name,
+      address: formData.address.trim(),
+      manager: formData.manager.trim(),
+      phone: formData.phone.trim(),
+      remark: formData.remark.trim()
+    };
     const res: any = isEditing.value && currentId.value
       ? await request.put(`/erp/warehouses/${currentId.value}`, payload)
       : await request.post('/erp/warehouses', payload);
@@ -236,11 +247,22 @@ const saveData = async () => {
 
 const handleDelete = async (row: ErpWarehouse) => {
   try {
+    await ElMessageBox.confirm(
+      `确认删除仓库“${row.name}”吗？若该仓库已被库位、库存或业务单据引用，系统会阻止删除。`,
+      t('action.delete'),
+      {
+        type: 'warning',
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel')
+      }
+    );
     await request.delete(`/erp/warehouses/${row.id}`);
     notifySuccess();
     fetchList();
   } catch (error) {
-    notifyError(error);
+    if (error !== 'cancel') {
+      notifyError(error);
+    }
   }
 };
 

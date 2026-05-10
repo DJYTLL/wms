@@ -1,7 +1,8 @@
 import { ref, computed } from 'vue';
 import { defineStore } from 'pinia';
 import { useRouter } from 'vue-router';
-import request, { clearTokens, setTokens } from '@/utils/request';
+import axios from 'axios';
+import request, { clearTokens, getToken, setTokens } from '@/utils/request';
 
 /**
  * 认证 Store (Pinia)
@@ -14,8 +15,8 @@ let listenersRegistered = false;
 export const useAuthStore = defineStore('auth', () => {
   const router = useRouter();
   
-  // JWT Token 的响应式状态，存储在 localStorage 中以持久化。
-  const token = ref<string | null>(localStorage.getItem('token'));
+  // JWT Token 仅保存在内存中。
+  const token = ref<string | null>(getToken());
   
   // 已认证用户对象的响应式状态。
   const user = ref<any>(null);
@@ -24,6 +25,8 @@ export const useAuthStore = defineStore('auth', () => {
   const permissions = ref<string[]>([]);
   const tenantId = ref<number | null>(null);
   const tenantCode = ref<string | null>(null);
+  const initialized = ref(false);
+  let restorePromise: Promise<boolean> | null = null;
 
   const applyToken = (newToken: string | null) => {
     token.value = newToken;
@@ -99,6 +102,36 @@ export const useAuthStore = defineStore('auth', () => {
     }
   };
 
+  const restoreSession = async () => {
+    if (token.value) {
+      initialized.value = true;
+      return true;
+    }
+    if (restorePromise) {
+      return restorePromise;
+    }
+    restorePromise = (async () => {
+      try {
+        const res: any = await axios.post('/api/refresh', {}, { withCredentials: true });
+        const refreshData = res.data;
+        if (!refreshData || refreshData.code !== 200 || !refreshData.data?.token) {
+          clearTokens();
+          return false;
+        }
+        setTokens(refreshData.data.token);
+        applyToken(refreshData.data.token);
+        return true;
+      } catch (_error) {
+        clearTokens();
+        return false;
+      } finally {
+        initialized.value = true;
+        restorePromise = null;
+      }
+    })();
+    return restorePromise;
+  };
+
   /**
    * 用户登出。
    * 清除状态并重定向到登录页面。
@@ -150,8 +183,10 @@ export const useAuthStore = defineStore('auth', () => {
     permissions,
     tenantId,
     tenantCode,
+    initialized,
     isAuthenticated,
     login,
+    restoreSession,
     logout,
     hasPermission,
     hasRole

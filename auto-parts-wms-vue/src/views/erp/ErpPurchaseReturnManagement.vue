@@ -107,6 +107,16 @@
                 >
                   {{ $t('action.copy') }}
                 </el-button>
+                <el-button
+                  v-if="row.status === 'APPROVED'"
+                  link
+                  type="danger"
+                  size="small"
+                  v-permission="'erp-purchase-return:cancel'"
+                  @click="handleCancel(row)"
+                >
+                  {{ $t('action.cancel') }}
+                </el-button>
               </template>
               <template v-else>
                 <el-button
@@ -230,7 +240,8 @@ const isApprovedPage = computed(() => route.meta.defaultStatus === 'APPROVED');
 
 const statusOptions = computed(() => ([
   { value: 'DRAFT', label: t('status.draft') },
-  { value: 'APPROVED', label: t('status.approved') }
+  { value: 'APPROVED', label: t('status.approved') },
+  { value: 'RED_FLUSHED', label: t('status.redFlushed') }
 ]));
 
 const pageTitle = computed(() => {
@@ -256,13 +267,15 @@ const canShow = (key: string) => isVisible(key);
 
 const statusTagType = (status: string) => {
   if (status === 'APPROVED') return 'success';
+  if (status === 'RED_FLUSHED') return 'danger';
   return 'info';
 };
 
 const formatStatus = (status: string) => {
   const mapping: Record<string, string> = {
     DRAFT: t('status.draft'),
-    APPROVED: t('status.approved')
+    APPROVED: t('status.approved'),
+    RED_FLUSHED: t('status.redFlushed')
   };
   return mapping[status] || status;
 };
@@ -327,7 +340,7 @@ const applyRouteStatus = () => {
   const lockStatus = route.meta.lockStatus === true;
   statusLocked.value = lockStatus;
   if (defaultStatus) {
-    statusFilter.value = defaultStatus;
+    statusFilter.value = defaultStatus === 'APPROVED' ? 'APPROVED,RED_FLUSHED' : defaultStatus;
     tableData.value = [];
     total.value = 0;
     return;
@@ -451,6 +464,29 @@ const handleDelete = async (row: PurchaseReturn) => {
       }
     );
     await request.delete(`/erp/purchase-returns/${row.id}`);
+    notifySuccess();
+    fetchList();
+  } catch (error) {
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
+  }
+};
+
+const handleCancel = async (row: PurchaseReturn) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      t('message.enterRedFlushReason'),
+      t('action.cancel'),
+      {
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel'),
+        inputPattern: /\S+/,
+        inputErrorMessage: t('message.enterRedFlushReason'),
+        type: 'warning'
+      }
+    );
+    await request.post(`/erp/purchase-returns/${row.id}/cancel`, { reason: value });
     notifySuccess();
     fetchList();
   } catch (error) {

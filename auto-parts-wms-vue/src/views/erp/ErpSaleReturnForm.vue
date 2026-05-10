@@ -514,6 +514,7 @@ const needsReload = ref(false);
 const showProfitColumn = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const isSaleReturnRoute = computed(() => route.path.startsWith('/erp/sale-returns'));
 
 const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
@@ -1284,7 +1285,7 @@ const fetchProducts = async () => {
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses');
+    const res: any = await request.get('/erp/warehouses', { params: { enabled: true } });
     warehouseOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);
@@ -1293,7 +1294,7 @@ const fetchWarehouses = async () => {
 
 const fetchLocations = async () => {
   try {
-    const res: any = await request.get('/erp/locations');
+    const res: any = await request.get('/erp/locations', { params: { enabled: true } });
     locationOptions.value = res.data.data || [];
     formData.items.forEach(item => applyProductDefaults(item, false));
   } catch (error) {
@@ -1302,6 +1303,7 @@ const fetchLocations = async () => {
 };
 
 const loadDetail = async () => {
+  if (!isSaleReturnRoute.value) return;
   isInitializing.value = true;
   resetForm();
   if (!isEditing.value) {
@@ -1571,6 +1573,7 @@ watch(
     if (newPath === lastRouteKey.value) return;
     lastRouteKey.value = newPath;
     pagePath.value = route.path;
+    if (!isSaleReturnRoute.value) return;
     loadDetail();
   }
 );
@@ -1594,6 +1597,7 @@ onMounted(() => {
 onActivated(() => {
   if (!needsReload.value) return;
   needsReload.value = false;
+  if (!isSaleReturnRoute.value) return;
   loadDetail();
 });
 

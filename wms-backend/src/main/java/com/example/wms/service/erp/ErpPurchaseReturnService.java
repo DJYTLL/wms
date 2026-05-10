@@ -26,4 +26,6 @@ public interface ErpPurchaseReturnService {
     void delete(Long id);
 
     void approve(Long id);
+
+    void cancel(Long id, String reason);
 }

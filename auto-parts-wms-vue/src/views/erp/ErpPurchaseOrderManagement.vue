@@ -65,7 +65,6 @@
             <template #default="{ row }">
               <el-button link type="primary" size="small" v-permission="'erp-purchase:edit'" :disabled="row.status !== 'DRAFT'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
               <el-button link type="success" size="small" v-permission="'erp-purchase:approve'" :disabled="row.status !== 'DRAFT'" @click="handleApprove(row)">{{ $t('action.approve') }}</el-button>
-              <el-button link type="warning" size="small" v-permission="'erp-purchase:unapprove'" :disabled="row.status !== 'APPROVED'" @click="handleUnapprove(row)">{{ $t('action.unapprove') }}</el-button>
               <el-button link type="danger" size="small" v-permission="'erp-purchase:cancel'" :disabled="row.status === 'CANCELLED'" @click="handleCancel(row)">{{ $t('action.cancel') }}</el-button>
             </template>
           </el-table-column>
@@ -174,6 +173,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { ElMessageBox } from 'element-plus';
 
 interface OptionItem {
   id: number;
@@ -476,23 +476,27 @@ const handleApprove = async (row: PurchaseOrder) => {
   }
 };
 
-const handleUnapprove = async (row: PurchaseOrder) => {
-  try {
-    await request.post(`/erp/purchase-orders/${row.id}/unapprove`);
-    notifySuccess();
-    fetchList();
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
 const handleCancel = async (row: PurchaseOrder) => {
   try {
-    await request.post(`/erp/purchase-orders/${row.id}/cancel`);
+    const { value } = await ElMessageBox.prompt(
+      t('message.confirmRedFlush'),
+      t('action.redFlush'),
+      {
+        inputPlaceholder: t('placeholder.required'),
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel')
+      }
+    );
+    if (!value || !String(value).trim()) {
+      return;
+    }
+    await request.post(`/erp/purchase-orders/${row.id}/cancel`, { reason: String(value).trim() });
     notifySuccess();
     fetchList();
   } catch (error) {
-    notifyError(error);
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
   }
 };
 

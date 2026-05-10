@@ -49,6 +49,7 @@ public class JwtTokenService {
             .claim("tid", payload.tenantId())
             .claim("tcode", payload.tenantCode())
             .claim("utid", userTenantId)
+            .claim("utcode", payload.userTenantCode())
             .signWith(secretKey, SignatureAlgorithm.HS256)
             .compact();
     }

@@ -11,13 +11,13 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface AuditLogMapper {
     // 写入审计日志
-    @Insert("""
+        @Insert("""
         INSERT INTO app_audit_log (
-            tenant_id, actor_username, action, entity_type, entity_id, detail,
+            tenant_id, auth_tenant_id, auth_tenant_code, is_cross_tenant, actor_username, action, entity_type, entity_id, detail,
             status, request_id, client_ip, user_agent, method, path, http_status, error_code, error_message, duration_ms, created_at
         )
         VALUES (
-            #{tenantId}, #{actorUsername}, #{action}, #{entityType}, #{entityId}, #{detail},
+            #{tenantId}, #{authTenantId}, #{authTenantCode}, #{crossTenant}, #{actorUsername}, #{action}, #{entityType}, #{entityId}, #{detail},
             #{status}, #{requestId}, #{clientIp}, #{userAgent}, #{method}, #{path}, #{httpStatus}, #{errorCode}, #{errorMessage}, #{durationMs}, NOW()
         )
         """)
@@ -30,6 +30,9 @@ public interface AuditLogMapper {
         SELECT a.id,
                a.tenant_id,
                t.code AS tenant_code,
+               a.auth_tenant_id,
+               a.auth_tenant_code,
+               a.is_cross_tenant AS cross_tenant,
                a.actor_username,
                a.action,
                a.entity_type,
@@ -195,6 +198,9 @@ public interface AuditLogMapper {
         SELECT a.id,
                a.tenant_id,
                t.code AS tenant_code,
+               a.auth_tenant_id,
+               a.auth_tenant_code,
+               a.is_cross_tenant AS cross_tenant,
                a.actor_username,
                a.action,
                a.entity_type,

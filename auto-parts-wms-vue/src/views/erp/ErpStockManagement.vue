@@ -6,15 +6,12 @@
         <div class="table-toolbar inventory-toolbar">
           <div class="table-filters inventory-filters inventory-filters--stock">
             <el-select v-model="productFilter" :placeholder="$t('field.product')" class="inventory-field--narrow" clearable @change="handleSearch">
-              <el-option :label="$t('filter.all')" :value="null" />
               <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
-            <el-select v-model="warehouseFilter" :placeholder="$t('field.warehouse')" class="inventory-field--narrow" clearable @change="handleSearch">
-              <el-option :label="$t('filter.all')" :value="null" />
+            <el-select v-model="warehouseFilter" :placeholder="$t('field.warehouse')" class="inventory-field--narrow" clearable @change="handleWarehouseChange">
               <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
             <el-select v-model="locationFilter" :placeholder="$t('field.location')" class="inventory-field--narrow" clearable @change="handleSearch">
-              <el-option :label="$t('filter.all')" :value="null" />
               <el-option :label="$t('field.unassigned')" :value="-1" />
               <el-option v-for="item in getLocationOptions(warehouseFilter || undefined)" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
@@ -157,9 +154,9 @@ const fetchList = async () => {
       page: page.value,
       size: size.value
     };
-    if (productFilter.value) params.productId = productFilter.value;
-    if (warehouseFilter.value) params.warehouseId = warehouseFilter.value;
-    if (locationFilter.value) params.locationId = locationFilter.value;
+    if (productFilter.value !== null) params.productId = productFilter.value;
+    if (warehouseFilter.value !== null) params.warehouseId = warehouseFilter.value;
+    if (locationFilter.value !== null) params.locationId = locationFilter.value;
 
     const res: any = await request.get('/erp/stock/balances/page', { params });
     if (res.data.code === 200) {
@@ -176,6 +173,11 @@ const fetchList = async () => {
 const handleSearch = () => {
   page.value = 1;
   fetchList();
+};
+
+const handleWarehouseChange = () => {
+  locationFilter.value = null;
+  handleSearch();
 };
 
 const handlePageChange = (newPage: number) => {

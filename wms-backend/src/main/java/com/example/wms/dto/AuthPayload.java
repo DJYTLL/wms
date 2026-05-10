@@ -8,5 +8,6 @@ public record AuthPayload(UserClaim user,
                           long authVersion,
                           Long tenantId,
                           String tenantCode,
-                          Long userTenantId) {
+                          Long userTenantId,
+                          String userTenantCode) {
 }

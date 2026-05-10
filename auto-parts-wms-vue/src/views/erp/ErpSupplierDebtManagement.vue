@@ -1,17 +1,19 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpSupplierDebtManagement') }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
-          <el-input
-            v-model="searchQuery"
-            :placeholder="$t('field.supplier')"
-            class="table-search"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
+      <div class="page-title">{{ $t('page.erpSupplierDebtManagement') }}</div>
+      <div class="page-toolbar-card">
+        <div class="table-toolbar finance-toolbar">
+          <div class="table-filters finance-filters finance-filters--summary">
+            <el-input
+              v-model="searchQuery"
+              :placeholder="$t('field.supplier')"
+              class="table-search finance-field--wide"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -7,6 +7,7 @@ import java.util.List;
 // 更新采购单请求（ERP进销存）
 public record ErpPurchaseOrderUpdateRequest(
     String orderNo,
+    String orderAt,
     Long supplierId,
     String paymentMethodCode,
     java.math.BigDecimal paidAmount,

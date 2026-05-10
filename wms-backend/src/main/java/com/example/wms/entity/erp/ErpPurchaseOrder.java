@@ -31,6 +31,10 @@ public class ErpPurchaseOrder {
     @TableField("supplier_id")
     private Long supplierId;
 
+    // 单据时间
+    @TableField("order_at")
+    private Instant orderAt;
+
     // 总金额
     @TableField("total_amount")
     private BigDecimal totalAmount;
@@ -145,6 +149,14 @@ public class ErpPurchaseOrder {
 
     public void setSupplierId(Long supplierId) {
         this.supplierId = supplierId;
+    }
+
+    public Instant getOrderAt() {
+        return orderAt;
+    }
+
+    public void setOrderAt(Instant orderAt) {
+        this.orderAt = orderAt;
     }
 
     public BigDecimal getTotalAmount() {

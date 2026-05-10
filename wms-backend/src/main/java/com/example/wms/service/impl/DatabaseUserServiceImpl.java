@@ -91,7 +91,8 @@ public class DatabaseUserServiceImpl implements UserAccountService {
             user.getAuthVersion(),
             user.getTenantId(),
             context.tenantCode(),
-            user.getTenantId());
+            user.getTenantId(),
+            context.tenantCode());
     }
 
     @Override

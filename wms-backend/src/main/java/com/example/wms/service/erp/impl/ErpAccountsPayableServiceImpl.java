@@ -163,20 +163,13 @@ public class ErpAccountsPayableServiceImpl implements ErpAccountsPayableService 
                             if (payment == null) {
                                 return null;
                             }
-                            if (payment.getAmount() != null && payment.getAmount().compareTo(BigDecimal.ZERO) < 0) {
-                                return null;
-                            }
-                            BigDecimal displayAmount = allocation.getAllocatedAmount();
-                            if (displayAmount != null && displayAmount.compareTo(BigDecimal.ZERO) < 0) {
-                                return null;
-                            }
                             return new ErpPaymentView(
                                 payment.getId(),
                                 payment.getPaymentNo(),
                                 payment.getSupplierId(),
                                 supplierName == null ? "-" : supplierName,
                                 allocation.getPayableId(),
-                                displayAmount,
+                                allocation.getAllocatedAmount(),
                                 allocation.getAllocatedDiscount(),
                                 payment.getStatus(),
                                 payment.getCreatedAt(),
@@ -199,7 +192,6 @@ public class ErpAccountsPayableServiceImpl implements ErpAccountsPayableService 
             List<ErpPayment> payments = erpPaymentMapper.selectList(new QueryWrapper<ErpPayment>()
                 .eq("tenant_id", tenantId)
                 .eq("payable_id", payableId)
-                .ge("amount", BigDecimal.ZERO)
                 .orderByDesc("created_at"));
             if (payments == null || payments.isEmpty()) {
                 return List.of();

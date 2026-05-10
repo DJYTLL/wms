@@ -48,6 +48,12 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
     private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_APPROVED = "APPROVED";
     private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
+
+    private enum PayableMode {
+        NORMAL,
+        RETURN,
+        MIXED
+    }
     private final ErpPaymentMapper erpPaymentMapper;
     private final ErpPaymentPayableMapper erpPaymentPayableMapper;
     private final ErpSupplierMapper erpSupplierMapper;
@@ -114,9 +120,6 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         Long tenantId = TenantContext.requireTenantId();
         BigDecimal amount = request.amount() == null ? BigDecimal.ZERO : request.amount();
         BigDecimal discountAmount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
-        if (amount.compareTo(BigDecimal.ZERO) < 0 || discountAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("金额不能小于0");
-        }
 
         List<Long> payableIds = new ArrayList<>();
         if (request.payableIds() != null) {
@@ -155,6 +158,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
                 throw new IllegalArgumentException("金额为0的应付单不可付款");
             }
         }
+        PayableMode payableMode = resolvePayableMode(payables);
 
         Long supplierId = request.supplierId();
         Long purchaseOrderId = request.purchaseOrderId();
@@ -184,7 +188,8 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         }
 
         List<ErpPaymentPayable> allocations = null;
-        if (request.allocations() != null && !request.allocations().isEmpty()) {
+        boolean hasAllocations = request.allocations() != null && !request.allocations().isEmpty();
+        if (hasAllocations) {
             allocations = buildAllocationsFromRequest(tenantId, payables, request.allocations());
             BigDecimal sumAmount = allocations.stream()
                 .map(ErpPaymentPayable::getAllocatedAmount)
@@ -194,9 +199,18 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             amount = sumAmount;
             discountAmount = sumDiscount;
+        } else {
+            validateHeaderAmounts(payableMode, amount, discountAmount);
         }
         BigDecimal totalAllocate = amount.add(discountAmount);
-        if (totalAllocate.compareTo(BigDecimal.ZERO) <= 0) {
+        if (payableMode == PayableMode.MIXED && !hasAllocations) {
+            throw new IllegalArgumentException("正负应付混合付款需填写分摊金额");
+        }
+        if (payableMode == PayableMode.RETURN) {
+            if (totalAllocate.compareTo(BigDecimal.ZERO) >= 0) {
+                throw new IllegalArgumentException("退款金额必须小于0");
+            }
+        } else if (payableMode != PayableMode.MIXED && totalAllocate.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("付款金额或优惠金额必须大于0");
         }
 
@@ -218,7 +232,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         erpPaymentMapper.insert(receipt);
 
         if (allocations == null) {
-            allocations = buildAllocations(tenantId, receipt.getId(), payables, amount, discountAmount);
+            allocations = buildAllocations(tenantId, receipt.getId(), payables, amount, discountAmount, payableMode);
         } else {
             for (ErpPaymentPayable allocation : allocations) {
                 allocation.setPaymentId(receipt.getId());
@@ -246,9 +260,6 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
 
         BigDecimal amount = request.amount() == null ? BigDecimal.ZERO : request.amount();
         BigDecimal discountAmount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
-        if (amount.compareTo(BigDecimal.ZERO) < 0 || discountAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("金额不能小于0");
-        }
 
         List<Long> payableIds = new ArrayList<>();
         if (request.payableIds() != null) {
@@ -287,6 +298,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
                 throw new IllegalArgumentException("金额为0的应付单不可付款");
             }
         }
+        PayableMode payableMode = resolvePayableMode(payables);
 
         Long supplierId = request.supplierId();
         Long purchaseOrderId = request.purchaseOrderId();
@@ -316,7 +328,8 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         }
 
         List<ErpPaymentPayable> allocations = null;
-        if (request.allocations() != null && !request.allocations().isEmpty()) {
+        boolean hasAllocations = request.allocations() != null && !request.allocations().isEmpty();
+        if (hasAllocations) {
             allocations = buildAllocationsFromRequest(tenantId, payables, request.allocations());
             BigDecimal sumAmount = allocations.stream()
                 .map(ErpPaymentPayable::getAllocatedAmount)
@@ -326,9 +339,18 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             amount = sumAmount;
             discountAmount = sumDiscount;
+        } else {
+            validateHeaderAmounts(payableMode, amount, discountAmount);
         }
         BigDecimal totalAllocate = amount.add(discountAmount);
-        if (totalAllocate.compareTo(BigDecimal.ZERO) <= 0) {
+        if (payableMode == PayableMode.MIXED && !hasAllocations) {
+            throw new IllegalArgumentException("正负应付混合付款需填写分摊金额");
+        }
+        if (payableMode == PayableMode.RETURN) {
+            if (totalAllocate.compareTo(BigDecimal.ZERO) >= 0) {
+                throw new IllegalArgumentException("退款金额必须小于0");
+            }
+        } else if (payableMode != PayableMode.MIXED && totalAllocate.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("付款金额或优惠金额必须大于0");
         }
 
@@ -348,7 +370,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             .eq("tenant_id", tenantId)
             .eq("payment_id", receipt.getId()));
         if (allocations == null) {
-            allocations = buildAllocations(tenantId, receipt.getId(), payables, amount, discountAmount);
+            allocations = buildAllocations(tenantId, receipt.getId(), payables, amount, discountAmount, payableMode);
         } else {
             for (ErpPaymentPayable allocation : allocations) {
                 allocation.setPaymentId(receipt.getId());
@@ -384,7 +406,6 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         if (endAt != null) {
             wrapper.le("created_at", endAt);
         }
-        wrapper.ge("amount", BigDecimal.ZERO);
         return wrapper;
     }
 
@@ -676,16 +697,26 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         BigDecimal paid = payable.getPaidAmount() == null ? BigDecimal.ZERO : payable.getPaidAmount();
         BigDecimal discount = payable.getDiscountAmount() == null ? BigDecimal.ZERO : payable.getDiscountAmount();
         BigDecimal total = payable.getTotalAmount() == null ? BigDecimal.ZERO : payable.getTotalAmount();
+        boolean returnPayable = isReturnPayable(payable);
         BigDecimal newPaid = paid.add(amountDelta);
         BigDecimal newDiscount = discount.add(discountDelta);
-        if (newPaid.compareTo(BigDecimal.ZERO) < 0) {
-            newPaid = BigDecimal.ZERO;
-        }
-        if (newDiscount.compareTo(BigDecimal.ZERO) < 0) {
-            newDiscount = BigDecimal.ZERO;
+        if (!returnPayable) {
+            if (newPaid.compareTo(BigDecimal.ZERO) < 0) {
+                newPaid = BigDecimal.ZERO;
+            }
+            if (newDiscount.compareTo(BigDecimal.ZERO) < 0) {
+                newDiscount = BigDecimal.ZERO;
+            }
+        } else {
+            if (newPaid.compareTo(BigDecimal.ZERO) > 0) {
+                newPaid = BigDecimal.ZERO;
+            }
+            if (newDiscount.compareTo(BigDecimal.ZERO) > 0) {
+                newDiscount = BigDecimal.ZERO;
+            }
         }
         BigDecimal totalApplied = newPaid.add(newDiscount);
-        if (totalApplied.compareTo(total) > 0) {
+        if (!returnPayable && totalApplied.compareTo(total) > 0) {
             BigDecimal overflow = totalApplied.subtract(total);
             if (newDiscount.compareTo(overflow) >= 0) {
                 newDiscount = newDiscount.subtract(overflow);
@@ -696,9 +727,22 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
                 }
                 newDiscount = BigDecimal.ZERO;
             }
+        } else if (returnPayable && totalApplied.compareTo(total) < 0) {
+            BigDecimal overflow = total.subtract(totalApplied);
+            BigDecimal discountCapacity = newDiscount.abs();
+            if (discountCapacity.compareTo(overflow) >= 0) {
+                newDiscount = newDiscount.add(overflow);
+            } else {
+                BigDecimal remaining = overflow.subtract(discountCapacity);
+                newDiscount = BigDecimal.ZERO;
+                newPaid = newPaid.add(remaining);
+                if (newPaid.compareTo(BigDecimal.ZERO) > 0) {
+                    newPaid = BigDecimal.ZERO;
+                }
+            }
         }
         BigDecimal unpaid = total.subtract(newPaid.add(newDiscount));
-        if (unpaid.compareTo(BigDecimal.ZERO) < 0) {
+        if (!returnPayable && unpaid.compareTo(BigDecimal.ZERO) < 0) {
             unpaid = BigDecimal.ZERO;
         }
         payable.setPaidAmount(newPaid);
@@ -715,14 +759,18 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
                                                         Long receiptId,
                                                         List<ErpAccountsPayable> payables,
                                                         BigDecimal amount,
-                                                        BigDecimal discountAmount) {
+                                                        BigDecimal discountAmount,
+                                                        PayableMode payableMode) {
+        if (payableMode == PayableMode.MIXED) {
+            throw new IllegalArgumentException("正负应付混合付款需填写分摊金额");
+        }
         int count = payables.size();
         BigDecimal totalAllocate = amount.add(discountAmount);
         List<BigDecimal> weights = new ArrayList<>(count);
         List<BigDecimal> capacities = new ArrayList<>(count);
         BigDecimal totalUnpaid = BigDecimal.ZERO;
         for (ErpAccountsPayable payable : payables) {
-            BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
+            BigDecimal unpaid = absUnpaid(payable);
             weights.add(unpaid);
             capacities.add(unpaid);
             totalUnpaid = totalUnpaid.add(unpaid);
@@ -731,15 +779,21 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         if (totalUnpaid.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("未付金额为0，无法付款");
         }
-        if (totalAllocate.compareTo(totalUnpaid) > 0) {
+        BigDecimal absTotalAllocate = totalAllocate.abs();
+        if (absTotalAllocate.compareTo(totalUnpaid) > 0) {
             throw new IllegalArgumentException("付款金额不能大于未付金额");
         }
 
-        List<BigDecimal> totalAllocations = distributeByWeight(totalAllocate, weights, capacities);
-        List<BigDecimal> amountAllocations = distributeByWeight(amount, totalAllocations, totalAllocations);
+        List<BigDecimal> totalAllocations = distributeByWeight(absTotalAllocate, weights, capacities);
+        List<BigDecimal> amountAllocations = distributeByWeight(amount.abs(), totalAllocations, totalAllocations);
         List<BigDecimal> discountAllocations = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             discountAllocations.add(totalAllocations.get(i).subtract(amountAllocations.get(i)));
+        }
+        if (payableMode == PayableMode.RETURN) {
+            totalAllocations = totalAllocations.stream().map(BigDecimal::negate).toList();
+            amountAllocations = amountAllocations.stream().map(BigDecimal::negate).toList();
+            discountAllocations = discountAllocations.stream().map(BigDecimal::negate).toList();
         }
         List<ErpPaymentPayable> allocations = new ArrayList<>();
         for (int i = 0; i < payables.size(); i++) {
@@ -748,7 +802,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             BigDecimal allocDiscount = discountAllocations.get(i);
             BigDecimal allocTotal = totalAllocations.get(i);
             BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
-            if (allocTotal.compareTo(unpaid) > 0) {
+            if (!isAllocationWithinUnpaid(payable, allocTotal, unpaid)) {
                 throw new IllegalArgumentException("付款金额不能大于未付金额");
             }
             ErpPaymentPayable allocation = new ErpPaymentPayable();
@@ -788,12 +842,12 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             }
             BigDecimal amount = request.amount() == null ? BigDecimal.ZERO : request.amount();
             BigDecimal discount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
-            if (amount.compareTo(BigDecimal.ZERO) < 0 || discount.compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("分摊金额不能小于0");
+            if (!isAllocationSignValid(payable, amount, discount)) {
+                throw new IllegalArgumentException("分摊金额方向不正确");
             }
             BigDecimal allocTotal = amount.add(discount);
             BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
-            if (allocTotal.compareTo(unpaid) > 0) {
+            if (!isAllocationWithinUnpaid(payable, allocTotal, unpaid)) {
                 throw new IllegalArgumentException("分摊金额不能大于未付金额");
             }
             ErpPaymentPayable allocation = new ErpPaymentPayable();
@@ -804,6 +858,67 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             allocations.add(allocation);
         }
         return allocations;
+    }
+
+    private PayableMode resolvePayableMode(List<ErpAccountsPayable> payables) {
+        boolean hasReturn = false;
+        boolean hasNormal = false;
+        for (ErpAccountsPayable payable : payables) {
+            if (isReturnPayable(payable)) {
+                hasReturn = true;
+            } else {
+                hasNormal = true;
+            }
+        }
+        if (hasReturn && hasNormal) {
+            return PayableMode.MIXED;
+        }
+        if (hasReturn) {
+            return PayableMode.RETURN;
+        }
+        return PayableMode.NORMAL;
+    }
+
+    private boolean isReturnPayable(ErpAccountsPayable payable) {
+        if (payable == null) {
+            return false;
+        }
+        if (payable.getPurchaseReturnId() != null) {
+            return true;
+        }
+        BigDecimal unpaid = payable.getUnpaidAmount();
+        return unpaid != null && unpaid.compareTo(BigDecimal.ZERO) < 0;
+    }
+
+    private void validateHeaderAmounts(PayableMode payableMode, BigDecimal amount, BigDecimal discountAmount) {
+        if (payableMode == PayableMode.RETURN) {
+            if (amount.compareTo(BigDecimal.ZERO) > 0 || discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+                throw new IllegalArgumentException("退货应付金额不能大于0");
+            }
+            return;
+        }
+        if (amount.compareTo(BigDecimal.ZERO) < 0 || discountAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("金额不能小于0");
+        }
+    }
+
+    private BigDecimal absUnpaid(ErpAccountsPayable payable) {
+        BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
+        return unpaid.abs();
+    }
+
+    private boolean isAllocationSignValid(ErpAccountsPayable payable, BigDecimal amount, BigDecimal discount) {
+        if (isReturnPayable(payable)) {
+            return amount.compareTo(BigDecimal.ZERO) <= 0 && discount.compareTo(BigDecimal.ZERO) <= 0;
+        }
+        return amount.compareTo(BigDecimal.ZERO) >= 0 && discount.compareTo(BigDecimal.ZERO) >= 0;
+    }
+
+    private boolean isAllocationWithinUnpaid(ErpAccountsPayable payable, BigDecimal allocTotal, BigDecimal unpaid) {
+        if (isReturnPayable(payable)) {
+            return allocTotal.compareTo(unpaid) >= 0;
+        }
+        return allocTotal.compareTo(unpaid) <= 0;
     }
 
     private List<BigDecimal> distributeByWeight(BigDecimal total,

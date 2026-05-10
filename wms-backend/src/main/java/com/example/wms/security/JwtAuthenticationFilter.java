@@ -1,5 +1,6 @@
 package com.example.wms.security;
 
+import com.example.wms.audit.RequestAuditContext;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -54,6 +55,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     Long authTenantId = userTenantValue == null
                         ? targetTenantId
                         : Long.valueOf(userTenantValue.longValue());
+                    RequestAuditContext auditContext = RequestAuditContext.get();
+                    if (auditContext != null) {
+                        auditContext.setAuthTenantId(authTenantId);
+                        auditContext.setAuthTenantCode(claims.get("utcode", String.class));
+                        auditContext.setCrossTenant(authTenantId != null
+                            && targetTenantId != null
+                            && !authTenantId.equals(targetTenantId));
+                    }
                     if (StringUtils.hasText(username) && SecurityContextHolder.getContext().getAuthentication() == null) {
                         if (authTenantId != null && (targetTenantId == null || !authTenantId.equals(targetTenantId))) {
                             TenantContext.setTenantId(authTenantId);

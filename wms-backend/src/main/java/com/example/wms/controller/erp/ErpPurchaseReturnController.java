@@ -89,4 +89,15 @@ public class ErpPurchaseReturnController {
         erpPurchaseReturnService.approve(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
+
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return:cancel')")
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id,
+                                                    @RequestBody(required = false) RedFlushRequest request) {
+        String reason = request == null ? null : request.reason();
+        erpPurchaseReturnService.cancel(id, reason);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    public record RedFlushRequest(String reason) {}
 }

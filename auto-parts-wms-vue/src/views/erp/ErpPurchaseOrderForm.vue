@@ -505,6 +505,7 @@ const handleCopy = async () => {
 
     const payload = {
       orderNo,
+      orderAt: formatDateTime(new Date()),
       supplierId: order.supplierId,
       paymentMethodCode: order.paymentMethodCode || '',
       paidAmount: order.paidAmount,
@@ -551,7 +552,7 @@ const fetchProducts = async () => {
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses');
+    const res: any = await request.get('/erp/warehouses', { params: { enabled: true } });
     warehouseOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);
@@ -560,7 +561,7 @@ const fetchWarehouses = async () => {
 
 const fetchLocations = async () => {
   try {
-    const res: any = await request.get('/erp/locations');
+    const res: any = await request.get('/erp/locations', { params: { enabled: true } });
     locationOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);
@@ -622,7 +623,7 @@ const fetchNextOrderNo = async () => {
       formData.paymentMethodCode = order.paymentMethodCode || '';
       formData.paidAmount = order.paidAmount == null ? '' : String(order.paidAmount);
       formData.discountAmount = order.discountAmount == null ? '' : String(order.discountAmount);
-      formData.orderAt = formatDateTime(new Date(order.createdAt || Date.now()));
+      formData.orderAt = formatDateTime(new Date(order.orderAt || order.createdAt || Date.now()));
       formData.remark = order.remark || '';
       formData.items = (data.items || order.items || []).map((item: any) => ({
         id: item.id,
@@ -735,6 +736,7 @@ const saveData = async (options: { closeOnSuccess?: boolean; reloadAfterCreate?:
 
   const payload = {
     orderNo: formData.orderNo || undefined,
+    orderAt: formData.orderAt || undefined,
     supplierId: formData.supplierId,
     paymentMethodCode: formData.paymentMethodCode || undefined,
     paidAmount: parseDecimal(formData.paidAmount, 2),

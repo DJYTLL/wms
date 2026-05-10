@@ -60,12 +60,12 @@
             </div>
             <div class="form-group">
               <el-form-item :label="$t('field.paymentAmount')" required>
-                <DecimalInput v-model="formData.amount" input-mode="decimal" :scale="2" />
+                <DecimalInput v-model="formData.amount" input-mode="decimal" :scale="2" :allow-negative="allowNegativeAmount" />
               </el-form-item>
             </div>
             <div class="form-group">
               <el-form-item :label="$t('field.discountAmount')">
-                <DecimalInput v-model="formData.discountAmount" input-mode="decimal" :scale="2" />
+                <DecimalInput v-model="formData.discountAmount" input-mode="decimal" :scale="2" :allow-negative="allowNegativeAmount" />
               </el-form-item>
             </div>
             <div class="form-group">
@@ -94,12 +94,12 @@
                 <el-table-column prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
                 <el-table-column :label="$t('field.paymentAmount')" min-width="140">
                   <template #default="{ row }">
-                    <DecimalInput v-model="getAllocation(row.id).amount" input-mode="decimal" :scale="2" />
+                    <DecimalInput v-model="getAllocation(row.id).amount" input-mode="decimal" :scale="2" :allow-negative="isReturnPayable(row.id)" />
                   </template>
                 </el-table-column>
                 <el-table-column :label="$t('field.discountAmount')" min-width="140">
                   <template #default="{ row }">
-                    <DecimalInput v-model="getAllocation(row.id).discount" input-mode="decimal" :scale="2" />
+                    <DecimalInput v-model="getAllocation(row.id).discount" input-mode="decimal" :scale="2" :allow-negative="isReturnPayable(row.id)" />
                   </template>
                 </el-table-column>
               </el-table>
@@ -182,6 +182,24 @@ const selectedPayables = computed(() => {
     }));
 });
 
+const payableMode = computed<'none' | 'normal' | 'return' | 'mixed'>(() => {
+  if (!selectedPayables.value.length) return 'none';
+  let hasNormal = false;
+  let hasReturn = false;
+  selectedPayables.value.forEach((item) => {
+    if ((item.unpaidAmount ?? 0) < 0) {
+      hasReturn = true;
+    } else {
+      hasNormal = true;
+    }
+  });
+  if (hasNormal && hasReturn) return 'mixed';
+  if (hasReturn) return 'return';
+  return 'normal';
+});
+
+const allowNegativeAmount = computed(() => payableMode.value === 'return' || payableMode.value === 'mixed');
+
 const getAllocation = (id: number) => {
   if (!allocationMap[id]) {
     allocationMap[id] = { amount: '', discount: '' };
@@ -202,10 +220,10 @@ const allocationTotals = computed(() => {
     }
     const amount = Number(alloc.amount ?? 0);
     const discount = Number(alloc.discount ?? 0);
-    totalAmount += Number.isNaN(amount) ? 0 : amount;
-    totalDiscount += Number.isNaN(discount) ? 0 : discount;
+    totalAmount = roundCurrency(totalAmount + (Number.isNaN(amount) ? 0 : amount));
+    totalDiscount = roundCurrency(totalDiscount + (Number.isNaN(discount) ? 0 : discount));
   });
-  return { totalAmount, totalDiscount, hasAny };
+  return { totalAmount: roundCurrency(totalAmount), totalDiscount: roundCurrency(totalDiscount), hasAny };
 });
 
 const paymentId = computed(() => {
@@ -213,6 +231,7 @@ const paymentId = computed(() => {
   const parsed = Number(route.params.id);
   return Number.isFinite(parsed) ? parsed : null;
 });
+const isPaymentRoute = computed(() => route.path.startsWith('/erp/payments'));
 const isEditing = computed(() => Boolean(paymentId.value));
 
 const normalizeNumber = (value: unknown) => {
@@ -226,6 +245,15 @@ const toFixedString = (value: number) => {
 
 const isClose = (a: number, b: number, tolerance = 0.005) => {
   return Math.abs(a - b) <= tolerance;
+};
+
+const roundCurrency = (value: number) => {
+  return Math.round(value * 100) / 100;
+};
+
+const isReturnPayable = (id: number) => {
+  const item = payableOptions.value.find((option) => option.id === id);
+  return Number(item?.unpaidAmount ?? 0) < 0;
 };
 
 const distributeByWeight = (total: number, weights: number[]) => {
@@ -294,33 +322,41 @@ watch(
         return;
       }
     }
+    if (payableMode.value === 'mixed') {
+      return;
+    }
     const totalAllocate = totalsAmount + totalsDiscount;
-    if (totalAllocate <= 0) {
+    if (
+      (payableMode.value === 'return' && totalAllocate >= 0) ||
+      (payableMode.value !== 'return' && totalAllocate <= 0)
+    ) {
       return;
     }
     const weights = ids.map((id) => {
       const item = payableOptions.value.find((opt) => opt.id === id);
-      return normalizeNumber(item?.unpaidAmount);
+      return Math.abs(normalizeNumber(item?.unpaidAmount));
     });
     const totalUnpaid = weights.reduce((sum, value) => sum + value, 0);
     if (totalUnpaid <= 0) {
       return;
     }
-    let amountToAllocate = totalsAmount;
-    let discountToAllocate = totalsDiscount;
-    if (totalAllocate > totalUnpaid) {
+    const totalAllocateAbs = Math.abs(totalAllocate);
+    let amountToAllocate = Math.abs(totalsAmount);
+    let discountToAllocate = Math.abs(totalsDiscount);
+    if (totalAllocateAbs > totalUnpaid) {
       notifyWarning(t('message.paymentOverUnpaid'));
-      const scale = totalUnpaid / totalAllocate;
-      amountToAllocate = Math.floor(totalsAmount * scale * 100) / 100;
-      discountToAllocate = Math.floor(totalsDiscount * scale * 100) / 100;
+      const scale = totalUnpaid / totalAllocateAbs;
+      amountToAllocate = Math.floor(amountToAllocate * scale * 100) / 100;
+      discountToAllocate = Math.floor(discountToAllocate * scale * 100) / 100;
     }
     const amountAllocations = distributeByWeight(amountToAllocate, weights);
     const discountAllocations = distributeByWeight(discountToAllocate, weights);
+    const sign = payableMode.value === 'return' ? -1 : 1;
     updatingFromTotals.value = true;
     ids.forEach((id, index) => {
       allocationMap[id] = {
-        amount: toFixedString(amountAllocations[index] ?? 0),
-        discount: toFixedString(discountAllocations[index] ?? 0)
+        amount: toFixedString((amountAllocations[index] ?? 0) * sign),
+        discount: toFixedString((discountAllocations[index] ?? 0) * sign)
       };
     });
     updatingFromTotals.value = false;
@@ -329,6 +365,9 @@ watch(
 );
 
 watch(paymentId, (newVal, oldVal) => {
+  if (!isPaymentRoute.value) {
+    return;
+  }
   if (newVal && newVal !== oldVal) {
     loadPaymentDetail();
   }
@@ -373,6 +412,9 @@ const resetForm = () => {
 };
 
 const loadPaymentDetail = async () => {
+  if (!isPaymentRoute.value) {
+    return;
+  }
   if (!paymentId.value) {
     return;
   }
@@ -479,7 +521,7 @@ const fetchPayables = async (supplierId: number | null) => {
       const items: PayableOption[] = res.data.data || [];
       payableOptions.value = items.filter((item) => {
         if (item.status === 'RED_FLUSHED') return false;
-        if (typeof item.totalAmount === 'number' && item.totalAmount <= 0) return false;
+        if (Number(item.unpaidAmount ?? 0) === 0) return false;
         return true;
       });
     }
@@ -513,6 +555,7 @@ const handlePayableChange = (value: number[] | number | null) => {
     const target = payableOptions.value.find((item) => item.id === ids[0]);
     if (target) {
       formData.value.amount = String(target.unpaidAmount ?? '');
+      formData.value.discountAmount = allocationMap[target.id]?.discount ?? '';
       allocationMap[target.id] = {
         amount: String(target.unpaidAmount ?? ''),
         discount: allocationMap[target.id]?.discount ?? ''
@@ -546,6 +589,7 @@ const handlePayableChange = (value: number[] | number | null) => {
     return sum + (Number.isNaN(value) ? 0 : value);
   }, 0);
   formData.value.amount = totalUnpaid ? String(totalUnpaid) : '';
+  formData.value.discountAmount = '';
 };
 
 const savePayment = async (closeOnSuccess = false) => {
@@ -563,7 +607,17 @@ const savePayment = async (closeOnSuccess = false) => {
   const discountAmount = allocationTotals.value.hasAny
     ? allocationTotals.value.totalDiscount
     : Number(formData.value.discountAmount || 0);
-  if (amount < 0 || discountAmount < 0 || amount + discountAmount <= 0) {
+  const totalAmount = amount + discountAmount;
+  if (payableMode.value === 'mixed' && !allocationTotals.value.hasAny) {
+    notifyWarning('正负应付混合付款需填写分摊金额');
+    return;
+  }
+  if (payableMode.value === 'return') {
+    if (amount > 0 || discountAmount > 0 || totalAmount >= 0) {
+      notifyWarning('退款金额必须小于0');
+      return;
+    }
+  } else if (payableMode.value === 'normal' && (amount < 0 || discountAmount < 0 || totalAmount <= 0)) {
     notifyWarning(t('message.required'));
     return;
   }
@@ -646,7 +700,7 @@ onMounted(() => {
   resetForm();
   fetchSuppliers();
   fetchSettlementMethods();
-  if (isEditing.value) {
+  if (isPaymentRoute.value && isEditing.value) {
     loadPaymentDetail();
   } else {
     fetchPaymentNo();
@@ -659,6 +713,9 @@ onMounted(() => {
 
 onActivated(() => {
   pagePath.value = route.path;
+  if (!isPaymentRoute.value) {
+    return;
+  }
   if (isEditing.value) {
     loadPaymentDetail();
     return;

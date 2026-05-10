@@ -150,16 +150,6 @@
                   {{ $t('action.approve') }}
                 </el-button>
                 <el-button
-                  v-if="row.status === 'APPROVED' && !isDraftPage"
-                  link
-                  type="warning"
-                  size="small"
-                  v-permission="'erp-sale:unapprove'"
-                  @click="handleUnapprove(row)"
-                >
-                  {{ $t('action.unapprove') }}
-                </el-button>
-                <el-button
                   v-if="row.status === 'DRAFT'"
                   link
                   type="danger"
@@ -459,16 +449,6 @@ const openPrintPage = (row: SaleOrder) => {
 const handleApprove = async (row: SaleOrder) => {
   try {
     await request.post(`/erp/sale-orders/${row.id}/approve`);
-    notifySuccess();
-    fetchList();
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const handleUnapprove = async (row: SaleOrder) => {
-  try {
-    await request.post(`/erp/sale-orders/${row.id}/unapprove`);
     notifySuccess();
     fetchList();
   } catch (error) {

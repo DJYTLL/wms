@@ -932,7 +932,7 @@ const fetchProducts = async () => {
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses');
+    const res: any = await request.get('/erp/warehouses', { params: { enabled: true } });
     warehouseOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);
@@ -941,7 +941,7 @@ const fetchWarehouses = async () => {
 
 const fetchLocations = async () => {
   try {
-    const res: any = await request.get('/erp/locations');
+    const res: any = await request.get('/erp/locations', { params: { enabled: true } });
     locationOptions.value = res.data.data || [];
     formData.items.forEach(item => applyProductDefaults(item, false));
   } catch (error) {

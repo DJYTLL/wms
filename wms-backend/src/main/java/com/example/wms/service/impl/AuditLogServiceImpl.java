@@ -53,6 +53,9 @@ public class AuditLogServiceImpl implements AuditLogService {
             log.setUserAgent(context.getUserAgent());
             log.setMethod(context.getMethod());
             log.setPath(context.getPath());
+            log.setAuthTenantId(context.getAuthTenantId());
+            log.setAuthTenantCode(context.getAuthTenantCode());
+            log.setCrossTenant(context.getCrossTenant());
         }
         auditLogMapper.insert(log);
     }
@@ -126,6 +129,9 @@ public class AuditLogServiceImpl implements AuditLogService {
             log.getId(),
             log.getTenantId(),
             log.getTenantCode(),
+            log.getAuthTenantId(),
+            log.getAuthTenantCode(),
+            Boolean.TRUE.equals(log.getCrossTenant()),
             log.getActorUsername(),
             log.getAction(),
             log.getEntityType(),

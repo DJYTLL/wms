@@ -705,8 +705,8 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         if (receivable == null) {
             return false;
         }
-        String orderNo = receivable.getOrderNo();
-        return orderNo != null && orderNo.startsWith("AR");
+        BigDecimal totalAmount = receivable.getTotalAmount();
+        return totalAmount != null && totalAmount.compareTo(BigDecimal.ZERO) < 0;
     }
 
     private ReceiptMode resolveReceiptMode(List<ErpAccountsReceivable> receivables) {

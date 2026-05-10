@@ -228,7 +228,8 @@ public class TenantServiceImpl implements TenantService {
                 sourcePayload.authVersion(),
                 targetTenant.getId(),
                 targetTenant.getCode(),
-                sourcePayload.userTenantId()
+                sourcePayload.userTenantId(),
+                sourcePayload.userTenantCode()
             );
             return refreshTokenService.issueTokens(sourceUser, targetPayload);
         } finally {

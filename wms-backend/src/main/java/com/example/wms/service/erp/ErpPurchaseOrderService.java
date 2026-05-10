@@ -37,7 +37,7 @@ public interface ErpPurchaseOrderService {
     // 审核采购单
     void approve(Long id);
 
-    // 反审核采购单
+    // 兼容旧接口：采购单不支持反审核
     void unapprove(Long id);
 
     // 作废/红冲采购单

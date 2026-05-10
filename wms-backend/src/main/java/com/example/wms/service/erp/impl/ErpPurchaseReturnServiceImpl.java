@@ -10,6 +10,8 @@ import com.example.wms.dto.erp.ErpPurchaseReturnItemRequest;
 import com.example.wms.dto.erp.ErpPurchaseReturnUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsPayable;
+import com.example.wms.entity.erp.ErpPayment;
+import com.example.wms.entity.erp.ErpPaymentPayable;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.entity.erp.ErpPurchaseReturnItem;
@@ -18,6 +20,8 @@ import com.example.wms.entity.erp.ErpStockTxn;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
+import com.example.wms.mapper.erp.ErpPaymentMapper;
+import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnItemMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
@@ -46,6 +50,7 @@ import java.util.UUID;
 public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_APPROVED = "APPROVED";
+    private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
     private static final String ORDER_TYPE = "PURCHASE_RETURN";
     private static final String PAYABLE_ORDER_TYPE = "AP_RETURN";
 
@@ -59,6 +64,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private final ErpStockTxnMapper erpStockTxnMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
+    private final ErpPaymentMapper erpPaymentMapper;
+    private final ErpPaymentPayableMapper erpPaymentPayableMapper;
     private final SystemConfigMapper systemConfigMapper;
 
     public ErpPurchaseReturnServiceImpl(ErpPurchaseReturnMapper erpPurchaseReturnMapper,
@@ -68,6 +75,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                                         ErpStockTxnMapper erpStockTxnMapper,
                                         ErpOrderSequenceMapper erpOrderSequenceMapper,
                                         ErpAccountsPayableMapper erpAccountsPayableMapper,
+                                        ErpPaymentMapper erpPaymentMapper,
+                                        ErpPaymentPayableMapper erpPaymentPayableMapper,
                                         SystemConfigMapper systemConfigMapper) {
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
         this.erpPurchaseReturnItemMapper = erpPurchaseReturnItemMapper;
@@ -76,6 +85,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         this.erpStockTxnMapper = erpStockTxnMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
+        this.erpPaymentMapper = erpPaymentMapper;
+        this.erpPaymentPayableMapper = erpPaymentPayableMapper;
         this.systemConfigMapper = systemConfigMapper;
     }
 
@@ -219,6 +230,61 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             }
         }
         createReturnPayable(tenantId, order, resolveReturnTotal(order));
+    }
+
+    @Override
+    @Transactional
+    @AuditLog(action = "ERP_PURCHASE_RETURN_RED_FLUSH", entityType = "erp_purchase_return", entityId = "{arg0}")
+    public void cancel(Long id, String reason) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPurchaseReturn order = loadForUpdate(tenantId, id);
+        if (!STATUS_APPROVED.equals(order.getStatus())) {
+            throw new IllegalArgumentException("仅已审核状态可红冲");
+        }
+        String reasonText = reason == null ? "" : reason.trim();
+        if (reasonText.isEmpty()) {
+            throw new IllegalArgumentException("请填写红冲原因");
+        }
+
+        ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseReturnId(tenantId, order.getId());
+        if (payable != null) {
+            List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPayableId(tenantId, payable.getId());
+            if (allocations != null && !allocations.isEmpty()) {
+                List<Long> paymentIds = allocations.stream()
+                    .map(ErpPaymentPayable::getPaymentId)
+                    .filter(java.util.Objects::nonNull)
+                    .distinct()
+                    .toList();
+                if (!paymentIds.isEmpty()) {
+                    List<ErpPayment> approvedPayments = erpPaymentMapper.selectList(new QueryWrapper<ErpPayment>()
+                        .eq("tenant_id", tenantId)
+                        .in("id", paymentIds)
+                        .eq("status", STATUS_APPROVED));
+                    if (!approvedPayments.isEmpty()) {
+                        throw new IllegalArgumentException("请先红冲付款单");
+                    }
+                }
+            }
+        }
+
+        order.setStatus(STATUS_RED_FLUSHED);
+        order.setRemark(appendRedFlushReason(order.getRemark(), reasonText));
+        order.setUpdatedAt(Instant.now());
+        updateWithVersion(tenantId, order);
+
+        List<ErpPurchaseReturnItem> items = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
+        String returnType = resolveReturnType(order.getReturnType());
+        for (ErpPurchaseReturnItem item : items) {
+            if (item.getQty() == null) {
+                throw new IllegalArgumentException("退货数量不能为空");
+            }
+            if (RETURN_GOODS.equals(returnType)) {
+                applyStockDelta(tenantId, item, item.getQty(), "PURCHASE_RETURN_RED_FLUSH", id, true);
+            } else {
+                applyStockDelta(tenantId, item, BigDecimal.ZERO, "PURCHASE_RETURN_RED_FLUSH", id, false);
+            }
+        }
+        redFlushReturnPayable(tenantId, order, reasonText);
     }
 
     private QueryWrapper<ErpPurchaseReturn> baseWrapper(String keyword, String status, Long supplierId, Instant startAt, Instant endAt) {
@@ -452,6 +518,21 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         }
     }
 
+    private void redFlushReturnPayable(Long tenantId, ErpPurchaseReturn order, String reason) {
+        ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseReturnId(tenantId, order.getId());
+        if (payable == null) {
+            return;
+        }
+        payable.setTotalAmount(BigDecimal.ZERO);
+        payable.setPaidAmount(BigDecimal.ZERO);
+        payable.setDiscountAmount(BigDecimal.ZERO);
+        payable.setUnpaidAmount(BigDecimal.ZERO);
+        payable.setStatus(STATUS_RED_FLUSHED);
+        payable.setRemark(appendRedFlushReason(payable.getRemark(), reason));
+        payable.setUpdatedAt(Instant.now());
+        erpAccountsPayableMapper.updateById(payable);
+    }
+
     private BigDecimal resolveReturnTotal(ErpPurchaseReturn order) {
         if (order.getTotalAmountInclTax() != null) {
             return order.getTotalAmountInclTax();
@@ -577,5 +658,22 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         } catch (Exception ex) {
             return fallback;
         }
+    }
+
+    private String appendRedFlushReason(String remark, String reason) {
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            return remark;
+        }
+        String marker = "红冲原因：";
+        String base = remark == null ? "" : remark.trim();
+        String append = marker + trimmed;
+        if (base.isEmpty()) {
+            return append;
+        }
+        if (base.contains(marker)) {
+            return base;
+        }
+        return base + " | " + append;
     }
 }

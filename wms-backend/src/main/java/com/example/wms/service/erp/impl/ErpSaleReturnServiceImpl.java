@@ -11,6 +11,8 @@ import com.example.wms.dto.erp.ErpSaleReturnUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsReceivable;
 import com.example.wms.entity.erp.ErpProduct;
+import com.example.wms.entity.erp.ErpReceipt;
+import com.example.wms.entity.erp.ErpReceiptReceivable;
 import com.example.wms.entity.erp.ErpSaleReturn;
 import com.example.wms.entity.erp.ErpSaleReturnItem;
 import com.example.wms.entity.erp.ErpStockBalance;
@@ -19,6 +21,8 @@ import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
+import com.example.wms.mapper.erp.ErpReceiptMapper;
+import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnItemMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
@@ -60,6 +64,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private final ErpStockTxnMapper erpStockTxnMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final ErpAccountsReceivableMapper erpAccountsReceivableMapper;
+    private final ErpReceiptMapper erpReceiptMapper;
+    private final ErpReceiptReceivableMapper erpReceiptReceivableMapper;
     private final SystemConfigMapper systemConfigMapper;
 
     public ErpSaleReturnServiceImpl(ErpSaleReturnMapper erpSaleReturnMapper,
@@ -69,6 +75,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
                                     ErpStockTxnMapper erpStockTxnMapper,
                                     ErpOrderSequenceMapper erpOrderSequenceMapper,
                                     ErpAccountsReceivableMapper erpAccountsReceivableMapper,
+                                    ErpReceiptMapper erpReceiptMapper,
+                                    ErpReceiptReceivableMapper erpReceiptReceivableMapper,
                                     SystemConfigMapper systemConfigMapper) {
         this.erpSaleReturnMapper = erpSaleReturnMapper;
         this.erpSaleReturnItemMapper = erpSaleReturnItemMapper;
@@ -77,6 +85,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         this.erpStockTxnMapper = erpStockTxnMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.erpAccountsReceivableMapper = erpAccountsReceivableMapper;
+        this.erpReceiptMapper = erpReceiptMapper;
+        this.erpReceiptReceivableMapper = erpReceiptReceivableMapper;
         this.systemConfigMapper = systemConfigMapper;
     }
 
@@ -237,6 +247,10 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (reasonText.isEmpty()) {
             throw new IllegalArgumentException("请填写红冲原因");
         }
+        ErpAccountsReceivable returnReceivable = findReturnReceivable(tenantId, order);
+        if (returnReceivable != null && hasApprovedRefundReceipt(tenantId, returnReceivable.getId())) {
+            throw new IllegalArgumentException("请先红冲退款单");
+        }
         order.setStatus(STATUS_RED_FLUSHED);
         String originRemark = order.getRemark();
         if (originRemark == null || originRemark.isBlank()) {
@@ -324,8 +338,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             }
             item.setWarehouseId(warehouseId);
             item.setLocationId(locationId);
-            if (request.qty() == null) {
-                throw new IllegalArgumentException("退货数量不能为空");
+            if (request.qty() == null || request.qty().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("退货数量必须大于0");
             }
             item.setQty(request.qty());
             BigDecimal taxRate = request.taxRate() == null ? BigDecimal.ZERO : request.taxRate();
@@ -483,9 +497,9 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         erpAccountsReceivableMapper.insert(ar);
     }
 
-    private void redFlushReturnReceivable(Long tenantId, ErpSaleReturn order, String reason) {
+    private ErpAccountsReceivable findReturnReceivable(Long tenantId, ErpSaleReturn order) {
         if (order.getSaleOrderId() == null) {
-            return;
+            return null;
         }
         List<ErpAccountsReceivable> list = erpAccountsReceivableMapper.selectList(new QueryWrapper<ErpAccountsReceivable>()
             .eq("tenant_id", tenantId)
@@ -494,10 +508,55 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             .lt("total_amount", BigDecimal.ZERO)
             .orderByDesc("id")
             .last("LIMIT 1"));
-        if (list.isEmpty()) {
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    private boolean hasApprovedRefundReceipt(Long tenantId, Long receivableId) {
+        List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceivableId(tenantId, receivableId);
+        if (allocations != null && !allocations.isEmpty()) {
+            List<Long> receiptIds = allocations.stream()
+                .map(ErpReceiptReceivable::getReceiptId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+            if (!receiptIds.isEmpty()) {
+                List<ErpReceipt> receipts = erpReceiptMapper.selectBatchIds(receiptIds);
+                if (receipts != null) {
+                    java.util.Map<Long, ErpReceipt> receiptMap = receipts.stream()
+                        .filter(receipt -> tenantId.equals(receipt.getTenantId()))
+                        .collect(java.util.stream.Collectors.toMap(ErpReceipt::getId, receipt -> receipt, (left, right) -> left));
+                    for (ErpReceiptReceivable allocation : allocations) {
+                        ErpReceipt receipt = receiptMap.get(allocation.getReceiptId());
+                        if (receipt == null || !STATUS_APPROVED.equals(receipt.getStatus())) {
+                            continue;
+                        }
+                        BigDecimal allocatedTotal = allocation.getAllocatedTotal() == null ? BigDecimal.ZERO : allocation.getAllocatedTotal();
+                        if (allocatedTotal.compareTo(BigDecimal.ZERO) < 0) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        List<ErpReceipt> receipts = erpReceiptMapper.selectList(new QueryWrapper<ErpReceipt>()
+            .eq("tenant_id", tenantId)
+            .eq("receivable_id", receivableId)
+            .eq("status", STATUS_APPROVED));
+        for (ErpReceipt receipt : receipts) {
+            BigDecimal total = (receipt.getAmount() == null ? BigDecimal.ZERO : receipt.getAmount())
+                .add(receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount());
+            if (total.compareTo(BigDecimal.ZERO) < 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void redFlushReturnReceivable(Long tenantId, ErpSaleReturn order, String reason) {
+        ErpAccountsReceivable ar = findReturnReceivable(tenantId, order);
+        if (ar == null) {
             return;
         }
-        ErpAccountsReceivable ar = list.get(0);
         ar.setTotalAmount(BigDecimal.ZERO);
         ar.setPaidAmount(BigDecimal.ZERO);
         ar.setUnpaidAmount(BigDecimal.ZERO);

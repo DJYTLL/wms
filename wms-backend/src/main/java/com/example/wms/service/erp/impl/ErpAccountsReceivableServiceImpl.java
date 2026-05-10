@@ -162,20 +162,13 @@ public class ErpAccountsReceivableServiceImpl implements ErpAccountsReceivableSe
                             if (receipt == null) {
                                 return null;
                             }
-                            if (receipt.getAmount() != null && receipt.getAmount().compareTo(BigDecimal.ZERO) < 0) {
-                                return null;
-                            }
-                            BigDecimal displayAmount = allocation.getAllocatedAmount();
-                            if (displayAmount != null && displayAmount.compareTo(BigDecimal.ZERO) < 0) {
-                                return null;
-                            }
                             return new ErpReceiptView(
                                 receipt.getId(),
                                 receipt.getReceiptNo(),
                                 receipt.getCustomerId(),
                                 customerName == null ? "-" : customerName,
                                 allocation.getReceivableId(),
-                                displayAmount,
+                                allocation.getAllocatedAmount(),
                                 allocation.getAllocatedDiscount(),
                                 receipt.getStatus(),
                                 receipt.getCreatedAt(),

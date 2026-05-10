@@ -6,9 +6,9 @@ const request: AxiosInstance = axios.create({
   withCredentials: true,
 })
 
-const TOKEN_KEY = 'token'
+let accessToken: string | null = null
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY)
+export const getToken = () => accessToken
 
 const dispatchTokensUpdated = (token: string) => {
   if (typeof window !== 'undefined') {
@@ -25,12 +25,12 @@ const dispatchTokensCleared = () => {
 }
 
 export const setTokens = (token: string) => {
-  localStorage.setItem(TOKEN_KEY, token)
+  accessToken = token
   dispatchTokensUpdated(token)
 }
 
 export const clearTokens = () => {
-  localStorage.removeItem(TOKEN_KEY)
+  accessToken = null
   dispatchTokensCleared()
 }
 

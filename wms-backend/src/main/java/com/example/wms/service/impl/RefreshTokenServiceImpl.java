@@ -132,7 +132,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             payload.authVersion(),
             audienceTenantId,
             tenantCode,
-            payload.userTenantId());
+            payload.userTenantId(),
+            payload.userTenantCode());
     }
 
     private boolean hasRole(AuthPayload payload, String roleCode) {

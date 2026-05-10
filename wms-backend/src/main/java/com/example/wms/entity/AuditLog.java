@@ -7,6 +7,9 @@ public class AuditLog {
     private Long id;
     private Long tenantId;
     private String tenantCode;
+    private Long authTenantId;
+    private String authTenantCode;
+    private Boolean crossTenant;
     private String actorUsername;
     private String action;
     private String entityType;
@@ -46,6 +49,30 @@ public class AuditLog {
 
     public void setTenantCode(String tenantCode) {
         this.tenantCode = tenantCode;
+    }
+
+    public Long getAuthTenantId() {
+        return authTenantId;
+    }
+
+    public void setAuthTenantId(Long authTenantId) {
+        this.authTenantId = authTenantId;
+    }
+
+    public String getAuthTenantCode() {
+        return authTenantCode;
+    }
+
+    public void setAuthTenantCode(String authTenantCode) {
+        this.authTenantCode = authTenantCode;
+    }
+
+    public Boolean getCrossTenant() {
+        return crossTenant;
+    }
+
+    public void setCrossTenant(Boolean crossTenant) {
+        this.crossTenant = crossTenant;
     }
 
     public String getActorUsername() {

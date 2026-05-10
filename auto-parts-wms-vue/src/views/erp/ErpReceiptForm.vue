@@ -326,6 +326,7 @@ const receiptId = computed(() => {
   const parsed = Number(route.params.id);
   return Number.isFinite(parsed) ? parsed : null;
 });
+const isReceiptRoute = computed(() => route.path.startsWith('/erp/receipts'));
 const isEditing = computed(() => Boolean(receiptId.value));
 
 const normalizeNumber = (value: unknown) => {
@@ -458,6 +459,9 @@ watch(allocationTotals, (val) => {
 );
 
 watch(receiptId, (newVal, oldVal) => {
+  if (!isReceiptRoute.value) {
+    return;
+  }
   if (newVal && newVal !== oldVal) {
     loadReceiptDetail();
   }
@@ -550,6 +554,9 @@ const resetForm = () => {
 };
 
 const loadReceiptDetail = async () => {
+  if (!isReceiptRoute.value) {
+    return;
+  }
   if (!receiptId.value) {
     return;
   }
@@ -1009,7 +1016,7 @@ onMounted(() => {
   resetForm();
   fetchCustomers();
   fetchSettlementMethods();
-  if (isEditing.value) {
+  if (isReceiptRoute.value && isEditing.value) {
     loadReceiptDetail();
   } else {
     fetchReceiptNo();
@@ -1022,6 +1029,9 @@ onMounted(() => {
 
 onActivated(() => {
   pagePath.value = route.path;
+  if (!isReceiptRoute.value) {
+    return;
+  }
   if (isEditing.value) {
     loadReceiptDetail();
     return;

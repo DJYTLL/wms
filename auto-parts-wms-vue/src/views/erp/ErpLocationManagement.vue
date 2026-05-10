@@ -172,7 +172,7 @@ const getWarehouseName = (id?: number) => warehouseOptions.value.find(item => it
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses');
+    const res: any = await request.get('/erp/warehouses', { params: { enabled: true } });
     warehouseOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);

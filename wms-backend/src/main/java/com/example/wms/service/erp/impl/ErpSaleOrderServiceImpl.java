@@ -241,20 +241,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     @Transactional
     @AuditLog(action = "ERP_SALE_UNAPPROVE", entityType = "erp_sale_order", entityId = "{arg0}")
     public void unapprove(Long id) {
-        Long tenantId = TenantContext.requireTenantId();
-        ErpSaleOrder order = loadForUpdate(tenantId, id);
-        if (!STATUS_APPROVED.equals(order.getStatus())) {
-            throw new IllegalArgumentException("仅已审核状态可反审核");
-        }
-        List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
-        for (ErpSaleOrderItem item : items) {
-            applyStockDelta(tenantId, item, item.getQty(), "SALE_UNAPPROVE", id);
-        }
-        order.setStatus(STATUS_DRAFT);
-        order.setUnapprovedBy(resolveCurrentUsername());
-        order.setUnapprovedAt(Instant.now());
-        order.setUpdatedAt(Instant.now());
-        updateWithVersion(tenantId, order);
+        throw new IllegalArgumentException("销售单已审核后仅允许红冲，不允许反审核");
     }
 
     @Override
@@ -288,12 +275,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (reason == null || reason.trim().isEmpty()) {
             throw new IllegalArgumentException("红冲原因不能为空");
         }
-        List<ErpReceipt> approvedReceipts = erpReceiptMapper.selectList(new QueryWrapper<ErpReceipt>()
-            .eq("tenant_id", tenantId)
-            .eq("sale_order_id", order.getId())
-            .eq("status", "APPROVED")
-            .gt("amount", BigDecimal.ZERO));
-        if (!approvedReceipts.isEmpty()) {
+        if (hasApprovedReceiptImpact(tenantId, order.getId())) {
             throw new IllegalArgumentException("请先红冲收款单");
         }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
@@ -424,6 +406,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             }
             item.setWarehouseId(warehouseId);
             item.setLocationId(locationId);
+            if (request.qty() == null || request.qty().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("销售数量必须大于0");
+            }
             item.setQty(request.qty());
             BigDecimal taxRate = request.taxRate() == null ? BigDecimal.ZERO : request.taxRate();
             BigDecimal price = request.price();
@@ -454,6 +439,68 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             index += 1;
         }
         return items;
+    }
+
+    private boolean hasApprovedReceiptImpact(Long tenantId, Long saleOrderId) {
+        ErpAccountsReceivable receivable = erpAccountsReceivableMapper.findBySaleOrderId(tenantId, saleOrderId);
+        if (receivable != null && hasApprovedReceiptAllocation(tenantId, receivable.getId(), true)) {
+            return true;
+        }
+        List<ErpReceipt> approvedReceipts = erpReceiptMapper.selectList(new QueryWrapper<ErpReceipt>()
+            .eq("tenant_id", tenantId)
+            .eq("sale_order_id", saleOrderId)
+            .eq("status", STATUS_APPROVED));
+        for (ErpReceipt receipt : approvedReceipts) {
+            if (receiptImpactTotal(receipt).compareTo(BigDecimal.ZERO) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasApprovedReceiptAllocation(Long tenantId, Long receivableId, boolean positiveImpact) {
+        List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceivableId(tenantId, receivableId);
+        if (allocations == null || allocations.isEmpty()) {
+            return false;
+        }
+        List<Long> receiptIds = allocations.stream()
+            .map(ErpReceiptReceivable::getReceiptId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        if (receiptIds.isEmpty()) {
+            return false;
+        }
+        List<ErpReceipt> receipts = erpReceiptMapper.selectBatchIds(receiptIds);
+        if (receipts == null || receipts.isEmpty()) {
+            return false;
+        }
+        java.util.Map<Long, ErpReceipt> receiptMap = receipts.stream()
+            .filter(receipt -> tenantId.equals(receipt.getTenantId()))
+            .collect(java.util.stream.Collectors.toMap(ErpReceipt::getId, receipt -> receipt, (left, right) -> left));
+        for (ErpReceiptReceivable allocation : allocations) {
+            ErpReceipt receipt = receiptMap.get(allocation.getReceiptId());
+            if (receipt == null || !STATUS_APPROVED.equals(receipt.getStatus())) {
+                continue;
+            }
+            BigDecimal allocatedTotal = allocation.getAllocatedTotal() == null ? BigDecimal.ZERO : allocation.getAllocatedTotal();
+            if (positiveImpact && allocatedTotal.compareTo(BigDecimal.ZERO) > 0) {
+                return true;
+            }
+            if (!positiveImpact && allocatedTotal.compareTo(BigDecimal.ZERO) < 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private BigDecimal receiptImpactTotal(ErpReceipt receipt) {
+        if (receipt == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal amount = receipt.getAmount() == null ? BigDecimal.ZERO : receipt.getAmount();
+        BigDecimal discount = receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount();
+        return amount.add(discount);
     }
 
     private void applyTotals(ErpSaleOrder order, List<ErpSaleOrderItem> items) {

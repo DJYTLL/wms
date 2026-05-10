@@ -40,6 +40,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -184,6 +185,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setOrderNo(orderNo);
         order.setStatus(STATUS_DRAFT);
         order.setSupplierId(request.supplierId());
+        order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setPaymentMethodCode(request.paymentMethodCode());
         order.setPaidAmount(request.paidAmount());
         order.setDiscountAmount(request.discountAmount());
@@ -224,6 +226,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         String newOrderNo = resolveOrderNoForUpdate(request.orderNo(), order.getOrderNo(), tenantId, order.getId());
         order.setOrderNo(newOrderNo);
         order.setSupplierId(request.supplierId());
+        order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setPaymentMethodCode(request.paymentMethodCode());
         order.setPaidAmount(request.paidAmount());
         order.setDiscountAmount(request.discountAmount());
@@ -289,20 +292,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     @Transactional
     @AuditLog(action = "ERP_PURCHASE_UNAPPROVE", entityType = "erp_purchase_order", entityId = "{arg0}")
     public void unapprove(Long id) {
-        Long tenantId = TenantContext.requireTenantId();
-        ErpPurchaseOrder order = loadForUpdate(tenantId, id);
-        if (!STATUS_APPROVED.equals(order.getStatus())) {
-            throw new IllegalArgumentException("仅已审核状态可反审核");
-        }
-        List<ErpPurchaseOrderItem> items = erpPurchaseOrderItemMapper.findByOrderId(tenantId, id);
-        for (ErpPurchaseOrderItem item : items) {
-            applyStockDelta(tenantId, item, item.getQty().negate(), "PURCHASE_UNAPPROVE", id);
-        }
-        order.setStatus(STATUS_DRAFT);
-        order.setUnapprovedBy(resolveCurrentUsername());
-        order.setUnapprovedAt(Instant.now());
-        order.setUpdatedAt(Instant.now());
-        updateWithVersion(tenantId, order);
+        throw new IllegalArgumentException("采购单仅支持红冲，不支持反审核");
     }
 
     @Override
@@ -372,10 +362,10 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             wrapper.eq("supplier_id", supplierId);
         }
         if (startAt != null) {
-            wrapper.ge("created_at", startAt);
+            wrapper.ge("order_at", startAt);
         }
         if (endAt != null) {
-            wrapper.le("created_at", endAt);
+            wrapper.le("order_at", endAt);
         }
         return wrapper;
     }
@@ -770,6 +760,25 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             return Integer.parseInt(value);
         } catch (NumberFormatException ex) {
             return fallback;
+        }
+    }
+
+    private Instant parseOrderAt(String value) {
+        if (value == null || value.isBlank()) {
+            return Instant.now();
+        }
+        String trimmed = value.trim();
+        try {
+            if (trimmed.matches("\\d+")) {
+                return Instant.ofEpochMilli(Long.parseLong(trimmed));
+            }
+            if (trimmed.contains("T")) {
+                return Instant.parse(trimmed);
+            }
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            return LocalDateTime.parse(trimmed, formatter).atZone(ZoneId.systemDefault()).toInstant();
+        } catch (Exception ex) {
+            return Instant.now();
         }
     }
 

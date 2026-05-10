@@ -597,7 +597,7 @@ const router = createRouter({
  * 如果用户未认证 (store 中没有 token) 并且尝试访问受保护的路由 (除 /login 以外的任何路由)，
  *  mereka 将被重定向到 /login。
  */
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   
   // 设置网页标题
@@ -607,9 +607,18 @@ router.beforeEach((to, from, next) => {
     document.title = '汽配仓储系统';
   }
 
+  if (to.name !== 'login' && !authStore.initialized) {
+    await authStore.restoreSession();
+  }
+
   // 1. 认证拦截
   if (to.name !== 'login' && !authStore.isAuthenticated) {
     next({ name: 'login' });
+    return;
+  }
+
+  if (to.name === 'login' && authStore.isAuthenticated) {
+    next({ path: '/' });
     return;
   }
 

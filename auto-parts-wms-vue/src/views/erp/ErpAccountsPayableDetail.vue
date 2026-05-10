@@ -1,16 +1,36 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpAccountsPayableDetail') }}</h2>
-      <div class="page-actions">
-        <el-button @click="goBack">{{ $t('action.back') }}</el-button>
-        <el-button
-          v-if="canPrint"
-          type="primary"
-          @click="handlePrint"
-        >
-          {{ $t('action.print') }}
-        </el-button>
+      <div class="page-title">{{ $t('page.erpAccountsPayableDetail') }}</div>
+      <div class="page-toolbar-card">
+        <div class="table-toolbar detail-toolbar">
+          <div class="detail-toolbar__summary">
+            <div class="detail-toolbar__item">
+              <span class="detail-toolbar__label">{{ $t('field.orderNo') }}</span>
+              <span class="detail-toolbar__value">{{ detail.payable.orderNo || '-' }}</span>
+            </div>
+            <div class="detail-toolbar__item">
+              <span class="detail-toolbar__label">{{ $t('field.supplier') }}</span>
+              <span class="detail-toolbar__value">{{ detail.supplierName || '-' }}</span>
+            </div>
+            <div class="detail-toolbar__item">
+              <span class="detail-toolbar__label">{{ $t('field.status') }}</span>
+              <el-tag :type="apStatusTagType(detail.payable.status)" size="small">
+                {{ apStatusLabel(detail.payable.status) }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="table-actions detail-toolbar__actions">
+            <el-button @click="goBack">{{ $t('action.back') }}</el-button>
+            <el-button
+              v-if="canPrint"
+              type="primary"
+              @click="handlePrint"
+            >
+              {{ $t('action.print') }}
+            </el-button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -226,6 +246,47 @@ onMounted(() => {
 </script>
 
 <style scoped>
+:deep(.detail-toolbar) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.detail-toolbar__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, max-content));
+  align-items: center;
+  gap: 12px 24px;
+  min-width: 0;
+}
+
+.detail-toolbar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detail-toolbar__label {
+  color: #6b7280;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.detail-toolbar__value {
+  color: #1f2937;
+  font-weight: 500;
+  min-width: 0;
+  word-break: break-all;
+}
+
+:deep(.detail-toolbar__actions) {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-left: 0;
+}
+
 :deep(.payments-card .table-body) {
   max-height: 320px;
   overflow: auto;
@@ -237,5 +298,30 @@ onMounted(() => {
 
 :deep(.row-red-flush:hover > td) {
   background-color: rgba(255, 77, 79, 0.12) !important;
+}
+
+@media (max-width: 1280px) {
+  :deep(.detail-toolbar) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detail-toolbar__summary {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+
+  :deep(.detail-toolbar__actions) {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .detail-toolbar__summary {
+    grid-template-columns: 1fr;
+  }
+
+  :deep(.detail-toolbar__actions) {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 </style>

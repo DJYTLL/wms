@@ -1,40 +1,44 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell page-shell--system">
     <div class="page-header">
-      <h2 class="page-title">{{ $t('page.erpReceiptManagement') }}</h2>
-      <div class="table-toolbar">
-        <div class="table-filters">
-          <el-input
-            v-model="searchQuery"
-            :placeholder="$t('action.search')"
-            class="table-search"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
-          <FuzzyProductSelect
-            v-model="customerFilter"
-            :options="customerOptions"
-            :placeholder="$t('field.customer')"
-            class="table-search"
-            @change="handleSearch"
-          />
-          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search" clearable @change="handleSearch">
-            <el-option :label="$t('filter.all')" value="" />
-            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-date-picker
-            v-model="dateRange"
-            type="datetimerange"
-            value-format="x"
-            format="YYYY/MM/DD HH:mm:ss"
-            :start-placeholder="$t('field.startTime')"
-            :end-placeholder="$t('field.endTime')"
-            @change="handleSearch"
-            class="table-date-range--compact"
-          />
+      <div class="page-title">{{ $t('page.erpReceiptManagement') }}</div>
+      <div class="page-toolbar-card">
+        <div class="table-toolbar finance-toolbar">
+          <div class="table-filters finance-filters finance-filters--management">
+            <el-input
+              v-model="searchQuery"
+              :placeholder="$t('action.search')"
+              class="table-search finance-field--wide"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <FuzzyProductSelect
+              v-model="customerFilter"
+              :options="customerOptions"
+              :placeholder="$t('field.customer')"
+              class="table-search finance-field--narrow"
+              @change="handleSearch"
+            />
+            <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search finance-field--narrow" clearable @change="handleSearch">
+              <el-option :label="$t('filter.all')" value="" />
+              <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <el-date-picker
+              v-model="dateRange"
+              type="datetimerange"
+              value-format="x"
+              format="YYYY/MM/DD HH:mm:ss"
+              :start-placeholder="$t('field.startTime')"
+              :end-placeholder="$t('field.endTime')"
+              @change="handleSearch"
+              class="table-date-range--compact finance-date-range"
+            />
+          </div>
+          <div class="table-actions">
+            <el-button type="primary" v-permission="'erp-receipt:add'" @click="openCreate">{{ $t('action.add') }}</el-button>
+          </div>
         </div>
-        <el-button type="primary" v-permission="'erp-receipt:add'" @click="openCreate">{{ $t('action.add') }}</el-button>
       </div>
     </div>
 
@@ -293,19 +297,6 @@ onActivated(() => {
 </script>
 
 <style scoped>
-:deep(.table-date-range--compact) {
-  flex: 0 0 380px;
-}
-
-:deep(.table-date-range--compact.el-range-editor) {
-  width: 380px !important;
-  min-width: 380px !important;
-}
-
-:deep(.table-date-range--compact .el-range-input) {
-  width: 132px;
-}
-
 :deep(.row-red-flush > td) {
   background-color: rgba(255, 77, 79, 0.12) !important;
 }
