@@ -117,6 +117,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { MASTER_DATA_CODE_HINT, isValidMasterCode, normalizeMasterCode } from '@/utils/erpMasterData';
 
 interface OptionItem {
   id: number;
@@ -173,7 +174,7 @@ const getWarehouseName = (id?: number) => warehouseOptions.value.find(item => it
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses/options');
+    const res: any = await request.get('/erp/warehouses');
     warehouseOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);
@@ -252,10 +253,14 @@ const resetForm = () => {
 };
 
 const saveData = async () => {
-  const code = formData.code.trim();
+  const code = normalizeMasterCode(formData.code);
   const name = formData.name.trim();
   if (!code || !name || !formData.warehouseId) {
     notifyWarning(t('message.required'));
+    return;
+  }
+  if (!isValidMasterCode(code)) {
+    notifyWarning(MASTER_DATA_CODE_HINT);
     return;
   }
   try {
@@ -285,7 +290,7 @@ const saveData = async () => {
 const handleDelete = async (row: ErpLocation) => {
   try {
     await ElMessageBox.confirm(
-      `确认删除库位“${row.name || row.code}”吗？若该库位已被库存、商品或业务单据引用，系统会阻止删除。`,
+      `确认删除库位“${row.name || row.code}”吗？仅未被库存、商品或业务单据引用的库位允许删除，已使用库位请改为停用。`,
       t('action.delete'),
       {
         type: 'warning',

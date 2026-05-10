@@ -104,6 +104,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { MASTER_DATA_CODE_HINT, isValidMasterCode, normalizeMasterCode } from '@/utils/erpMasterData';
 
 interface ErpWarehouse {
   id: number;
@@ -215,10 +216,14 @@ const resetForm = () => {
 };
 
 const saveData = async () => {
-  const code = formData.code.trim();
+  const code = normalizeMasterCode(formData.code);
   const name = formData.name.trim();
   if (!code || !name) {
     notifyWarning(t('message.required'));
+    return;
+  }
+  if (!isValidMasterCode(code)) {
+    notifyWarning(MASTER_DATA_CODE_HINT);
     return;
   }
   try {
@@ -248,7 +253,7 @@ const saveData = async () => {
 const handleDelete = async (row: ErpWarehouse) => {
   try {
     await ElMessageBox.confirm(
-      `确认删除仓库“${row.name}”吗？若该仓库已被库位、库存或业务单据引用，系统会阻止删除。`,
+      `确认删除仓库“${row.name}”吗？仅未被任何库位、库存或业务单据引用的仓库允许删除，已使用仓库请改为停用。`,
       t('action.delete'),
       {
         type: 'warning',

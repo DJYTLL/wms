@@ -512,6 +512,7 @@ import { useApiError } from '@/composables/useApiError';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
+import { mergeOptionById } from '@/utils/erpMasterData';
 import { ElMessageBox } from 'element-plus';
 import { Close, View } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
@@ -1783,6 +1784,39 @@ const fetchLocations = async () => {
   }
 };
 
+const ensureWarehouseOption = async (warehouseId?: number | null) => {
+  if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
+  try {
+    const res: any = await request.get(`/erp/warehouses/${warehouseId}`);
+    const warehouse = res.data.data;
+    if (warehouse) {
+      warehouseOptions.value = mergeOptionById(warehouseOptions.value, {
+        id: warehouse.id,
+        name: warehouse.name
+      });
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const ensureLocationOption = async (locationId?: number | null) => {
+  if (!locationId || locationOptions.value.some(item => item.id === locationId)) return;
+  try {
+    const res: any = await request.get(`/erp/locations/${locationId}`);
+    const location = res.data.data;
+    if (location) {
+      locationOptions.value = mergeOptionById(locationOptions.value, {
+        id: location.id,
+        name: location.name,
+        warehouseId: location.warehouseId
+      });
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const loadDetail = async () => {
   const seq = ++loadDetailSeq;
   isInitializing.value = true;
@@ -1825,6 +1859,10 @@ const loadDetail = async () => {
         taxRate: item.taxRate,
         remark: item.remark
       }));
+      await Promise.all(formData.items.flatMap(item => [
+        ensureWarehouseOption(item.warehouseId),
+        ensureLocationOption(item.locationId)
+      ]));
       for (const item of formData.items) {
         await fetchStockOptions(item.productId);
         syncStockKey(item);

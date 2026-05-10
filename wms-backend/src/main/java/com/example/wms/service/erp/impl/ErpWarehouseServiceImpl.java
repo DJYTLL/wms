@@ -33,6 +33,7 @@ import com.example.wms.mapper.erp.ErpStockCountMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.ErpWarehouseService;
+import com.example.wms.service.erp.support.ErpMasterDataRules;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -42,8 +43,6 @@ import java.util.List;
 // 仓库服务实现（ERP进销存）
 @Service
 public class ErpWarehouseServiceImpl implements ErpWarehouseService {
-    private static final String STATUS_DRAFT = "DRAFT";
-
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpLocationMapper erpLocationMapper;
     private final ErpProductMapper erpProductMapper;
@@ -117,7 +116,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
     @AuditLog(action = "ERP_WAREHOUSE_CREATE", entityType = "erp_warehouse", entityId = "{result.id}", detail = "code={arg0.code}")
     public ErpWarehouse create(ErpWarehouseCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
-        String normalizedCode = normalizeRequiredText(request.code(), "仓库编码不能为空");
+        String normalizedCode = ErpMasterDataRules.normalizeMasterCode(request.code(), "仓库编码不能为空");
         ErpWarehouse existing = erpWarehouseMapper.findByCode(tenantId, normalizedCode);
         if (existing != null) {
             throw new IllegalArgumentException("仓库编码已存在");
@@ -136,7 +135,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
     @AuditLog(action = "ERP_WAREHOUSE_UPDATE", entityType = "erp_warehouse", entityId = "{arg0}", detail = "code={arg1.code}")
     public ErpWarehouse update(Long id, ErpWarehouseUpdateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
-        String normalizedCode = normalizeRequiredText(request.code(), "仓库编码不能为空");
+        String normalizedCode = ErpMasterDataRules.normalizeMasterCode(request.code(), "仓库编码不能为空");
         ErpWarehouse warehouse = erpWarehouseMapper.selectOne(new QueryWrapper<ErpWarehouse>()
             .eq("tenant_id", tenantId)
             .eq("id", id));
@@ -191,20 +190,20 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
 
     private void applyRequest(ErpWarehouse warehouse, ErpWarehouseCreateRequest request, String normalizedCode) {
         warehouse.setCode(normalizedCode);
-        warehouse.setName(normalizeOptionalText(request.name()));
-        warehouse.setAddress(normalizeOptionalText(request.address()));
-        warehouse.setManager(normalizeOptionalText(request.manager()));
-        warehouse.setPhone(normalizeOptionalText(request.phone()));
-        warehouse.setRemark(normalizeOptionalText(request.remark()));
+        warehouse.setName(ErpMasterDataRules.normalizeOptionalText(request.name()));
+        warehouse.setAddress(ErpMasterDataRules.normalizeOptionalText(request.address()));
+        warehouse.setManager(ErpMasterDataRules.normalizeOptionalText(request.manager()));
+        warehouse.setPhone(ErpMasterDataRules.normalizeOptionalText(request.phone()));
+        warehouse.setRemark(ErpMasterDataRules.normalizeOptionalText(request.remark()));
     }
 
     private void applyRequest(ErpWarehouse warehouse, ErpWarehouseUpdateRequest request, String normalizedCode) {
         warehouse.setCode(normalizedCode);
-        warehouse.setName(normalizeOptionalText(request.name()));
-        warehouse.setAddress(normalizeOptionalText(request.address()));
-        warehouse.setManager(normalizeOptionalText(request.manager()));
-        warehouse.setPhone(normalizeOptionalText(request.phone()));
-        warehouse.setRemark(normalizeOptionalText(request.remark()));
+        warehouse.setName(ErpMasterDataRules.normalizeOptionalText(request.name()));
+        warehouse.setAddress(ErpMasterDataRules.normalizeOptionalText(request.address()));
+        warehouse.setManager(ErpMasterDataRules.normalizeOptionalText(request.manager()));
+        warehouse.setPhone(ErpMasterDataRules.normalizeOptionalText(request.phone()));
+        warehouse.setRemark(ErpMasterDataRules.normalizeOptionalText(request.remark()));
     }
 
     private void ensureWarehouseNotReferenced(Long tenantId, Long warehouseId) {
@@ -309,7 +308,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         if (erpAssemblyOrderMapper.selectCount(new QueryWrapper<ErpAssemblyOrder>()
             .eq("tenant_id", tenantId)
             .eq("warehouse_id", warehouseId)
-            .eq("status", STATUS_DRAFT)) > 0) {
+            .in("status", ErpMasterDataRules.PENDING_ORDER_STATUSES)) > 0) {
             throw new IllegalArgumentException("仓库仍被未完成组装/拆分单引用，不能停用");
         }
         if (erpAssemblyOrderItemMapper.selectCount(new QueryWrapper<ErpAssemblyOrderItem>()
@@ -321,7 +320,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         if (erpStockCountMapper.selectCount(new QueryWrapper<ErpStockCount>()
             .eq("tenant_id", tenantId)
             .eq("warehouse_id", warehouseId)
-            .eq("status", STATUS_DRAFT)) > 0) {
+            .in("status", ErpMasterDataRules.PENDING_ORDER_STATUSES)) > 0) {
             throw new IllegalArgumentException("仓库仍被未完成盘点单引用，不能停用");
         }
         if (erpStockCountItemMapper.selectCount(new QueryWrapper<ErpStockCountItem>()
@@ -334,34 +333,18 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
 
     private String draftOrderSubquery(String tableName, Long tenantId) {
         return String.format(
-            "SELECT id FROM %s WHERE tenant_id = %d AND status = '%s'",
+            "SELECT id FROM %s WHERE tenant_id = %d AND status IN (%s)",
             tableName,
             tenantId,
-            STATUS_DRAFT
+            ErpMasterDataRules.pendingStatusSqlList()
         );
     }
 
     private String draftStockCountSubquery(Long tenantId) {
         return String.format(
-            "SELECT id FROM erp_stock_count WHERE tenant_id = %d AND status = '%s'",
+            "SELECT id FROM erp_stock_count WHERE tenant_id = %d AND status IN (%s)",
             tenantId,
-            STATUS_DRAFT
+            ErpMasterDataRules.pendingStatusSqlList()
         );
-    }
-
-    private String normalizeRequiredText(String value, String message) {
-        String normalized = normalizeOptionalText(value);
-        if (normalized == null) {
-            throw new IllegalArgumentException(message);
-        }
-        return normalized;
-    }
-
-    private String normalizeOptionalText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String normalized = value.trim();
-        return normalized.isEmpty() ? null : normalized;
     }
 }

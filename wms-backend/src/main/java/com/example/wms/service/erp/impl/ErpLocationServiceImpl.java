@@ -33,6 +33,7 @@ import com.example.wms.mapper.erp.ErpStockCountMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.ErpLocationService;
+import com.example.wms.service.erp.support.ErpMasterDataRules;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -42,8 +43,6 @@ import java.util.List;
 // 库位服务实现（ERP进销存）
 @Service
 public class ErpLocationServiceImpl implements ErpLocationService {
-    private static final String STATUS_DRAFT = "DRAFT";
-
     private final ErpLocationMapper erpLocationMapper;
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpProductMapper erpProductMapper;
@@ -117,7 +116,7 @@ public class ErpLocationServiceImpl implements ErpLocationService {
     @AuditLog(action = "ERP_LOCATION_CREATE", entityType = "erp_location", entityId = "{result.id}", detail = "code={arg0.code}")
     public ErpLocation create(ErpLocationCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
-        String normalizedCode = normalizeRequiredText(request.code(), "库位编码不能为空");
+        String normalizedCode = ErpMasterDataRules.normalizeMasterCode(request.code(), "库位编码不能为空");
         ensureWarehouseExists(tenantId, request.warehouseId());
         ErpLocation existing = erpLocationMapper.findByCode(tenantId, request.warehouseId(), normalizedCode);
         if (existing != null) {
@@ -137,7 +136,7 @@ public class ErpLocationServiceImpl implements ErpLocationService {
     @AuditLog(action = "ERP_LOCATION_UPDATE", entityType = "erp_location", entityId = "{arg0}", detail = "code={arg1.code}")
     public ErpLocation update(Long id, ErpLocationUpdateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
-        String normalizedCode = normalizeRequiredText(request.code(), "库位编码不能为空");
+        String normalizedCode = ErpMasterDataRules.normalizeMasterCode(request.code(), "库位编码不能为空");
         ErpLocation location = erpLocationMapper.selectOne(new QueryWrapper<ErpLocation>()
             .eq("tenant_id", tenantId)
             .eq("id", id));
@@ -203,22 +202,22 @@ public class ErpLocationServiceImpl implements ErpLocationService {
 
     private void applyRequest(ErpLocation location, ErpLocationCreateRequest request, String normalizedCode) {
         location.setCode(normalizedCode);
-        location.setName(normalizeOptionalText(request.name()));
+        location.setName(ErpMasterDataRules.normalizeOptionalText(request.name()));
         location.setWarehouseId(request.warehouseId());
-        location.setAisle(normalizeOptionalText(request.aisle()));
-        location.setRack(normalizeOptionalText(request.rack()));
-        location.setBin(normalizeOptionalText(request.bin()));
-        location.setRemark(normalizeOptionalText(request.remark()));
+        location.setAisle(ErpMasterDataRules.normalizeOptionalText(request.aisle()));
+        location.setRack(ErpMasterDataRules.normalizeOptionalText(request.rack()));
+        location.setBin(ErpMasterDataRules.normalizeOptionalText(request.bin()));
+        location.setRemark(ErpMasterDataRules.normalizeOptionalText(request.remark()));
     }
 
     private void applyRequest(ErpLocation location, ErpLocationUpdateRequest request, String normalizedCode) {
         location.setCode(normalizedCode);
-        location.setName(normalizeOptionalText(request.name()));
+        location.setName(ErpMasterDataRules.normalizeOptionalText(request.name()));
         location.setWarehouseId(request.warehouseId());
-        location.setAisle(normalizeOptionalText(request.aisle()));
-        location.setRack(normalizeOptionalText(request.rack()));
-        location.setBin(normalizeOptionalText(request.bin()));
-        location.setRemark(normalizeOptionalText(request.remark()));
+        location.setAisle(ErpMasterDataRules.normalizeOptionalText(request.aisle()));
+        location.setRack(ErpMasterDataRules.normalizeOptionalText(request.rack()));
+        location.setBin(ErpMasterDataRules.normalizeOptionalText(request.bin()));
+        location.setRemark(ErpMasterDataRules.normalizeOptionalText(request.remark()));
     }
 
     private void ensureLocationNotReferenced(Long tenantId, Long locationId) {
@@ -312,7 +311,7 @@ public class ErpLocationServiceImpl implements ErpLocationService {
         if (erpAssemblyOrderMapper.selectCount(new QueryWrapper<ErpAssemblyOrder>()
             .eq("tenant_id", tenantId)
             .eq("location_id", locationId)
-            .eq("status", STATUS_DRAFT)) > 0) {
+            .in("status", ErpMasterDataRules.PENDING_ORDER_STATUSES)) > 0) {
             throw new IllegalArgumentException("库位仍被未完成组装/拆分单引用，不能停用");
         }
         if (erpAssemblyOrderItemMapper.selectCount(new QueryWrapper<ErpAssemblyOrderItem>()
@@ -324,7 +323,7 @@ public class ErpLocationServiceImpl implements ErpLocationService {
         if (erpStockCountMapper.selectCount(new QueryWrapper<ErpStockCount>()
             .eq("tenant_id", tenantId)
             .eq("location_id", locationId)
-            .eq("status", STATUS_DRAFT)) > 0) {
+            .in("status", ErpMasterDataRules.PENDING_ORDER_STATUSES)) > 0) {
             throw new IllegalArgumentException("库位仍被未完成盘点单引用，不能停用");
         }
         if (erpStockCountItemMapper.selectCount(new QueryWrapper<ErpStockCountItem>()
@@ -337,34 +336,18 @@ public class ErpLocationServiceImpl implements ErpLocationService {
 
     private String draftOrderSubquery(String tableName, Long tenantId) {
         return String.format(
-            "SELECT id FROM %s WHERE tenant_id = %d AND status = '%s'",
+            "SELECT id FROM %s WHERE tenant_id = %d AND status IN (%s)",
             tableName,
             tenantId,
-            STATUS_DRAFT
+            ErpMasterDataRules.pendingStatusSqlList()
         );
     }
 
     private String draftStockCountSubquery(Long tenantId) {
         return String.format(
-            "SELECT id FROM erp_stock_count WHERE tenant_id = %d AND status = '%s'",
+            "SELECT id FROM erp_stock_count WHERE tenant_id = %d AND status IN (%s)",
             tenantId,
-            STATUS_DRAFT
+            ErpMasterDataRules.pendingStatusSqlList()
         );
-    }
-
-    private String normalizeRequiredText(String value, String message) {
-        String normalized = normalizeOptionalText(value);
-        if (normalized == null) {
-            throw new IllegalArgumentException(message);
-        }
-        return normalized;
-    }
-
-    private String normalizeOptionalText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String normalized = value.trim();
-        return normalized.isEmpty() ? null : normalized;
     }
 }

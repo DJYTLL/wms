@@ -2,6 +2,7 @@ package com.example.wms;
 
 import com.example.wms.controller.erp.ErpLocationController;
 import com.example.wms.controller.erp.ErpWarehouseController;
+import com.example.wms.dto.erp.ErpWarehouseCreateRequest;
 import com.example.wms.dto.erp.ErpLocationCreateRequest;
 import com.example.wms.dto.erp.ErpLocationUpdateRequest;
 import com.example.wms.dto.erp.ErpWarehouseUpdateRequest;
@@ -147,6 +148,28 @@ class ErpMasterDataGovernanceTests {
     }
 
     @Test
+    void warehouseCreateNormalizesCodeToUppercase() {
+        ErpWarehouseServiceImpl service = warehouseServiceImpl();
+        when(warehouseMapper.findByCode(TENANT_ID, "WH/001_A")).thenReturn(null);
+
+        service.create(new ErpWarehouseCreateRequest(" wh/001_a ", "总仓", "A", "M", "P", true, "R"));
+
+        ArgumentCaptor<ErpWarehouse> captor = ArgumentCaptor.forClass(ErpWarehouse.class);
+        verify(warehouseMapper).insert(captor.capture());
+        assertThat(captor.getValue().getCode()).isEqualTo("WH/001_A");
+    }
+
+    @Test
+    void warehouseCreateRejectsDuplicateAfterNormalization() {
+        ErpWarehouseServiceImpl service = warehouseServiceImpl();
+        when(warehouseMapper.findByCode(TENANT_ID, "WH-001")).thenReturn(warehouse(9L, "WH-001", true));
+
+        assertThatThrownBy(() -> service.create(new ErpWarehouseCreateRequest(" wh-001 ", "总仓", null, null, null, true, null)))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("仓库编码已存在");
+    }
+
+    @Test
     void locationDeleteBlocksWhenReferencedByStockBalance() {
         ErpLocationServiceImpl service = locationServiceImpl();
         when(locationMapper.selectOne(any())).thenReturn(location(2L, 8L, "LOC-001", true));
@@ -218,6 +241,17 @@ class ErpMasterDataGovernanceTests {
         assertThat(saved.getRack()).isEqualTo("R02");
         assertThat(saved.getBin()).isEqualTo("B02");
         assertThat(saved.getRemark()).isEqualTo("新备注");
+    }
+
+    @Test
+    void locationCreateRejectsInvalidCode() {
+        ErpLocationServiceImpl service = locationServiceImpl();
+
+        assertThatThrownBy(() -> service.create(
+            new ErpLocationCreateRequest(8L, "loc 001", "库位一", "A01", "R01", "B01", true, "备注")
+        ))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("编码只能包含字母、数字、短横线、下划线或斜杠");
     }
 
     @Test

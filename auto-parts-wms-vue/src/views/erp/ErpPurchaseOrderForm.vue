@@ -246,6 +246,7 @@ import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { ElMessageBox } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
+import { mergeOptionById } from '@/utils/erpMasterData';
 
 interface OptionItem {
   id: number;
@@ -568,6 +569,39 @@ const fetchLocations = async () => {
   }
 };
 
+const ensureWarehouseOption = async (warehouseId?: number | null) => {
+  if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
+  try {
+    const res: any = await request.get(`/erp/warehouses/${warehouseId}`);
+    const warehouse = res.data.data;
+    if (warehouse) {
+      warehouseOptions.value = mergeOptionById(warehouseOptions.value, {
+        id: warehouse.id,
+        name: warehouse.name
+      });
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const ensureLocationOption = async (locationId?: number | null) => {
+  if (!locationId || locationOptions.value.some(item => item.id === locationId)) return;
+  try {
+    const res: any = await request.get(`/erp/locations/${locationId}`);
+    const location = res.data.data;
+    if (location) {
+      locationOptions.value = mergeOptionById(locationOptions.value, {
+        id: location.id,
+        name: location.name,
+        warehouseId: location.warehouseId
+      });
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const applyDefaultPaymentMethod = () => {
   if (formData.paymentMethodCode) return;
   const defaultItem = paymentMethodOptions.value.find(item => item.isDefault);
@@ -635,6 +669,10 @@ const fetchNextOrderNo = async () => {
         taxRate: item.taxRate == null ? '' : String(item.taxRate),
         remark: item.remark
       }));
+      await Promise.all(formData.items.flatMap(item => [
+        ensureWarehouseOption(item.warehouseId),
+        ensureLocationOption(item.locationId)
+      ]));
       if (!formData.items.length) addItem();
     }
   } catch (error) {

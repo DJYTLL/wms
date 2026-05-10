@@ -433,6 +433,7 @@ import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
+import { mergeOptionById } from '@/utils/erpMasterData';
 
 interface OptionItem {
   id: number;
@@ -651,6 +652,39 @@ const fetchLocations = async () => {
   }
 };
 
+const ensureWarehouseOption = async (warehouseId?: number | null) => {
+  if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
+  try {
+    const res: any = await request.get(`/erp/warehouses/${warehouseId}`);
+    const warehouse = res.data.data;
+    if (warehouse) {
+      warehouseOptions.value = mergeOptionById(warehouseOptions.value, {
+        id: warehouse.id,
+        name: warehouse.name
+      });
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const ensureLocationOption = async (locationId?: number | null) => {
+  if (!locationId || locationOptions.value.some(item => item.id === locationId)) return;
+  try {
+    const res: any = await request.get(`/erp/locations/${locationId}`);
+    const location = res.data.data;
+    if (location) {
+      locationOptions.value = mergeOptionById(locationOptions.value, {
+        id: location.id,
+        name: location.name,
+        warehouseId: location.warehouseId
+      });
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const fetchNextCode = async () => {
   try {
     const res: any = await request.get('/erp/products/next-code');
@@ -722,7 +756,7 @@ const openAddModal = () => {
   showModal.value = true;
 };
 
-const openEditModal = (row: ErpProduct) => {
+const openEditModal = async (row: ErpProduct) => {
   isEditing.value = true;
   currentId.value = row.id;
   formData.code = row.code;
@@ -731,6 +765,8 @@ const openEditModal = (row: ErpProduct) => {
   formData.unitId = row.unitId || null;
   formData.defaultWarehouseId = row.defaultWarehouseId || null;
   formData.defaultLocationId = row.defaultLocationId || null;
+  await ensureWarehouseOption(formData.defaultWarehouseId);
+  await ensureLocationOption(formData.defaultLocationId);
   syncDefaultLocation();
   formData.salePrice = row.salePrice;
   formData.costPrice = row.costPrice == null ? '' : String(row.costPrice);

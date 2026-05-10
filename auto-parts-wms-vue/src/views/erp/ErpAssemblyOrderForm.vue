@@ -210,6 +210,7 @@ import { useApiError } from '@/composables/useApiError';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import { mergeOptionById } from '@/utils/erpMasterData';
 
 interface OptionItem {
   id: number;
@@ -474,6 +475,39 @@ const fetchOptions = async () => {
   }
 };
 
+const ensureWarehouseOption = async (warehouseId?: number | null) => {
+  if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
+  try {
+    const res: any = await request.get(`/erp/warehouses/${warehouseId}`);
+    const warehouse = res.data.data;
+    if (warehouse) {
+      warehouseOptions.value = mergeOptionById(warehouseOptions.value, {
+        id: warehouse.id,
+        name: warehouse.name
+      });
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const ensureLocationOption = async (locationId?: number | null) => {
+  if (!locationId || locationOptions.value.some(item => item.id === locationId)) return;
+  try {
+    const res: any = await request.get(`/erp/locations/${locationId}`);
+    const location = res.data.data;
+    if (location) {
+      locationOptions.value = mergeOptionById(locationOptions.value, {
+        id: location.id,
+        name: location.name,
+        warehouseId: location.warehouseId
+      });
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const addItem = () => {
   formData.items.push({
     productId: null,
@@ -644,6 +678,8 @@ const fetchDetail = async () => {
     formData.finishedQty = String(order.finishedQty ?? '');
     formData.warehouseId = order.warehouseId || null;
     formData.locationId = order.locationId || null;
+    await ensureWarehouseOption(formData.warehouseId);
+    await ensureLocationOption(formData.locationId);
     formData.laborCost = String(order.laborCost ?? '');
     formData.remark = order.remark || '';
     formData.items = (detail.items || []).map((item: any) => ({
@@ -655,6 +691,10 @@ const fetchDetail = async () => {
       amount: Number(item.amount || 0),
       remark: item.remark || ''
     }));
+    await Promise.all(formData.items.flatMap(item => [
+      ensureWarehouseOption(item.warehouseId),
+      ensureLocationOption(item.locationId)
+    ]));
     await fetchStockOptionsForItems(formData.items);
     if (!formData.items.length) addItem();
   } catch (error) {
