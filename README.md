@@ -47,6 +47,14 @@
 - 采购、采购退货、销售、销售退货、组装、拆分、商品默认仓库/库位、盘点等页面在编辑历史单据时，允许回显已停用但仍存在的仓库/库位，避免旧数据打开后丢失当前值。
 - 仓库管理页和库位管理页的删除提示已明确“已使用主数据应优先停用”，避免误把删除当作常规退出路径。
 
+### 打印模板与针式打印链路升级
+
+- 打印模板管理页已从简单弹窗配置升级为模板设计器，支持左侧模板配置、右侧实时预览、样例单据切换、显示列排序与针式打印样式预览。
+- 销售、采购、退货、收付款、应收应付、盘点、初始库存等打印页已统一切换为针式打印机友好的窄版样式，去掉阴影、灰底、圆角等网页视觉元素。
+- 前端已接入 `QZ Tray` 直打能力，打印时优先尝试本地直打，失败时回退浏览器打印。
+- 后端已补充 `QZ Tray` 可信签名接口，前端通过证书与签名握手连接本地 `QZ Tray`。
+- 仓库根目录新增 `qz-provisioning/`，用于给客户机侧载 QZ 信任配置，减少手工授权成本。
+
 ## 2. 仓库总览
 
 ### 2.1 根目录
@@ -55,7 +63,9 @@
 | --- | --- |
 | `.gitignore` | 根仓库忽略规则，排除前端 `node_modules/dist`、后端 `target`、IDE 目录等本地文件 |
 | `auto-parts-wms-vue/` | 前端项目 |
+| `qz-provisioning/` | QZ Tray 客户端信任与授权安装包目录 |
 | `wms-backend/` | 后端项目 |
+| `tools/` | 仓库级辅助脚本、Git Hook 与业务收口脚本 |
 | `.vscode/` | 当前工作区编辑器配置目录，不属于业务代码 |
 
 ## 3. 运行与部署
@@ -99,7 +109,28 @@ mvn spring-boot:run
 
 - `wms-backend/src/main/resources/application.properties`
 
-### 3.5 默认账号
+### 3.5 打印与 QZ Tray 部署
+
+当前系统支持两种打印方式：
+
+- 浏览器打印：通过 `window.print()` 打印
+- 本地直打：通过 `QZ Tray` 连接本机打印机
+
+如果要使用针式打印机直打，建议按下面顺序部署：
+
+1. 安装针式打印机驱动
+2. 安装 `QZ Tray`
+3. 执行 [qz-provisioning/README.md](D:/project/qz-provisioning/README.md) 中的安装步骤
+4. 重启 `QZ Tray`
+5. 回到系统测试打印
+
+说明：
+
+- 当前可信签名材料由后端提供，配置位于 `wms-backend/src/main/resources/application.properties`
+- 当前客户侧信任补丁位于 `D:\project\qz-provisioning`
+- 如果系统默认打印机不是目标针式打印机，直打时仍可能进入 PDF 或其他默认设备
+
+### 3.6 默认账号
 
 系统启动后，`DataInitializer` 会确保默认租户和默认管理员存在：
 
@@ -112,7 +143,7 @@ mvn spring-boot:run
 - 旧版 `wms-backend/README.md` 中写的是 `admin123`，但当前实际配置文件中默认密码是 `password`
 - 以 `application.properties` 与 `DataInitializer.java` 为准
 
-### 3.6 租户模型说明
+### 3.7 租户模型说明
 
 系统当前区分两类租户：
 
@@ -332,6 +363,8 @@ mvn spring-boot:run
 | `request.ts` | Axios 封装，负责统一 baseURL、JWT、401 刷新、幂等键注入 |
 | `csv.ts` | CSV 导出/解析等工具 |
 | `i18n.ts` | 国际化工具函数 |
+| `directPrint.ts` | 打印页 HTML 收集与 QZ/浏览器打印桥接 |
+| `printTemplate.ts` | 打印模板解析、默认模板读取、预览模板本地暂存 |
 | `qzTray.ts` | QZ Tray 打印支持工具 |
 
 ### 5.15 `src/views/` 页面说明
@@ -492,6 +525,7 @@ ERP 页面较多，但命名规则非常统一，基本可以通过文件名判�
 | 文件/目录 | 说明 |
 | --- | --- |
 | `application.properties` | 后端主配置，包含端口、JWT、数据库、Flyway、监控阈值等 |
+| `qz/` | QZ Tray 开发证书、公钥 PEM、PFX 等签名材料 |
 | `schema.sql` | 数据库结构参考文件 |
 | `db/migration/` | Flyway 数据库迁移脚本目录 |
 
@@ -554,6 +588,7 @@ ERP 页面较多，但命名规则非常统一，基本可以通过文件名判�
 | `config/WebMvcConfig.java` | Web MVC 相关配置 |
 | `controller/AuthController.java` | 登录、刷新、登出接口 |
 | `controller/HealthController.java` | 健康检查接口 |
+| `controller/QzTrayController.java` | QZ Tray 证书与签名接口 |
 | `security/JwtAuthenticationFilter.java` | 解析 JWT 并写入认证上下文 |
 | `security/JwtTokenService.java` | JWT 生成、解析、校验 |
 | `audit/RequestAuditContextFilter.java` | 请求级审计上下文采集 |
@@ -731,6 +766,7 @@ ERP 代码数量最多，但组织非常标准，按业务对象横向展开。
 - 面向租户的外部查询表默认补 `(tenant_id, deleted_at)` 组合索引，并在自定义 SQL 中显式过滤 `deleted_at IS NULL`。
 - 技术性状态表与追加型流水表要单独建模：刷新令牌优先用撤销/过期字段，审计日志与库存流水默认只追加不做恢复接口。
 - 建议后续把旧的零散文档合并，避免多份 README 内容不一致。
+- 打印交付要区分三层：业务模板、前端直打链路、客户机 `QZ Tray` provisioning。不要只改其中一层。
 
 ## 9. 业务完成收口规范
 
@@ -860,10 +896,19 @@ git config core.hooksPath tools/git-hooks
 - 影响范围：`README.md`、`wms-backend/src/main/resources/db/migration/V57__logical_delete_metadata_and_indexes.sql`、`wms-backend/src/main/java/com/example/wms/config/AuditMetaObjectHandler.java`、`wms-backend/src/main/java/com/example/wms/security/CurrentActor.java`、部分 ERP 实体、`auto-parts-wms-vue/src/utils/request.ts`、`auto-parts-wms-vue/src/views/system/AuditLogManagement.vue`、前端中英文语言包，以及后端逻辑删除回归测试。
 - 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q -DskipTests compile` 和 `mvn -q -Dtest=LogicalDeleteGovernanceTests,AuditMetaObjectHandlerTests,ErpMasterDataGovernanceTests test`；前端构建在当前环境因审批额度限制未执行。
 
+### 2026-05-11 打印模板设计器与 QZ 直打接入
+
+- 本次变更：将打印模板管理升级为双栏设计器，统一 10 个打印页的模板解析逻辑，接入 `QZ Tray` 直打、后端可信签名接口和客户机 provisioning 安装包，并将打印样式统一为针式打印机友好的窄版模板。
+- 影响范围：`README.md`、`qz-provisioning/*`、`auto-parts-wms-vue/src/views/erp/*Print.vue`、`auto-parts-wms-vue/src/views/erp/ErpPrintTemplateManagement.vue`、`auto-parts-wms-vue/src/components/PrintPreviewDialog.vue`、`auto-parts-wms-vue/src/utils/directPrint.ts`、`auto-parts-wms-vue/src/utils/printTemplate.ts`、`auto-parts-wms-vue/src/utils/qzTray.ts`、`wms-backend/src/main/java/com/example/wms/controller/QzTrayController.java`、`wms-backend/src/main/java/com/example/wms/service/QzTraySigningService.java`、`wms-backend/src/main/java/com/example/wms/service/impl/QzTraySigningServiceImpl.java`、`wms-backend/src/main/resources/qz/*`、`wms-backend/src/main/resources/application.properties`。
+- 验证方式：前端执行 `vue-tsc --build` 与 `vite build`；后端执行 `mvn -q -DskipTests compile`；客户机执行 `D:\project\qz-provisioning\windows\install-qz-provision.bat` 后测试 QZ 授权与打印。
+
 ## 10. 快速定位指南
 
 - 查登录认证：`auto-parts-wms-vue/src/stores/auth.ts`、`auto-parts-wms-vue/src/utils/request.ts`、`wms-backend/src/main/java/com/example/wms/controller/AuthController.java`
 - 查路由权限：`auto-parts-wms-vue/src/router/index.ts`
+- 查打印模板：`auto-parts-wms-vue/src/views/erp/ErpPrintTemplateManagement.vue`、`auto-parts-wms-vue/src/utils/printTemplate.ts`
+- 查 QZ 直打：`auto-parts-wms-vue/src/utils/qzTray.ts`、`auto-parts-wms-vue/src/utils/directPrint.ts`、`wms-backend/src/main/java/com/example/wms/controller/QzTrayController.java`
+- 查客户机 QZ 信任：`qz-provisioning/README.md`
 - 查系统初始化：`wms-backend/src/main/java/com/example/wms/config/DataInitializer.java`
 - 查菜单定义：`wms-backend/src/main/java/com/example/wms/config/MenuSeedProvider.java`
 - 查数据库变更：`wms-backend/src/main/resources/db/migration/`
