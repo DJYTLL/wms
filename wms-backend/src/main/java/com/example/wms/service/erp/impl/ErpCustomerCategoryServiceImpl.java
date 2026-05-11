@@ -6,8 +6,12 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpCustomerCategoryCreateRequest;
 import com.example.wms.dto.erp.ErpCustomerCategoryUpdateRequest;
+import com.example.wms.entity.erp.ErpCustomer;
 import com.example.wms.entity.erp.ErpCustomerCategory;
+import com.example.wms.entity.erp.ErpProductPrice;
+import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpCustomerCategoryMapper;
+import com.example.wms.mapper.erp.ErpProductPriceMapper;
 import com.example.wms.service.erp.ErpCustomerCategoryService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -19,9 +23,15 @@ import java.util.List;
 @Service
 public class ErpCustomerCategoryServiceImpl implements ErpCustomerCategoryService {
     private final ErpCustomerCategoryMapper erpCustomerCategoryMapper;
+    private final ErpCustomerMapper erpCustomerMapper;
+    private final ErpProductPriceMapper erpProductPriceMapper;
 
-    public ErpCustomerCategoryServiceImpl(ErpCustomerCategoryMapper erpCustomerCategoryMapper) {
+    public ErpCustomerCategoryServiceImpl(ErpCustomerCategoryMapper erpCustomerCategoryMapper,
+                                          ErpCustomerMapper erpCustomerMapper,
+                                          ErpProductPriceMapper erpProductPriceMapper) {
         this.erpCustomerCategoryMapper = erpCustomerCategoryMapper;
+        this.erpCustomerMapper = erpCustomerMapper;
+        this.erpProductPriceMapper = erpProductPriceMapper;
     }
 
     @Override
@@ -107,6 +117,16 @@ public class ErpCustomerCategoryServiceImpl implements ErpCustomerCategoryServic
             .eq("id", id));
         if (category == null) {
             throw new IllegalArgumentException("客户类别不存在");
+        }
+        if (erpCustomerMapper.selectCount(new QueryWrapper<ErpCustomer>()
+            .eq("tenant_id", tenantId)
+            .eq("category_id", id)) > 0) {
+            throw new IllegalArgumentException("客户类别已被客户引用，不能删除");
+        }
+        if (erpProductPriceMapper.selectCount(new QueryWrapper<ErpProductPrice>()
+            .eq("tenant_id", tenantId)
+            .eq("customer_category_id", id)) > 0) {
+            throw new IllegalArgumentException("客户类别已被商品价格引用，不能删除");
         }
         erpCustomerCategoryMapper.deleteById(id);
     }

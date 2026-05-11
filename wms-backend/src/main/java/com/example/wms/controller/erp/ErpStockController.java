@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 // ERP库存接口
@@ -38,6 +39,15 @@ public class ErpStockController {
     @PreAuthorize("hasAuthority('PERM_erp-stock:view')")
     public ResponseEntity<ApiResponse<List<ErpStockBalanceOption>>> listBalancesByProduct(@RequestParam Long productId) {
         return ResponseEntity.ok(ApiResponse.ok(erpStockService.listBalancesByProduct(productId)));
+    }
+
+    // 查询指定范围的现存量
+    @GetMapping("/balances/qty")
+    @PreAuthorize("hasAuthority('PERM_erp-stock:view')")
+    public ResponseEntity<ApiResponse<BigDecimal>> getQtyOnHand(@RequestParam Long productId,
+                                                                @RequestParam(required = false) Long warehouseId,
+                                                                @RequestParam(required = false) Long locationId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockService.getQtyOnHand(productId, warehouseId, locationId)));
     }
 
     // 分页查询库存流水

@@ -273,7 +273,7 @@ const openEditPage = (row: AssemblyOrder) => {
 };
 
 const openViewPage = (row: AssemblyOrder) => {
-  router.push({ path: `/erp/disassemble-orders/${row.id}/edit`, query: { mode: 'view' } });
+  router.push({ path: `/erp/disassemble-orders/${row.id}/view`, query: { mode: 'view' } });
 };
 
 const handleApprove = async (row: AssemblyOrder) => {

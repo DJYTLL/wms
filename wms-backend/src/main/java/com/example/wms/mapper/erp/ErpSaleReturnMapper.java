@@ -11,4 +11,14 @@ import org.apache.ibatis.annotations.Select;
 public interface ErpSaleReturnMapper extends BaseMapper<ErpSaleReturn> {
     @Select("SELECT * FROM erp_sale_return WHERE tenant_id = #{tenantId} AND order_no = #{orderNo} AND deleted_at IS NULL")
     ErpSaleReturn findByOrderNo(@Param("tenantId") Long tenantId, @Param("orderNo") String orderNo);
+
+    @Select("""
+        SELECT COUNT(1)
+        FROM erp_sale_return
+        WHERE tenant_id = #{tenantId}
+          AND sale_order_id = #{saleOrderId}
+          AND status = 'APPROVED'
+          AND deleted_at IS NULL
+        """)
+    long countApprovedBySaleOrderId(@Param("tenantId") Long tenantId, @Param("saleOrderId") Long saleOrderId);
 }

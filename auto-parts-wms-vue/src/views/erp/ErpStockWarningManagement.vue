@@ -53,16 +53,10 @@
               {{ row.defaultLocationName || $t('field.unassignedLocation') }}
             </template>
           </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="220" fixed="right">
+          <el-table-column :label="$t('table.actions')" width="120" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="handleAction('replenish', row)">
                 {{ $t('action.replenish') }}
-              </el-button>
-              <el-button link type="primary" size="small" @click="handleAction('transfer', row)">
-                {{ $t('action.transfer') }}
-              </el-button>
-              <el-button link type="primary" size="small" @click="handleAction('adjust', row)">
-                {{ $t('action.adjust') }}
               </el-button>
             </template>
           </el-table-column>
@@ -88,7 +82,6 @@
 import { ref, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { ElMessage } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
@@ -185,9 +178,7 @@ const handleSizeChange = (newSize: number) => {
 const handleAction = (action: string, row: StockWarning) => {
   if (action === 'replenish') {
     router.push({ path: '/erp/purchase-orders/create', query: { productId: row.productId } });
-    return;
   }
-  ElMessage.info(t('message.comingSoon'));
 };
 
 onMounted(() => {

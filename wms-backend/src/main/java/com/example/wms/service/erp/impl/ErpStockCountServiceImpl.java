@@ -119,6 +119,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         if (TYPE_INIT.equals(type) && hasActiveInit(tenantId)) {
             throw new IllegalArgumentException("初始库存仅允许创建一次");
         }
+        validateCountRequest(request.items());
         String countNo = ensureCountNo(tenantId, request.countNo(), type);
         ErpStockCount count = new ErpStockCount();
         count.setTenantId(tenantId);
@@ -154,6 +155,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         if (!STATUS_DRAFT.equals(count.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可编辑");
         }
+        validateCountRequest(request.items());
         count.setWarehouseId(request.warehouseId());
         count.setLocationId(request.locationId());
         Instant countAt = parseInstant(request.countAt());
@@ -192,7 +194,13 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
             .orderByAsc("line_no"));
         String operator = resolveCurrentUsername();
         for (ErpStockCountItem item : items) {
-            BigDecimal delta = item.getDiffQty();
+            BigDecimal systemQty = resolveSystemQty(tenantId, item.getProductId(), item.getWarehouseId(), item.getLocationId());
+            BigDecimal countedQty = item.getCountedQty() == null ? BigDecimal.ZERO : item.getCountedQty();
+            BigDecimal delta = countedQty.subtract(systemQty);
+            item.setSystemQty(systemQty);
+            item.setDiffQty(delta);
+            item.setUpdatedAt(Instant.now());
+            erpStockCountItemMapper.updateById(item);
             if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
                 continue;
             }
@@ -289,8 +297,8 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         for (ErpStockCountItemRequest request : requests) {
             Long warehouseId = request.warehouseId() != null ? request.warehouseId() : count.getWarehouseId();
             Long locationId = request.locationId() != null ? request.locationId() : count.getLocationId();
-            BigDecimal systemQty = resolveSystemQty(tenantId, request, warehouseId, locationId);
-            BigDecimal countedQty = request.countedQty();
+            BigDecimal systemQty = resolveSystemQty(tenantId, request.productId(), warehouseId, locationId);
+            BigDecimal countedQty = request.countedQty() == null ? BigDecimal.ZERO : request.countedQty();
             BigDecimal diffQty = countedQty.subtract(systemQty);
 
             ErpStockCountItem item = new ErpStockCountItem();
@@ -311,12 +319,26 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         return items;
     }
 
-    private BigDecimal resolveSystemQty(Long tenantId, ErpStockCountItemRequest request, Long warehouseId, Long locationId) {
-        if (request.systemQty() != null) {
-            return request.systemQty();
-        }
-        ErpStockBalance balance = erpStockBalanceMapper.findByKey(tenantId, request.productId(), warehouseId, locationId);
+    private BigDecimal resolveSystemQty(Long tenantId, Long productId, Long warehouseId, Long locationId) {
+        ErpStockBalance balance = erpStockBalanceMapper.findByKey(tenantId, productId, warehouseId, locationId);
         return balance == null ? BigDecimal.ZERO : balance.getQtyOnHand();
+    }
+
+    private void validateCountRequest(List<ErpStockCountItemRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new IllegalArgumentException("盘点明细不能为空");
+        }
+        for (ErpStockCountItemRequest request : requests) {
+            if (request == null || request.productId() == null) {
+                throw new IllegalArgumentException("盘点商品不能为空");
+            }
+            if (request.countedQty() == null) {
+                throw new IllegalArgumentException("盘点数量不能为空");
+            }
+            if (request.countedQty().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("盘点数量不能小于 0");
+            }
+        }
     }
 
     private void applyStockDelta(Long tenantId,

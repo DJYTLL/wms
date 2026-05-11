@@ -149,4 +149,32 @@ public class ErpStockServiceImpl implements ErpStockService {
         }
         return options;
     }
+
+    @Override
+    public BigDecimal getQtyOnHand(Long productId, Long warehouseId, Long locationId) {
+        if (productId == null) {
+            return BigDecimal.ZERO;
+        }
+        QueryWrapper<ErpStockBalance> wrapper = new QueryWrapper<ErpStockBalance>()
+            .eq("tenant_id", TenantContext.requireTenantId())
+            .eq("product_id", productId);
+        if (warehouseId != null) {
+            wrapper.eq("warehouse_id", warehouseId);
+        }
+        if (locationId != null) {
+            if (locationId < 0) {
+                wrapper.isNull("location_id");
+            } else {
+                wrapper.eq("location_id", locationId);
+            }
+        }
+        List<ErpStockBalance> balances = erpStockBalanceMapper.selectList(wrapper);
+        BigDecimal total = BigDecimal.ZERO;
+        for (ErpStockBalance balance : balances) {
+            if (balance.getQtyOnHand() != null) {
+                total = total.add(balance.getQtyOnHand());
+            }
+        }
+        return total;
+    }
 }

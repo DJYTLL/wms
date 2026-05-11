@@ -48,6 +48,8 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
     private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_APPROVED = "APPROVED";
     private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
+    private static final String STATUS_SETTLED = "SETTLED";
+    private static final String STATUS_OPEN = "OPEN";
     private enum ReceiptMode {
         NORMAL,
         RETURN,
@@ -433,7 +435,6 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         if (endAt != null) {
             wrapper.le("created_at", endAt);
         }
-        wrapper.ge("amount", BigDecimal.ZERO);
         return wrapper;
     }
 
@@ -533,6 +534,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         if (!STATUS_DRAFT.equals(receipt.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可审核");
         }
+        validateReceiptApproval(tenantId, receipt);
         receipt.setStatus(STATUS_APPROVED);
         receipt.setUpdatedAt(Instant.now());
         erpReceiptMapper.updateById(receipt);
@@ -760,10 +762,53 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         receivable.setPaidAmount(newPaid);
         receivable.setUnpaidAmount(unpaid);
         if (!"RED_FLUSHED".equals(receivable.getStatus())) {
-            receivable.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? "SETTLED" : "OPEN");
+            receivable.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
         }
         receivable.setUpdatedAt(Instant.now());
         erpAccountsReceivableMapper.updateById(receivable);
+    }
+
+    private void validateReceiptApproval(Long tenantId, ErpReceipt receipt) {
+        List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceiptId(tenantId, receipt.getId());
+        if (allocations != null && !allocations.isEmpty()) {
+            for (ErpReceiptReceivable allocation : allocations) {
+                ensureReceivableCapacity(tenantId, allocation.getReceivableId(), allocation.getAllocatedTotal());
+            }
+            return;
+        }
+        ensureReceivableCapacity(
+            tenantId,
+            receipt.getReceivableId(),
+            resolveReceiptTotal(receipt.getAmount(), receipt.getDiscountAmount())
+        );
+    }
+
+    private void ensureReceivableCapacity(Long tenantId, Long receivableId, BigDecimal delta) {
+        if (receivableId == null) {
+            throw new IllegalArgumentException("应收单不存在");
+        }
+        if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            throw new IllegalArgumentException("收款金额或优惠金额必须大于0");
+        }
+        ErpAccountsReceivable receivable = erpAccountsReceivableMapper.selectOne(new QueryWrapper<ErpAccountsReceivable>()
+            .eq("tenant_id", tenantId)
+            .eq("id", receivableId));
+        if (receivable == null) {
+            throw new IllegalArgumentException("应收单不存在");
+        }
+        if (STATUS_RED_FLUSHED.equals(receivable.getStatus())) {
+            throw new IllegalArgumentException("红冲应收单不可收款");
+        }
+        BigDecimal unpaid = receivable.getUnpaidAmount() == null ? BigDecimal.ZERO : receivable.getUnpaidAmount();
+        if (unpaid.compareTo(BigDecimal.ZERO) == 0 || delta.signum() != unpaid.signum() || delta.abs().compareTo(unpaid.abs()) > 0) {
+            throw new IllegalArgumentException("收款金额不能大于未收金额");
+        }
+    }
+
+    private BigDecimal resolveReceiptTotal(BigDecimal amount, BigDecimal discountAmount) {
+        BigDecimal normalizedAmount = amount == null ? BigDecimal.ZERO : amount;
+        BigDecimal normalizedDiscount = discountAmount == null ? BigDecimal.ZERO : discountAmount;
+        return normalizedAmount.add(normalizedDiscount);
     }
 
     private List<ErpReceiptReceivable> buildAllocations(Long tenantId,

@@ -1524,7 +1524,6 @@ ok:admin
   - `PUT /api/erp/sale-orders/{id}`（仅 DRAFT）
   - `POST /api/erp/sale-orders/{id}/cancel`（DRAFT 或 APPROVED）
   - `POST /api/erp/sale-orders/{id}/approve`（关键）
-  - `POST /api/erp/sale-orders/{id}/unapprove`
 
 说明：
 - `orderNo` 可留空，后端将自动生成单号
@@ -1572,7 +1571,7 @@ ok:admin
 
 单据：
 - `erp-purchase:view` / `erp-purchase:add` / `erp-purchase:edit` / `erp-purchase:cancel` / `erp-purchase:approve` / `erp-purchase:unapprove`
-- `erp-sale:view` / `erp-sale:add` / `erp-sale:edit` / `erp-sale:cancel` / `erp-sale:approve` / `erp-sale:unapprove`
+- `erp-sale:view` / `erp-sale:add` / `erp-sale:edit` / `erp-sale:cancel` / `erp-sale:approve` / `erp-sale:redflush`
 
 库存：
 - `erp-stock:view`

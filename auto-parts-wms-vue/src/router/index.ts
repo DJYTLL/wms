@@ -450,7 +450,13 @@ const routes: Array<RouteRecordRaw> = [
         path: 'erp/assemble-orders/:id/edit',
         name: 'erp-assemble-order-edit',
         component: () => import('../views/erp/ErpAssemblyOrderForm.vue'),
-        meta: { title: '编辑组装单', permission: 'erp-assembly:view', titleKey: 'page.erpAssembleOrderEdit' }
+        meta: { title: '编辑组装单', permission: 'erp-assembly:edit', titleKey: 'page.erpAssembleOrderEdit' }
+      },
+      {
+        path: 'erp/assemble-orders/:id/view',
+        name: 'erp-assemble-order-view',
+        component: () => import('../views/erp/ErpAssemblyOrderForm.vue'),
+        meta: { title: '查看组装单', permission: 'erp-assembly:view', titleKey: 'page.erpAssembleOrderEdit' }
       },
       {
         path: 'erp/disassemble-orders',
@@ -468,7 +474,13 @@ const routes: Array<RouteRecordRaw> = [
         path: 'erp/disassemble-orders/:id/edit',
         name: 'erp-disassemble-order-edit',
         component: () => import('../views/erp/ErpDisassembleOrderForm.vue'),
-        meta: { title: '编辑拆分单', permission: 'erp-assembly:view', titleKey: 'page.erpDisassembleOrderEdit' }
+        meta: { title: '编辑拆分单', permission: 'erp-assembly:edit', titleKey: 'page.erpDisassembleOrderEdit' }
+      },
+      {
+        path: 'erp/disassemble-orders/:id/view',
+        name: 'erp-disassemble-order-view',
+        component: () => import('../views/erp/ErpDisassembleOrderForm.vue'),
+        meta: { title: '查看拆分单', permission: 'erp-assembly:view', titleKey: 'page.erpDisassembleOrderEdit' }
       },
       {
         path: 'erp/assemblies',

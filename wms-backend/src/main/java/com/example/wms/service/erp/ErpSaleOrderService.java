@@ -37,9 +37,6 @@ public interface ErpSaleOrderService {
     // 审核销售单
     void approve(Long id);
 
-    // 反审核销售单
-    void unapprove(Long id);
-
     // 作废销售单
     void cancel(Long id);
 

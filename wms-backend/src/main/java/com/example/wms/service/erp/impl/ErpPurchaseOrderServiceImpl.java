@@ -55,7 +55,12 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_APPROVED = "APPROVED";
     private static final String STATUS_CANCELLED = "CANCELLED";
+    private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
+    private static final String STATUS_SETTLED = "SETTLED";
+    private static final String STATUS_OPEN = "OPEN";
     private static final String ORDER_TYPE = "PURCHASE";
+    private static final String AUTO_PAYABLE_REMARK = "采购单审核生成应付单";
+    private static final String AUTO_PAYMENT_REMARK = "采购单审核自动付款";
 
     private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
     private final ErpPurchaseOrderItemMapper erpPurchaseOrderItemMapper;
@@ -292,7 +297,21 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     @Transactional
     @AuditLog(action = "ERP_PURCHASE_UNAPPROVE", entityType = "erp_purchase_order", entityId = "{arg0}")
     public void unapprove(Long id) {
-        throw new IllegalArgumentException("采购单仅支持红冲，不支持反审核");
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPurchaseOrder order = loadForUpdate(tenantId, id);
+        if (!STATUS_APPROVED.equals(order.getStatus())) {
+            throw new IllegalArgumentException("仅已审核状态可反审核");
+        }
+        rollbackPurchaseFinanceOnUnapprove(tenantId, order);
+        List<ErpPurchaseOrderItem> items = erpPurchaseOrderItemMapper.findByOrderId(tenantId, id);
+        for (ErpPurchaseOrderItem item : items) {
+            applyStockDelta(tenantId, item, item.getQty().negate(), "PURCHASE_UNAPPROVE", id);
+        }
+        order.setStatus(STATUS_DRAFT);
+        order.setUnapprovedBy(resolveCurrentUsername());
+        order.setUnapprovedAt(Instant.now());
+        order.setUpdatedAt(Instant.now());
+        updateWithVersion(tenantId, order);
     }
 
     @Override
@@ -308,9 +327,11 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             List<ErpPayment> approvedPayments = erpPaymentMapper.selectList(new QueryWrapper<ErpPayment>()
                 .eq("tenant_id", tenantId)
                 .eq("purchase_order_id", order.getId())
-                .eq("status", "APPROVED")
-                .gt("amount", BigDecimal.ZERO));
-            if (!approvedPayments.isEmpty()) {
+                .eq("status", STATUS_APPROVED));
+            boolean hasAppliedPayments = approvedPayments.stream()
+                .map(payment -> resolvePaymentAppliedTotal(payment.getAmount(), payment.getDiscountAmount()))
+                .anyMatch(total -> total.compareTo(BigDecimal.ZERO) > 0);
+            if (hasAppliedPayments) {
                 throw new IllegalArgumentException("请先红冲付款单");
             }
             List<ErpPurchaseOrderItem> items = erpPurchaseOrderItemMapper.findByOrderId(tenantId, id);
@@ -322,7 +343,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 payable.setTotalAmount(BigDecimal.ZERO);
                 payable.setPaidAmount(BigDecimal.ZERO);
                 payable.setUnpaidAmount(BigDecimal.ZERO);
-                payable.setStatus("RED_FLUSHED");
+                payable.setStatus(STATUS_RED_FLUSHED);
                 payable.setRemark(appendRedFlushReason(payable.getRemark(), reason));
                 payable.setUpdatedAt(Instant.now());
                 erpAccountsPayableMapper.updateById(payable);
@@ -449,9 +470,9 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             payable.setTotalAmount(totalAmount);
             payable.setPaidAmount(BigDecimal.ZERO);
             payable.setUnpaidAmount(totalAmount);
-            payable.setStatus("OPEN");
+            payable.setStatus(STATUS_OPEN);
             payable.setSettlementMethod(null);
-            payable.setRemark("采购单审核生成应付单");
+            payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setCreatedAt(Instant.now());
             payable.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.insert(payable);
@@ -461,9 +482,9 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             existing.setTotalAmount(totalAmount);
             existing.setUnpaidAmount(totalAmount.subtract(paidAmount).max(BigDecimal.ZERO));
             if (existing.getUnpaidAmount().compareTo(BigDecimal.ZERO) == 0) {
-                existing.setStatus("APPROVED");
+                existing.setStatus(STATUS_SETTLED);
             } else {
-                existing.setStatus("OPEN");
+                existing.setStatus(STATUS_OPEN);
             }
             existing.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.updateById(existing);
@@ -505,20 +526,23 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             payable.setPaidAmount(paidCash);
             payable.setDiscountAmount(discount);
             payable.setUnpaidAmount(unpaid);
-            payable.setStatus(totalApplied.compareTo(total) == 0 ? "SETTLED" : "OPEN");
+            payable.setStatus(totalApplied.compareTo(total) == 0 ? STATUS_SETTLED : STATUS_OPEN);
             payable.setSettlementMethod(null);
-            payable.setRemark("采购单审核生成应付单");
+            payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setCreatedAt(Instant.now());
             payable.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.insert(payable);
         } else {
+            payable.setOrderNo(order.getOrderNo());
+            payable.setSupplierId(order.getSupplierId());
             payable.setTotalAmount(total);
             payable.setPaidAmount(paidCash);
             payable.setDiscountAmount(discount);
             payable.setUnpaidAmount(unpaid);
-            if (!"RED_FLUSHED".equals(payable.getStatus())) {
-                payable.setStatus(totalApplied.compareTo(total) == 0 ? "SETTLED" : "OPEN");
+            if (!STATUS_RED_FLUSHED.equals(payable.getStatus())) {
+                payable.setStatus(totalApplied.compareTo(total) == 0 ? STATUS_SETTLED : STATUS_OPEN);
             }
+            payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.updateById(payable);
         }
@@ -536,9 +560,9 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 payment.setDiscountAmount(discount);
                 payment.setSettlementMethod(null);
                 payment.setPaymentMethodCode(order.getPaymentMethodCode());
-                payment.setStatus("APPROVED");
+                payment.setStatus(STATUS_APPROVED);
                 payment.setPaidAt(Instant.now());
-                payment.setRemark("采购单审核自动付款");
+                payment.setRemark(AUTO_PAYMENT_REMARK);
                 payment.setCreatedAt(Instant.now());
                 payment.setUpdatedAt(Instant.now());
                 erpPaymentMapper.insert(payment);
@@ -552,8 +576,95 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 allocation.setAllocatedTotal(totalApplied);
                 allocation.setCreatedAt(Instant.now());
                 erpPaymentPayableMapper.insert(allocation);
+            } else if (AUTO_PAYMENT_REMARK.equals(paymentExisting.getRemark())) {
+                paymentExisting.setPayableId(payable.getId());
+                paymentExisting.setSupplierId(order.getSupplierId());
+                paymentExisting.setAmount(paidCash);
+                paymentExisting.setDiscountAmount(discount);
+                paymentExisting.setSettlementMethod(null);
+                paymentExisting.setPaymentMethodCode(order.getPaymentMethodCode());
+                paymentExisting.setStatus(STATUS_APPROVED);
+                paymentExisting.setPaidAt(Instant.now());
+                paymentExisting.setRemark(AUTO_PAYMENT_REMARK);
+                paymentExisting.setUpdatedAt(Instant.now());
+                erpPaymentMapper.updateById(paymentExisting);
+
+                erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
+                    .eq("tenant_id", tenantId)
+                    .eq("payment_id", paymentExisting.getId()));
+                ErpPaymentPayable allocation = new ErpPaymentPayable();
+                allocation.setTenantId(tenantId);
+                allocation.setPaymentId(paymentExisting.getId());
+                allocation.setPayableId(payable.getId());
+                allocation.setAllocatedAmount(paidCash);
+                allocation.setAllocatedDiscount(discount);
+                allocation.setAllocatedTotal(totalApplied);
+                allocation.setCreatedAt(Instant.now());
+                erpPaymentPayableMapper.insert(allocation);
             }
         }
+    }
+
+    private void rollbackPurchaseFinanceOnUnapprove(Long tenantId, ErpPurchaseOrder order) {
+        List<ErpPayment> activePayments = erpPaymentMapper.selectList(new QueryWrapper<ErpPayment>()
+            .eq("tenant_id", tenantId)
+            .eq("purchase_order_id", order.getId())
+            .ne("status", STATUS_RED_FLUSHED));
+        for (ErpPayment payment : activePayments) {
+            if (!AUTO_PAYMENT_REMARK.equals(payment.getRemark())) {
+                throw new IllegalArgumentException("存在已关联付款单，请先处理付款单后再反审核");
+            }
+        }
+        for (ErpPayment payment : activePayments) {
+            erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
+                .eq("tenant_id", tenantId)
+                .eq("payment_id", payment.getId()));
+            erpPaymentMapper.deleteById(payment.getId());
+        }
+
+        ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, order.getId());
+        if (payable != null) {
+            boolean hasExternalAllocation = hasApprovedPaymentAllocation(tenantId, payable.getId());
+            if (hasExternalAllocation) {
+                throw new IllegalArgumentException("存在已关联付款单，请先处理付款单后再反审核");
+            }
+            erpAccountsPayableMapper.deleteById(payable.getId());
+        }
+    }
+
+    private boolean hasApprovedPaymentAllocation(Long tenantId, Long payableId) {
+        List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPayableId(tenantId, payableId);
+        if (allocations == null || allocations.isEmpty()) {
+            return false;
+        }
+        List<Long> paymentIds = allocations.stream()
+            .map(ErpPaymentPayable::getPaymentId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        if (paymentIds.isEmpty()) {
+            return false;
+        }
+        List<ErpPayment> payments = erpPaymentMapper.selectBatchIds(paymentIds);
+        if (payments == null || payments.isEmpty()) {
+            return false;
+        }
+        for (ErpPayment payment : payments) {
+            if (payment != null
+                && tenantId.equals(payment.getTenantId())
+                && STATUS_APPROVED.equals(payment.getStatus())
+                && !AUTO_PAYMENT_REMARK.equals(payment.getRemark())
+                && resolvePaymentAppliedTotal(payment.getAmount(), payment.getDiscountAmount()).compareTo(BigDecimal.ZERO) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private BigDecimal resolvePaymentAppliedTotal(BigDecimal amount, BigDecimal discountAmount) {
+        BigDecimal normalizedAmount = amount == null ? BigDecimal.ZERO : amount;
+        BigDecimal normalizedDiscount = discountAmount == null ? BigDecimal.ZERO : discountAmount;
+        return normalizedAmount.add(normalizedDiscount);
     }
 
     private BigDecimal resolvePayableTotal(ErpPurchaseOrder order) {

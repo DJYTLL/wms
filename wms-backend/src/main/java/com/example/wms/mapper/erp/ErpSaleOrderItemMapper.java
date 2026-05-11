@@ -20,7 +20,7 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
     @Select("""
         SELECT o.id AS orderId,
                o.order_no AS orderNo,
-               o.created_at AS orderAt,
+               o.order_at AS orderAt,
                i.product_id AS productId,
                i.qty AS qty,
                i.price AS price
@@ -34,7 +34,7 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
           AND o.customer_id = #{customerId}
           AND i.product_id = #{productId}
           AND o.status = 'APPROVED'
-        ORDER BY o.created_at DESC NULLS LAST, o.id DESC
+        ORDER BY o.order_at DESC NULLS LAST, o.id DESC
         LIMIT #{limit}
         """)
     List<ErpSaleOrderRecentItem> findRecentItems(@Param("tenantId") Long tenantId,
@@ -65,8 +65,8 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
               OR LOWER(o.order_no) LIKE CONCAT('%', LOWER(#{keyword}), '%')
             )
           </if>
-          <if test='startAt != null'>AND o.created_at <![CDATA[>=]]> #{startAt}</if>
-          <if test='endAt != null'>AND o.created_at <![CDATA[<=]]> #{endAt}</if>
+          <if test='startAt != null'>AND o.order_at <![CDATA[>=]]> #{startAt}</if>
+          <if test='endAt != null'>AND o.order_at <![CDATA[<=]]> #{endAt}</if>
         </script>
         """)
     long countProductHistory(@Param("tenantId") Long tenantId,
@@ -80,7 +80,7 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
         <script>
         SELECT o.id AS orderId,
                o.order_no AS orderNo,
-               o.created_at AS orderAt,
+               o.order_at AS orderAt,
                i.product_id AS productId,
                i.qty AS qty,
                i.price AS price,
@@ -107,9 +107,9 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
               OR LOWER(o.order_no) LIKE CONCAT('%', LOWER(#{keyword}), '%')
             )
           </if>
-          <if test='startAt != null'>AND o.created_at <![CDATA[>=]]> #{startAt}</if>
-          <if test='endAt != null'>AND o.created_at <![CDATA[<=]]> #{endAt}</if>
-        ORDER BY o.created_at DESC NULLS LAST, o.id DESC
+          <if test='startAt != null'>AND o.order_at <![CDATA[>=]]> #{startAt}</if>
+          <if test='endAt != null'>AND o.order_at <![CDATA[<=]]> #{endAt}</if>
+        ORDER BY o.order_at DESC NULLS LAST, o.id DESC
         LIMIT #{size} OFFSET #{offset}
         </script>
         """)

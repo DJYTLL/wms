@@ -40,8 +40,6 @@
             </template>
           </el-table-column>
           <el-table-column v-if="canShow('qty')" prop="qtyOnHand" :label="$t('field.qtyOnHand')" min-width="120" />
-          <el-table-column v-if="canShow('qtyLocked')" prop="qtyLocked" :label="$t('field.qtyLocked')" min-width="120" />
-          <el-table-column v-if="canShow('qtyAvailable')" prop="qtyAvailable" :label="$t('field.qtyAvailable')" min-width="120" />
           <el-table-column v-if="canShow('updatedAt')" prop="updatedAt" :label="$t('field.updatedTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.updatedAt) }}
@@ -85,8 +83,6 @@ interface StockBalance {
   warehouseId?: number;
   locationId?: number;
   qtyOnHand?: number;
-  qtyLocked?: number;
-  qtyAvailable?: number;
   updatedAt?: string;
 }
 
@@ -108,7 +104,7 @@ const productFilter = ref<number | null>(null);
 const warehouseFilter = ref<number | null>(null);
 const locationFilter = ref<number | null>(null);
 
-const defaultColumns = ['product', 'warehouse', 'location', 'qty', 'qtyLocked', 'qtyAvailable', 'updatedAt'];
+const defaultColumns = ['product', 'warehouse', 'location', 'qty', 'updatedAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-stock', defaultColumns);
 
 const canShow = (key: string) => isVisible(key);

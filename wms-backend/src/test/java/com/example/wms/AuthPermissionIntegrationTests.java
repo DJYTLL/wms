@@ -313,6 +313,19 @@ class AuthPermissionIntegrationTests {
         assertThat(annotation.value()).isEqualTo("hasAuthority('PERM_user:edit')");
     }
 
+    @Test
+    void assemblyDeleteRequiresDeletePermission() throws Exception {
+        Method method = com.example.wms.controller.erp.ErpAssemblyOrderController.class.getMethod(
+            "delete",
+            Long.class,
+            com.example.wms.dto.DeleteRequest.class
+        );
+        PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value()).isEqualTo("hasAuthority('PERM_erp-assembly:delete')");
+    }
+
     private TenantServiceImpl tenantService() {
         return new TenantServiceImpl(
             tenantMapper,

@@ -79,7 +79,7 @@
         <el-form-item :label="$t('field.parentCategory')">
           <el-select v-model="formData.parentId" clearable style="width: 100%">
             <el-option :label="$t('filter.all')" :value="null" />
-            <el-option v-for="item in categoryOptions" :key="item.id" :label="item.name" :value="item.id" />
+            <el-option v-for="item in parentCategoryOptions" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item :label="$t('field.level')">
@@ -104,7 +104,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated } from 'vue';
+import { computed, ref, reactive, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
@@ -158,6 +158,7 @@ const formData = reactive({
 });
 
 const canShow = (key: string) => isVisible(key);
+const parentCategoryOptions = computed(() => categoryOptions.value.filter(item => item.id !== currentId.value));
 
 const getParentName = (id?: number | null) => {
   if (!id) return '-';

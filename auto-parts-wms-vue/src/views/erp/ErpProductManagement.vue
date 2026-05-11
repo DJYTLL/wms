@@ -448,14 +448,27 @@ interface ErpProduct {
   id: number;
   code: string;
   name: string;
+  shortName?: string;
+  spec?: string;
+  model?: string;
   categoryId?: number;
   unitId?: number;
   defaultWarehouseId?: number;
   defaultLocationId?: number;
+  barcode?: string;
+  sku?: string;
+  brand?: string;
+  origin?: string;
+  weight?: number;
+  volume?: number;
   salePrice?: number;
   costPrice?: number;
+  taxRate?: number;
+  safetyStock?: number;
   minStock?: number;
   maxStock?: number;
+  batch?: boolean;
+  shelfLifeDays?: number;
   enabled: boolean;
   remark?: string;
   extAttrs?: Record<string, string> | string | null;
@@ -505,14 +518,27 @@ const { isVisible, fetchTenantKeys } = useColumnSettings('erp-product', defaultC
 const formData = reactive({
   code: '',
   name: '',
+  shortName: '',
+  spec: '',
+  model: '',
   categoryId: null as number | null,
   unitId: null as number | null,
   defaultWarehouseId: null as number | null,
   defaultLocationId: null as number | null,
+  barcode: '',
+  sku: '',
+  brand: '',
+  origin: '',
+  weight: '' as string,
+  volume: '' as string,
   salePrice: undefined as number | undefined,
   costPrice: '' as string,
+  taxRate: '' as string,
+  safetyStock: '' as string,
   minStock: '' as string,
   maxStock: '' as string,
+  batch: false,
+  shelfLifeDays: '' as string,
   enabled: true,
   remark: ''
 });
@@ -707,6 +733,14 @@ const fetchProductPrices = async (productId: number) => {
   }
 };
 
+const fetchProductDetail = async (productId: number) => {
+  const res: any = await request.get(`/erp/products/${productId}`);
+  if (res.data.code !== 200 || !res.data.data) {
+    throw new Error(t('message.loadFailed'));
+  }
+  return res.data.data as ErpProduct;
+};
+
 const fetchList = async () => {
   loading.value = true;
   try {
@@ -756,45 +790,80 @@ const openAddModal = () => {
   showModal.value = true;
 };
 
-const openEditModal = async (row: ErpProduct) => {
-  isEditing.value = true;
-  currentId.value = row.id;
+const applyProductDetail = (row: ErpProduct) => {
   formData.code = row.code;
   formData.name = row.name;
+  formData.shortName = row.shortName || '';
+  formData.spec = row.spec || '';
+  formData.model = row.model || '';
   formData.categoryId = row.categoryId || null;
   formData.unitId = row.unitId || null;
   formData.defaultWarehouseId = row.defaultWarehouseId || null;
   formData.defaultLocationId = row.defaultLocationId || null;
-  await ensureWarehouseOption(formData.defaultWarehouseId);
-  await ensureLocationOption(formData.defaultLocationId);
-  syncDefaultLocation();
+  formData.barcode = row.barcode || '';
+  formData.sku = row.sku || '';
+  formData.brand = row.brand || '';
+  formData.origin = row.origin || '';
+  formData.weight = row.weight == null ? '' : String(row.weight);
+  formData.volume = row.volume == null ? '' : String(row.volume);
   formData.salePrice = row.salePrice;
   formData.costPrice = row.costPrice == null ? '' : String(row.costPrice);
+  formData.taxRate = row.taxRate == null ? '' : String(row.taxRate);
+  formData.safetyStock = row.safetyStock == null ? '' : String(row.safetyStock);
   formData.minStock = row.minStock == null ? '' : String(row.minStock);
   formData.maxStock = row.maxStock == null ? '' : String(row.maxStock);
+  formData.batch = !!row.batch;
+  formData.shelfLifeDays = row.shelfLifeDays == null ? '' : String(row.shelfLifeDays);
   formData.enabled = row.enabled;
   formData.remark = row.remark || '';
   customFields.value = parseExtAttrs(row.extAttrs);
-  currentPriceMap.value = new Map();
-  if (row.id) {
-    fetchProductPrices(row.id);
-  } else {
-    buildPriceItems();
+};
+
+const openEditModal = async (row: ErpProduct) => {
+  try {
+    isEditing.value = true;
+    currentId.value = row.id;
+    const detail = await fetchProductDetail(row.id);
+    applyProductDetail(detail);
+    await ensureWarehouseOption(formData.defaultWarehouseId);
+    await ensureLocationOption(formData.defaultLocationId);
+    syncDefaultLocation();
+    currentPriceMap.value = new Map();
+    if (row.id) {
+      await fetchProductPrices(row.id);
+    } else {
+      buildPriceItems();
+    }
+    showModal.value = true;
+  } catch (error) {
+    notifyError(error);
   }
-  showModal.value = true;
 };
 
 const resetForm = () => {
   formData.code = '';
   formData.name = '';
+  formData.shortName = '';
+  formData.spec = '';
+  formData.model = '';
   formData.categoryId = null;
   formData.unitId = null;
   formData.defaultWarehouseId = null;
   formData.defaultLocationId = null;
+  formData.barcode = '';
+  formData.sku = '';
+  formData.brand = '';
+  formData.origin = '';
+  formData.weight = '';
+  formData.volume = '';
   formData.salePrice = undefined;
   formData.costPrice = '';
+  formData.taxRate = '';
+  formData.safetyStock = '';
   formData.minStock = '';
   formData.maxStock = '';
+  formData.batch = false;
+  formData.shelfLifeDays = '';
   formData.enabled = true;
   formData.remark = '';
   customFields.value = [];
@@ -807,21 +876,6 @@ const normalizeNumber = (value: string | number | null | undefined) => {
   return parsed;
 };
 
-const saveProductPrices = async (productId: number) => {
-  if (!priceItems.value.length) return;
-  const items = priceItems.value
-    .map(item => ({
-      customerCategoryId: item.categoryId,
-      salePrice: normalizeNumber(item.salePrice)
-    }))
-    .filter(item => item.salePrice != null);
-  try {
-    await request.put('/erp/product-prices', { items }, { params: { productId } });
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
 const saveData = async () => {
   if (!formData.code || !formData.name) {
     notifyWarning(t('message.required'));
@@ -830,20 +884,27 @@ const saveData = async () => {
   try {
     const payload = {
       ...formData,
+      weight: normalizeNumber(formData.weight),
+      volume: normalizeNumber(formData.volume),
       costPrice: normalizeNumber(formData.costPrice),
+      taxRate: normalizeNumber(formData.taxRate),
+      safetyStock: normalizeNumber(formData.safetyStock),
       minStock: normalizeNumber(formData.minStock),
       maxStock: normalizeNumber(formData.maxStock),
-      extAttrs: buildExtAttrsPayload()
+      shelfLifeDays: normalizeNumber(formData.shelfLifeDays),
+      extAttrs: buildExtAttrsPayload(),
+      priceItems: priceItems.value
+        .map(item => ({
+          customerCategoryId: item.categoryId,
+          salePrice: normalizeNumber(item.salePrice)
+        }))
+        .filter(item => item.salePrice != null)
     };
     const res: any = isEditing.value && currentId.value
       ? await request.put(`/erp/products/${currentId.value}`, payload)
       : await request.post('/erp/products', payload);
 
     if (res.data.code === 200) {
-      const productId = currentId.value || res.data.data?.id;
-      if (productId) {
-        await saveProductPrices(productId);
-      }
       notifySuccess();
       showModal.value = false;
       fetchList();

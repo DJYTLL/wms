@@ -318,7 +318,7 @@ const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
 
 const searchQuery = ref('');
-const statusFilter = ref<'all' | 'DRAFT' | 'APPROVED' | 'CANCELLED'>('all');
+const statusFilter = ref<'all' | 'DRAFT' | 'APPROVED' | 'CANCELLED' | 'RED_FLUSHED'>('all');
 
 const productOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
@@ -367,13 +367,29 @@ const getLocationOptions = (warehouseId?: number | null) => {
 const fetchOptions = async () => {
   try {
     const [productsRes, warehousesRes, locationsRes] = await Promise.all([
-      request.get('/erp/products'),
+      request.get('/erp/products/options'),
       request.get('/erp/warehouses/options'),
       request.get('/erp/locations/options')
     ]);
     productOptions.value = productsRes.data.data || [];
     warehouseOptions.value = warehousesRes.data.data || [];
     locationOptions.value = locationsRes.data.data || [];
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const ensureProductOption = async (productId?: number | null) => {
+  if (!productId || productOptions.value.some(item => item.id === productId)) return;
+  try {
+    const res: any = await request.get(`/erp/products/${productId}`);
+    const product = res.data.data;
+    if (product) {
+      productOptions.value = mergeOptionById(productOptions.value, {
+        id: product.id,
+        name: product.name
+      });
+    }
   } catch (error) {
     notifyError(error);
   }
@@ -479,17 +495,16 @@ const fetchBalanceForRow = async (row: StockCountItem) => {
     return;
   }
   try {
-    const params: Record<string, any> = {
-      page: 1,
-      size: 1,
-      productId: row.productId
-    };
+    const params: Record<string, any> = { productId: row.productId };
     if (row.warehouseId) params.warehouseId = row.warehouseId;
-    const locationId = normalizeLocationId(row.locationId ?? null);
-    if (locationId != null) params.locationId = locationId;
-    const res: any = await request.get('/erp/stock/balances/page', { params });
-    const item = res.data.data.items && res.data.data.items.length ? res.data.data.items[0] : null;
-    row.systemQty = item && item.qtyOnHand != null ? String(item.qtyOnHand) : '0';
+    if (row.locationId === -1) {
+      params.locationId = -1;
+    } else {
+      const locationId = normalizeLocationId(row.locationId ?? null);
+      if (locationId != null) params.locationId = locationId;
+    }
+    const res: any = await request.get('/erp/stock/balances/qty', { params });
+    row.systemQty = res.data.data != null ? String(res.data.data) : '0';
   } catch (error) {
     row.systemQty = '0';
   }
@@ -533,6 +548,7 @@ const loadDetail = async (id: number) => {
       remark: item.remark || ''
     }));
     await Promise.all(formData.items.flatMap(item => [
+      ensureProductOption(item.productId),
       ensureWarehouseOption(item.warehouseId),
       ensureLocationOption(item.locationId)
     ]));
@@ -582,6 +598,17 @@ const saveData = async () => {
   if (!formData.countNo || formData.items.length === 0) {
     notifyWarning(t('message.required'));
     return;
+  }
+  for (const item of formData.items) {
+    if (!item.productId) {
+      notifyWarning(t('message.required'));
+      return;
+    }
+    const countedQty = item.countedQty == null || item.countedQty === '' ? null : Number(item.countedQty);
+    if (countedQty == null || Number.isNaN(countedQty) || countedQty < 0) {
+      notifyWarning(t('message.invalidNumber'));
+      return;
+    }
   }
   try {
     const payload = {

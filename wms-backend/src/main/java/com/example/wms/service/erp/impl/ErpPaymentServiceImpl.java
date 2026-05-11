@@ -48,6 +48,8 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
     private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_APPROVED = "APPROVED";
     private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
+    private static final String STATUS_SETTLED = "SETTLED";
+    private static final String STATUS_OPEN = "OPEN";
 
     private enum PayableMode {
         NORMAL,
@@ -505,6 +507,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         if (!STATUS_DRAFT.equals(receipt.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可审核");
         }
+        validatePaymentApproval(tenantId, receipt);
         receipt.setStatus(STATUS_APPROVED);
         receipt.setUpdatedAt(Instant.now());
         erpPaymentMapper.updateById(receipt);
@@ -749,10 +752,53 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         payable.setDiscountAmount(newDiscount);
         payable.setUnpaidAmount(unpaid);
         if (!"RED_FLUSHED".equals(payable.getStatus())) {
-            payable.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? "SETTLED" : "OPEN");
+            payable.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
         }
         payable.setUpdatedAt(Instant.now());
         erpAccountsPayableMapper.updateById(payable);
+    }
+
+    private void validatePaymentApproval(Long tenantId, ErpPayment payment) {
+        List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, payment.getId());
+        if (allocations != null && !allocations.isEmpty()) {
+            for (ErpPaymentPayable allocation : allocations) {
+                ensurePayableCapacity(tenantId, allocation.getPayableId(), allocation.getAllocatedTotal());
+            }
+            return;
+        }
+        ensurePayableCapacity(
+            tenantId,
+            payment.getPayableId(),
+            resolvePaymentTotal(payment.getAmount(), payment.getDiscountAmount())
+        );
+    }
+
+    private void ensurePayableCapacity(Long tenantId, Long payableId, BigDecimal delta) {
+        if (payableId == null) {
+            throw new IllegalArgumentException("应付单不存在");
+        }
+        if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            throw new IllegalArgumentException("付款金额或优惠金额必须大于0");
+        }
+        ErpAccountsPayable payable = erpAccountsPayableMapper.selectOne(new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .eq("id", payableId));
+        if (payable == null) {
+            throw new IllegalArgumentException("应付单不存在");
+        }
+        if (STATUS_RED_FLUSHED.equals(payable.getStatus())) {
+            throw new IllegalArgumentException("红冲应付单不可付款");
+        }
+        BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
+        if (!isAllocationWithinUnpaid(payable, delta, unpaid)) {
+            throw new IllegalArgumentException("付款金额不能大于未付金额");
+        }
+    }
+
+    private BigDecimal resolvePaymentTotal(BigDecimal amount, BigDecimal discountAmount) {
+        BigDecimal normalizedAmount = amount == null ? BigDecimal.ZERO : amount;
+        BigDecimal normalizedDiscount = discountAmount == null ? BigDecimal.ZERO : discountAmount;
+        return normalizedAmount.add(normalizedDiscount);
     }
 
     private List<ErpPaymentPayable> buildAllocations(Long tenantId,

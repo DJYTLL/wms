@@ -1,6 +1,7 @@
 package com.example.wms.dto.erp;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 
@@ -9,7 +10,7 @@ public record ErpStockCountItemRequest(
     @NotNull Long productId,
     Long warehouseId,
     Long locationId,
-    @NotNull BigDecimal countedQty,
+    @NotNull @PositiveOrZero BigDecimal countedQty,
     BigDecimal systemQty,
     String remark
 ) {

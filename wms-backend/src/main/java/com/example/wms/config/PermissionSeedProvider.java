@@ -258,7 +258,6 @@ public final class PermissionSeedProvider {
             new PermissionSeed("erp-sale:edit", "编辑销售单(ERP)", "编辑ERP销售单"),
             new PermissionSeed("erp-sale:cancel", "作废销售单(ERP)", "作废ERP销售单"),
             new PermissionSeed("erp-sale:approve", "审核销售单(ERP)", "审核ERP销售单"),
-            new PermissionSeed("erp-sale:unapprove", "反审核销售单(ERP)", "反审核ERP销售单"),
             new PermissionSeed("erp-sale:redflush", "红冲销售单(ERP)", "红冲ERP销售单"),
 
             new PermissionSeed("erp-sale-return:view", "查看销售退货(ERP)", "查看ERP销售退货"),
@@ -266,7 +265,6 @@ public final class PermissionSeedProvider {
             new PermissionSeed("erp-sale-return:edit", "编辑销售退货(ERP)", "编辑ERP销售退货"),
             new PermissionSeed("erp-sale-return:cancel", "作废销售退货(ERP)", "作废ERP销售退货"),
             new PermissionSeed("erp-sale-return:approve", "审核销售退货(ERP)", "审核ERP销售退货"),
-            new PermissionSeed("erp-sale-return:unapprove", "反审核销售退货(ERP)", "反审核ERP销售退货"),
             new PermissionSeed("erp-sale-return:redflush", "红冲销售退货(ERP)", "红冲ERP销售退货"),
 
             // ERP 财务

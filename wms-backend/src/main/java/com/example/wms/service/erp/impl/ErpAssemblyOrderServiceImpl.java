@@ -112,6 +112,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
     @AuditLog(action = "ERP_ASSEMBLY_CREATE", entityType = "erp_assembly_order", entityId = "{result.order.id}", detail = "orderNo={result.order.orderNo}")
     public ErpAssemblyOrderDetail create(ErpAssemblyOrderCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        validateOrderRequest(request.finishedProductId(), request.finishedQty(), request.items());
         String type = normalizeType(request.orderType());
         String orderNo = ensureOrderNo(tenantId, request.orderNo(), type);
         ErpAssemblyOrder order = new ErpAssemblyOrder();
@@ -155,6 +156,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         if (!STATUS_DRAFT.equals(order.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可编辑");
         }
+        validateOrderRequest(request.finishedProductId(), request.finishedQty(), request.items());
         String newOrderNo = resolveOrderNoForUpdate(request.orderNo(), order.getOrderNo(), tenantId, order.getId());
         order.setOrderNo(newOrderNo);
         order.setOrderType(normalizeType(request.orderType()));
@@ -528,6 +530,28 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
 
     private BigDecimal normalizeAmount(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private void validateOrderRequest(Long finishedProductId,
+                                      BigDecimal finishedQty,
+                                      List<ErpAssemblyOrderItemRequest> items) {
+        if (finishedProductId == null) {
+            throw new IllegalArgumentException("成品不能为空");
+        }
+        if (finishedQty == null || finishedQty.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("成品数量必须大于 0");
+        }
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("明细不能为空");
+        }
+        for (ErpAssemblyOrderItemRequest item : items) {
+            if (item == null || item.productId() == null) {
+                throw new IllegalArgumentException("明细商品不能为空");
+            }
+            if (item.qty() == null || item.qty().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("明细数量必须大于 0");
+            }
+        }
     }
 
     private Instant parseOrderAt(String orderAt) {

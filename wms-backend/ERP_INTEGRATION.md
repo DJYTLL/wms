@@ -38,7 +38,7 @@
 - 单据创建/审核/反审核/作废/库存变化都要写审计日志
 - action 建议：
   - `PURCHASE_CREATE` / `PURCHASE_APPROVE` / `PURCHASE_UNAPPROVE`
-  - `SALE_CREATE` / `SALE_APPROVE` / `SALE_UNAPPROVE`
+  - `SALE_CREATE` / `SALE_APPROVE`
   - `STOCK_ADJUST`
 
 3) 幂等
@@ -257,7 +257,6 @@
 - `PUT /api/sale-orders/{id}`（仅 DRAFT）
 - `POST /api/sale-orders/{id}/cancel`（仅 DRAFT）
 - `POST /api/sale-orders/{id}/approve`（关键）
-- `POST /api/sale-orders/{id}/unapprove`（可选）
 
 销售审核的额外硬规则：
 
@@ -302,7 +301,7 @@
 - `sale:edit`
 - `sale:cancel`
 - `sale:approve`
-- `sale:unapprove`
+- `sale:redflush`
 
 库存：
 - `stock:view`
@@ -321,7 +320,6 @@
   - `SALE_UPDATE`
   - `SALE_CANCEL`
   - `SALE_APPROVE`
-  - `SALE_UNAPPROVE`
 - 库存：
   - `STOCK_TXN_CREATE`
 

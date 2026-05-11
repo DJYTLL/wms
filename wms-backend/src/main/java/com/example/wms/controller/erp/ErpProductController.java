@@ -38,6 +38,15 @@ public class ErpProductController {
         return ResponseEntity.ok(ApiResponse.ok(products));
     }
 
+    // 业务选项：仅返回启用商品
+    @GetMapping("/options")
+    @PreAuthorize("hasAuthority('PERM_erp-product:view')")
+    public ResponseEntity<ApiResponse<List<ErpProduct>>> options(@RequestParam(required = false) Long categoryId) {
+        List<ErpProduct> products = erpProductService.listAll(null, true, categoryId);
+        stripCostPriceIfNeeded(products);
+        return ResponseEntity.ok(ApiResponse.ok(products));
+    }
+
     // 分页查询商品
     @GetMapping("/page")
     @PreAuthorize("hasAuthority('PERM_erp-product:view')")

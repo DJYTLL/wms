@@ -20,6 +20,7 @@ import com.example.wms.mapper.erp.ErpReceiptMapper;
 import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
+import com.example.wms.mapper.erp.ErpSaleReturnMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.service.erp.ErpSaleOrderService;
@@ -47,9 +48,13 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private static final String STATUS_APPROVED = "APPROVED";
     private static final String STATUS_CANCELLED = "CANCELLED";
     private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
+    private static final String STATUS_SETTLED = "SETTLED";
+    private static final String STATUS_OPEN = "OPEN";
     private static final String ORDER_TYPE = "SALE";
     private static final String DEFAULT_SETTLEMENT_METHOD = "CASH";
     private static final String RECEIPT_ORDER_TYPE = "RECEIPT";
+    private static final String AUTO_RECEIVABLE_REMARK = "销售单审核自动生成";
+    private static final String AUTO_RECEIPT_REMARK = "销售单审核自动收款";
 
     private final ErpSaleOrderMapper erpSaleOrderMapper;
     private final ErpSaleOrderItemMapper erpSaleOrderItemMapper;
@@ -60,6 +65,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private final ErpAccountsReceivableMapper erpAccountsReceivableMapper;
     private final ErpReceiptMapper erpReceiptMapper;
     private final ErpReceiptReceivableMapper erpReceiptReceivableMapper;
+    private final ErpSaleReturnMapper erpSaleReturnMapper;
     private final SystemConfigMapper systemConfigMapper;
 
     public ErpSaleOrderServiceImpl(ErpSaleOrderMapper erpSaleOrderMapper,
@@ -68,10 +74,11 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                                    ErpStockBalanceMapper erpStockBalanceMapper,
                                    ErpStockTxnMapper erpStockTxnMapper,
                                    ErpOrderSequenceMapper erpOrderSequenceMapper,
-                                   ErpAccountsReceivableMapper erpAccountsReceivableMapper,
-                                   ErpReceiptMapper erpReceiptMapper,
-                                   ErpReceiptReceivableMapper erpReceiptReceivableMapper,
-                                   SystemConfigMapper systemConfigMapper) {
+                                    ErpAccountsReceivableMapper erpAccountsReceivableMapper,
+                                    ErpReceiptMapper erpReceiptMapper,
+                                    ErpReceiptReceivableMapper erpReceiptReceivableMapper,
+                                    ErpSaleReturnMapper erpSaleReturnMapper,
+                                    SystemConfigMapper systemConfigMapper) {
         this.erpSaleOrderMapper = erpSaleOrderMapper;
         this.erpSaleOrderItemMapper = erpSaleOrderItemMapper;
         this.erpProductMapper = erpProductMapper;
@@ -81,6 +88,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         this.erpAccountsReceivableMapper = erpAccountsReceivableMapper;
         this.erpReceiptMapper = erpReceiptMapper;
         this.erpReceiptReceivableMapper = erpReceiptReceivableMapper;
+        this.erpSaleReturnMapper = erpSaleReturnMapper;
         this.systemConfigMapper = systemConfigMapper;
     }
 
@@ -151,6 +159,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             erpSaleOrderItemMapper.insert(item);
         }
         applyTotals(order, items);
+        validateSettlementAmounts(order);
         order.setUpdatedAt(Instant.now());
         updateWithVersion(tenantId, order);
         return new ErpSaleOrderDetail(order, items);
@@ -192,6 +201,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             erpSaleOrderItemMapper.insert(item);
         }
         applyTotals(order, items);
+        validateSettlementAmounts(order);
         updateWithVersion(tenantId, order);
         return new ErpSaleOrderDetail(order, items);
     }
@@ -226,6 +236,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             throw new IllegalArgumentException("仅草稿状态可审核");
         }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
+        validateSettlementAmounts(order);
         for (ErpSaleOrderItem item : items) {
             applyStockDelta(tenantId, item, item.getQty().negate(), "SALE_APPROVE", id);
         }
@@ -237,14 +248,6 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         updateWithVersion(tenantId, order);
     }
 
-    @Override
-    @Transactional
-    @AuditLog(action = "ERP_SALE_UNAPPROVE", entityType = "erp_sale_order", entityId = "{arg0}")
-    public void unapprove(Long id) {
-        throw new IllegalArgumentException("销售单已审核后仅允许红冲，不允许反审核");
-    }
-
-    @Override
     @Transactional
     @AuditLog(action = "ERP_SALE_CANCEL", entityType = "erp_sale_order", entityId = "{arg0}")
     public void cancel(Long id) {
@@ -277,6 +280,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         if (hasApprovedReceiptImpact(tenantId, order.getId())) {
             throw new IllegalArgumentException("请先红冲收款单");
+        }
+        if (hasApprovedSaleReturn(tenantId, order.getId())) {
+            throw new IllegalArgumentException("请先红冲销售退货单");
         }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
         for (ErpSaleOrderItem item : items) {
@@ -371,10 +377,10 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             wrapper.eq("customer_id", customerId);
         }
         if (startAt != null) {
-            wrapper.ge("created_at", startAt);
+            wrapper.ge("order_at", startAt);
         }
         if (endAt != null) {
-            wrapper.le("created_at", endAt);
+            wrapper.le("order_at", endAt);
         }
         return wrapper;
     }
@@ -458,6 +464,10 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         return false;
     }
 
+    private boolean hasApprovedSaleReturn(Long tenantId, Long saleOrderId) {
+        return erpSaleReturnMapper.countApprovedBySaleOrderId(tenantId, saleOrderId) > 0;
+    }
+
     private boolean hasApprovedReceiptAllocation(Long tenantId, Long receivableId, boolean positiveImpact) {
         List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceivableId(tenantId, receivableId);
         if (allocations == null || allocations.isEmpty()) {
@@ -518,6 +528,21 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setTotalAmountExclTax(totalExcl);
         order.setTotalTaxAmount(totalTax);
         order.setTotalAmountInclTax(totalIncl);
+    }
+
+    private void validateSettlementAmounts(ErpSaleOrder order) {
+        BigDecimal paidAmount = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
+        BigDecimal discountAmount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
+        if (paidAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("付款金额不能小于0");
+        }
+        if (discountAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("优惠金额不能小于0");
+        }
+        BigDecimal totalAmountInclTax = order.getTotalAmountInclTax() == null ? BigDecimal.ZERO : order.getTotalAmountInclTax();
+        if (paidAmount.add(discountAmount).compareTo(totalAmountInclTax) > 0) {
+            throw new IllegalArgumentException("付款金额与优惠金额之和不能大于销售总金额");
+        }
     }
 
     private ErpSaleOrder loadForUpdate(Long tenantId, Long id) {
@@ -658,7 +683,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         ErpAccountsReceivable existing = erpAccountsReceivableMapper.findBySaleOrderId(tenantId, order.getId());
         if (existing == null) {
             BigDecimal unpaid = total.subtract(totalApplied);
-            String status = unpaid.compareTo(BigDecimal.ZERO) == 0 ? "SETTLED" : "OPEN";
+            String status = unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN;
 
             ErpAccountsReceivable ar = new ErpAccountsReceivable();
             ar.setTenantId(tenantId);
@@ -670,11 +695,23 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             ar.setUnpaidAmount(unpaid);
             ar.setStatus(status);
             ar.setSettlementMethod(order.getSettlementMethod());
-            ar.setRemark("销售单审核自动生成");
+            ar.setRemark(AUTO_RECEIVABLE_REMARK);
             ar.setCreatedAt(Instant.now());
             ar.setUpdatedAt(Instant.now());
             erpAccountsReceivableMapper.insert(ar);
             existing = ar;
+        } else {
+            BigDecimal unpaid = total.subtract(totalApplied);
+            existing.setOrderNo(order.getOrderNo());
+            existing.setCustomerId(order.getCustomerId());
+            existing.setTotalAmount(total);
+            existing.setPaidAmount(totalApplied);
+            existing.setUnpaidAmount(unpaid);
+            existing.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
+            existing.setSettlementMethod(order.getSettlementMethod());
+            existing.setRemark(AUTO_RECEIVABLE_REMARK);
+            existing.setUpdatedAt(Instant.now());
+            erpAccountsReceivableMapper.updateById(existing);
         }
 
         if (totalApplied.compareTo(BigDecimal.ZERO) > 0) {
@@ -689,9 +726,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 receipt.setAmount(paidCash);
                 receipt.setDiscountAmount(discount);
                 receipt.setSettlementMethod(order.getSettlementMethod());
-                receipt.setStatus("APPROVED");
+                receipt.setStatus(STATUS_APPROVED);
                 receipt.setReceivedAt(Instant.now());
-                receipt.setRemark("销售单审核自动收款");
+                receipt.setRemark(AUTO_RECEIPT_REMARK);
                 receipt.setCreatedAt(Instant.now());
                 receipt.setUpdatedAt(Instant.now());
                 erpReceiptMapper.insert(receipt);
@@ -699,6 +736,30 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 ErpReceiptReceivable allocation = new ErpReceiptReceivable();
                 allocation.setTenantId(tenantId);
                 allocation.setReceiptId(receipt.getId());
+                allocation.setReceivableId(existing.getId());
+                allocation.setAllocatedAmount(paidCash);
+                allocation.setAllocatedDiscount(discount);
+                allocation.setAllocatedTotal(totalApplied);
+                allocation.setCreatedAt(Instant.now());
+                erpReceiptReceivableMapper.insert(allocation);
+            } else if (AUTO_RECEIPT_REMARK.equals(receiptExisting.getRemark())) {
+                receiptExisting.setReceivableId(existing.getId());
+                receiptExisting.setCustomerId(order.getCustomerId());
+                receiptExisting.setAmount(paidCash);
+                receiptExisting.setDiscountAmount(discount);
+                receiptExisting.setSettlementMethod(order.getSettlementMethod());
+                receiptExisting.setStatus(STATUS_APPROVED);
+                receiptExisting.setReceivedAt(Instant.now());
+                receiptExisting.setRemark(AUTO_RECEIPT_REMARK);
+                receiptExisting.setUpdatedAt(Instant.now());
+                erpReceiptMapper.updateById(receiptExisting);
+
+                erpReceiptReceivableMapper.delete(new QueryWrapper<ErpReceiptReceivable>()
+                    .eq("tenant_id", tenantId)
+                    .eq("receipt_id", receiptExisting.getId()));
+                ErpReceiptReceivable allocation = new ErpReceiptReceivable();
+                allocation.setTenantId(tenantId);
+                allocation.setReceiptId(receiptExisting.getId());
                 allocation.setReceivableId(existing.getId());
                 allocation.setAllocatedAmount(paidCash);
                 allocation.setAllocatedDiscount(discount);

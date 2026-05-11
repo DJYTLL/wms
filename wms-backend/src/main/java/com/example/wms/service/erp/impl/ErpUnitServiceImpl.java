@@ -6,7 +6,9 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpUnitCreateRequest;
 import com.example.wms.dto.erp.ErpUnitUpdateRequest;
+import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpUnit;
+import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpUnitMapper;
 import com.example.wms.service.erp.ErpUnitService;
 import com.example.wms.tenant.TenantContext;
@@ -19,9 +21,11 @@ import java.util.List;
 @Service
 public class ErpUnitServiceImpl implements ErpUnitService {
     private final ErpUnitMapper erpUnitMapper;
+    private final ErpProductMapper erpProductMapper;
 
-    public ErpUnitServiceImpl(ErpUnitMapper erpUnitMapper) {
+    public ErpUnitServiceImpl(ErpUnitMapper erpUnitMapper, ErpProductMapper erpProductMapper) {
         this.erpUnitMapper = erpUnitMapper;
+        this.erpProductMapper = erpProductMapper;
     }
 
     @Override
@@ -101,6 +105,11 @@ public class ErpUnitServiceImpl implements ErpUnitService {
             .eq("id", id));
         if (unit == null) {
             throw new IllegalArgumentException("单位不存在");
+        }
+        if (erpProductMapper.selectCount(new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", tenantId)
+            .eq("unit_id", id)) > 0) {
+            throw new IllegalArgumentException("单位已被商品引用，不能删除");
         }
         erpUnitMapper.deleteById(id);
     }

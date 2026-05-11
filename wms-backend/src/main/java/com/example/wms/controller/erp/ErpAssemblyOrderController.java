@@ -82,7 +82,7 @@ public class ErpAssemblyOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.update(id, request)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:edit')")
+    @PreAuthorize("hasAuthority('PERM_erp-assembly:delete')")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
                                                     @Valid @RequestBody DeleteRequest request) {

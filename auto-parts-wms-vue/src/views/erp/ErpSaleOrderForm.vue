@@ -1753,12 +1753,32 @@ const fetchCustomerCategories = async () => {
 
 const fetchProducts = async () => {
   try {
-    const res: any = await request.get('/erp/products');
+    const res: any = await request.get('/erp/products/options');
     productOptions.value = res.data.data || [];
     for (const item of formData.items) {
       await fetchStockOptions(item.productId);
       applyProductDefaults(item, false);
       syncStockKey(item);
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const ensureProductOption = async (productId?: number | null) => {
+  if (!productId || productOptions.value.some(item => item.id === productId)) return;
+  try {
+    const res: any = await request.get(`/erp/products/${productId}`);
+    const product = res.data.data;
+    if (product) {
+      productOptions.value = mergeOptionById(productOptions.value, {
+        id: product.id,
+        name: product.name,
+        defaultWarehouseId: product.defaultWarehouseId,
+        defaultLocationId: product.defaultLocationId,
+        salePrice: product.salePrice,
+        costPrice: product.costPrice
+      });
     }
   } catch (error) {
     notifyError(error);
@@ -1860,6 +1880,7 @@ const loadDetail = async () => {
         remark: item.remark
       }));
       await Promise.all(formData.items.flatMap(item => [
+        ensureProductOption(item.productId),
         ensureWarehouseOption(item.warehouseId),
         ensureLocationOption(item.locationId)
       ]));

@@ -205,13 +205,20 @@ const fetchOptions = async () => {
 const fetchList = async () => {
   loading.value = true;
   try {
+    const trimmedBizId = bizIdFilter.value.trim();
+    if (trimmedBizId && !/^\d+$/.test(trimmedBizId)) {
+      notifyError(new Error(t('message.invalidNumber')));
+      tableData.value = [];
+      total.value = 0;
+      return;
+    }
     const params: Record<string, any> = {
       page: page.value,
       size: size.value
     };
     if (productFilter.value) params.productId = productFilter.value;
     if (bizTypeFilter.value) params.bizType = bizTypeFilter.value.trim();
-    if (bizIdFilter.value) params.bizId = bizIdFilter.value.trim();
+    if (trimmedBizId) params.bizId = Number(trimmedBizId);
 
     const res: any = await request.get('/erp/stock/txns/page', { params });
     if (res.data.code === 200) {

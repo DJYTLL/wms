@@ -131,14 +131,6 @@ public class ErpSaleOrderController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    // 反审核销售单
-    @PostMapping("/{id}/unapprove")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:unapprove')")
-    public ResponseEntity<ApiResponse<Void>> unapprove(@PathVariable Long id) {
-        erpSaleOrderService.unapprove(id);
-        return ResponseEntity.ok(ApiResponse.ok(null));
-    }
-
     // 作废销售单
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('PERM_erp-sale:cancel')")

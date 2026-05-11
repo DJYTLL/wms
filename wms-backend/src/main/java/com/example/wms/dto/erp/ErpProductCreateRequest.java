@@ -3,6 +3,7 @@ package com.example.wms.dto.erp;
 import jakarta.validation.constraints.NotBlank;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 // 新增商品请求（ERP进销存）
 public record ErpProductCreateRequest(
@@ -31,6 +32,7 @@ public record ErpProductCreateRequest(
     Integer shelfLifeDays,
     Boolean enabled,
     String extAttrs,
-    String remark
+    String remark,
+    List<ErpProductPriceItemRequest> priceItems
 ) {
 }

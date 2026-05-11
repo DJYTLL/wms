@@ -7,7 +7,9 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpCategoryCreateRequest;
 import com.example.wms.dto.erp.ErpCategoryUpdateRequest;
 import com.example.wms.entity.erp.ErpCategory;
+import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.mapper.erp.ErpCategoryMapper;
+import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.service.erp.ErpCategoryService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -19,9 +21,11 @@ import java.util.List;
 @Service
 public class ErpCategoryServiceImpl implements ErpCategoryService {
     private final ErpCategoryMapper erpCategoryMapper;
+    private final ErpProductMapper erpProductMapper;
 
-    public ErpCategoryServiceImpl(ErpCategoryMapper erpCategoryMapper) {
+    public ErpCategoryServiceImpl(ErpCategoryMapper erpCategoryMapper, ErpProductMapper erpProductMapper) {
         this.erpCategoryMapper = erpCategoryMapper;
+        this.erpProductMapper = erpProductMapper;
     }
 
     @Override
@@ -59,6 +63,7 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
         if (existing != null) {
             throw new IllegalArgumentException("分类编码已存在");
         }
+        validateParentRelation(tenantId, null, request.parentId());
         ErpCategory category = new ErpCategory();
         category.setTenantId(tenantId);
         applyRequest(category, request);
@@ -83,6 +88,7 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
         if (existing != null && !existing.getId().equals(id)) {
             throw new IllegalArgumentException("分类编码已存在");
         }
+        validateParentRelation(tenantId, id, request.parentId());
         applyRequest(category, request);
         if (request.enabled() != null) {
             category.setEnabled(request.enabled());
@@ -102,7 +108,47 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
         if (category == null) {
             throw new IllegalArgumentException("分类不存在");
         }
+        long childCount = erpCategoryMapper.selectCount(new QueryWrapper<ErpCategory>()
+            .eq("tenant_id", tenantId)
+            .eq("parent_id", id));
+        if (childCount > 0) {
+            throw new IllegalArgumentException("分类下存在子分类，不能删除");
+        }
+        long productCount = erpProductMapper.selectCount(new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", tenantId)
+            .eq("category_id", id));
+        if (productCount > 0) {
+            throw new IllegalArgumentException("分类已被商品引用，不能删除");
+        }
         erpCategoryMapper.deleteById(id);
+    }
+
+    private void validateParentRelation(Long tenantId, Long currentId, Long parentId) {
+        if (parentId == null) {
+            return;
+        }
+        if (currentId != null && currentId.equals(parentId)) {
+            throw new IllegalArgumentException("父级分类不能选择自己");
+        }
+        ErpCategory parent = erpCategoryMapper.selectOne(new QueryWrapper<ErpCategory>()
+            .eq("tenant_id", tenantId)
+            .eq("id", parentId));
+        if (parent == null) {
+            throw new IllegalArgumentException("父级分类不存在");
+        }
+        Long cursor = parent.getParentId();
+        while (cursor != null) {
+            if (currentId != null && currentId.equals(cursor)) {
+                throw new IllegalArgumentException("父级分类不能形成循环关系");
+            }
+            ErpCategory ancestor = erpCategoryMapper.selectOne(new QueryWrapper<ErpCategory>()
+                .eq("tenant_id", tenantId)
+                .eq("id", cursor));
+            if (ancestor == null) {
+                break;
+            }
+            cursor = ancestor.getParentId();
+        }
     }
 
     private QueryWrapper<ErpCategory> baseWrapper(String keyword, Boolean enabled) {

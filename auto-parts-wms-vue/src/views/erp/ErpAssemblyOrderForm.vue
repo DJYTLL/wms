@@ -463,13 +463,32 @@ const loadNextOrderNo = async () => {
 const fetchOptions = async () => {
   try {
     const [productsRes, warehousesRes, locationsRes] = await Promise.all([
-      request.get('/erp/products'),
+      request.get('/erp/products/options'),
       request.get('/erp/warehouses/options'),
       request.get('/erp/locations/options')
     ]);
     productOptions.value = productsRes.data.data || [];
     warehouseOptions.value = warehousesRes.data.data || [];
     locationOptions.value = locationsRes.data.data || [];
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const ensureProductOption = async (productId?: number | null) => {
+  if (!productId || productOptions.value.some(item => item.id === productId)) return;
+  try {
+    const res: any = await request.get(`/erp/products/${productId}`);
+    const product = res.data.data;
+    if (product) {
+      productOptions.value = mergeOptionById(productOptions.value, {
+        id: product.id,
+        name: product.name,
+        costPrice: product.costPrice,
+        defaultWarehouseId: product.defaultWarehouseId,
+        defaultLocationId: product.defaultLocationId
+      });
+    }
   } catch (error) {
     notifyError(error);
   }
@@ -675,6 +694,7 @@ const fetchDetail = async () => {
     formData.status = order.status || '';
     formData.orderType = order.orderType || 'ASSEMBLE';
     formData.finishedProductId = order.finishedProductId || null;
+    await ensureProductOption(formData.finishedProductId);
     formData.finishedQty = String(order.finishedQty ?? '');
     formData.warehouseId = order.warehouseId || null;
     formData.locationId = order.locationId || null;
@@ -692,6 +712,7 @@ const fetchDetail = async () => {
       remark: item.remark || ''
     }));
     await Promise.all(formData.items.flatMap(item => [
+      ensureProductOption(item.productId),
       ensureWarehouseOption(item.warehouseId),
       ensureLocationOption(item.locationId)
     ]));

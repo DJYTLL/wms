@@ -1,6 +1,8 @@
 package com.example.wms.dto.erp;
 
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -9,8 +11,8 @@ public record ErpAssemblyOrderUpdateRequest(
     String orderNo,
     String orderType,
     String orderAt,
-    Long finishedProductId,
-    BigDecimal finishedQty,
+    @NotNull Long finishedProductId,
+    @NotNull @Positive BigDecimal finishedQty,
     Long warehouseId,
     Long locationId,
     BigDecimal laborCost,
