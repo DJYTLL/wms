@@ -81,6 +81,10 @@ public class ErpSaleOrderItem {
     @TableField("remark")
     private String remark;
 
+    // 审核出库时单位成本（非数据库字段，用于利润展示）
+    @TableField(exist = false)
+    private BigDecimal unitCost;
+
     // 创建时间
     @TableField("created_at")
     private Instant createdAt;
@@ -234,6 +238,14 @@ public class ErpSaleOrderItem {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public BigDecimal getUnitCost() {
+        return unitCost;
+    }
+
+    public void setUnitCost(BigDecimal unitCost) {
+        this.unitCost = unitCost;
     }
 
     public Instant getCreatedAt() {

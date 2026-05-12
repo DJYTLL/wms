@@ -1,12 +1,14 @@
 package com.example.wms.mapper.erp;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.example.wms.dto.erp.ErpSaleOrderItemCostSnapshot;
 import com.example.wms.entity.erp.ErpStockTxn;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 // 库存流水 Mapper（ERP进销存）
 @Mapper
@@ -71,4 +73,20 @@ public interface ErpStockTxnMapper extends BaseMapper<ErpStockTxn> {
         """)
     BigDecimal sumApprovedSaleReturnCost(@Param("tenantId") Long tenantId,
                                          @Param("saleOrderId") Long saleOrderId);
+
+    @Select("""
+        SELECT biz_item_id AS bizItemId,
+               COALESCE(
+                   SUM(ABS(total_cost)) / NULLIF(SUM(ABS(qty_delta)), 0),
+                   0
+               ) AS unitCost
+        FROM erp_stock_txn
+        WHERE tenant_id = #{tenantId}
+          AND biz_type = 'SALE_APPROVE'
+          AND biz_id = #{saleOrderId}
+          AND biz_item_id IS NOT NULL
+        GROUP BY biz_item_id
+        """)
+    List<ErpSaleOrderItemCostSnapshot> findSaleItemCostSnapshots(@Param("tenantId") Long tenantId,
+                                                                 @Param("saleOrderId") Long saleOrderId);
 }

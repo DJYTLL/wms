@@ -58,7 +58,15 @@
           <el-table-column v-if="canShow('price')" prop="salePrice" :label="$t('field.price')" min-width="120" />
           <el-table-column v-if="canShow('costPrice') && canViewCostPrice" :label="$t('field.costPrice')" min-width="120">
             <template #default="{ row }">
-              {{ formatMoney(row.costPrice) }}
+              <el-button
+                link
+                type="primary"
+                class="cost-price-trigger"
+                :disabled="!canViewPurchaseHistory"
+                @click="openPurchaseHistory(row)"
+              >
+                {{ formatMoney(row.costPrice) }}
+              </el-button>
             </template>
           </el-table-column>
           <el-table-column v-if="canShow('minStock')" prop="minStock" :label="$t('field.minStock')" min-width="120" />
@@ -579,11 +587,77 @@
         </div>
       </template>
     </el-drawer>
+
+    <el-dialog
+      v-model="purchaseHistoryDialogVisible"
+      :title="$t('field.purchaseHistory')"
+      width="980px"
+      class="history-dialog"
+      append-to-body
+    >
+      <div class="history-header">
+        <div class="history-header__item">
+          <span>{{ $t('field.product') }}：</span>
+          <strong>{{ historyProductName }}</strong>
+        </div>
+      </div>
+      <div v-loading="purchaseHistoryLoading">
+        <div class="history-toolbar">
+          <el-input
+            v-model="purchaseHistoryKeyword"
+            :placeholder="$t('placeholder.keyword')"
+            clearable
+            class="history-search"
+          />
+          <el-date-picker
+            v-model="purchaseHistoryRange"
+            type="daterange"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            :range-separator="$t('separator.to')"
+            :start-placeholder="$t('field.startTime')"
+            :end-placeholder="$t('field.endTime')"
+            class="history-date"
+            clearable
+          />
+        </div>
+        <el-table
+          :data="purchaseHistoryItems"
+          stripe
+          :empty-text="$t('table.empty')"
+          height="360"
+        >
+          <el-table-column prop="supplierName" :label="$t('field.supplierName')" min-width="180" />
+          <el-table-column prop="qty" :label="$t('field.quantity')" width="120" />
+          <el-table-column :label="$t('field.price')" width="140">
+            <template #default="{ row }">{{ formatMoney(row.price) }}</template>
+          </el-table-column>
+          <el-table-column :label="$t('field.priceInclTax')" width="140">
+            <template #default="{ row }">{{ formatMoney(row.priceInclTax) }}</template>
+          </el-table-column>
+          <el-table-column :label="$t('field.orderTime')" width="180">
+            <template #default="{ row }">{{ formatHistoryDate(row.orderAt) }}</template>
+          </el-table-column>
+          <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="180" />
+        </el-table>
+        <el-pagination
+          class="history-pagination"
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="purchaseHistoryTotal"
+          :current-page="purchaseHistoryPage"
+          :page-size="purchaseHistorySize"
+          :page-sizes="[10, 20, 50, 100]"
+          @current-change="handlePurchaseHistoryPageChange"
+          @size-change="handlePurchaseHistorySizeChange"
+        />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated, computed } from 'vue';
+import { ref, reactive, onMounted, onActivated, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
@@ -643,6 +717,18 @@ interface CustomField {
   value: string;
 }
 
+interface PurchaseHistoryItem {
+  orderId: number;
+  orderNo: string;
+  orderAt: string;
+  productId: number;
+  qty: number;
+  price: number;
+  priceInclTax: number;
+  supplierId: number;
+  supplierName: string;
+}
+
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
@@ -660,6 +746,15 @@ const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
 const layoutMode = ref<'stacked' | 'tabs'>('stacked');
+const purchaseHistoryDialogVisible = ref(false);
+const purchaseHistoryLoading = ref(false);
+const purchaseHistoryItems = ref<PurchaseHistoryItem[]>([]);
+const purchaseHistoryKeyword = ref('');
+const purchaseHistoryRange = ref<string[]>([]);
+const purchaseHistoryPage = ref(1);
+const purchaseHistorySize = ref(10);
+const purchaseHistoryTotal = ref(0);
+const historyProduct = ref<ErpProduct | null>(null);
 
 const categoryOptions = ref<OptionItem[]>([]);
 const customerCategoryOptions = ref<OptionItem[]>([]);
@@ -705,6 +800,8 @@ const canShow = (key: string) => isVisible(key);
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 const canViewCostPrice = computed(() => hasPermission('erp-product:cost:view') || hasPermission('erp-product:cost:edit'));
 const canEditCostPrice = computed(() => hasPermission('erp-product:cost:edit'));
+const canViewPurchaseHistory = computed(() => hasPermission('erp-purchase:view'));
+const historyProductName = computed(() => historyProduct.value?.name || '-');
 
 const getCategoryName = (id?: number) => categoryOptions.value.find(item => item.id === id)?.name || '-';
 const getUnitName = (id?: number) => unitOptions.value.find(item => item.id === id)?.name || '-';
@@ -717,6 +814,58 @@ const formatMoney = (value?: number) => {
 const getLocationOptions = (warehouseId?: number | null) => {
   if (!warehouseId) return locationOptions.value;
   return locationOptions.value.filter(item => item.warehouseId === warehouseId);
+};
+const normalizeDateTimeValue = (value: any) => {
+  if (!value) return '-';
+  if (typeof value === 'string') {
+    const normalized = value.replace('T', ' ').replace(/\.\d{3}Z$/, '').replace(/Z$/, '');
+    return normalized;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const pad = (num: number) => String(num).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+const formatHistoryDate = (value: any) => normalizeDateTimeValue(value);
+
+const normalizeArray = <T>(value: any): T[] => {
+  if (Array.isArray(value)) return value as T[];
+  if (Array.isArray(value?.items)) return value.items as T[];
+  if (Array.isArray(value?.list)) return value.list as T[];
+  return [];
+};
+
+const normalizeHistoryKeyword = (value: string) => value.trim();
+
+const resolveHistoryRange = (range: string[]) => {
+  if (!range || range.length < 2) return null;
+  const [start, end] = range;
+  if (!start || !end) return null;
+  const startDate = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T23:59:59.999`);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return null;
+  return {
+    startAt: startDate.toISOString(),
+    endAt: endDate.toISOString()
+  };
+};
+
+const buildPurchaseHistoryParams = (pageNo: number, pageSize: number) => {
+  const productId = historyProduct.value?.id;
+  if (!productId) return null;
+  const params: Record<string, any> = {
+    productId,
+    page: pageNo,
+    size: pageSize
+  };
+  const keyword = normalizeHistoryKeyword(purchaseHistoryKeyword.value);
+  if (keyword) params.keyword = keyword;
+  const range = resolveHistoryRange(purchaseHistoryRange.value);
+  if (range) {
+    params.startAt = range.startAt;
+    params.endAt = range.endAt;
+  }
+  return params;
 };
 
 const parseExtAttrs = (raw: unknown): CustomField[] => {
@@ -938,6 +1087,52 @@ const handleSizeChange = (newSize: number) => {
   fetchList();
 };
 
+const fetchPurchaseHistory = async (pageNo = purchaseHistoryPage.value) => {
+  const params = buildPurchaseHistoryParams(pageNo, purchaseHistorySize.value);
+  if (!params) {
+    purchaseHistoryItems.value = [];
+    purchaseHistoryTotal.value = 0;
+    return;
+  }
+  purchaseHistoryLoading.value = true;
+  try {
+    const res: any = await request.get('/erp/purchase-orders/product-history', { params });
+    const data = res?.data?.data || {};
+    purchaseHistoryItems.value = normalizeArray<PurchaseHistoryItem>(data);
+    purchaseHistoryTotal.value = data.total || 0;
+    purchaseHistoryPage.value = data.page || pageNo;
+    purchaseHistorySize.value = data.size || purchaseHistorySize.value;
+  } catch (error) {
+    purchaseHistoryItems.value = [];
+    purchaseHistoryTotal.value = 0;
+    notifyError(error);
+  } finally {
+    purchaseHistoryLoading.value = false;
+  }
+};
+
+const openPurchaseHistory = async (row: ErpProduct) => {
+  if (!canViewPurchaseHistory.value || !row?.id) return;
+  historyProduct.value = row;
+  purchaseHistoryKeyword.value = '';
+  purchaseHistoryRange.value = [];
+  purchaseHistoryPage.value = 1;
+  purchaseHistorySize.value = 10;
+  purchaseHistoryDialogVisible.value = true;
+  await fetchPurchaseHistory(1);
+};
+
+const handlePurchaseHistoryPageChange = (newPage: number) => {
+  purchaseHistoryPage.value = newPage;
+  fetchPurchaseHistory(newPage);
+};
+
+const handlePurchaseHistorySizeChange = (newSize: number) => {
+  purchaseHistorySize.value = newSize;
+  purchaseHistoryPage.value = 1;
+  fetchPurchaseHistory(1);
+};
+
 const openAddModal = () => {
   isEditing.value = false;
   currentId.value = null;
@@ -1082,6 +1277,13 @@ const handleDelete = async (row: ErpProduct) => {
   }
 };
 
+watch([purchaseHistoryKeyword, purchaseHistoryRange], () => {
+  purchaseHistoryPage.value = 1;
+  if (purchaseHistoryDialogVisible.value) {
+    fetchPurchaseHistory(1);
+  }
+}, { deep: true });
+
 onMounted(() => {
   fetchCategories();
   fetchCustomerCategories();
@@ -1104,6 +1306,54 @@ onActivated(() => {
 </script>
 
 <style scoped>
+.cost-price-trigger {
+  padding: 0;
+  min-height: auto;
+  font-weight: 500;
+}
+
+.history-dialog :deep(.el-dialog__body) {
+  padding-top: 10px;
+}
+
+.history-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+  color: #2c3e50;
+}
+
+.history-header__item {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.history-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.history-search {
+  width: 220px;
+}
+
+.history-date {
+  width: 260px;
+}
+
+.history-pagination {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .price-list {
   display: flex;
   flex-direction: column;

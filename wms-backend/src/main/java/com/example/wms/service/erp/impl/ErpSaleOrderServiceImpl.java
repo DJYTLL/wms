@@ -9,6 +9,7 @@ import com.example.wms.dto.erp.ErpSaleOrderDetail;
 import com.example.wms.dto.erp.ErpSaleOrderHistoryItem;
 import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
 import com.example.wms.dto.erp.ErpSaleOrderItemRequest;
+import com.example.wms.dto.erp.ErpSaleOrderItemCostSnapshot;
 import com.example.wms.dto.erp.ErpSaleOrderUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.*;
@@ -45,8 +46,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 // 销售单服务实现（ERP进销存）
 @Service
@@ -144,6 +147,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             throw new IllegalArgumentException("销售单不存在");
         }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
+        enrichItemCostSnapshots(tenantId, id, items);
         enrichFlowStatus(tenantId, List.of(order));
         BigDecimal customerDebtTotal = order.getCustomerId() == null
             ? BigDecimal.ZERO
@@ -717,6 +721,28 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             .eq("version", version));
         if (updated == 0) {
             throw new IllegalArgumentException("销售单已被修改，请刷新重试");
+        }
+    }
+
+    private void enrichItemCostSnapshots(Long tenantId, Long saleOrderId, List<ErpSaleOrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        Map<Long, BigDecimal> unitCostByItemId = erpStockTxnMapper.findSaleItemCostSnapshots(tenantId, saleOrderId).stream()
+            .filter(snapshot -> snapshot.bizItemId() != null && snapshot.unitCost() != null)
+            .collect(Collectors.toMap(
+                ErpSaleOrderItemCostSnapshot::bizItemId,
+                ErpSaleOrderItemCostSnapshot::unitCost,
+                (left, right) -> right
+            ));
+        for (ErpSaleOrderItem item : items) {
+            if (item.getId() == null) {
+                continue;
+            }
+            BigDecimal unitCost = unitCostByItemId.get(item.getId());
+            if (unitCost != null) {
+                item.setUnitCost(unitCost);
+            }
         }
     }
 
