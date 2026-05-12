@@ -700,7 +700,15 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         BigDecimal paid = payable.getPaidAmount() == null ? BigDecimal.ZERO : payable.getPaidAmount();
         BigDecimal discount = payable.getDiscountAmount() == null ? BigDecimal.ZERO : payable.getDiscountAmount();
         BigDecimal total = payable.getTotalAmount() == null ? BigDecimal.ZERO : payable.getTotalAmount();
+        BigDecimal unpaidBefore = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
         boolean returnPayable = isReturnPayable(payable);
+        BigDecimal applyTotal = amountDelta.add(discountDelta);
+        if (!returnPayable && applyTotal.compareTo(BigDecimal.ZERO) > 0 && applyTotal.compareTo(unpaidBefore) > 0) {
+            throw new IllegalArgumentException("付款金额不能大于未付金额");
+        }
+        if (returnPayable && applyTotal.compareTo(BigDecimal.ZERO) < 0 && applyTotal.compareTo(unpaidBefore) < 0) {
+            throw new IllegalArgumentException("付款金额不能大于未付金额");
+        }
         BigDecimal newPaid = paid.add(amountDelta);
         BigDecimal newDiscount = discount.add(discountDelta);
         if (!returnPayable) {

@@ -570,32 +570,26 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private void applyStockDelta(Long tenantId, ErpSaleOrderItem item, BigDecimal delta, String bizType, Long orderId) {
         Long warehouseId = item.getWarehouseId();
         Long locationId = item.getLocationId();
-        ErpStockBalance balance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
-        BigDecimal before = balance == null ? BigDecimal.ZERO : balance.getQtyOnHand();
-        BigDecimal after = before.add(delta);
-        if (after.compareTo(BigDecimal.ZERO) < 0) {
+        String operator = resolveCurrentUsername();
+        ErpStockBalance updatedBalance;
+        if (delta.compareTo(BigDecimal.ZERO) < 0) {
+            updatedBalance = erpStockBalanceMapper.addQtyIfEnough(
+                tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
+        } else {
+            updatedBalance = erpStockBalanceMapper.upsertAddQty(
+                tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
+        }
+        if (updatedBalance == null) {
+            ErpStockBalance currentBalance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
+            BigDecimal currentQty = currentBalance == null ? BigDecimal.ZERO : currentBalance.getQtyOnHand();
             BigDecimal required = delta.abs();
             String productLabel = item.getProductName() == null ? item.getProductCode() : item.getProductName();
             throw new IllegalArgumentException(
-                "库存不足，商品[" + productLabel + "] 可用=" + before + "，需求=" + required
+                "库存不足，商品[" + productLabel + "] 可用=" + currentQty + "，需求=" + required
             );
         }
-        if (balance == null) {
-            balance = new ErpStockBalance();
-            balance.setTenantId(tenantId);
-            balance.setProductId(item.getProductId());
-            balance.setWarehouseId(warehouseId);
-            balance.setLocationId(locationId);
-            balance.setQtyOnHand(after);
-            balance.setUpdatedBy(resolveCurrentUsername());
-            balance.setUpdatedAt(Instant.now());
-            erpStockBalanceMapper.insert(balance);
-        } else {
-            balance.setQtyOnHand(after);
-            balance.setUpdatedBy(resolveCurrentUsername());
-            balance.setUpdatedAt(Instant.now());
-            erpStockBalanceMapper.updateById(balance);
-        }
+        BigDecimal after = updatedBalance.getQtyOnHand() == null ? BigDecimal.ZERO : updatedBalance.getQtyOnHand();
+        BigDecimal before = after.subtract(delta);
 
         ErpStockTxn txn = new ErpStockTxn();
         txn.setTenantId(tenantId);
@@ -613,7 +607,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         BigDecimal totalCost = unitCost.multiply(delta).setScale(4, RoundingMode.HALF_UP);
         txn.setUnitCost(unitCost);
         txn.setTotalCost(totalCost);
-        txn.setOperator(resolveCurrentUsername());
+        txn.setOperator(operator);
         txn.setOperatorId(null);
         txn.setRemark(item.getRemark());
         txn.setCreatedAt(Instant.now());

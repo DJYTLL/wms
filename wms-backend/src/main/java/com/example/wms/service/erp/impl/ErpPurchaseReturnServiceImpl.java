@@ -260,7 +260,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                         .eq("tenant_id", tenantId)
                         .in("id", paymentIds)
                         .eq("status", STATUS_APPROVED));
-                    if (!approvedPayments.isEmpty()) {
+                    boolean hasAppliedRefunds = approvedPayments.stream()
+                        .map(payment -> resolvePaymentAppliedTotal(payment.getAmount(), payment.getDiscountAmount()))
+                        .anyMatch(total -> total.compareTo(BigDecimal.ZERO) < 0);
+                    if (hasAppliedRefunds) {
                         throw new IllegalArgumentException("请先红冲付款单");
                     }
                 }
@@ -314,10 +317,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             wrapper.eq("supplier_id", supplierId);
         }
         if (startAt != null) {
-            wrapper.ge("created_at", startAt);
+            wrapper.ge("order_at", startAt);
         }
         if (endAt != null) {
-            wrapper.le("created_at", endAt);
+            wrapper.le("order_at", endAt);
         }
         return wrapper;
     }
@@ -675,5 +678,11 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             return base;
         }
         return base + " | " + append;
+    }
+
+    private BigDecimal resolvePaymentAppliedTotal(BigDecimal amount, BigDecimal discountAmount) {
+        BigDecimal paid = amount == null ? BigDecimal.ZERO : amount;
+        BigDecimal discount = discountAmount == null ? BigDecimal.ZERO : discountAmount;
+        return paid.add(discount);
     }
 }

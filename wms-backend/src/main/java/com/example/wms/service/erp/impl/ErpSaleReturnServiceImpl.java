@@ -57,8 +57,11 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_APPROVED = "APPROVED";
     private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
+    private static final String STATUS_SETTLED = "SETTLED";
+    private static final String STATUS_OPEN = "OPEN";
     private static final String ORDER_TYPE = "SALE_RETURN";
     private static final String RECEIVABLE_ORDER_TYPE = "AR_RETURN";
+    private static final String RECEIPT_ORDER_TYPE = "RECEIPT";
 
     private static final String RETURN_RESTOCK = "RESTOCK";
     private static final String RETURN_SCRAP = "SCRAP";
@@ -583,34 +586,32 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (updateBalance && delta.compareTo(BigDecimal.ZERO) > 0) {
             updateProductAvgCost(tenantId, item.getProductId(), delta, unitCost);
         }
-        ErpStockBalance balance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
-        BigDecimal before = balance == null ? BigDecimal.ZERO : balance.getQtyOnHand();
-        BigDecimal after = before.add(delta);
-        if (updateBalance && after.compareTo(BigDecimal.ZERO) < 0) {
-            BigDecimal required = delta.abs();
-            String productLabel = item.getProductName() == null ? item.getProductCode() : item.getProductName();
-            throw new IllegalArgumentException(
-                "库存不足，商品[" + productLabel + "] 可用=" + before + "，需求=" + required
-            );
-        }
+        ErpStockBalance balance = null;
+        BigDecimal before;
+        BigDecimal after;
         if (updateBalance) {
-            if (balance == null) {
-                balance = new ErpStockBalance();
-                balance.setTenantId(tenantId);
-                balance.setProductId(item.getProductId());
-                balance.setWarehouseId(warehouseId);
-                balance.setLocationId(locationId);
-                balance.setQtyOnHand(after);
-                balance.setUpdatedBy(resolveCurrentUsername());
-                balance.setUpdatedAt(Instant.now());
-                erpStockBalanceMapper.insert(balance);
+            String operator = resolveCurrentUsername();
+            if (delta.compareTo(BigDecimal.ZERO) < 0) {
+                balance = erpStockBalanceMapper.addQtyIfEnough(
+                    tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
             } else {
-                balance.setQtyOnHand(after);
-                balance.setUpdatedBy(resolveCurrentUsername());
-                balance.setUpdatedAt(Instant.now());
-                erpStockBalanceMapper.updateById(balance);
+                balance = erpStockBalanceMapper.upsertAddQty(
+                    tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
             }
+            if (balance == null) {
+                ErpStockBalance currentBalance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
+                BigDecimal currentQty = currentBalance == null ? BigDecimal.ZERO : currentBalance.getQtyOnHand();
+                BigDecimal required = delta.abs();
+                String productLabel = item.getProductName() == null ? item.getProductCode() : item.getProductName();
+                throw new IllegalArgumentException(
+                    "库存不足，商品[" + productLabel + "] 可用=" + currentQty + "，需求=" + required
+                );
+            }
+            after = balance.getQtyOnHand() == null ? BigDecimal.ZERO : balance.getQtyOnHand();
+            before = after.subtract(delta);
         } else {
+            balance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
+            before = balance == null ? BigDecimal.ZERO : balance.getQtyOnHand();
             after = before;
         }
 
@@ -645,20 +646,53 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             return;
         }
         BigDecimal negative = amount.negate();
+        BigDecimal refundAmount = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
+        BigDecimal discountAmount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
+        BigDecimal applied = refundAmount.add(discountAmount);
+        BigDecimal negativeApplied = applied.negate();
+        BigDecimal unpaid = negative.subtract(negativeApplied);
         ErpAccountsReceivable ar = new ErpAccountsReceivable();
         ar.setTenantId(tenantId);
         ar.setSaleOrderId(order.getSaleOrderId());
         ar.setOrderNo(generateReceivableNo(tenantId));
         ar.setCustomerId(order.getCustomerId());
         ar.setTotalAmount(negative);
-        ar.setPaidAmount(BigDecimal.ZERO);
-        ar.setUnpaidAmount(negative);
-        ar.setStatus("OPEN");
+        ar.setPaidAmount(negativeApplied);
+        ar.setUnpaidAmount(unpaid);
+        ar.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
         ar.setSettlementMethod(order.getSettlementMethod());
         ar.setRemark("销售退货单号:" + order.getOrderNo());
         ar.setCreatedAt(Instant.now());
         ar.setUpdatedAt(Instant.now());
         erpAccountsReceivableMapper.insert(ar);
+
+        if (applied.compareTo(BigDecimal.ZERO) > 0) {
+            ErpReceipt receipt = new ErpReceipt();
+            receipt.setTenantId(tenantId);
+            receipt.setReceivableId(ar.getId());
+            receipt.setSaleOrderId(order.getSaleOrderId());
+            receipt.setReceiptNo(generateReceiptNo(tenantId));
+            receipt.setCustomerId(order.getCustomerId());
+            receipt.setAmount(refundAmount.negate());
+            receipt.setDiscountAmount(discountAmount.negate());
+            receipt.setSettlementMethod(order.getSettlementMethod());
+            receipt.setStatus(STATUS_APPROVED);
+            receipt.setReceivedAt(Instant.now());
+            receipt.setRemark("销售退货单审核自动退款/优惠:" + order.getOrderNo());
+            receipt.setCreatedAt(Instant.now());
+            receipt.setUpdatedAt(Instant.now());
+            erpReceiptMapper.insert(receipt);
+
+            ErpReceiptReceivable allocation = new ErpReceiptReceivable();
+            allocation.setTenantId(tenantId);
+            allocation.setReceiptId(receipt.getId());
+            allocation.setReceivableId(ar.getId());
+            allocation.setAllocatedAmount(refundAmount.negate());
+            allocation.setAllocatedDiscount(discountAmount.negate());
+            allocation.setAllocatedTotal(negativeApplied);
+            allocation.setCreatedAt(Instant.now());
+            erpReceiptReceivableMapper.insert(allocation);
+        }
     }
 
     private ErpAccountsReceivable findReturnReceivable(Long tenantId, ErpSaleReturn order) {
@@ -820,6 +854,17 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         String dateKey = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(dateFormat));
         erpOrderSequenceMapper.insertIgnore(tenantId, RECEIVABLE_ORDER_TYPE, dateKey);
         Long seq = erpOrderSequenceMapper.incrementAndGet(tenantId, RECEIVABLE_ORDER_TYPE, dateKey);
+        String seqStr = String.format("%0" + seqLength + "d", seq == null ? 1 : seq);
+        return prefix + dateKey + seqStr;
+    }
+
+    private String generateReceiptNo(Long tenantId) {
+        String prefix = readConfig("erp.order.no.receipt.prefix", "RC");
+        String dateFormat = readConfig("erp.order.no.date-format", "yyyyMMdd");
+        int seqLength = readIntConfig("erp.order.no.seq-length", 4);
+        String dateKey = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(dateFormat));
+        erpOrderSequenceMapper.insertIgnore(tenantId, RECEIPT_ORDER_TYPE, dateKey);
+        Long seq = erpOrderSequenceMapper.incrementAndGet(tenantId, RECEIPT_ORDER_TYPE, dateKey);
         String seqStr = String.format("%0" + seqLength + "d", seq == null ? 1 : seq);
         return prefix + dateKey + seqStr;
     }

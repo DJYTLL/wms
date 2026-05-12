@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 // ERP应收单 Mapper
@@ -41,5 +42,29 @@ public interface ErpAccountsReceivableMapper extends BaseMapper<ErpAccountsRecei
         ORDER BY total_debt DESC, c.id
         """)
     List<com.example.wms.dto.erp.ErpCustomerDebtView> listCustomerDebt(@Param("tenantId") Long tenantId,
-                                                                      @Param("keyword") String keyword);
+                                                                       @Param("keyword") String keyword);
+
+    @Select("""
+        UPDATE erp_accounts_receivable
+        SET paid_amount = paid_amount + #{delta},
+            unpaid_amount = total_amount - (paid_amount + #{delta}),
+            status = CASE
+                WHEN total_amount - (paid_amount + #{delta}) = 0 THEN 'SETTLED'
+                ELSE 'OPEN'
+            END,
+            updated_at = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND id = #{id}
+          AND deleted_at IS NULL
+          AND status <> 'RED_FLUSHED'
+          AND (
+              (total_amount >= 0 AND paid_amount + #{delta} BETWEEN 0 AND total_amount)
+              OR
+              (total_amount < 0 AND paid_amount + #{delta} BETWEEN total_amount AND 0)
+          )
+        RETURNING *
+        """)
+    ErpAccountsReceivable applyPaidDeltaIfInRange(@Param("tenantId") Long tenantId,
+                                                  @Param("id") Long id,
+                                                  @Param("delta") BigDecimal delta);
 }

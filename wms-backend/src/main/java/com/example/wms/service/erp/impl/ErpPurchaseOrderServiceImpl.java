@@ -297,21 +297,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     @Transactional
     @AuditLog(action = "ERP_PURCHASE_UNAPPROVE", entityType = "erp_purchase_order", entityId = "{arg0}")
     public void unapprove(Long id) {
-        Long tenantId = TenantContext.requireTenantId();
-        ErpPurchaseOrder order = loadForUpdate(tenantId, id);
-        if (!STATUS_APPROVED.equals(order.getStatus())) {
-            throw new IllegalArgumentException("仅已审核状态可反审核");
-        }
-        rollbackPurchaseFinanceOnUnapprove(tenantId, order);
-        List<ErpPurchaseOrderItem> items = erpPurchaseOrderItemMapper.findByOrderId(tenantId, id);
-        for (ErpPurchaseOrderItem item : items) {
-            applyStockDelta(tenantId, item, item.getQty().negate(), "PURCHASE_UNAPPROVE", id);
-        }
-        order.setStatus(STATUS_DRAFT);
-        order.setUnapprovedBy(resolveCurrentUsername());
-        order.setUnapprovedAt(Instant.now());
-        order.setUpdatedAt(Instant.now());
-        updateWithVersion(tenantId, order);
+        throw new IllegalArgumentException("采购单仅支持红冲，不支持反审核");
     }
 
     @Override
@@ -602,33 +588,6 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 allocation.setCreatedAt(Instant.now());
                 erpPaymentPayableMapper.insert(allocation);
             }
-        }
-    }
-
-    private void rollbackPurchaseFinanceOnUnapprove(Long tenantId, ErpPurchaseOrder order) {
-        List<ErpPayment> activePayments = erpPaymentMapper.selectList(new QueryWrapper<ErpPayment>()
-            .eq("tenant_id", tenantId)
-            .eq("purchase_order_id", order.getId())
-            .ne("status", STATUS_RED_FLUSHED));
-        for (ErpPayment payment : activePayments) {
-            if (!AUTO_PAYMENT_REMARK.equals(payment.getRemark())) {
-                throw new IllegalArgumentException("存在已关联付款单，请先处理付款单后再反审核");
-            }
-        }
-        for (ErpPayment payment : activePayments) {
-            erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
-                .eq("tenant_id", tenantId)
-                .eq("payment_id", payment.getId()));
-            erpPaymentMapper.deleteById(payment.getId());
-        }
-
-        ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, order.getId());
-        if (payable != null) {
-            boolean hasExternalAllocation = hasApprovedPaymentAllocation(tenantId, payable.getId());
-            if (hasExternalAllocation) {
-                throw new IllegalArgumentException("存在已关联付款单，请先处理付款单后再反审核");
-            }
-            erpAccountsPayableMapper.deleteById(payable.getId());
         }
     }
 

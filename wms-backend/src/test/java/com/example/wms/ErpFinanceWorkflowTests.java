@@ -8,8 +8,11 @@ import com.example.wms.entity.erp.ErpPayment;
 import com.example.wms.entity.erp.ErpPaymentPayable;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpPurchaseOrder;
+import com.example.wms.entity.erp.ErpPurchaseReturn;
+import com.example.wms.entity.erp.ErpPurchaseReturnItem;
 import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpReceiptReceivable;
+import com.example.wms.dto.erp.ErpPaymentCreateRequest;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
@@ -20,6 +23,8 @@ import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderItemMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
+import com.example.wms.mapper.erp.ErpPurchaseReturnItemMapper;
+import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
 import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
@@ -28,6 +33,7 @@ import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.service.erp.impl.ErpPaymentServiceImpl;
 import com.example.wms.service.erp.impl.ErpPurchaseOrderServiceImpl;
+import com.example.wms.service.erp.impl.ErpPurchaseReturnServiceImpl;
 import com.example.wms.service.erp.impl.ErpReceiptServiceImpl;
 import com.example.wms.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
@@ -80,6 +86,10 @@ class ErpFinanceWorkflowTests {
     private ErpAccountsPayableMapper payableMapper;
     @Mock
     private ErpPurchaseOrderMapper purchaseOrderMapper;
+    @Mock
+    private ErpPurchaseReturnMapper purchaseReturnMapper;
+    @Mock
+    private ErpPurchaseReturnItemMapper purchaseReturnItemMapper;
 
     @Mock
     private ErpPurchaseOrderItemMapper purchaseOrderItemMapper;
@@ -153,6 +163,7 @@ class ErpFinanceWorkflowTests {
         payable.setId(200L);
         payable.setTenantId(1L);
         payable.setStatus("OPEN");
+        payable.setTotalAmount(new BigDecimal("100"));
         payable.setUnpaidAmount(new BigDecimal("50"));
 
         when(paymentMapper.selectOne(any())).thenReturn(payment);
@@ -167,39 +178,157 @@ class ErpFinanceWorkflowTests {
     }
 
     @Test
-    void purchaseUnapproveRollsBackAutoFinanceDocuments() {
+    void purchaseUnapproveIsRejectedBecausePurchaseUsesRedFlushOnly() {
         ErpPurchaseOrderServiceImpl service = purchaseOrderService();
-        ErpPurchaseOrder order = new ErpPurchaseOrder();
-        order.setId(30L);
+
+        assertThatThrownBy(() -> service.unapprove(30L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("采购单仅支持红冲，不支持反审核");
+
+        verify(purchaseOrderMapper, never()).selectOne(any());
+    }
+
+    @Test
+    void paymentCreateAllowsNegativePurchaseReturnPayable() {
+        ErpPaymentServiceImpl service = paymentService();
+        ErpAccountsPayable payable = new ErpAccountsPayable();
+        payable.setId(60L);
+        payable.setTenantId(1L);
+        payable.setSupplierId(6L);
+        payable.setPurchaseReturnId(600L);
+        payable.setOrderNo("PRT001");
+        payable.setStatus("OPEN");
+        payable.setTotalAmount(new BigDecimal("-80"));
+        payable.setUnpaidAmount(new BigDecimal("-80"));
+
+        when(payableMapper.selectList(any())).thenReturn(List.of(payable));
+        when(paymentMapper.selectOne(any())).thenReturn(null);
+        when(orderSequenceMapper.incrementAndGet(1L, "PAYMENT", java.time.LocalDate.now(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")))).thenReturn(1L);
+        when(paymentPayableMapper.findByPaymentId(eq(1L), any())).thenReturn(List.of());
+
+        service.create(new ErpPaymentCreateRequest(
+            null,
+            6L,
+            60L,
+            List.of(60L),
+            null,
+            new BigDecimal("-80"),
+            BigDecimal.ZERO,
+            null,
+            "CASH",
+            null,
+            null,
+            null
+        ));
+
+        ArgumentCaptor<ErpPayment> paymentCaptor = ArgumentCaptor.forClass(ErpPayment.class);
+        ArgumentCaptor<ErpPaymentPayable> allocationCaptor = ArgumentCaptor.forClass(ErpPaymentPayable.class);
+        verify(paymentMapper).insert(paymentCaptor.capture());
+        verify(paymentPayableMapper).insert(allocationCaptor.capture());
+        assertThat(paymentCaptor.getValue().getAmount()).isEqualByComparingTo("-80");
+        assertThat(allocationCaptor.getValue().getAllocatedTotal()).isEqualByComparingTo("-80");
+    }
+
+    @Test
+    void purchaseReturnCancelRedFlushesPayableAndRestoresReturnStock() {
+        ErpPurchaseReturnServiceImpl service = purchaseReturnService();
+        ErpPurchaseReturn order = new ErpPurchaseReturn();
+        order.setId(70L);
         order.setTenantId(1L);
         order.setStatus("APPROVED");
+        order.setReturnType("RETURN");
         order.setVersion(0L);
 
-        ErpPayment autoPayment = new ErpPayment();
-        autoPayment.setId(31L);
-        autoPayment.setTenantId(1L);
-        autoPayment.setPurchaseOrderId(30L);
-        autoPayment.setRemark("采购单审核自动付款");
-        autoPayment.setStatus("APPROVED");
+        ErpPurchaseReturnItem item = new ErpPurchaseReturnItem();
+        item.setReturnId(70L);
+        item.setProductId(700L);
+        item.setQty(new BigDecimal("3"));
 
         ErpAccountsPayable payable = new ErpAccountsPayable();
-        payable.setId(32L);
+        payable.setId(71L);
         payable.setTenantId(1L);
-        payable.setPurchaseOrderId(30L);
+        payable.setPurchaseReturnId(70L);
+        payable.setTotalAmount(new BigDecimal("-30"));
+        payable.setPaidAmount(BigDecimal.ZERO);
+        payable.setDiscountAmount(BigDecimal.ZERO);
+        payable.setUnpaidAmount(new BigDecimal("-30"));
+        payable.setStatus("OPEN");
 
-        when(purchaseOrderMapper.selectOne(any())).thenReturn(order);
-        when(paymentMapper.selectList(any())).thenReturn(List.of(autoPayment));
-        when(payableMapper.findByPurchaseOrderId(1L, 30L)).thenReturn(payable);
-        when(paymentPayableMapper.findByPayableId(1L, 32L)).thenReturn(List.of());
-        when(purchaseOrderItemMapper.findByOrderId(1L, 30L)).thenReturn(List.of());
-        when(purchaseOrderMapper.update(any(ErpPurchaseOrder.class), any(QueryWrapper.class))).thenReturn(1);
+        when(purchaseReturnMapper.selectOne(any())).thenReturn(order);
+        when(purchaseReturnMapper.update(any(ErpPurchaseReturn.class), any(QueryWrapper.class))).thenReturn(1);
+        when(purchaseReturnItemMapper.findByReturnId(1L, 70L)).thenReturn(List.of(item));
+        when(payableMapper.findByPurchaseReturnId(1L, 70L)).thenReturn(payable);
+        when(paymentPayableMapper.findByPayableId(1L, 71L)).thenReturn(List.of());
 
-        service.unapprove(30L);
+        service.cancel(70L, "wrong qty");
 
-        verify(paymentPayableMapper).delete(any(QueryWrapper.class));
-        verify(paymentMapper).deleteById(31L);
-        verify(payableMapper).deleteById(32L);
-        assertThat(order.getStatus()).isEqualTo("DRAFT");
+        assertThat(order.getStatus()).isEqualTo("RED_FLUSHED");
+        assertThat(order.getRemark()).contains("红冲原因：wrong qty");
+        assertThat(payable.getStatus()).isEqualTo("RED_FLUSHED");
+        assertThat(payable.getTotalAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        ArgumentCaptor<com.example.wms.entity.erp.ErpStockTxn> txnCaptor = ArgumentCaptor.forClass(com.example.wms.entity.erp.ErpStockTxn.class);
+        verify(stockTxnMapper).insert(txnCaptor.capture());
+        assertThat(txnCaptor.getValue().getBizType()).isEqualTo("PURCHASE_RETURN_RED_FLUSH");
+        assertThat(txnCaptor.getValue().getQtyDelta()).isEqualByComparingTo("3");
+    }
+
+    @Test
+    void purchaseReturnCancelAllowsAlreadyRedFlushedRefundPayment() {
+        ErpPurchaseReturnServiceImpl service = purchaseReturnService();
+        ErpPurchaseReturn order = new ErpPurchaseReturn();
+        order.setId(80L);
+        order.setTenantId(1L);
+        order.setStatus("APPROVED");
+        order.setReturnType("SCRAP");
+        order.setVersion(0L);
+
+        ErpPurchaseReturnItem item = new ErpPurchaseReturnItem();
+        item.setReturnId(80L);
+        item.setProductId(800L);
+        item.setQty(new BigDecimal("2"));
+
+        ErpAccountsPayable payable = new ErpAccountsPayable();
+        payable.setId(81L);
+        payable.setTenantId(1L);
+        payable.setPurchaseReturnId(80L);
+        payable.setTotalAmount(new BigDecimal("-20"));
+        payable.setUnpaidAmount(BigDecimal.ZERO);
+        payable.setStatus("OPEN");
+
+        ErpPaymentPayable allocation = new ErpPaymentPayable();
+        allocation.setPayableId(81L);
+        allocation.setPaymentId(82L);
+
+        ErpPayment redFlushPayment = new ErpPayment();
+        redFlushPayment.setId(82L);
+        redFlushPayment.setStatus("APPROVED");
+        redFlushPayment.setAmount(new BigDecimal("20"));
+        redFlushPayment.setDiscountAmount(BigDecimal.ZERO);
+
+        when(purchaseReturnMapper.selectOne(any())).thenReturn(order);
+        when(purchaseReturnMapper.update(any(ErpPurchaseReturn.class), any(QueryWrapper.class))).thenReturn(1);
+        when(purchaseReturnItemMapper.findByReturnId(1L, 80L)).thenReturn(List.of(item));
+        when(payableMapper.findByPurchaseReturnId(1L, 80L)).thenReturn(payable);
+        when(paymentPayableMapper.findByPayableId(1L, 81L)).thenReturn(List.of(allocation));
+        when(paymentMapper.selectList(any())).thenReturn(List.of(redFlushPayment));
+
+        service.cancel(80L, "refund reversed");
+
+        assertThat(order.getStatus()).isEqualTo("RED_FLUSHED");
+        assertThat(payable.getStatus()).isEqualTo("RED_FLUSHED");
+    }
+
+    @Test
+    void purchaseReturnListFiltersByBusinessOrderTime() {
+        ErpPurchaseReturnServiceImpl service = purchaseReturnService();
+        ArgumentCaptor<QueryWrapper<ErpPurchaseReturn>> captor = ArgumentCaptor.forClass(QueryWrapper.class);
+        when(purchaseReturnMapper.selectList(any())).thenReturn(List.of());
+
+        service.listAll(null, null, null, Instant.parse("2026-05-01T00:00:00Z"), Instant.parse("2026-05-02T00:00:00Z"));
+
+        verify(purchaseReturnMapper).selectList(captor.capture());
+        assertThat(String.valueOf(captor.getValue().getSqlSegment())).contains("order_at");
+        assertThat(String.valueOf(captor.getValue().getSqlSegment())).doesNotContain("created_at");
     }
 
     @Test
@@ -285,6 +414,21 @@ class ErpFinanceWorkflowTests {
             payableMapper,
             paymentMapper,
             paymentPayableMapper
+        );
+    }
+
+    private ErpPurchaseReturnServiceImpl purchaseReturnService() {
+        return new ErpPurchaseReturnServiceImpl(
+            purchaseReturnMapper,
+            purchaseReturnItemMapper,
+            productMapper,
+            stockBalanceMapper,
+            stockTxnMapper,
+            orderSequenceMapper,
+            payableMapper,
+            paymentMapper,
+            paymentPayableMapper,
+            systemConfigMapper
         );
     }
 }

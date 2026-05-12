@@ -731,41 +731,13 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
     }
 
     private void applyReceivablePaidAmount(Long tenantId, Long receivableId, BigDecimal delta) {
-        if (receivableId == null || delta == null) {
+        if (receivableId == null || delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
             return;
         }
-        ErpAccountsReceivable receivable = erpAccountsReceivableMapper.selectOne(new QueryWrapper<ErpAccountsReceivable>()
-            .eq("tenant_id", tenantId)
-            .eq("id", receivableId));
-        if (receivable == null) {
-            return;
+        ErpAccountsReceivable updated = erpAccountsReceivableMapper.applyPaidDeltaIfInRange(tenantId, receivableId, delta);
+        if (updated == null) {
+            throw new IllegalArgumentException("收款金额不能大于未收金额");
         }
-        BigDecimal paid = receivable.getPaidAmount() == null ? BigDecimal.ZERO : receivable.getPaidAmount();
-        BigDecimal total = receivable.getTotalAmount() == null ? BigDecimal.ZERO : receivable.getTotalAmount();
-        BigDecimal newPaid = paid.add(delta);
-        if (total.compareTo(BigDecimal.ZERO) >= 0) {
-            if (newPaid.compareTo(BigDecimal.ZERO) < 0) {
-                newPaid = BigDecimal.ZERO;
-            }
-            if (newPaid.compareTo(total) > 0) {
-                newPaid = total;
-            }
-        } else {
-            if (newPaid.compareTo(BigDecimal.ZERO) > 0) {
-                newPaid = BigDecimal.ZERO;
-            }
-            if (newPaid.compareTo(total) < 0) {
-                newPaid = total;
-            }
-        }
-        BigDecimal unpaid = total.subtract(newPaid);
-        receivable.setPaidAmount(newPaid);
-        receivable.setUnpaidAmount(unpaid);
-        if (!"RED_FLUSHED".equals(receivable.getStatus())) {
-            receivable.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
-        }
-        receivable.setUpdatedAt(Instant.now());
-        erpAccountsReceivableMapper.updateById(receivable);
     }
 
     private void validateReceiptApproval(Long tenantId, ErpReceipt receipt) {
