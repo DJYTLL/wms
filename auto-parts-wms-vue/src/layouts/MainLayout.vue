@@ -165,6 +165,7 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
 const i18n = useI18n();
 const t = i18n.t;
+const te = i18n.te;
 const router = useRouter();
 const route = useRoute();
 const themeStore = useThemeStore();
@@ -525,11 +526,13 @@ const switchLanguage = async () => {
 const labelFromKey = (key?: string, fallback?: string) => {
   if (!key) return fallback || '';
   const normalizedKey = normalizeMenuKey(key);
-  const translated = t(normalizedKey);
-  if (translated === normalizedKey && fallback) {
+  if (te(normalizedKey)) {
+    return t(normalizedKey);
+  }
+  if (fallback) {
     return fallback;
   }
-  return translated;
+  return key;
 };
 
 const menuLabel = (item: MenuItem) => {

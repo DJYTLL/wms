@@ -22,6 +22,7 @@ import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.service.erp.ErpAssemblyOrderService;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -55,6 +56,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
     private final ErpStockTxnMapper erpStockTxnMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final SystemConfigMapper systemConfigMapper;
+    private final ErpCostService erpCostService;
 
     public ErpAssemblyOrderServiceImpl(ErpAssemblyOrderMapper erpAssemblyOrderMapper,
                                        ErpAssemblyOrderItemMapper erpAssemblyOrderItemMapper,
@@ -62,7 +64,8 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
                                        ErpStockBalanceMapper erpStockBalanceMapper,
                                        ErpStockTxnMapper erpStockTxnMapper,
                                        ErpOrderSequenceMapper erpOrderSequenceMapper,
-                                       SystemConfigMapper systemConfigMapper) {
+                                       SystemConfigMapper systemConfigMapper,
+                                       ErpCostService erpCostService) {
         this.erpAssemblyOrderMapper = erpAssemblyOrderMapper;
         this.erpAssemblyOrderItemMapper = erpAssemblyOrderItemMapper;
         this.erpProductMapper = erpProductMapper;
@@ -70,6 +73,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         this.erpStockTxnMapper = erpStockTxnMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.systemConfigMapper = systemConfigMapper;
+        this.erpCostService = erpCostService;
     }
 
     @Override
@@ -410,7 +414,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
             return;
         }
         BigDecimal inboundUnitCost = order.getUnitCost() == null ? BigDecimal.ZERO : order.getUnitCost();
-        updateProductAvgCost(tenantId, order.getFinishedProductId(), inboundQty, inboundUnitCost);
+        erpCostService.applyInboundAverageCost(tenantId, order.getFinishedProductId(), inboundQty, inboundUnitCost);
     }
 
     private void applyDisassembleCost(Long tenantId, ErpAssemblyOrder order, List<ErpAssemblyOrderItem> items) {
@@ -453,7 +457,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
             item.setUnitCost(unitCost);
             item.setAmount(unitCost.multiply(qty));
             erpAssemblyOrderItemMapper.updateById(item);
-            updateProductAvgCost(tenantId, item.getProductId(), qty, unitCost);
+            erpCostService.applyInboundAverageCost(tenantId, item.getProductId(), qty, unitCost);
         }
     }
 
@@ -461,41 +465,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         if (productId == null) {
             return BigDecimal.ZERO;
         }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null || product.getCostPrice() == null) {
-            return BigDecimal.ZERO;
-        }
-        return product.getCostPrice();
-    }
-
-    private void updateProductAvgCost(Long tenantId, Long productId, BigDecimal inboundQty, BigDecimal inboundUnitCost) {
-        if (productId == null || inboundQty == null || inboundUnitCost == null) {
-            return;
-        }
-        if (inboundQty.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null) {
-            return;
-        }
-        BigDecimal oldQty = erpStockBalanceMapper.sumQtyByProduct(tenantId, productId);
-        if (oldQty == null) {
-            oldQty = BigDecimal.ZERO;
-        }
-        BigDecimal oldCost = product.getCostPrice() == null ? BigDecimal.ZERO : product.getCostPrice();
-        BigDecimal newQty = oldQty.add(inboundQty);
-        if (newQty.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        BigDecimal totalCost = oldCost.multiply(oldQty).add(inboundUnitCost.multiply(inboundQty));
-        BigDecimal newCost = totalCost.divide(newQty, 4, RoundingMode.HALF_UP);
-        product.setCostPrice(newCost);
-        erpProductMapper.updateById(product);
+        return erpCostService.getProductCost(tenantId, productId);
     }
 
     private QueryWrapper<ErpAssemblyOrder> baseWrapper(String keyword, String status, String orderType, Instant startAt, Instant endAt) {

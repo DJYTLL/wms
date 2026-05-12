@@ -168,43 +168,6 @@ const routes: Array<RouteRecordRaw> = [
         component: () => import('../views/system/TenantManagement.vue'),
         meta: { title: '租户管理', permission: 'tenant:view' }
       },
-      // --- 基本信息管理 ---
-      {
-        path: 'basic/warehouse-management',
-        name: 'warehouse-management',
-        component: () => import('../views/basic/WarehouseManagement.vue'),
-        meta: { title: '仓库管理', permission: 'warehouse:view' }
-      },
-      {
-        path: 'basic/shelf-management',
-        name: 'shelf-management',
-        component: () => import('../views/basic/ShelfManagement.vue'),
-        meta: { title: '货架管理', permission: 'shelf:view' }
-      },
-      {
-        path: 'basic/product-management',
-        name: 'product-management',
-        component: () => import('../views/basic/ProductManagement.vue'),
-        meta: { title: '商品管理', permission: 'product:view' }
-      },
-      {
-        path: 'basic/supplier-management',
-        name: 'supplier-management',
-        component: () => import('../views/basic/SupplierManagement.vue'),
-        meta: { title: '供应商管理', permission: 'supplier:view' }
-      },
-      {
-        path: 'basic/category-management',
-        name: 'category-management',
-        component: () => import('../views/basic/CategoryManagement.vue'),
-        meta: { title: '商品分类管理', permission: 'category:view' }
-      },
-      {
-        path: 'basic/unit-management',
-        name: 'unit-management',
-        component: () => import('../views/basic/UnitManagement.vue'),
-        meta: { title: '计量单位管理', permission: 'unit:view' }
-      },
       // --- 进销存 ---
       {
         path: 'erp/products',

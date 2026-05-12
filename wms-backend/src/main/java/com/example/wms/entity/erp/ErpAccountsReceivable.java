@@ -34,8 +34,20 @@ public class ErpAccountsReceivable extends TenantAuditableSoftDeleteEntity {
     @TableField("settlement_method")
     private String settlementMethod;
 
+    @TableField("source_type")
+    private String sourceType;
+
+    @TableField("source_id")
+    private Long sourceId;
+
     @TableField("remark")
     private String remark;
+
+    @TableField("red_flush_source_type")
+    private String redFlushSourceType;
+
+    @TableField("red_flush_source_id")
+    private Long redFlushSourceId;
 
     @TableField("print_count")
     private Integer printCount;
@@ -107,12 +119,44 @@ public class ErpAccountsReceivable extends TenantAuditableSoftDeleteEntity {
         this.settlementMethod = settlementMethod;
     }
 
+    public String getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(String sourceType) {
+        this.sourceType = sourceType;
+    }
+
+    public Long getSourceId() {
+        return sourceId;
+    }
+
+    public void setSourceId(Long sourceId) {
+        this.sourceId = sourceId;
+    }
+
     public String getRemark() {
         return remark;
     }
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getRedFlushSourceType() {
+        return redFlushSourceType;
+    }
+
+    public void setRedFlushSourceType(String redFlushSourceType) {
+        this.redFlushSourceType = redFlushSourceType;
+    }
+
+    public Long getRedFlushSourceId() {
+        return redFlushSourceId;
+    }
+
+    public void setRedFlushSourceId(Long redFlushSourceId) {
+        this.redFlushSourceId = redFlushSourceId;
     }
 
     public Integer getPrintCount() {

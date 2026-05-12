@@ -108,41 +108,6 @@ public final class PermissionSeedProvider {
             new PermissionSeed("column:tenant-management:status", "租户管理-状态列", "租户管理状态列显示"),
             new PermissionSeed("column:tenant-management:createdAt", "租户管理-创建时间列", "租户管理创建时间列显示"),
 
-            new PermissionSeed("column:warehouse-management:name", "仓库管理-名称列", "仓库管理名称列显示"),
-            new PermissionSeed("column:warehouse-management:code", "仓库管理-编码列", "仓库管理编码列显示"),
-            new PermissionSeed("column:warehouse-management:address", "仓库管理-地址列", "仓库管理地址列显示"),
-            new PermissionSeed("column:warehouse-management:status", "仓库管理-状态列", "仓库管理状态列显示"),
-
-            new PermissionSeed("column:shelf-management:name", "货架管理-名称列", "货架管理名称列显示"),
-            new PermissionSeed("column:shelf-management:shelfCode", "货架管理-编码列", "货架管理编码列显示"),
-            new PermissionSeed("column:shelf-management:warehouseLabel", "货架管理-仓库列", "货架管理仓库列显示"),
-            new PermissionSeed("column:shelf-management:capacity", "货架管理-容量列", "货架管理容量列显示"),
-            new PermissionSeed("column:shelf-management:status", "货架管理-状态列", "货架管理状态列显示"),
-
-            new PermissionSeed("column:product-management:name", "商品管理-名称列", "商品管理名称列显示"),
-            new PermissionSeed("column:product-management:sku", "商品管理-编码列", "商品管理编码列显示"),
-            new PermissionSeed("column:product-management:price", "商品管理-价格列", "商品管理价格列显示"),
-            new PermissionSeed("column:product-management:unit", "商品管理-单位列", "商品管理单位列显示"),
-            new PermissionSeed("column:product-management:categoryLabel", "商品管理-分类列", "商品管理分类列显示"),
-            new PermissionSeed("column:product-management:warehouseLabel", "商品管理-仓库列", "商品管理仓库列显示"),
-            new PermissionSeed("column:product-management:shelfLabel", "商品管理-货架列", "商品管理货架列显示"),
-            new PermissionSeed("column:product-management:status", "商品管理-状态列", "商品管理状态列显示"),
-
-            new PermissionSeed("column:supplier-management:name", "供应商管理-名称列", "供应商管理名称列显示"),
-            new PermissionSeed("column:supplier-management:contactPerson", "供应商管理-联系人列", "供应商管理联系人列显示"),
-            new PermissionSeed("column:supplier-management:phone", "供应商管理-电话列", "供应商管理电话列显示"),
-            new PermissionSeed("column:supplier-management:email", "供应商管理-邮箱列", "供应商管理邮箱列显示"),
-            new PermissionSeed("column:supplier-management:status", "供应商管理-状态列", "供应商管理状态列显示"),
-
-            new PermissionSeed("column:category-management:name", "分类管理-名称列", "分类管理名称列显示"),
-            new PermissionSeed("column:category-management:code", "分类管理-编码列", "分类管理编码列显示"),
-            new PermissionSeed("column:category-management:description", "分类管理-描述列", "分类管理描述列显示"),
-            new PermissionSeed("column:category-management:status", "分类管理-状态列", "分类管理状态列显示"),
-
-            new PermissionSeed("column:unit-management:name", "单位管理-名称列", "单位管理名称列显示"),
-            new PermissionSeed("column:unit-management:symbol", "单位管理-符号列", "单位管理符号列显示"),
-            new PermissionSeed("column:unit-management:status", "单位管理-状态列", "单位管理状态列显示"),
-
             new PermissionSeed("column:inbound-management:orderNumber", "入库管理-单号列", "入库管理单号列显示"),
             new PermissionSeed("column:inbound-management:type", "入库管理-类型列", "入库管理类型列显示"),
             new PermissionSeed("column:inbound-management:supplier", "入库管理-供应商列", "入库管理供应商列显示"),

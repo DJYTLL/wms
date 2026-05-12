@@ -74,6 +74,13 @@
             </template>
           </el-table-column>
           <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+          <el-table-column v-if="canShow('refundStatus')" :label="$t('field.refundStatus')" min-width="150">
+            <template #default="{ row }">
+              <el-tag :type="financeStatusTagType(row.refundStatus)" size="small">
+                {{ formatFinanceStatus(row.refundStatus, row.refundUnpaidAmount) }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
@@ -224,6 +231,8 @@ interface SaleReturn {
   customerId?: number;
   status: string;
   totalAmount?: number;
+  refundStatus?: string;
+  refundUnpaidAmount?: number;
   createdAt?: string;
 }
 
@@ -282,7 +291,7 @@ const canCreate = computed(() => {
   return true;
 });
 
-const defaultColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'createdAt'];
+const defaultColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'refundStatus', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-sale-return', defaultColumns);
 
 const canShow = (key: string) => isVisible(key);
@@ -300,6 +309,29 @@ const formatStatus = (status: string) => {
     RED_FLUSHED: t('status.redFlushed')
   };
   return mapping[status] || status;
+};
+
+const financeStatusTagType = (status?: string) => {
+  if (status === 'SETTLED') return 'success';
+  if (status === 'RED_FLUSHED') return 'danger';
+  if (status === 'OPEN') return 'warning';
+  return 'info';
+};
+
+const formatFinanceStatus = (status?: string, unpaidAmount?: number) => {
+  if (!status) return '-';
+  if (status === 'SETTLED') return t('status.settled');
+  if (status === 'RED_FLUSHED') return t('status.redFlushed');
+  if (status === 'OPEN') {
+    const unpaid = Math.abs(Number(unpaidAmount || 0));
+    return unpaid > 0 ? `${t('status.open')} ${formatAmount(unpaid)}` : t('status.open');
+  }
+  return status;
+};
+
+const formatAmount = (value?: number) => {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? num.toFixed(2) : '0.00';
 };
 
 const formatDateTime = (value?: string) => {

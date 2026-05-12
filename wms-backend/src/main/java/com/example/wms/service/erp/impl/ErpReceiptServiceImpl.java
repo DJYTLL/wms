@@ -535,9 +535,11 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
             throw new IllegalArgumentException("仅草稿状态可审核");
         }
         validateReceiptApproval(tenantId, receipt);
-        receipt.setStatus(STATUS_APPROVED);
-        receipt.setUpdatedAt(Instant.now());
-        erpReceiptMapper.updateById(receipt);
+        ErpReceipt approvedReceipt = erpReceiptMapper.approveDraft(tenantId, id);
+        if (approvedReceipt == null) {
+            throw new IllegalArgumentException("收款单状态已变化，请刷新重试");
+        }
+        receipt = approvedReceipt;
 
         List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceiptId(tenantId, receipt.getId());
         if (allocations != null && !allocations.isEmpty()) {
@@ -564,15 +566,18 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         if (reasonText.isEmpty()) {
             throw new IllegalArgumentException("请填写红冲原因");
         }
-        receipt.setStatus(STATUS_RED_FLUSHED);
         String originRemark = receipt.getRemark();
+        String redFlushRemark;
         if (originRemark == null || originRemark.isBlank()) {
-            receipt.setRemark("红冲原因：" + reasonText);
+            redFlushRemark = "红冲原因：" + reasonText;
         } else {
-            receipt.setRemark(originRemark + " | 红冲原因：" + reasonText);
+            redFlushRemark = originRemark + " | 红冲原因：" + reasonText;
         }
-        receipt.setUpdatedAt(Instant.now());
-        erpReceiptMapper.updateById(receipt);
+        ErpReceipt redFlushedReceipt = erpReceiptMapper.redFlushApproved(tenantId, id, redFlushRemark);
+        if (redFlushedReceipt == null) {
+            throw new IllegalArgumentException("收款单状态已变化，请刷新重试");
+        }
+        receipt = redFlushedReceipt;
 
         ErpReceipt redReceipt = new ErpReceipt();
         redReceipt.setTenantId(tenantId);
@@ -580,10 +585,13 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         redReceipt.setSaleOrderId(receipt.getSaleOrderId());
         redReceipt.setReceiptNo(generateReceiptNo(tenantId));
         redReceipt.setCustomerId(receipt.getCustomerId());
-        redReceipt.setAmount(receipt.getAmount().negate());
+        BigDecimal receiptAmount = receipt.getAmount() == null ? BigDecimal.ZERO : receipt.getAmount();
+        redReceipt.setAmount(receiptAmount.negate());
         redReceipt.setDiscountAmount(receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount().negate());
         redReceipt.setSettlementMethod(receipt.getSettlementMethod());
         redReceipt.setStatus(STATUS_APPROVED);
+        redReceipt.setRedFlushSourceType("RECEIPT");
+        redReceipt.setRedFlushSourceId(receipt.getId());
         redReceipt.setReceivedAt(Instant.now());
         redReceipt.setRemark("红冲收款单：" + reasonText);
         redReceipt.setCreatedAt(Instant.now());

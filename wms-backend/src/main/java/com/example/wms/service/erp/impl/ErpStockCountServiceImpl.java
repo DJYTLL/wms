@@ -22,6 +22,7 @@ import com.example.wms.mapper.erp.ErpStockCountItemMapper;
 import com.example.wms.mapper.erp.ErpStockCountMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.service.erp.ErpStockCountService;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -55,6 +56,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final ErpProductMapper erpProductMapper;
+    private final ErpCostService erpCostService;
 
     public ErpStockCountServiceImpl(ErpStockCountMapper erpStockCountMapper,
                                     ErpStockCountItemMapper erpStockCountItemMapper,
@@ -62,7 +64,8 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
                                     ErpStockTxnMapper erpStockTxnMapper,
                                     ErpOrderSequenceMapper erpOrderSequenceMapper,
                                     SystemConfigMapper systemConfigMapper,
-                                    ErpProductMapper erpProductMapper) {
+                                    ErpProductMapper erpProductMapper,
+                                    ErpCostService erpCostService) {
         this.erpStockCountMapper = erpStockCountMapper;
         this.erpStockCountItemMapper = erpStockCountItemMapper;
         this.erpStockBalanceMapper = erpStockBalanceMapper;
@@ -70,6 +73,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.systemConfigMapper = systemConfigMapper;
         this.erpProductMapper = erpProductMapper;
+        this.erpCostService = erpCostService;
     }
 
     @Override
@@ -243,6 +247,10 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
             if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
                 continue;
             }
+            if (delta.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal unitCost = erpCostService.getProductCost(tenantId, item.getProductId());
+                erpCostService.reverseInboundAverageCost(tenantId, item.getProductId(), delta, unitCost);
+            }
             applyStockDelta(tenantId, count, item, delta.negate(), operator, "STOCK_INIT_RED_FLUSH", "初始库存红冲");
         }
         count.setStatus(STATUS_RED_FLUSHED);
@@ -350,7 +358,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
                                  String remark) {
         BigDecimal unitCost = getProductCost(tenantId, item.getProductId());
         if (delta.compareTo(BigDecimal.ZERO) > 0) {
-            updateProductAvgCost(tenantId, item.getProductId(), delta, unitCost);
+            erpCostService.applyInboundAverageCost(tenantId, item.getProductId(), delta, unitCost);
         }
         ErpStockBalance balance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), item.getWarehouseId(), item.getLocationId());
         BigDecimal before = balance == null ? BigDecimal.ZERO : balance.getQtyOnHand();
@@ -441,44 +449,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
     }
 
     private BigDecimal getProductCost(Long tenantId, Long productId) {
-        if (productId == null) {
-            return BigDecimal.ZERO;
-        }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null || product.getCostPrice() == null) {
-            return BigDecimal.ZERO;
-        }
-        return product.getCostPrice();
-    }
-
-    private void updateProductAvgCost(Long tenantId, Long productId, BigDecimal inboundQty, BigDecimal inboundUnitCost) {
-        if (productId == null || inboundQty == null || inboundUnitCost == null) {
-            return;
-        }
-        if (inboundQty.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null) {
-            return;
-        }
-        BigDecimal oldQty = erpStockBalanceMapper.sumQtyByProduct(tenantId, productId);
-        if (oldQty == null) {
-            oldQty = BigDecimal.ZERO;
-        }
-        BigDecimal oldCost = product.getCostPrice() == null ? BigDecimal.ZERO : product.getCostPrice();
-        BigDecimal newQty = oldQty.add(inboundQty);
-        if (newQty.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        BigDecimal totalCost = oldCost.multiply(oldQty).add(inboundUnitCost.multiply(inboundQty));
-        BigDecimal newCost = totalCost.divide(newQty, 4, RoundingMode.HALF_UP);
-        product.setCostPrice(newCost);
-        erpProductMapper.updateById(product);
+        return erpCostService.getProductCost(tenantId, productId);
     }
 
     private String ensureCountNo(Long tenantId, String provided, String countType) {

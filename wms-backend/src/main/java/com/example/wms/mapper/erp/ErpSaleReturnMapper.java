@@ -21,4 +21,39 @@ public interface ErpSaleReturnMapper extends BaseMapper<ErpSaleReturn> {
           AND deleted_at IS NULL
         """)
     long countApprovedBySaleOrderId(@Param("tenantId") Long tenantId, @Param("saleOrderId") Long saleOrderId);
+
+    @Select("""
+        UPDATE erp_sale_return
+        SET status = 'APPROVED',
+            approved_by = #{operator},
+            approved_at = NOW(),
+            updated_at = NOW(),
+            version = COALESCE(version, 0) + 1
+        WHERE tenant_id = #{tenantId}
+          AND id = #{id}
+          AND status = 'DRAFT'
+          AND deleted_at IS NULL
+        RETURNING *
+        """)
+    ErpSaleReturn approveDraft(@Param("tenantId") Long tenantId,
+                               @Param("id") Long id,
+                               @Param("operator") String operator);
+
+    @Select("""
+        UPDATE erp_sale_return
+        SET status = 'RED_FLUSHED',
+            red_flush_source_type = 'SALE_RETURN',
+            red_flush_source_id = id,
+            remark = #{remark},
+            updated_at = NOW(),
+            version = COALESCE(version, 0) + 1
+        WHERE tenant_id = #{tenantId}
+          AND id = #{id}
+          AND status = 'APPROVED'
+          AND deleted_at IS NULL
+        RETURNING *
+        """)
+    ErpSaleReturn redFlushApproved(@Param("tenantId") Long tenantId,
+                                   @Param("id") Long id,
+                                   @Param("remark") String remark);
 }

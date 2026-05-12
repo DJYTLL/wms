@@ -25,6 +25,20 @@ public interface ErpAccountsReceivableMapper extends BaseMapper<ErpAccountsRecei
     ErpAccountsReceivable findBySaleOrderId(@Param("tenantId") Long tenantId, @Param("saleOrderId") Long saleOrderId);
 
     @Select("""
+        SELECT *
+        FROM erp_accounts_receivable
+        WHERE tenant_id = #{tenantId}
+          AND source_type = #{sourceType}
+          AND source_id = #{sourceId}
+          AND deleted_at IS NULL
+        ORDER BY id DESC
+        LIMIT 1
+        """)
+    ErpAccountsReceivable findBySource(@Param("tenantId") Long tenantId,
+                                       @Param("sourceType") String sourceType,
+                                       @Param("sourceId") Long sourceId);
+
+    @Select("""
         SELECT c.id AS customer_id,
                c.name AS customer_name,
                COALESCE(SUM(ar.unpaid_amount), 0) AS total_debt

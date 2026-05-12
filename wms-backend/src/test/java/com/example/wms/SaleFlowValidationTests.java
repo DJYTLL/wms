@@ -4,12 +4,18 @@ import com.example.wms.dto.erp.ErpSaleOrderCreateRequest;
 import com.example.wms.dto.erp.ErpSaleOrderItemRequest;
 import com.example.wms.dto.erp.ErpSaleReturnCreateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnItemRequest;
+import com.example.wms.entity.erp.ErpCustomer;
+import com.example.wms.entity.erp.ErpLocation;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.entity.erp.ErpSaleOrderItem;
+import com.example.wms.entity.erp.ErpSettlementMethod;
+import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
+import com.example.wms.mapper.erp.ErpCustomerMapper;
+import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
@@ -18,10 +24,13 @@ import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnItemMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
+import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.impl.ErpSaleOrderServiceImpl;
 import com.example.wms.service.erp.impl.ErpSaleReturnServiceImpl;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +44,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +55,14 @@ class SaleFlowValidationTests {
     private ErpSaleOrderItemMapper saleOrderItemMapper;
     @Mock
     private ErpProductMapper productMapper;
+    @Mock
+    private ErpCustomerMapper customerMapper;
+    @Mock
+    private ErpWarehouseMapper warehouseMapper;
+    @Mock
+    private ErpLocationMapper locationMapper;
+    @Mock
+    private ErpSettlementMethodMapper settlementMethodMapper;
     @Mock
     private ErpStockBalanceMapper stockBalanceMapper;
     @Mock
@@ -77,6 +95,7 @@ class SaleFlowValidationTests {
     @Test
     void saleCreateRejectsNegativePaidAmount() {
         ErpSaleOrderServiceImpl service = saleOrderService();
+        stubValidMasterData();
         when(productMapper.selectOne(any())).thenReturn(product(100L));
 
         ErpSaleOrderCreateRequest request = new ErpSaleOrderCreateRequest(
@@ -99,6 +118,7 @@ class SaleFlowValidationTests {
     @Test
     void saleCreateRejectsSettlementAmountsExceedingTotal() {
         ErpSaleOrderServiceImpl service = saleOrderService();
+        stubValidMasterData();
         when(productMapper.selectOne(any())).thenReturn(product(100L));
 
         ErpSaleOrderCreateRequest request = new ErpSaleOrderCreateRequest(
@@ -178,6 +198,7 @@ class SaleFlowValidationTests {
     @Test
     void saleReturnCreateRejectsNegativeRefundAmount() {
         ErpSaleReturnServiceImpl service = saleReturnService();
+        stubValidMasterData();
         when(saleOrderMapper.selectOne(any())).thenReturn(approvedSaleOrder(99L, 10L));
         when(saleOrderItemMapper.findByOrderId(1L, 99L)).thenReturn(List.of(soldItem(100L, "2")));
         when(saleReturnMapper.selectList(any())).thenReturn(List.of());
@@ -201,11 +222,67 @@ class SaleFlowValidationTests {
             .hasMessage("退款金额不能小于0");
     }
 
+    @Test
+    void saleReturnCreateRejectsAmountExceedingOriginalSaleAmount() {
+        ErpSaleReturnServiceImpl service = saleReturnService();
+        when(saleOrderMapper.selectOne(any())).thenReturn(approvedSaleOrder(99L, 10L));
+        when(saleOrderItemMapper.findByOrderId(1L, 99L)).thenReturn(List.of(soldItem(100L, "2")));
+        when(saleReturnMapper.selectList(any())).thenReturn(List.of());
+
+        ErpSaleReturnCreateRequest request = new ErpSaleReturnCreateRequest(
+            "SR-003",
+            "2026-05-12 10:00:00",
+            "RESTOCK",
+            10L,
+            99L,
+            "CASH",
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            List.of(new ErpSaleReturnItemRequest(
+                100L,
+                1L,
+                1L,
+                BigDecimal.ONE,
+                new BigDecimal("300"),
+                null,
+                BigDecimal.ZERO,
+                1,
+                null
+            )),
+            null
+        );
+
+        assertThatThrownBy(() -> service.create(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("商品退货金额不能超过原销售可退金额");
+    }
+
+    @Test
+    void saleApproveUsesAtomicDraftTransitionBeforeSideEffects() {
+        ErpSaleOrderServiceImpl service = saleOrderService();
+        ErpSaleOrder order = draftSaleOrder(77L, 10L);
+        order.setPaidAmount(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTotalAmountInclTax(new BigDecimal("100"));
+
+        when(saleOrderMapper.selectOne(any())).thenReturn(order);
+        when(saleOrderItemMapper.findByOrderId(1L, 77L)).thenReturn(List.of(soldItem(100L, "1")));
+        when(saleOrderMapper.approveDraft(eq(1L), eq(77L), any())).thenReturn(null);
+
+        assertThatThrownBy(() -> service.approve(77L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("销售单状态已变化，请刷新重试");
+    }
+
     private ErpSaleOrderServiceImpl saleOrderService() {
         return new ErpSaleOrderServiceImpl(
             saleOrderMapper,
             saleOrderItemMapper,
             productMapper,
+            customerMapper,
+            warehouseMapper,
+            locationMapper,
+            settlementMethodMapper,
             stockBalanceMapper,
             stockTxnMapper,
             orderSequenceMapper,
@@ -213,7 +290,8 @@ class SaleFlowValidationTests {
             receiptMapper,
             receiptReceivableMapper,
             saleReturnMapper,
-            systemConfigMapper
+            systemConfigMapper,
+            costService()
         );
     }
 
@@ -222,6 +300,10 @@ class SaleFlowValidationTests {
             saleReturnMapper,
             saleReturnItemMapper,
             productMapper,
+            customerMapper,
+            warehouseMapper,
+            locationMapper,
+            settlementMethodMapper,
             stockBalanceMapper,
             stockTxnMapper,
             orderSequenceMapper,
@@ -230,8 +312,13 @@ class SaleFlowValidationTests {
             receiptReceivableMapper,
             saleOrderItemMapper,
             saleOrderMapper,
-            systemConfigMapper
+            systemConfigMapper,
+            costService()
         );
+    }
+
+    private ErpCostService costService() {
+        return new ErpCostService(productMapper, stockBalanceMapper);
     }
 
     private ErpProduct product(Long id) {
@@ -239,7 +326,44 @@ class SaleFlowValidationTests {
         product.setId(id);
         product.setCode("P-" + id);
         product.setName("Product-" + id);
+        product.setDefaultWarehouseId(1L);
         return product;
+    }
+
+    private void stubValidMasterData() {
+        when(customerMapper.selectOne(any())).thenReturn(customer(10L));
+        when(settlementMethodMapper.findByCode(1L, "CASH")).thenReturn(settlementMethod("CASH"));
+        when(warehouseMapper.selectOne(any())).thenReturn(warehouse(1L));
+        when(locationMapper.selectOne(any())).thenReturn(location(1L, 1L));
+    }
+
+    private ErpCustomer customer(Long id) {
+        ErpCustomer customer = new ErpCustomer();
+        customer.setId(id);
+        customer.setEnabled(true);
+        return customer;
+    }
+
+    private ErpWarehouse warehouse(Long id) {
+        ErpWarehouse warehouse = new ErpWarehouse();
+        warehouse.setId(id);
+        warehouse.setEnabled(true);
+        return warehouse;
+    }
+
+    private ErpLocation location(Long id, Long warehouseId) {
+        ErpLocation location = new ErpLocation();
+        location.setId(id);
+        location.setWarehouseId(warehouseId);
+        location.setEnabled(true);
+        return location;
+    }
+
+    private ErpSettlementMethod settlementMethod(String code) {
+        ErpSettlementMethod method = new ErpSettlementMethod();
+        method.setCode(code);
+        method.setEnabled(true);
+        return method;
     }
 
     private ErpSaleOrder approvedSaleOrder(Long id, Long customerId) {
@@ -251,10 +375,18 @@ class SaleFlowValidationTests {
         return order;
     }
 
+    private ErpSaleOrder draftSaleOrder(Long id, Long customerId) {
+        ErpSaleOrder order = approvedSaleOrder(id, customerId);
+        order.setStatus("DRAFT");
+        order.setVersion(0L);
+        return order;
+    }
+
     private ErpSaleOrderItem soldItem(Long productId, String qty) {
         ErpSaleOrderItem item = new ErpSaleOrderItem();
         item.setProductId(productId);
         item.setQty(new BigDecimal(qty));
+        item.setAmountInclTax(new BigDecimal("100").multiply(new BigDecimal(qty)));
         return item;
     }
 

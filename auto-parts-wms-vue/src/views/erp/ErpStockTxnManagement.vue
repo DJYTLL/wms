@@ -36,8 +36,20 @@
     <div class="table-card stock-txn-card">
       <div class="table-body stock-txn-body">
         <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('txnNo')" prop="txnNo" :label="$t('field.txnNo')" min-width="160" />
+          <el-table-column v-if="canShow('docNo')" :label="$t('field.docNo')" min-width="180">
+            <template #default="{ row }">
+              <el-button
+                v-if="canPreviewDoc(row)"
+                link
+                type="primary"
+                class="doc-no-link"
+                @click="handlePreviewDoc(row)"
+              >
+                {{ displayDocNo(row) }}
+              </el-button>
+              <span v-else>{{ displayDocNo(row) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column v-if="canShow('bizType')" prop="bizType" :label="$t('field.bizType')" min-width="200">
             <template #default="{ row }">
               {{ formatBizType(row.bizType) }}
@@ -91,17 +103,26 @@
         />
       </div>
     </div>
+
+    <PrintPreviewDialog
+      v-model="printPreviewVisible"
+      :doc-type="printPreviewDocType"
+      :doc-id="printPreviewDocId"
+      :title="printPreviewTitle"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
 interface OptionItem {
   id: number;
@@ -113,6 +134,7 @@ interface OptionItem {
 interface StockTxn {
   id: number;
   txnNo?: string;
+  docNo?: string;
   bizType?: string;
   bizId?: number;
   productId?: number;
@@ -126,7 +148,14 @@ interface StockTxn {
   createdAt?: string;
 }
 
+type PrintDocType = 'SALE_ORDER' | 'PURCHASE_ORDER' | 'SALE_RETURN' | 'PURCHASE_RETURN' | 'STOCK_COUNT' | 'STOCK_INIT';
+type DocRouteInfo = {
+  endpoint: string;
+  noPath: Array<'order' | 'count' | 'orderNo' | 'countNo'>;
+};
+
 const { t } = useI18n();
+const router = useRouter();
 const { notifyError } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 
@@ -143,11 +172,15 @@ const locationOptions = ref<OptionItem[]>([]);
 const productFilter = ref<number | null>(null);
 const bizTypeFilter = ref('');
 const bizIdFilter = ref('');
+const printPreviewVisible = ref(false);
+const printPreviewDocId = ref<number | null>(null);
+const printPreviewDocType = ref<PrintDocType>('SALE_ORDER');
+const printPreviewTitle = ref('');
 
-const defaultColumns = ['txnNo', 'bizType', 'product', 'warehouse', 'location', 'qtyDelta', 'qtyBefore', 'qtyAfter', 'unitCost', 'totalCost', 'createdAt'];
+const defaultColumns = ['docNo', 'bizType', 'product', 'warehouse', 'location', 'qtyDelta', 'qtyBefore', 'qtyAfter', 'unitCost', 'totalCost', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-stock-txn', defaultColumns);
 
-const canShow = (key: string) => isVisible(key);
+const canShow = (key: string) => key === 'docNo' || isVisible(key);
 
 const formatDateTime = (value?: string) => {
   if (!value) return '-';
@@ -186,6 +219,109 @@ const getLocationName = (id?: number) => {
   return locationOptions.value.find(item => item.id === id)?.name || t('field.unassignedLocation');
 };
 
+const displayDocNo = (row: StockTxn) => row.docNo || '-';
+
+const previewDocTypeMap: Record<string, PrintDocType> = {
+  PURCHASE_APPROVE: 'PURCHASE_ORDER',
+  PURCHASE_UNAPPROVE: 'PURCHASE_ORDER',
+  PURCHASE_CANCEL: 'PURCHASE_ORDER',
+  PURCHASE_RETURN: 'PURCHASE_RETURN',
+  PURCHASE_RETURN_SCRAP: 'PURCHASE_RETURN',
+  PURCHASE_RETURN_RED_FLUSH: 'PURCHASE_RETURN',
+  SALE_APPROVE: 'SALE_ORDER',
+  SALE_RED_FLUSH: 'SALE_ORDER',
+  SALE_RETURN_RESTOCK: 'SALE_RETURN',
+  SALE_RETURN_SCRAP: 'SALE_RETURN',
+  SALE_RETURN_RED_FLUSH: 'SALE_RETURN',
+  STOCK_COUNT: 'STOCK_COUNT',
+  STOCK_INIT: 'STOCK_INIT',
+  STOCK_INIT_RED_FLUSH: 'STOCK_INIT'
+};
+
+const assemblyViewRouteMap: Record<string, string> = {
+  ASSEMBLE_OUT: 'erp-assemble-order-view',
+  ASSEMBLE_IN: 'erp-assemble-order-view',
+  DISASSEMBLE_OUT: 'erp-disassemble-order-view',
+  DISASSEMBLE_IN: 'erp-disassemble-order-view'
+};
+
+const docRouteMap: Record<string, DocRouteInfo> = {
+  PURCHASE_APPROVE: { endpoint: 'purchase-orders', noPath: ['order', 'orderNo'] },
+  PURCHASE_UNAPPROVE: { endpoint: 'purchase-orders', noPath: ['order', 'orderNo'] },
+  PURCHASE_CANCEL: { endpoint: 'purchase-orders', noPath: ['order', 'orderNo'] },
+  PURCHASE_RETURN: { endpoint: 'purchase-returns', noPath: ['order', 'orderNo'] },
+  PURCHASE_RETURN_SCRAP: { endpoint: 'purchase-returns', noPath: ['order', 'orderNo'] },
+  PURCHASE_RETURN_RED_FLUSH: { endpoint: 'purchase-returns', noPath: ['order', 'orderNo'] },
+  SALE_APPROVE: { endpoint: 'sale-orders', noPath: ['order', 'orderNo'] },
+  SALE_RED_FLUSH: { endpoint: 'sale-orders', noPath: ['order', 'orderNo'] },
+  SALE_RETURN_RESTOCK: { endpoint: 'sale-returns', noPath: ['order', 'orderNo'] },
+  SALE_RETURN_SCRAP: { endpoint: 'sale-returns', noPath: ['order', 'orderNo'] },
+  SALE_RETURN_RED_FLUSH: { endpoint: 'sale-returns', noPath: ['order', 'orderNo'] },
+  STOCK_COUNT: { endpoint: 'stock-counts', noPath: ['count', 'countNo'] },
+  STOCK_INIT: { endpoint: 'stock-inits', noPath: ['count', 'countNo'] },
+  STOCK_INIT_RED_FLUSH: { endpoint: 'stock-inits', noPath: ['count', 'countNo'] },
+  ASSEMBLE_OUT: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] },
+  ASSEMBLE_IN: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] },
+  DISASSEMBLE_OUT: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] },
+  DISASSEMBLE_IN: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] }
+};
+
+const canPreviewDoc = (row: StockTxn) => {
+  if (!row.bizType || !row.bizId) return false;
+  return !!previewDocTypeMap[row.bizType] || !!assemblyViewRouteMap[row.bizType];
+};
+
+const handlePreviewDoc = (row: StockTxn) => {
+  if (!row.bizType || !row.bizId) return;
+  const printDocType = previewDocTypeMap[row.bizType];
+  if (printDocType) {
+    printPreviewDocType.value = printDocType;
+    printPreviewDocId.value = row.bizId;
+    printPreviewTitle.value = `${t('action.preview')}：${displayDocNo(row)}`;
+    printPreviewVisible.value = true;
+    return;
+  }
+  const routeName = assemblyViewRouteMap[row.bizType];
+  if (routeName) {
+    router.push({ name: routeName, params: { id: row.bizId } });
+  }
+};
+
+const pickDocNo = (detail: any, noPath: DocRouteInfo['noPath']) => {
+  let current = detail;
+  for (const key of noPath) {
+    current = current?.[key];
+  }
+  return typeof current === 'string' && current.trim() ? current.trim() : '';
+};
+
+const resolveDocNos = async (items: StockTxn[]) => {
+  const cache = new Map<string, Promise<string>>();
+  const resolveOne = (row: StockTxn) => {
+    if (row.docNo || !row.bizType || !row.bizId) {
+      return Promise.resolve(row.docNo || '');
+    }
+    const routeInfo = docRouteMap[row.bizType];
+    if (!routeInfo) {
+      return Promise.resolve('');
+    }
+    const cacheKey = `${routeInfo.endpoint}:${row.bizId}`;
+    if (!cache.has(cacheKey)) {
+      cache.set(cacheKey, request.get(`/erp/${routeInfo.endpoint}/${row.bizId}`)
+        .then((res: any) => pickDocNo(res.data?.data, routeInfo.noPath))
+        .catch(() => ''));
+    }
+    return cache.get(cacheKey)!;
+  };
+
+  await Promise.all(items.map(async (row) => {
+    const docNo = await resolveOne(row);
+    if (docNo) {
+      row.docNo = docNo;
+    }
+  }));
+  return items;
+};
 
 const fetchOptions = async () => {
   try {
@@ -222,7 +358,7 @@ const fetchList = async () => {
 
     const res: any = await request.get('/erp/stock/txns/page', { params });
     if (res.data.code === 200) {
-      tableData.value = res.data.data.items || [];
+      tableData.value = await resolveDocNos(res.data.data.items || []);
       total.value = res.data.data.total || 0;
     }
   } catch (error) {
@@ -265,5 +401,10 @@ onActivated(() => {
 .stock-txn-body {
   max-height: 100%;
   overflow: auto;
+}
+
+.doc-no-link {
+  padding: 0;
+  font-weight: 600;
 }
 </style>

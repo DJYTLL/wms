@@ -70,6 +70,18 @@ public class ErpSaleReturn {
     @TableField("remark")
     private String remark;
 
+    @TableField("red_flush_source_type")
+    private String redFlushSourceType;
+
+    @TableField("red_flush_source_id")
+    private Long redFlushSourceId;
+
+    @TableField(exist = false)
+    private String refundStatus;
+
+    @TableField(exist = false)
+    private BigDecimal refundUnpaidAmount;
+
     @TableField("print_count")
     private Integer printCount;
 
@@ -242,6 +254,38 @@ public class ErpSaleReturn {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getRedFlushSourceType() {
+        return redFlushSourceType;
+    }
+
+    public void setRedFlushSourceType(String redFlushSourceType) {
+        this.redFlushSourceType = redFlushSourceType;
+    }
+
+    public Long getRedFlushSourceId() {
+        return redFlushSourceId;
+    }
+
+    public void setRedFlushSourceId(Long redFlushSourceId) {
+        this.redFlushSourceId = redFlushSourceId;
+    }
+
+    public String getRefundStatus() {
+        return refundStatus;
+    }
+
+    public void setRefundStatus(String refundStatus) {
+        this.refundStatus = refundStatus;
+    }
+
+    public BigDecimal getRefundUnpaidAmount() {
+        return refundUnpaidAmount;
+    }
+
+    public void setRefundUnpaidAmount(BigDecimal refundUnpaidAmount) {
+        this.refundUnpaidAmount = refundUnpaidAmount;
     }
 
     public Integer getPrintCount() {

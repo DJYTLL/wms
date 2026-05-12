@@ -28,6 +28,7 @@ import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.service.erp.ErpPurchaseReturnService;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -67,6 +68,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private final ErpPaymentMapper erpPaymentMapper;
     private final ErpPaymentPayableMapper erpPaymentPayableMapper;
     private final SystemConfigMapper systemConfigMapper;
+    private final ErpCostService erpCostService;
 
     public ErpPurchaseReturnServiceImpl(ErpPurchaseReturnMapper erpPurchaseReturnMapper,
                                         ErpPurchaseReturnItemMapper erpPurchaseReturnItemMapper,
@@ -77,7 +79,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                                         ErpAccountsPayableMapper erpAccountsPayableMapper,
                                         ErpPaymentMapper erpPaymentMapper,
                                         ErpPaymentPayableMapper erpPaymentPayableMapper,
-                                        SystemConfigMapper systemConfigMapper) {
+                                        SystemConfigMapper systemConfigMapper,
+                                        ErpCostService erpCostService) {
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
         this.erpPurchaseReturnItemMapper = erpPurchaseReturnItemMapper;
         this.erpProductMapper = erpProductMapper;
@@ -88,6 +91,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         this.erpPaymentMapper = erpPaymentMapper;
         this.erpPaymentPayableMapper = erpPaymentPayableMapper;
         this.systemConfigMapper = systemConfigMapper;
+        this.erpCostService = erpCostService;
     }
 
     @Override
@@ -429,6 +433,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private void applyStockDelta(Long tenantId, ErpPurchaseReturnItem item, BigDecimal delta, String bizType, Long orderId, boolean updateBalance) {
         Long warehouseId = item.getWarehouseId();
         Long locationId = item.getLocationId();
+        BigDecimal unitCost = getProductCost(tenantId, item.getProductId());
+        if (updateBalance && delta.compareTo(BigDecimal.ZERO) > 0) {
+            erpCostService.applyInboundAverageCost(tenantId, item.getProductId(), delta, unitCost);
+        }
         ErpStockBalance balance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
         BigDecimal before = balance == null ? BigDecimal.ZERO : balance.getQtyOnHand();
         BigDecimal after = before.add(delta);
@@ -472,7 +480,6 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         txn.setQtyDelta(delta);
         txn.setQtyBefore(before);
         txn.setQtyAfter(after);
-        BigDecimal unitCost = getProductCost(tenantId, item.getProductId());
         BigDecimal totalCost = unitCost.multiply(delta).setScale(4, RoundingMode.HALF_UP);
         txn.setUnitCost(unitCost);
         txn.setTotalCost(totalCost);
@@ -544,16 +551,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     }
 
     private BigDecimal getProductCost(Long tenantId, Long productId) {
-        if (productId == null) {
-            return BigDecimal.ZERO;
-        }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null || product.getCostPrice() == null) {
-            return BigDecimal.ZERO;
-        }
-        return product.getCostPrice();
+        return erpCostService.getProductCost(tenantId, productId);
     }
 
     private String resolveReturnType(String type) {

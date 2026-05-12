@@ -17,14 +17,6 @@ public final class MenuSeedProvider {
             new MenuSeed("out-normal", "outbound", "普通出库", "out-normal", "/outbound/normal", null, "outbound:view", 10),
             new MenuSeed("out-urgent", "outbound", "加急出库", "out-urgent", "/outbound/urgent", null, "outbound:view", 20),
 
-            new MenuSeed("basic", null, "基本信息管理", "basic", null, ICON_BASIC, null, 30),
-            new MenuSeed("warehouse-management", "basic", "仓库管理", "warehouse-management", "/basic/warehouse-management", null, "warehouse:view", 10),
-            new MenuSeed("shelf-management", "basic", "货架管理", "shelf-management", "/basic/shelf-management", null, "shelf:view", 20),
-            new MenuSeed("product-management", "basic", "商品管理", "product-management", "/basic/product-management", null, "product:view", 30),
-            new MenuSeed("supplier-management", "basic", "供应商管理", "supplier-management", "/basic/supplier-management", null, "supplier:view", 40),
-            new MenuSeed("category-management", "basic", "商品分类管理", "category-management", "/basic/category-management", null, "category:view", 50),
-            new MenuSeed("unit-management", "basic", "计量单位管理", "unit-management", "/basic/unit-management", null, "unit:view", 60),
-
             new MenuSeed("erp", null, "进销存", "erp", null, ICON_WAREHOUSE, null, 35),
             new MenuSeed("erp-basic", "erp", "基础资料", "erp-basic", null, ICON_BASIC, null, 10),
             new MenuSeed("erp-product", "erp-basic", "商品管理", "erp-product", "/erp/products", null, "erp-product:view", 10),

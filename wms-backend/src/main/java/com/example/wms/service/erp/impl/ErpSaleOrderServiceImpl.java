@@ -14,6 +14,8 @@ import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.*;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
+import com.example.wms.mapper.erp.ErpCustomerMapper;
+import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
@@ -21,9 +23,12 @@ import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
+import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.ErpSaleOrderService;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -55,10 +60,15 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private static final String RECEIPT_ORDER_TYPE = "RECEIPT";
     private static final String AUTO_RECEIVABLE_REMARK = "销售单审核自动生成";
     private static final String AUTO_RECEIPT_REMARK = "销售单审核自动收款";
+    private static final String SOURCE_SALE_ORDER = "SALE_ORDER";
 
     private final ErpSaleOrderMapper erpSaleOrderMapper;
     private final ErpSaleOrderItemMapper erpSaleOrderItemMapper;
     private final ErpProductMapper erpProductMapper;
+    private final ErpCustomerMapper erpCustomerMapper;
+    private final ErpWarehouseMapper erpWarehouseMapper;
+    private final ErpLocationMapper erpLocationMapper;
+    private final ErpSettlementMethodMapper erpSettlementMethodMapper;
     private final ErpStockBalanceMapper erpStockBalanceMapper;
     private final ErpStockTxnMapper erpStockTxnMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
@@ -67,10 +77,15 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private final ErpReceiptReceivableMapper erpReceiptReceivableMapper;
     private final ErpSaleReturnMapper erpSaleReturnMapper;
     private final SystemConfigMapper systemConfigMapper;
+    private final ErpCostService erpCostService;
 
     public ErpSaleOrderServiceImpl(ErpSaleOrderMapper erpSaleOrderMapper,
                                    ErpSaleOrderItemMapper erpSaleOrderItemMapper,
                                    ErpProductMapper erpProductMapper,
+                                   ErpCustomerMapper erpCustomerMapper,
+                                   ErpWarehouseMapper erpWarehouseMapper,
+                                   ErpLocationMapper erpLocationMapper,
+                                   ErpSettlementMethodMapper erpSettlementMethodMapper,
                                    ErpStockBalanceMapper erpStockBalanceMapper,
                                    ErpStockTxnMapper erpStockTxnMapper,
                                    ErpOrderSequenceMapper erpOrderSequenceMapper,
@@ -78,10 +93,15 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                                     ErpReceiptMapper erpReceiptMapper,
                                     ErpReceiptReceivableMapper erpReceiptReceivableMapper,
                                     ErpSaleReturnMapper erpSaleReturnMapper,
-                                    SystemConfigMapper systemConfigMapper) {
+                                    SystemConfigMapper systemConfigMapper,
+                                    ErpCostService erpCostService) {
         this.erpSaleOrderMapper = erpSaleOrderMapper;
         this.erpSaleOrderItemMapper = erpSaleOrderItemMapper;
         this.erpProductMapper = erpProductMapper;
+        this.erpCustomerMapper = erpCustomerMapper;
+        this.erpWarehouseMapper = erpWarehouseMapper;
+        this.erpLocationMapper = erpLocationMapper;
+        this.erpSettlementMethodMapper = erpSettlementMethodMapper;
         this.erpStockBalanceMapper = erpStockBalanceMapper;
         this.erpStockTxnMapper = erpStockTxnMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
@@ -90,13 +110,16 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         this.erpReceiptReceivableMapper = erpReceiptReceivableMapper;
         this.erpSaleReturnMapper = erpSaleReturnMapper;
         this.systemConfigMapper = systemConfigMapper;
+        this.erpCostService = erpCostService;
     }
 
     @Override
     public List<ErpSaleOrder> listAll(String keyword, String status, Long customerId, Instant startAt, Instant endAt) {
         QueryWrapper<ErpSaleOrder> wrapper = baseWrapper(keyword, status, customerId, startAt, endAt);
         wrapper.orderByDesc("updated_at");
-        return erpSaleOrderMapper.selectList(wrapper);
+        List<ErpSaleOrder> orders = erpSaleOrderMapper.selectList(wrapper);
+        enrichFlowStatus(tenantId(), orders);
+        return orders;
     }
 
     @Override
@@ -105,6 +128,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         QueryWrapper<ErpSaleOrder> wrapper = baseWrapper(keyword, status, customerId, startAt, endAt);
         wrapper.orderByDesc("updated_at");
         Page<ErpSaleOrder> result = erpSaleOrderMapper.selectPage(pageReq, wrapper);
+        enrichFlowStatus(tenantId(), result.getRecords());
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
     }
 
@@ -142,6 +166,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setOrderAt(orderAt == null ? Instant.now() : orderAt);
         order.setSettlementMethod(normalizeSettlementMethod(request.settlementMethod(), DEFAULT_SETTLEMENT_METHOD));
         order.setDeliveryMethod(normalizeCode(request.deliveryMethod()));
+        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod());
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setTotalAmount(BigDecimal.ZERO);
@@ -187,6 +212,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setSettlementMethod(normalizeSettlementMethod(request.settlementMethod(),
             order.getSettlementMethod() == null ? DEFAULT_SETTLEMENT_METHOD : order.getSettlementMethod()));
         order.setDeliveryMethod(normalizeCode(request.deliveryMethod()));
+        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod());
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
@@ -237,15 +263,14 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
         validateSettlementAmounts(order);
+        ErpSaleOrder approved = erpSaleOrderMapper.approveDraft(tenantId, id, resolveCurrentUsername());
+        if (approved == null) {
+            throw new IllegalArgumentException("销售单状态已变化，请刷新重试");
+        }
         for (ErpSaleOrderItem item : items) {
             applyStockDelta(tenantId, item, item.getQty().negate(), "SALE_APPROVE", id);
         }
         ensureReceivableAndReceipt(tenantId, order);
-        order.setStatus(STATUS_APPROVED);
-        order.setApprovedBy(resolveCurrentUsername());
-        order.setApprovedAt(Instant.now());
-        order.setUpdatedAt(Instant.now());
-        updateWithVersion(tenantId, order);
     }
 
     @Transactional
@@ -284,6 +309,11 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (hasApprovedSaleReturn(tenantId, order.getId())) {
             throw new IllegalArgumentException("请先红冲销售退货单");
         }
+        String redFlushRemark = appendRedFlushReason(order.getRemark(), reason);
+        ErpSaleOrder redFlushed = erpSaleOrderMapper.redFlushApproved(tenantId, id, redFlushRemark);
+        if (redFlushed == null) {
+            throw new IllegalArgumentException("销售单状态已变化，请刷新重试");
+        }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
         for (ErpSaleOrderItem item : items) {
             applyStockDelta(tenantId, item, item.getQty(), "SALE_RED_FLUSH", id);
@@ -295,13 +325,32 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             receivable.setUnpaidAmount(BigDecimal.ZERO);
             receivable.setStatus("RED_FLUSHED");
             receivable.setRemark(appendRedFlushReason(receivable.getRemark(), reason));
+            receivable.setRedFlushSourceType(SOURCE_SALE_ORDER);
+            receivable.setRedFlushSourceId(order.getId());
             receivable.setUpdatedAt(Instant.now());
             erpAccountsReceivableMapper.updateById(receivable);
         }
-        order.setStatus(STATUS_RED_FLUSHED);
-        order.setRemark(appendRedFlushReason(order.getRemark(), reason));
-        order.setUpdatedAt(Instant.now());
-        updateWithVersion(tenantId, order);
+    }
+
+    private Long tenantId() {
+        return TenantContext.requireTenantId();
+    }
+
+    private void enrichFlowStatus(Long tenantId, List<ErpSaleOrder> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return;
+        }
+        for (ErpSaleOrder order : orders) {
+            if (order == null || order.getId() == null) {
+                continue;
+            }
+            ErpAccountsReceivable receivable = erpAccountsReceivableMapper.findBySaleOrderId(tenantId, order.getId());
+            if (receivable != null) {
+                order.setReceivableStatus(receivable.getStatus());
+                order.setReceivableUnpaidAmount(receivable.getUnpaidAmount());
+            }
+            order.setApprovedReturnCount(erpSaleReturnMapper.countApprovedBySaleOrderId(tenantId, order.getId()));
+        }
     }
 
     @Override
@@ -385,6 +434,45 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         return wrapper;
     }
 
+    private void validateHeaderMasterData(Long tenantId, Long customerId, String settlementMethod) {
+        if (customerId == null) {
+            throw new IllegalArgumentException("请选择客户");
+        }
+        ErpCustomer customer = erpCustomerMapper.selectOne(new QueryWrapper<ErpCustomer>()
+            .eq("tenant_id", tenantId)
+            .eq("id", customerId));
+        if (customer == null || Boolean.FALSE.equals(customer.getEnabled())) {
+            throw new IllegalArgumentException("客户不存在或已停用");
+        }
+        if (settlementMethod == null || settlementMethod.isBlank()) {
+            throw new IllegalArgumentException("请选择结算方式");
+        }
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        if (method == null || Boolean.FALSE.equals(method.getEnabled())) {
+            throw new IllegalArgumentException("结算方式不存在或已停用");
+        }
+    }
+
+    private void validateStockBinding(Long tenantId, Long warehouseId, Long locationId) {
+        if (warehouseId == null) {
+            throw new IllegalArgumentException("请选择仓库");
+        }
+        ErpWarehouse warehouse = erpWarehouseMapper.selectOne(new QueryWrapper<ErpWarehouse>()
+            .eq("tenant_id", tenantId)
+            .eq("id", warehouseId));
+        if (warehouse == null || Boolean.FALSE.equals(warehouse.getEnabled())) {
+            throw new IllegalArgumentException("仓库不存在或已停用");
+        }
+        if (locationId != null) {
+            ErpLocation location = erpLocationMapper.selectOne(new QueryWrapper<ErpLocation>()
+                .eq("tenant_id", tenantId)
+                .eq("id", locationId));
+            if (location == null || Boolean.FALSE.equals(location.getEnabled()) || !warehouseId.equals(location.getWarehouseId())) {
+                throw new IllegalArgumentException("库位不存在、已停用或不属于所选仓库");
+            }
+        }
+    }
+
     private List<ErpSaleOrderItem> buildItems(Long tenantId, Long orderId, List<ErpSaleOrderItemRequest> requests) {
         List<ErpSaleOrderItem> items = new ArrayList<>();
         int index = 1;
@@ -410,6 +498,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 warehouseId = request.warehouseId();
                 locationId = request.locationId();
             }
+            validateStockBinding(tenantId, warehouseId, locationId);
             item.setWarehouseId(warehouseId);
             item.setLocationId(locationId);
             if (request.qty() == null || request.qty().compareTo(BigDecimal.ZERO) <= 0) {
@@ -571,6 +660,10 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         Long warehouseId = item.getWarehouseId();
         Long locationId = item.getLocationId();
         String operator = resolveCurrentUsername();
+        BigDecimal unitCost = resolveSaleStockUnitCost(tenantId, item.getProductId(), bizType, orderId);
+        if (delta.compareTo(BigDecimal.ZERO) > 0) {
+            erpCostService.applyInboundAverageCost(tenantId, item.getProductId(), delta, unitCost);
+        }
         ErpStockBalance updatedBalance;
         if (delta.compareTo(BigDecimal.ZERO) < 0) {
             updatedBalance = erpStockBalanceMapper.addQtyIfEnough(
@@ -603,7 +696,6 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         txn.setQtyDelta(delta);
         txn.setQtyBefore(before);
         txn.setQtyAfter(after);
-        BigDecimal unitCost = getProductCost(tenantId, item.getProductId());
         BigDecimal totalCost = unitCost.multiply(delta).setScale(4, RoundingMode.HALF_UP);
         txn.setUnitCost(unitCost);
         txn.setTotalCost(totalCost);
@@ -614,22 +706,19 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         erpStockTxnMapper.insert(txn);
     }
 
+    private BigDecimal resolveSaleStockUnitCost(Long tenantId, Long productId, String bizType, Long orderId) {
+        if ("SALE_RED_FLUSH".equals(bizType) && orderId != null && productId != null) {
+            BigDecimal originalCost = erpStockTxnMapper.findSaleIssueUnitCost(tenantId, orderId, productId);
+            if (originalCost != null && originalCost.compareTo(BigDecimal.ZERO) > 0) {
+                return originalCost;
+            }
+        }
+        return erpCostService.getProductCost(tenantId, productId);
+    }
+
     private String resolveCurrentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication == null ? "system" : authentication.getName();
-    }
-
-    private BigDecimal getProductCost(Long tenantId, Long productId) {
-        if (productId == null) {
-            return BigDecimal.ZERO;
-        }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null || product.getCostPrice() == null) {
-            return BigDecimal.ZERO;
-        }
-        return product.getCostPrice();
     }
 
     private String generateTxnNo() {
@@ -689,6 +778,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             ar.setUnpaidAmount(unpaid);
             ar.setStatus(status);
             ar.setSettlementMethod(order.getSettlementMethod());
+            ar.setSourceType(SOURCE_SALE_ORDER);
+            ar.setSourceId(order.getId());
             ar.setRemark(AUTO_RECEIVABLE_REMARK);
             ar.setCreatedAt(Instant.now());
             ar.setUpdatedAt(Instant.now());
@@ -703,6 +794,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             existing.setUnpaidAmount(unpaid);
             existing.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
             existing.setSettlementMethod(order.getSettlementMethod());
+            existing.setSourceType(SOURCE_SALE_ORDER);
+            existing.setSourceId(order.getId());
             existing.setRemark(AUTO_RECEIVABLE_REMARK);
             existing.setUpdatedAt(Instant.now());
             erpAccountsReceivableMapper.updateById(existing);

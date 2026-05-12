@@ -12,4 +12,7 @@ public interface ErpProductMapper extends BaseMapper<ErpProduct> {
     // 按编码查询
     @Select("SELECT * FROM erp_product WHERE tenant_id = #{tenantId} AND code = #{code} AND deleted_at IS NULL")
     ErpProduct findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
+
+    @Select("SELECT * FROM erp_product WHERE tenant_id = #{tenantId} AND id = #{productId} AND deleted_at IS NULL FOR UPDATE")
+    ErpProduct findByIdForUpdate(@Param("tenantId") Long tenantId, @Param("productId") Long productId);
 }

@@ -10,6 +10,8 @@ import com.example.wms.dto.erp.ErpSaleReturnItemRequest;
 import com.example.wms.dto.erp.ErpSaleReturnUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsReceivable;
+import com.example.wms.entity.erp.ErpCustomer;
+import com.example.wms.entity.erp.ErpLocation;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpReceiptReceivable;
@@ -17,10 +19,14 @@ import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.entity.erp.ErpSaleOrderItem;
 import com.example.wms.entity.erp.ErpSaleReturn;
 import com.example.wms.entity.erp.ErpSaleReturnItem;
+import com.example.wms.entity.erp.ErpSettlementMethod;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockTxn;
+import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
+import com.example.wms.mapper.erp.ErpCustomerMapper;
+import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
@@ -29,9 +35,12 @@ import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnItemMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
+import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.ErpSaleReturnService;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -62,6 +71,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private static final String ORDER_TYPE = "SALE_RETURN";
     private static final String RECEIVABLE_ORDER_TYPE = "AR_RETURN";
     private static final String RECEIPT_ORDER_TYPE = "RECEIPT";
+    private static final String SOURCE_SALE_RETURN = "SALE_RETURN";
 
     private static final String RETURN_RESTOCK = "RESTOCK";
     private static final String RETURN_SCRAP = "SCRAP";
@@ -69,6 +79,10 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private final ErpSaleReturnMapper erpSaleReturnMapper;
     private final ErpSaleReturnItemMapper erpSaleReturnItemMapper;
     private final ErpProductMapper erpProductMapper;
+    private final ErpCustomerMapper erpCustomerMapper;
+    private final ErpWarehouseMapper erpWarehouseMapper;
+    private final ErpLocationMapper erpLocationMapper;
+    private final ErpSettlementMethodMapper erpSettlementMethodMapper;
     private final ErpStockBalanceMapper erpStockBalanceMapper;
     private final ErpStockTxnMapper erpStockTxnMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
@@ -78,10 +92,15 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private final ErpSaleOrderItemMapper erpSaleOrderItemMapper;
     private final ErpSaleOrderMapper erpSaleOrderMapper;
     private final SystemConfigMapper systemConfigMapper;
+    private final ErpCostService erpCostService;
 
     public ErpSaleReturnServiceImpl(ErpSaleReturnMapper erpSaleReturnMapper,
                                     ErpSaleReturnItemMapper erpSaleReturnItemMapper,
                                     ErpProductMapper erpProductMapper,
+                                    ErpCustomerMapper erpCustomerMapper,
+                                    ErpWarehouseMapper erpWarehouseMapper,
+                                    ErpLocationMapper erpLocationMapper,
+                                    ErpSettlementMethodMapper erpSettlementMethodMapper,
                                     ErpStockBalanceMapper erpStockBalanceMapper,
                                     ErpStockTxnMapper erpStockTxnMapper,
                                     ErpOrderSequenceMapper erpOrderSequenceMapper,
@@ -90,10 +109,15 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
                                     ErpReceiptReceivableMapper erpReceiptReceivableMapper,
                                     ErpSaleOrderItemMapper erpSaleOrderItemMapper,
                                     ErpSaleOrderMapper erpSaleOrderMapper,
-                                    SystemConfigMapper systemConfigMapper) {
+                                    SystemConfigMapper systemConfigMapper,
+                                    ErpCostService erpCostService) {
         this.erpSaleReturnMapper = erpSaleReturnMapper;
         this.erpSaleReturnItemMapper = erpSaleReturnItemMapper;
         this.erpProductMapper = erpProductMapper;
+        this.erpCustomerMapper = erpCustomerMapper;
+        this.erpWarehouseMapper = erpWarehouseMapper;
+        this.erpLocationMapper = erpLocationMapper;
+        this.erpSettlementMethodMapper = erpSettlementMethodMapper;
         this.erpStockBalanceMapper = erpStockBalanceMapper;
         this.erpStockTxnMapper = erpStockTxnMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
@@ -103,13 +127,16 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         this.erpSaleOrderItemMapper = erpSaleOrderItemMapper;
         this.erpSaleOrderMapper = erpSaleOrderMapper;
         this.systemConfigMapper = systemConfigMapper;
+        this.erpCostService = erpCostService;
     }
 
     @Override
     public List<ErpSaleReturn> listAll(String keyword, String status, Long customerId, Instant startAt, Instant endAt) {
         QueryWrapper<ErpSaleReturn> wrapper = baseWrapper(keyword, status, customerId, startAt, endAt);
         wrapper.orderByDesc("updated_at");
-        return erpSaleReturnMapper.selectList(wrapper);
+        List<ErpSaleReturn> returns = erpSaleReturnMapper.selectList(wrapper);
+        enrichFlowStatus(TenantContext.requireTenantId(), returns);
+        return returns;
     }
 
     @Override
@@ -118,6 +145,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         QueryWrapper<ErpSaleReturn> wrapper = baseWrapper(keyword, status, customerId, startAt, endAt);
         wrapper.orderByDesc("updated_at");
         Page<ErpSaleReturn> result = erpSaleReturnMapper.selectPage(pageReq, wrapper);
+        enrichFlowStatus(TenantContext.requireTenantId(), result.getRecords());
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
     }
 
@@ -155,6 +183,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setSaleOrderId(request.saleOrderId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setSettlementMethod(request.settlementMethod());
+        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod());
         order.setPaidAmount(request.paidAmount());
         order.setDiscountAmount(request.discountAmount());
         order.setVersion(0L);
@@ -189,6 +218,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setSaleOrderId(request.saleOrderId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setSettlementMethod(request.settlementMethod());
+        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod());
         order.setPaidAmount(request.paidAmount());
         order.setDiscountAmount(request.discountAmount());
         order.setRemark(request.remark());
@@ -235,11 +265,10 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         List<ErpSaleReturnItem> items = erpSaleReturnItemMapper.findByReturnId(tenantId, id);
         validateSaleReturnSourceFromItems(tenantId, order.getSaleOrderId(), order.getCustomerId(), items, id);
         validateSettlementAmounts(order);
-        order.setStatus(STATUS_APPROVED);
-        order.setApprovedBy(resolveCurrentUsername());
-        order.setApprovedAt(Instant.now());
-        order.setUpdatedAt(Instant.now());
-        updateWithVersion(tenantId, order);
+        ErpSaleReturn approved = erpSaleReturnMapper.approveDraft(tenantId, id, resolveCurrentUsername());
+        if (approved == null) {
+            throw new IllegalArgumentException("销售退货单状态已变化，请刷新重试");
+        }
 
         String returnType = resolveReturnType(order.getReturnType());
         for (ErpSaleReturnItem item : items) {
@@ -247,9 +276,9 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
                 throw new IllegalArgumentException("退货数量不能为空");
             }
             if (RETURN_RESTOCK.equals(returnType)) {
-                applyStockDelta(tenantId, item, item.getQty(), "SALE_RETURN_RESTOCK", id, true);
+                applyStockDelta(tenantId, item, item.getQty(), "SALE_RETURN_RESTOCK", id, order.getSaleOrderId(), true);
             } else {
-                applyStockDelta(tenantId, item, BigDecimal.ZERO, "SALE_RETURN_SCRAP", id, false);
+                applyStockDelta(tenantId, item, BigDecimal.ZERO, "SALE_RETURN_SCRAP", id, order.getSaleOrderId(), false);
             }
         }
         createReturnReceivable(tenantId, order, resolveReturnTotal(order));
@@ -272,26 +301,31 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (returnReceivable != null && hasApprovedRefundReceipt(tenantId, returnReceivable.getId())) {
             throw new IllegalArgumentException("请先红冲退款单");
         }
-        order.setStatus(STATUS_RED_FLUSHED);
         String originRemark = order.getRemark();
+        String redFlushRemark;
         if (originRemark == null || originRemark.isBlank()) {
-            order.setRemark("红冲原因：" + reasonText);
+            redFlushRemark = "红冲原因：" + reasonText;
         } else {
-            order.setRemark(originRemark + " | 红冲原因：" + reasonText);
+            redFlushRemark = originRemark + " | 红冲原因：" + reasonText;
         }
-        order.setUpdatedAt(Instant.now());
-        updateWithVersion(tenantId, order);
+        ErpSaleReturn redFlushed = erpSaleReturnMapper.redFlushApproved(tenantId, id, redFlushRemark);
+        if (redFlushed == null) {
+            throw new IllegalArgumentException("销售退货单状态已变化，请刷新重试");
+        }
 
         List<ErpSaleReturnItem> items = erpSaleReturnItemMapper.findByReturnId(tenantId, id);
         String returnType = resolveReturnType(order.getReturnType());
+        if (RETURN_RESTOCK.equals(returnType)) {
+            reverseRestockCosts(tenantId, order.getSaleOrderId(), items);
+        }
         for (ErpSaleReturnItem item : items) {
             if (item.getQty() == null) {
                 throw new IllegalArgumentException("退货数量不能为空");
             }
             if (RETURN_RESTOCK.equals(returnType)) {
-                applyStockDelta(tenantId, item, item.getQty().negate(), "SALE_RETURN_RED_FLUSH", id, true);
+                applyStockDelta(tenantId, item, item.getQty().negate(), "SALE_RETURN_RED_FLUSH", id, order.getSaleOrderId(), true);
             } else {
-                applyStockDelta(tenantId, item, BigDecimal.ZERO, "SALE_RETURN_RED_FLUSH", id, false);
+                applyStockDelta(tenantId, item, BigDecimal.ZERO, "SALE_RETURN_RED_FLUSH", id, order.getSaleOrderId(), false);
             }
         }
         redFlushReturnReceivable(tenantId, order, reasonText);
@@ -332,6 +366,45 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         return wrapper;
     }
 
+    private void validateHeaderMasterData(Long tenantId, Long customerId, String settlementMethod) {
+        if (customerId == null) {
+            throw new IllegalArgumentException("请选择客户");
+        }
+        ErpCustomer customer = erpCustomerMapper.selectOne(new QueryWrapper<ErpCustomer>()
+            .eq("tenant_id", tenantId)
+            .eq("id", customerId));
+        if (customer == null || Boolean.FALSE.equals(customer.getEnabled())) {
+            throw new IllegalArgumentException("客户不存在或已停用");
+        }
+        if (settlementMethod == null || settlementMethod.isBlank()) {
+            throw new IllegalArgumentException("请选择结算方式");
+        }
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        if (method == null || Boolean.FALSE.equals(method.getEnabled())) {
+            throw new IllegalArgumentException("结算方式不存在或已停用");
+        }
+    }
+
+    private void validateStockBinding(Long tenantId, Long warehouseId, Long locationId) {
+        if (warehouseId == null) {
+            throw new IllegalArgumentException("请选择仓库");
+        }
+        ErpWarehouse warehouse = erpWarehouseMapper.selectOne(new QueryWrapper<ErpWarehouse>()
+            .eq("tenant_id", tenantId)
+            .eq("id", warehouseId));
+        if (warehouse == null || Boolean.FALSE.equals(warehouse.getEnabled())) {
+            throw new IllegalArgumentException("仓库不存在或已停用");
+        }
+        if (locationId != null) {
+            ErpLocation location = erpLocationMapper.selectOne(new QueryWrapper<ErpLocation>()
+                .eq("tenant_id", tenantId)
+                .eq("id", locationId));
+            if (location == null || Boolean.FALSE.equals(location.getEnabled()) || !warehouseId.equals(location.getWarehouseId())) {
+                throw new IllegalArgumentException("库位不存在、已停用或不属于所选仓库");
+            }
+        }
+    }
+
     private List<ErpSaleReturnItem> buildItems(Long tenantId, Long returnId, List<ErpSaleReturnItemRequest> requests) {
         List<ErpSaleReturnItem> items = new ArrayList<>();
         int index = 1;
@@ -357,6 +430,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
                 warehouseId = request.warehouseId();
                 locationId = request.locationId();
             }
+            validateStockBinding(tenantId, warehouseId, locationId);
             item.setWarehouseId(warehouseId);
             item.setLocationId(locationId);
             if (request.qty() == null || request.qty().compareTo(BigDecimal.ZERO) <= 0) {
@@ -405,7 +479,14 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (customerId == null) {
             throw new IllegalArgumentException("销售退货必须选择客户");
         }
-        validateSaleReturnSource(tenantId, saleOrderId, customerId, aggregateRequestedQty(requests), currentReturnId);
+        validateSaleReturnSource(
+            tenantId,
+            saleOrderId,
+            customerId,
+            aggregateRequestedQty(requests),
+            aggregateRequestedAmountInclTax(requests),
+            currentReturnId
+        );
     }
 
     private void validateSaleReturnSourceFromItems(Long tenantId,
@@ -419,13 +500,21 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (customerId == null) {
             throw new IllegalArgumentException("销售退货必须选择客户");
         }
-        validateSaleReturnSource(tenantId, saleOrderId, customerId, aggregateExistingQty(items), currentReturnId);
+        validateSaleReturnSource(
+            tenantId,
+            saleOrderId,
+            customerId,
+            aggregateExistingQty(items),
+            aggregateExistingAmountInclTax(items),
+            currentReturnId
+        );
     }
 
     private void validateSaleReturnSource(Long tenantId,
                                           Long saleOrderId,
                                           Long customerId,
                                           Map<Long, BigDecimal> requestQtyByProduct,
+                                          Map<Long, BigDecimal> requestAmountByProduct,
                                           Long currentReturnId) {
         ErpSaleOrder saleOrder = loadApprovedSaleOrder(tenantId, saleOrderId);
         if (!customerId.equals(saleOrder.getCustomerId())) {
@@ -437,14 +526,21 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
 
         List<ErpSaleOrderItem> saleItems = erpSaleOrderItemMapper.findByOrderId(tenantId, saleOrderId);
         Map<Long, BigDecimal> soldQtyByProduct = new HashMap<>();
+        Map<Long, BigDecimal> soldAmountByProduct = new HashMap<>();
         for (ErpSaleOrderItem saleItem : saleItems) {
             if (saleItem.getProductId() == null || saleItem.getQty() == null) {
                 continue;
             }
             soldQtyByProduct.merge(saleItem.getProductId(), saleItem.getQty(), BigDecimal::add);
+            soldAmountByProduct.merge(
+                saleItem.getProductId(),
+                saleItem.getAmountInclTax() == null ? BigDecimal.ZERO : saleItem.getAmountInclTax(),
+                BigDecimal::add
+            );
         }
 
         Map<Long, BigDecimal> approvedReturnQtyByProduct = loadApprovedReturnQtyByProduct(tenantId, saleOrderId, currentReturnId);
+        Map<Long, BigDecimal> approvedReturnAmountByProduct = loadApprovedReturnAmountByProduct(tenantId, saleOrderId, currentReturnId);
         for (Map.Entry<Long, BigDecimal> entry : requestQtyByProduct.entrySet()) {
             Long productId = entry.getKey();
             BigDecimal requestQty = entry.getValue();
@@ -459,6 +555,13 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             }
             if (requestQty.compareTo(remainingQty) > 0) {
                 throw new IllegalArgumentException("商品退货数量不能超过原销售可退数量");
+            }
+            BigDecimal requestAmount = requestAmountByProduct.getOrDefault(productId, BigDecimal.ZERO);
+            BigDecimal soldAmount = soldAmountByProduct.getOrDefault(productId, BigDecimal.ZERO);
+            BigDecimal approvedAmount = approvedReturnAmountByProduct.getOrDefault(productId, BigDecimal.ZERO);
+            BigDecimal remainingAmount = soldAmount.subtract(approvedAmount);
+            if (requestAmount.compareTo(remainingAmount) > 0) {
+                throw new IllegalArgumentException("商品退货金额不能超过原销售可退金额");
             }
         }
     }
@@ -490,6 +593,28 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         return qtyByProduct;
     }
 
+    private Map<Long, BigDecimal> aggregateRequestedAmountInclTax(List<ErpSaleReturnItemRequest> requests) {
+        Map<Long, BigDecimal> amountByProduct = new HashMap<>();
+        if (requests == null) {
+            return amountByProduct;
+        }
+        for (ErpSaleReturnItemRequest request : requests) {
+            if (request == null || request.productId() == null || request.qty() == null) {
+                continue;
+            }
+            BigDecimal taxRate = request.taxRate() == null ? BigDecimal.ZERO : request.taxRate();
+            BigDecimal priceInclTax = request.priceInclTax();
+            if (priceInclTax == null && request.price() != null) {
+                priceInclTax = calcPriceInclTax(request.price(), taxRate);
+            }
+            if (priceInclTax == null) {
+                priceInclTax = BigDecimal.ZERO;
+            }
+            amountByProduct.merge(request.productId(), priceInclTax.multiply(request.qty()), BigDecimal::add);
+        }
+        return amountByProduct;
+    }
+
     private Map<Long, BigDecimal> aggregateExistingQty(List<ErpSaleReturnItem> items) {
         Map<Long, BigDecimal> qtyByProduct = new HashMap<>();
         if (items == null) {
@@ -502,6 +627,24 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             qtyByProduct.merge(item.getProductId(), item.getQty(), BigDecimal::add);
         }
         return qtyByProduct;
+    }
+
+    private Map<Long, BigDecimal> aggregateExistingAmountInclTax(List<ErpSaleReturnItem> items) {
+        Map<Long, BigDecimal> amountByProduct = new HashMap<>();
+        if (items == null) {
+            return amountByProduct;
+        }
+        for (ErpSaleReturnItem item : items) {
+            if (item == null || item.getProductId() == null) {
+                continue;
+            }
+            amountByProduct.merge(
+                item.getProductId(),
+                item.getAmountInclTax() == null ? BigDecimal.ZERO : item.getAmountInclTax(),
+                BigDecimal::add
+            );
+        }
+        return amountByProduct;
     }
 
     private Map<Long, BigDecimal> loadApprovedReturnQtyByProduct(Long tenantId, Long saleOrderId, Long currentReturnId) {
@@ -523,6 +666,47 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             }
         }
         return qtyByProduct;
+    }
+
+    private Map<Long, BigDecimal> loadApprovedReturnAmountByProduct(Long tenantId, Long saleOrderId, Long currentReturnId) {
+        List<ErpSaleReturn> approvedReturns = erpSaleReturnMapper.selectList(new QueryWrapper<ErpSaleReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("sale_order_id", saleOrderId)
+            .eq("status", STATUS_APPROVED));
+        Map<Long, BigDecimal> amountByProduct = new HashMap<>();
+        for (ErpSaleReturn approvedReturn : approvedReturns) {
+            if (currentReturnId != null && currentReturnId.equals(approvedReturn.getId())) {
+                continue;
+            }
+            List<ErpSaleReturnItem> returnItems = erpSaleReturnItemMapper.findByReturnId(tenantId, approvedReturn.getId());
+            for (ErpSaleReturnItem returnItem : returnItems) {
+                if (returnItem.getProductId() == null) {
+                    continue;
+                }
+                amountByProduct.merge(
+                    returnItem.getProductId(),
+                    returnItem.getAmountInclTax() == null ? BigDecimal.ZERO : returnItem.getAmountInclTax(),
+                    BigDecimal::add
+                );
+            }
+        }
+        return amountByProduct;
+    }
+
+    private void enrichFlowStatus(Long tenantId, List<ErpSaleReturn> returns) {
+        if (returns == null || returns.isEmpty()) {
+            return;
+        }
+        for (ErpSaleReturn order : returns) {
+            if (order == null || order.getId() == null) {
+                continue;
+            }
+            ErpAccountsReceivable receivable = findReturnReceivable(tenantId, order);
+            if (receivable != null) {
+                order.setRefundStatus(receivable.getStatus());
+                order.setRefundUnpaidAmount(receivable.getUnpaidAmount());
+            }
+        }
     }
 
     private void applyTotals(ErpSaleReturn order, List<ErpSaleReturnItem> items) {
@@ -579,12 +763,18 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         }
     }
 
-    private void applyStockDelta(Long tenantId, ErpSaleReturnItem item, BigDecimal delta, String bizType, Long orderId, boolean updateBalance) {
+    private void applyStockDelta(Long tenantId,
+                                 ErpSaleReturnItem item,
+                                 BigDecimal delta,
+                                 String bizType,
+                                 Long orderId,
+                                 Long sourceSaleOrderId,
+                                 boolean updateBalance) {
         Long warehouseId = item.getWarehouseId();
         Long locationId = item.getLocationId();
-        BigDecimal unitCost = getProductCost(tenantId, item.getProductId());
+        BigDecimal unitCost = getReturnUnitCost(tenantId, sourceSaleOrderId, item.getProductId());
         if (updateBalance && delta.compareTo(BigDecimal.ZERO) > 0) {
-            updateProductAvgCost(tenantId, item.getProductId(), delta, unitCost);
+            erpCostService.applyInboundAverageCost(tenantId, item.getProductId(), delta, unitCost);
         }
         ErpStockBalance balance = null;
         BigDecimal before;
@@ -637,6 +827,45 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         erpStockTxnMapper.insert(txn);
     }
 
+    private BigDecimal getReturnUnitCost(Long tenantId, Long saleOrderId, Long productId) {
+        if (saleOrderId != null && productId != null) {
+            BigDecimal originalCost = erpStockTxnMapper.findSaleIssueUnitCost(tenantId, saleOrderId, productId);
+            if (originalCost != null && originalCost.compareTo(BigDecimal.ZERO) > 0) {
+                return originalCost;
+            }
+        }
+        return erpCostService.getProductCost(tenantId, productId);
+    }
+
+    private void reverseRestockCosts(Long tenantId, Long saleOrderId, List<ErpSaleReturnItem> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        Map<Long, BigDecimal> qtyMap = new HashMap<>();
+        Map<Long, BigDecimal> costMap = new HashMap<>();
+        for (ErpSaleReturnItem item : items) {
+            if (item == null || item.getProductId() == null || item.getQty() == null) {
+                continue;
+            }
+            BigDecimal qty = item.getQty();
+            if (qty.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal unitCost = getReturnUnitCost(tenantId, saleOrderId, item.getProductId());
+            qtyMap.merge(item.getProductId(), qty, BigDecimal::add);
+            costMap.merge(item.getProductId(), unitCost.multiply(qty), BigDecimal::add);
+        }
+        for (Map.Entry<Long, BigDecimal> entry : qtyMap.entrySet()) {
+            BigDecimal qty = entry.getValue();
+            if (qty.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal removedUnitCost = costMap.getOrDefault(entry.getKey(), BigDecimal.ZERO)
+                .divide(qty, 4, RoundingMode.HALF_UP);
+            erpCostService.reverseInboundAverageCost(tenantId, entry.getKey(), qty, removedUnitCost);
+        }
+    }
+
     private void createReturnReceivable(Long tenantId, ErpSaleReturn order, BigDecimal delta) {
         if (order.getSaleOrderId() == null) {
             return;
@@ -661,6 +890,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         ar.setUnpaidAmount(unpaid);
         ar.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
         ar.setSettlementMethod(order.getSettlementMethod());
+        ar.setSourceType(SOURCE_SALE_RETURN);
+        ar.setSourceId(order.getId());
         ar.setRemark("销售退货单号:" + order.getOrderNo());
         ar.setCreatedAt(Instant.now());
         ar.setUpdatedAt(Instant.now());
@@ -698,6 +929,11 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private ErpAccountsReceivable findReturnReceivable(Long tenantId, ErpSaleReturn order) {
         if (order.getSaleOrderId() == null) {
             return null;
+        }
+        ErpAccountsReceivable sourceReceivable = erpAccountsReceivableMapper.findBySource(
+            tenantId, SOURCE_SALE_RETURN, order.getId());
+        if (sourceReceivable != null) {
+            return sourceReceivable;
         }
         List<ErpAccountsReceivable> list = erpAccountsReceivableMapper.selectList(new QueryWrapper<ErpAccountsReceivable>()
             .eq("tenant_id", tenantId)
@@ -759,6 +995,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         ar.setPaidAmount(BigDecimal.ZERO);
         ar.setUnpaidAmount(BigDecimal.ZERO);
         ar.setStatus(STATUS_RED_FLUSHED);
+        ar.setRedFlushSourceType(SOURCE_SALE_RETURN);
+        ar.setRedFlushSourceId(order.getId());
         if (reason != null && !reason.isBlank()) {
             String remark = ar.getRemark();
             ar.setRemark((remark == null || remark.isBlank())
@@ -774,47 +1012,6 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             return order.getTotalAmountInclTax();
         }
         return order.getTotalAmount() == null ? BigDecimal.ZERO : order.getTotalAmount();
-    }
-
-    private BigDecimal getProductCost(Long tenantId, Long productId) {
-        if (productId == null) {
-            return BigDecimal.ZERO;
-        }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null || product.getCostPrice() == null) {
-            return BigDecimal.ZERO;
-        }
-        return product.getCostPrice();
-    }
-
-    private void updateProductAvgCost(Long tenantId, Long productId, BigDecimal inboundQty, BigDecimal inboundUnitCost) {
-        if (productId == null || inboundQty == null || inboundUnitCost == null) {
-            return;
-        }
-        if (inboundQty.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null) {
-            return;
-        }
-        BigDecimal oldQty = erpStockBalanceMapper.sumQtyByProduct(tenantId, productId);
-        if (oldQty == null) {
-            oldQty = BigDecimal.ZERO;
-        }
-        BigDecimal oldCost = product.getCostPrice() == null ? BigDecimal.ZERO : product.getCostPrice();
-        BigDecimal newQty = oldQty.add(inboundQty);
-        if (newQty.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        BigDecimal totalCost = oldCost.multiply(oldQty).add(inboundUnitCost.multiply(inboundQty));
-        BigDecimal newCost = totalCost.divide(newQty, 4, RoundingMode.HALF_UP);
-        product.setCostPrice(newCost);
-        erpProductMapper.updateById(product);
     }
 
     private String resolveReturnType(String type) {

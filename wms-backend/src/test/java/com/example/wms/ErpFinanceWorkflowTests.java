@@ -35,6 +35,7 @@ import com.example.wms.service.erp.impl.ErpPaymentServiceImpl;
 import com.example.wms.service.erp.impl.ErpPurchaseOrderServiceImpl;
 import com.example.wms.service.erp.impl.ErpPurchaseReturnServiceImpl;
 import com.example.wms.service.erp.impl.ErpReceiptServiceImpl;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -413,7 +414,8 @@ class ErpFinanceWorkflowTests {
             systemConfigMapper,
             payableMapper,
             paymentMapper,
-            paymentPayableMapper
+            paymentPayableMapper,
+            costService()
         );
     }
 
@@ -428,7 +430,12 @@ class ErpFinanceWorkflowTests {
             payableMapper,
             paymentMapper,
             paymentPayableMapper,
-            systemConfigMapper
+            systemConfigMapper,
+            costService()
         );
+    }
+
+    private ErpCostService costService() {
+        return new ErpCostService(productMapper, stockBalanceMapper);
     }
 }

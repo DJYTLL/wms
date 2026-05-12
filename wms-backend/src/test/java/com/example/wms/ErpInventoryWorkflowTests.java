@@ -18,6 +18,7 @@ import com.example.wms.mapper.erp.ErpStockCountMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.service.erp.impl.ErpAssemblyOrderServiceImpl;
 import com.example.wms.service.erp.impl.ErpStockCountServiceImpl;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -169,7 +170,8 @@ class ErpInventoryWorkflowTests {
             stockTxnMapper,
             orderSequenceMapper,
             systemConfigMapper,
-            productMapper
+            productMapper,
+            costService()
         );
     }
 
@@ -181,7 +183,12 @@ class ErpInventoryWorkflowTests {
             stockBalanceMapper,
             stockTxnMapper,
             orderSequenceMapper,
-            systemConfigMapper
+            systemConfigMapper,
+            costService()
         );
+    }
+
+    private ErpCostService costService() {
+        return new ErpCostService(productMapper, stockBalanceMapper);
     }
 }

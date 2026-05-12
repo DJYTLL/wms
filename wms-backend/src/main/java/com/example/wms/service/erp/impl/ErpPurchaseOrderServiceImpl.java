@@ -30,6 +30,7 @@ import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.service.erp.ErpPurchaseOrderService;
+import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -72,6 +73,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
     private final ErpPaymentMapper erpPaymentMapper;
     private final ErpPaymentPayableMapper erpPaymentPayableMapper;
+    private final ErpCostService erpCostService;
 
     public ErpPurchaseOrderServiceImpl(ErpPurchaseOrderMapper erpPurchaseOrderMapper,
                                        ErpPurchaseOrderItemMapper erpPurchaseOrderItemMapper,
@@ -82,7 +84,8 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                                       SystemConfigMapper systemConfigMapper,
                                       ErpAccountsPayableMapper erpAccountsPayableMapper,
                                       ErpPaymentMapper erpPaymentMapper,
-                                      ErpPaymentPayableMapper erpPaymentPayableMapper) {
+                                      ErpPaymentPayableMapper erpPaymentPayableMapper,
+                                      ErpCostService erpCostService) {
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
         this.erpPurchaseOrderItemMapper = erpPurchaseOrderItemMapper;
         this.erpProductMapper = erpProductMapper;
@@ -93,6 +96,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
         this.erpPaymentMapper = erpPaymentMapper;
         this.erpPaymentPayableMapper = erpPaymentPayableMapper;
+        this.erpCostService = erpCostService;
     }
 
     @Override
@@ -321,6 +325,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 throw new IllegalArgumentException("请先红冲付款单");
             }
             List<ErpPurchaseOrderItem> items = erpPurchaseOrderItemMapper.findByOrderId(tenantId, id);
+            reverseInboundCosts(tenantId, items);
             for (ErpPurchaseOrderItem item : items) {
                 applyStockDelta(tenantId, item, item.getQty().negate(), "PURCHASE_CANCEL", id);
             }
@@ -736,36 +741,37 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             }
             BigDecimal totalCost = costMap.getOrDefault(productId, BigDecimal.ZERO);
             BigDecimal inboundUnitCost = totalCost.divide(inboundQty, 4, RoundingMode.HALF_UP);
-            updateProductAvgCost(tenantId, productId, inboundQty, inboundUnitCost);
+            erpCostService.applyInboundAverageCost(tenantId, productId, inboundQty, inboundUnitCost);
         }
     }
 
-    private void updateProductAvgCost(Long tenantId, Long productId, BigDecimal inboundQty, BigDecimal inboundUnitCost) {
-        if (productId == null || inboundQty == null || inboundUnitCost == null) {
+    private void reverseInboundCosts(Long tenantId, List<ErpPurchaseOrderItem> items) {
+        if (items == null || items.isEmpty()) {
             return;
         }
-        if (inboundQty.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
+        Map<Long, BigDecimal> qtyMap = new HashMap<>();
+        Map<Long, BigDecimal> costMap = new HashMap<>();
+        for (ErpPurchaseOrderItem item : items) {
+            if (item == null || item.getProductId() == null || item.getQty() == null) {
+                continue;
+            }
+            BigDecimal qty = item.getQty();
+            if (qty.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal unitCost = item.getPrice() == null ? BigDecimal.ZERO : item.getPrice();
+            qtyMap.merge(item.getProductId(), qty, BigDecimal::add);
+            costMap.merge(item.getProductId(), unitCost.multiply(qty), BigDecimal::add);
         }
-        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", tenantId)
-            .eq("id", productId));
-        if (product == null) {
-            return;
+        for (Map.Entry<Long, BigDecimal> entry : qtyMap.entrySet()) {
+            BigDecimal qty = entry.getValue();
+            if (qty.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal removedUnitCost = costMap.getOrDefault(entry.getKey(), BigDecimal.ZERO)
+                .divide(qty, 4, RoundingMode.HALF_UP);
+            erpCostService.reverseInboundAverageCost(tenantId, entry.getKey(), qty, removedUnitCost);
         }
-        BigDecimal oldQty = erpStockBalanceMapper.sumQtyByProduct(tenantId, productId);
-        if (oldQty == null) {
-            oldQty = BigDecimal.ZERO;
-        }
-        BigDecimal oldCost = product.getCostPrice() == null ? BigDecimal.ZERO : product.getCostPrice();
-        BigDecimal newQty = oldQty.add(inboundQty);
-        if (newQty.compareTo(BigDecimal.ZERO) <= 0) {
-            return;
-        }
-        BigDecimal totalCost = oldCost.multiply(oldQty).add(inboundUnitCost.multiply(inboundQty));
-        BigDecimal newCost = totalCost.divide(newQty, 4, RoundingMode.HALF_UP);
-        product.setCostPrice(newCost);
-        erpProductMapper.updateById(product);
     }
 
     private String generateTxnNo() {

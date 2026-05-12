@@ -109,6 +109,21 @@ public class ErpSaleOrder {
     @TableField("remark")
     private String remark;
 
+    @TableField("red_flush_source_type")
+    private String redFlushSourceType;
+
+    @TableField("red_flush_source_id")
+    private Long redFlushSourceId;
+
+    @TableField(exist = false)
+    private String receivableStatus;
+
+    @TableField(exist = false)
+    private BigDecimal receivableUnpaidAmount;
+
+    @TableField(exist = false)
+    private Long approvedReturnCount;
+
     // 创建时间
     @TableField("created_at")
     private Instant createdAt;
@@ -318,6 +333,46 @@ public class ErpSaleOrder {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getRedFlushSourceType() {
+        return redFlushSourceType;
+    }
+
+    public void setRedFlushSourceType(String redFlushSourceType) {
+        this.redFlushSourceType = redFlushSourceType;
+    }
+
+    public Long getRedFlushSourceId() {
+        return redFlushSourceId;
+    }
+
+    public void setRedFlushSourceId(Long redFlushSourceId) {
+        this.redFlushSourceId = redFlushSourceId;
+    }
+
+    public String getReceivableStatus() {
+        return receivableStatus;
+    }
+
+    public void setReceivableStatus(String receivableStatus) {
+        this.receivableStatus = receivableStatus;
+    }
+
+    public BigDecimal getReceivableUnpaidAmount() {
+        return receivableUnpaidAmount;
+    }
+
+    public void setReceivableUnpaidAmount(BigDecimal receivableUnpaidAmount) {
+        this.receivableUnpaidAmount = receivableUnpaidAmount;
+    }
+
+    public Long getApprovedReturnCount() {
+        return approvedReturnCount;
+    }
+
+    public void setApprovedReturnCount(Long approvedReturnCount) {
+        this.approvedReturnCount = approvedReturnCount;
     }
 
     public Instant getCreatedAt() {

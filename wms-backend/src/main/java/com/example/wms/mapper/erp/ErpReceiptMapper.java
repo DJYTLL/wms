@@ -18,4 +18,33 @@ public interface ErpReceiptMapper extends BaseMapper<ErpReceipt> {
         LIMIT 1
         """)
     ErpReceipt findBySaleOrderId(@Param("tenantId") Long tenantId, @Param("saleOrderId") Long saleOrderId);
+
+    @Select("""
+        UPDATE erp_receipt
+        SET status = 'APPROVED',
+            updated_at = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND id = #{id}
+          AND status = 'DRAFT'
+          AND deleted_at IS NULL
+        RETURNING *
+        """)
+    ErpReceipt approveDraft(@Param("tenantId") Long tenantId, @Param("id") Long id);
+
+    @Select("""
+        UPDATE erp_receipt
+        SET status = 'RED_FLUSHED',
+            red_flush_source_type = 'RECEIPT',
+            red_flush_source_id = id,
+            remark = #{remark},
+            updated_at = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND id = #{id}
+          AND status = 'APPROVED'
+          AND deleted_at IS NULL
+        RETURNING *
+        """)
+    ErpReceipt redFlushApproved(@Param("tenantId") Long tenantId,
+                                @Param("id") Long id,
+                                @Param("remark") String remark);
 }

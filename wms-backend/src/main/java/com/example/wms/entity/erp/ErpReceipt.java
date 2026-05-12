@@ -40,6 +40,12 @@ public class ErpReceipt extends TenantAuditableSoftDeleteEntity {
     @TableField("remark")
     private String remark;
 
+    @TableField("red_flush_source_type")
+    private String redFlushSourceType;
+
+    @TableField("red_flush_source_id")
+    private Long redFlushSourceId;
+
     @TableField("print_count")
     private Integer printCount;
 
@@ -124,6 +130,22 @@ public class ErpReceipt extends TenantAuditableSoftDeleteEntity {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getRedFlushSourceType() {
+        return redFlushSourceType;
+    }
+
+    public void setRedFlushSourceType(String redFlushSourceType) {
+        this.redFlushSourceType = redFlushSourceType;
+    }
+
+    public Long getRedFlushSourceId() {
+        return redFlushSourceId;
+    }
+
+    public void setRedFlushSourceId(Long redFlushSourceId) {
+        this.redFlushSourceId = redFlushSourceId;
     }
 
     public Integer getPrintCount() {

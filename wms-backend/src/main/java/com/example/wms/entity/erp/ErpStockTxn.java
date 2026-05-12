@@ -83,6 +83,10 @@ public class ErpStockTxn {
     @TableField("created_at")
     private Instant createdAt;
 
+    // 关联单据号（非数据库字段，用于库存流水展示）
+    @TableField(exist = false)
+    private String docNo;
+
     public Long getId() {
         return id;
     }
@@ -225,5 +229,13 @@ public class ErpStockTxn {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getDocNo() {
+        return docNo;
+    }
+
+    public void setDocNo(String docNo) {
+        this.docNo = docNo;
     }
 }
