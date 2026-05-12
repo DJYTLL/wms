@@ -87,6 +87,9 @@ public interface AuditLogMapper {
         <if test="path != null and path != ''">
           AND a.path ILIKE CONCAT('%', #{path}, '%')
         </if>
+        <if test="deleteReason != null and deleteReason != ''">
+          AND a.delete_reason ILIKE CONCAT('%', #{deleteReason}, '%')
+        </if>
         <if test="errorCode != null and errorCode != ''">
           AND a.error_code = #{errorCode}
         </if>
@@ -115,6 +118,7 @@ public interface AuditLogMapper {
                                   @Param("requestId") String requestId,
                                   @Param("method") String method,
                                   @Param("path") String path,
+                                  @Param("deleteReason") String deleteReason,
                                   @Param("errorCode") String errorCode,
                                   @Param("errorMessage") String errorMessage,
                                   @Param("httpStatus") Integer httpStatus,
@@ -163,6 +167,9 @@ public interface AuditLogMapper {
         <if test="path != null and path != ''">
           AND a.path ILIKE CONCAT('%', #{path}, '%')
         </if>
+        <if test="deleteReason != null and deleteReason != ''">
+          AND a.delete_reason ILIKE CONCAT('%', #{deleteReason}, '%')
+        </if>
         <if test="errorCode != null and errorCode != ''">
           AND a.error_code = #{errorCode}
         </if>
@@ -189,6 +196,7 @@ public interface AuditLogMapper {
                @Param("requestId") String requestId,
                @Param("method") String method,
                @Param("path") String path,
+               @Param("deleteReason") String deleteReason,
                @Param("errorCode") String errorCode,
                @Param("errorMessage") String errorMessage,
                @Param("httpStatus") Integer httpStatus,
@@ -258,6 +266,9 @@ public interface AuditLogMapper {
         <if test="path != null and path != ''">
           AND a.path ILIKE CONCAT('%', #{path}, '%')
         </if>
+        <if test="deleteReason != null and deleteReason != ''">
+          AND a.delete_reason ILIKE CONCAT('%', #{deleteReason}, '%')
+        </if>
         <if test="errorCode != null and errorCode != ''">
           AND a.error_code = #{errorCode}
         </if>
@@ -286,6 +297,7 @@ public interface AuditLogMapper {
                                     @Param("requestId") String requestId,
                                     @Param("method") String method,
                                     @Param("path") String path,
+                                    @Param("deleteReason") String deleteReason,
                                     @Param("errorCode") String errorCode,
                                     @Param("errorMessage") String errorMessage,
                                     @Param("httpStatus") Integer httpStatus,

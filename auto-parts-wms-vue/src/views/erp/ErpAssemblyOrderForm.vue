@@ -45,7 +45,7 @@
               <el-form-item :label="$t('field.finishedProduct')" required>
                 <FuzzyProductSelect
                   v-model="formData.finishedProductId"
-                  :options="productOptions"
+                  :options="getSelectableProductOptions(formData.finishedProductId)"
                   :placeholder="$t('field.product')"
                   style="width: 100%"
                   :disabled="isReadOnly"
@@ -100,7 +100,7 @@
                 <template #default="{ row }">
                   <FuzzyProductSelect
                     v-model="row.productId"
-                    :options="productOptions"
+                    :options="getSelectableProductOptions(row.productId)"
                     :placeholder="$t('field.product')"
                     style="width: 100%"
                     :disabled="isReadOnly"
@@ -220,6 +220,7 @@ interface OptionItem {
   defaultWarehouseId?: number;
   defaultLocationId?: number;
   warehouseId?: number;
+  enabled?: boolean;
 }
 
 interface AssemblyItem {
@@ -486,13 +487,17 @@ const ensureProductOption = async (productId?: number | null) => {
         name: product.name,
         costPrice: product.costPrice,
         defaultWarehouseId: product.defaultWarehouseId,
-        defaultLocationId: product.defaultLocationId
+        defaultLocationId: product.defaultLocationId,
+        enabled: product.enabled
       });
     }
   } catch (error) {
     notifyError(error);
   }
 };
+
+const getSelectableProductOptions = (currentProductId?: number | null) =>
+  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
 
 const ensureWarehouseOption = async (warehouseId?: number | null) => {
   if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;

@@ -55,9 +55,11 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 // 销售退货服务实现（ERP进销存）
@@ -71,6 +73,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private static final String ORDER_TYPE = "SALE_RETURN";
     private static final String RECEIVABLE_ORDER_TYPE = "AR_RETURN";
     private static final String RECEIPT_ORDER_TYPE = "RECEIPT";
+    private static final String SOURCE_SALE_ORDER = "SALE_ORDER";
     private static final String SOURCE_SALE_RETURN = "SALE_RETURN";
 
     private static final String RETURN_RESTOCK = "RESTOCK";
@@ -192,12 +195,12 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setUpdatedAt(Instant.now());
         erpSaleReturnMapper.insert(order);
 
-        List<ErpSaleReturnItem> items = buildItems(tenantId, order.getId(), request.items());
+        List<ErpSaleReturnItem> items = buildItems(tenantId, order.getId(), request.items(), Set.of());
         for (ErpSaleReturnItem item : items) {
             erpSaleReturnItemMapper.insert(item);
         }
         applyTotals(order, items);
-        validateSettlementAmounts(order);
+        validateSettlementAmounts(tenantId, order, null);
         erpSaleReturnMapper.updateById(order);
 
         return new ErpSaleReturnDetail(order, items);
@@ -224,15 +227,17 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
 
+        Set<Long> allowedDisabledProductIds = existingProductIds(erpSaleReturnItemMapper.findByReturnId(tenantId, id));
+
         erpSaleReturnItemMapper.delete(new QueryWrapper<ErpSaleReturnItem>()
             .eq("tenant_id", tenantId)
             .eq("return_id", id));
-        List<ErpSaleReturnItem> items = buildItems(tenantId, id, request.items());
+        List<ErpSaleReturnItem> items = buildItems(tenantId, id, request.items(), allowedDisabledProductIds);
         for (ErpSaleReturnItem item : items) {
             erpSaleReturnItemMapper.insert(item);
         }
         applyTotals(order, items);
-        validateSettlementAmounts(order);
+        validateSettlementAmounts(tenantId, order, id);
         updateWithVersion(tenantId, order);
 
         return new ErpSaleReturnDetail(order, items);
@@ -264,7 +269,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         }
         List<ErpSaleReturnItem> items = erpSaleReturnItemMapper.findByReturnId(tenantId, id);
         validateSaleReturnSourceFromItems(tenantId, order.getSaleOrderId(), order.getCustomerId(), items, id);
-        validateSettlementAmounts(order);
+        validateSettlementAmounts(tenantId, order, id);
         ErpSaleReturn approved = erpSaleReturnMapper.approveDraft(tenantId, id, resolveCurrentUsername());
         if (approved == null) {
             throw new IllegalArgumentException("销售退货单状态已变化，请刷新重试");
@@ -405,16 +410,14 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         }
     }
 
-    private List<ErpSaleReturnItem> buildItems(Long tenantId, Long returnId, List<ErpSaleReturnItemRequest> requests) {
+    private List<ErpSaleReturnItem> buildItems(Long tenantId,
+                                               Long returnId,
+                                               List<ErpSaleReturnItemRequest> requests,
+                                               Set<Long> allowedDisabledProductIds) {
         List<ErpSaleReturnItem> items = new ArrayList<>();
         int index = 1;
         for (ErpSaleReturnItemRequest request : requests) {
-            ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-                .eq("tenant_id", tenantId)
-                .eq("id", request.productId()));
-            if (product == null) {
-                throw new IllegalArgumentException("商品不存在");
-            }
+            ErpProduct product = requireUsableProduct(tenantId, request.productId(), allowedDisabledProductIds);
             ErpSaleReturnItem item = new ErpSaleReturnItem();
             item.setTenantId(tenantId);
             item.setReturnId(returnId);
@@ -466,6 +469,32 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             index += 1;
         }
         return items;
+    }
+
+    private ErpProduct requireUsableProduct(Long tenantId, Long productId, Set<Long> allowedDisabledProductIds) {
+        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", tenantId)
+            .eq("id", productId));
+        if (product == null) {
+            throw new IllegalArgumentException("商品不存在");
+        }
+        if (Boolean.FALSE.equals(product.getEnabled()) && (allowedDisabledProductIds == null || !allowedDisabledProductIds.contains(productId))) {
+            throw new IllegalArgumentException("商品已停用，不能新增引用");
+        }
+        return product;
+    }
+
+    private Set<Long> existingProductIds(List<ErpSaleReturnItem> items) {
+        Set<Long> ids = new HashSet<>();
+        if (items == null) {
+            return ids;
+        }
+        for (ErpSaleReturnItem item : items) {
+            if (item != null && item.getProductId() != null) {
+                ids.add(item.getProductId());
+            }
+        }
+        return ids;
     }
 
     private void validateSaleReturnSourceFromRequest(Long tenantId,
@@ -562,6 +591,13 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             BigDecimal remainingAmount = soldAmount.subtract(approvedAmount);
             if (requestAmount.compareTo(remainingAmount) > 0) {
                 throw new IllegalArgumentException("商品退货金额不能超过原销售可退金额");
+            }
+            BigDecimal maxAmountByQty = soldAmount
+                .divide(soldQty, 6, RoundingMode.HALF_UP)
+                .multiply(requestQty)
+                .setScale(2, RoundingMode.HALF_UP);
+            if (requestAmount.compareTo(maxAmountByQty) > 0) {
+                throw new IllegalArgumentException("商品退货单价不能高于原销售单价");
             }
         }
     }
@@ -726,7 +762,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setTotalAmountInclTax(totalIncl);
     }
 
-    private void validateSettlementAmounts(ErpSaleReturn order) {
+    private void validateSettlementAmounts(Long tenantId, ErpSaleReturn order, Long currentReturnId) {
         BigDecimal paidAmount = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
         BigDecimal discountAmount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
         if (paidAmount.compareTo(BigDecimal.ZERO) < 0) {
@@ -739,6 +775,47 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (paidAmount.add(discountAmount).compareTo(totalAmountInclTax) > 0) {
             throw new IllegalArgumentException("退款金额与优惠金额之和不能大于退货总金额");
         }
+        if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal refundableCash = calculateRefundableCash(tenantId, order.getSaleOrderId(), currentReturnId);
+            if (paidAmount.compareTo(refundableCash) > 0) {
+                throw new IllegalArgumentException("退款金额不能超过原销售可退实收金额");
+            }
+        }
+    }
+
+    private BigDecimal calculateRefundableCash(Long tenantId, Long saleOrderId, Long currentReturnId) {
+        if (saleOrderId == null) {
+            return BigDecimal.ZERO;
+        }
+        ErpAccountsReceivable saleReceivable = erpAccountsReceivableMapper.findBySource(
+            tenantId, SOURCE_SALE_ORDER, saleOrderId);
+        if (saleReceivable == null) {
+            saleReceivable = erpAccountsReceivableMapper.findBySaleOrderId(tenantId, saleOrderId);
+        }
+        BigDecimal collectedCash = BigDecimal.ZERO;
+        if (saleReceivable != null && saleReceivable.getId() != null) {
+            BigDecimal approvedReceipts = erpReceiptReceivableMapper.sumApprovedAllocatedAmountByReceivableId(
+                tenantId, saleReceivable.getId());
+            if (approvedReceipts != null && approvedReceipts.compareTo(BigDecimal.ZERO) > 0) {
+                collectedCash = approvedReceipts;
+            }
+        }
+        BigDecimal refundedCash = BigDecimal.ZERO;
+        List<ErpSaleReturn> approvedReturns = erpSaleReturnMapper.selectList(new QueryWrapper<ErpSaleReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("sale_order_id", saleOrderId)
+            .eq("status", STATUS_APPROVED));
+        for (ErpSaleReturn approvedReturn : approvedReturns) {
+            if (currentReturnId != null && currentReturnId.equals(approvedReturn.getId())) {
+                continue;
+            }
+            BigDecimal paid = approvedReturn.getPaidAmount() == null ? BigDecimal.ZERO : approvedReturn.getPaidAmount();
+            if (paid.compareTo(BigDecimal.ZERO) > 0) {
+                refundedCash = refundedCash.add(paid);
+            }
+        }
+        BigDecimal refundable = collectedCash.subtract(refundedCash);
+        return refundable.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : refundable;
     }
 
     private ErpSaleReturn loadForUpdate(Long tenantId, Long id) {

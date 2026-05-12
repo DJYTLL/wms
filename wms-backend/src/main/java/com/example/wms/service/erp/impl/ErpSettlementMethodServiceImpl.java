@@ -7,8 +7,26 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSettlementMethodCreateRequest;
 import com.example.wms.dto.erp.ErpSettlementMethodUpdateRequest;
+import com.example.wms.entity.erp.ErpAccountsPayable;
+import com.example.wms.entity.erp.ErpAccountsReceivable;
+import com.example.wms.entity.erp.ErpCustomer;
+import com.example.wms.entity.erp.ErpPayment;
+import com.example.wms.entity.erp.ErpPurchaseReturn;
+import com.example.wms.entity.erp.ErpReceipt;
+import com.example.wms.entity.erp.ErpSaleOrder;
+import com.example.wms.entity.erp.ErpSaleReturn;
 import com.example.wms.entity.erp.ErpSettlementMethod;
+import com.example.wms.entity.erp.ErpSupplier;
+import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
+import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
+import com.example.wms.mapper.erp.ErpCustomerMapper;
+import com.example.wms.mapper.erp.ErpPaymentMapper;
+import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
+import com.example.wms.mapper.erp.ErpReceiptMapper;
+import com.example.wms.mapper.erp.ErpSaleOrderMapper;
+import com.example.wms.mapper.erp.ErpSaleReturnMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
+import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.service.erp.ErpSettlementMethodService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -20,9 +38,36 @@ import java.util.List;
 @Service
 public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodService {
     private final ErpSettlementMethodMapper erpSettlementMethodMapper;
+    private final ErpCustomerMapper erpCustomerMapper;
+    private final ErpSupplierMapper erpSupplierMapper;
+    private final ErpSaleOrderMapper erpSaleOrderMapper;
+    private final ErpSaleReturnMapper erpSaleReturnMapper;
+    private final ErpPurchaseReturnMapper erpPurchaseReturnMapper;
+    private final ErpReceiptMapper erpReceiptMapper;
+    private final ErpPaymentMapper erpPaymentMapper;
+    private final ErpAccountsReceivableMapper erpAccountsReceivableMapper;
+    private final ErpAccountsPayableMapper erpAccountsPayableMapper;
 
-    public ErpSettlementMethodServiceImpl(ErpSettlementMethodMapper erpSettlementMethodMapper) {
+    public ErpSettlementMethodServiceImpl(ErpSettlementMethodMapper erpSettlementMethodMapper,
+                                          ErpCustomerMapper erpCustomerMapper,
+                                          ErpSupplierMapper erpSupplierMapper,
+                                          ErpSaleOrderMapper erpSaleOrderMapper,
+                                          ErpSaleReturnMapper erpSaleReturnMapper,
+                                          ErpPurchaseReturnMapper erpPurchaseReturnMapper,
+                                          ErpReceiptMapper erpReceiptMapper,
+                                          ErpPaymentMapper erpPaymentMapper,
+                                          ErpAccountsReceivableMapper erpAccountsReceivableMapper,
+                                          ErpAccountsPayableMapper erpAccountsPayableMapper) {
         this.erpSettlementMethodMapper = erpSettlementMethodMapper;
+        this.erpCustomerMapper = erpCustomerMapper;
+        this.erpSupplierMapper = erpSupplierMapper;
+        this.erpSaleOrderMapper = erpSaleOrderMapper;
+        this.erpSaleReturnMapper = erpSaleReturnMapper;
+        this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
+        this.erpReceiptMapper = erpReceiptMapper;
+        this.erpPaymentMapper = erpPaymentMapper;
+        this.erpAccountsReceivableMapper = erpAccountsReceivableMapper;
+        this.erpAccountsPayableMapper = erpAccountsPayableMapper;
     }
 
     @Override
@@ -105,7 +150,56 @@ public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodServic
         if (method == null) {
             throw new IllegalArgumentException("结算方式不存在");
         }
+        ensureSettlementMethodNotReferenced(tenantId, method.getCode());
         erpSettlementMethodMapper.deleteById(id);
+    }
+
+    private void ensureSettlementMethodNotReferenced(Long tenantId, String code) {
+        if (erpCustomerMapper.selectCount(new QueryWrapper<ErpCustomer>()
+            .eq("tenant_id", tenantId)
+            .eq("payment_terms", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被客户引用，不能删除");
+        }
+        if (erpSupplierMapper.selectCount(new QueryWrapper<ErpSupplier>()
+            .eq("tenant_id", tenantId)
+            .eq("payment_terms", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被供应商引用，不能删除");
+        }
+        if (erpSaleOrderMapper.selectCount(new QueryWrapper<ErpSaleOrder>()
+            .eq("tenant_id", tenantId)
+            .eq("settlement_method", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被销售单引用，不能删除");
+        }
+        if (erpSaleReturnMapper.selectCount(new QueryWrapper<ErpSaleReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("settlement_method", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被销售退货单引用，不能删除");
+        }
+        if (erpPurchaseReturnMapper.selectCount(new QueryWrapper<ErpPurchaseReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("settlement_method", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被采购退货单引用，不能删除");
+        }
+        if (erpReceiptMapper.selectCount(new QueryWrapper<ErpReceipt>()
+            .eq("tenant_id", tenantId)
+            .eq("settlement_method", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被收款单引用，不能删除");
+        }
+        if (erpPaymentMapper.selectCount(new QueryWrapper<ErpPayment>()
+            .eq("tenant_id", tenantId)
+            .eq("settlement_method", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被付款单引用，不能删除");
+        }
+        if (erpAccountsReceivableMapper.selectCount(new QueryWrapper<ErpAccountsReceivable>()
+            .eq("tenant_id", tenantId)
+            .eq("settlement_method", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被应收单引用，不能删除");
+        }
+        if (erpAccountsPayableMapper.selectCount(new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .eq("settlement_method", code)) > 0) {
+            throw new IllegalArgumentException("结算方式已被应付单引用，不能删除");
+        }
     }
 
     private QueryWrapper<ErpSettlementMethod> baseWrapper(String keyword, Boolean enabled) {

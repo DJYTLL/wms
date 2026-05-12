@@ -7,8 +7,12 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpDeliveryMethodCreateRequest;
 import com.example.wms.dto.erp.ErpDeliveryMethodUpdateRequest;
+import com.example.wms.entity.erp.ErpCustomer;
 import com.example.wms.entity.erp.ErpDeliveryMethod;
+import com.example.wms.entity.erp.ErpSaleOrder;
+import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpDeliveryMethodMapper;
+import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.service.erp.ErpDeliveryMethodService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -20,9 +24,15 @@ import java.util.List;
 @Service
 public class ErpDeliveryMethodServiceImpl implements ErpDeliveryMethodService {
     private final ErpDeliveryMethodMapper erpDeliveryMethodMapper;
+    private final ErpCustomerMapper erpCustomerMapper;
+    private final ErpSaleOrderMapper erpSaleOrderMapper;
 
-    public ErpDeliveryMethodServiceImpl(ErpDeliveryMethodMapper erpDeliveryMethodMapper) {
+    public ErpDeliveryMethodServiceImpl(ErpDeliveryMethodMapper erpDeliveryMethodMapper,
+                                        ErpCustomerMapper erpCustomerMapper,
+                                        ErpSaleOrderMapper erpSaleOrderMapper) {
         this.erpDeliveryMethodMapper = erpDeliveryMethodMapper;
+        this.erpCustomerMapper = erpCustomerMapper;
+        this.erpSaleOrderMapper = erpSaleOrderMapper;
     }
 
     @Override
@@ -105,7 +115,21 @@ public class ErpDeliveryMethodServiceImpl implements ErpDeliveryMethodService {
         if (method == null) {
             throw new IllegalArgumentException("送货方式不存在");
         }
+        ensureDeliveryMethodNotReferenced(tenantId, method.getCode());
         erpDeliveryMethodMapper.deleteById(id);
+    }
+
+    private void ensureDeliveryMethodNotReferenced(Long tenantId, String code) {
+        if (erpCustomerMapper.selectCount(new QueryWrapper<ErpCustomer>()
+            .eq("tenant_id", tenantId)
+            .eq("delivery_method_code", code)) > 0) {
+            throw new IllegalArgumentException("送货方式已被客户引用，不能删除");
+        }
+        if (erpSaleOrderMapper.selectCount(new QueryWrapper<ErpSaleOrder>()
+            .eq("tenant_id", tenantId)
+            .eq("delivery_method_code", code)) > 0) {
+            throw new IllegalArgumentException("送货方式已被销售单引用，不能删除");
+        }
     }
 
     private QueryWrapper<ErpDeliveryMethod> baseWrapper(String keyword, Boolean enabled) {

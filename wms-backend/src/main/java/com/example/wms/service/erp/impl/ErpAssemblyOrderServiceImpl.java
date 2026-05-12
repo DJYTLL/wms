@@ -37,7 +37,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 // Assembly order service implementation
@@ -116,7 +118,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
     @AuditLog(action = "ERP_ASSEMBLY_CREATE", entityType = "erp_assembly_order", entityId = "{result.order.id}", detail = "orderNo={result.order.orderNo}")
     public ErpAssemblyOrderDetail create(ErpAssemblyOrderCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
-        validateOrderRequest(request.finishedProductId(), request.finishedQty(), request.items());
+        validateOrderRequest(request.finishedProductId(), request.finishedQty(), request.items(), tenantId, Set.of());
         String type = normalizeType(request.orderType());
         String orderNo = ensureOrderNo(tenantId, request.orderNo(), type);
         ErpAssemblyOrder order = new ErpAssemblyOrder();
@@ -136,7 +138,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         order.setUpdatedAt(Instant.now());
         erpAssemblyOrderMapper.insert(order);
 
-        List<ErpAssemblyOrderItem> items = buildItems(tenantId, order.getId(), request.items());
+        List<ErpAssemblyOrderItem> items = buildItems(tenantId, order.getId(), request.items(), Set.of());
         for (ErpAssemblyOrderItem item : items) {
             erpAssemblyOrderItemMapper.insert(item);
         }
@@ -160,7 +162,8 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         if (!STATUS_DRAFT.equals(order.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可编辑");
         }
-        validateOrderRequest(request.finishedProductId(), request.finishedQty(), request.items());
+        Set<Long> allowedDisabledProductIds = existingProductIds(erpAssemblyOrderItemMapper.findByOrderId(tenantId, id), order.getFinishedProductId());
+        validateOrderRequest(request.finishedProductId(), request.finishedQty(), request.items(), tenantId, allowedDisabledProductIds);
         String newOrderNo = resolveOrderNoForUpdate(request.orderNo(), order.getOrderNo(), tenantId, order.getId());
         order.setOrderNo(newOrderNo);
         order.setOrderType(normalizeType(request.orderType()));
@@ -178,7 +181,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
             .eq("tenant_id", tenantId)
             .eq("order_id", id));
 
-        List<ErpAssemblyOrderItem> items = buildItems(tenantId, id, request.items());
+        List<ErpAssemblyOrderItem> items = buildItems(tenantId, id, request.items(), allowedDisabledProductIds);
         for (ErpAssemblyOrderItem item : items) {
             erpAssemblyOrderItemMapper.insert(item);
         }
@@ -244,16 +247,14 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         erpAssemblyOrderMapper.updateById(order);
     }
 
-    private List<ErpAssemblyOrderItem> buildItems(Long tenantId, Long orderId, List<ErpAssemblyOrderItemRequest> requests) {
+    private List<ErpAssemblyOrderItem> buildItems(Long tenantId,
+                                                  Long orderId,
+                                                  List<ErpAssemblyOrderItemRequest> requests,
+                                                  Set<Long> allowedDisabledProductIds) {
         List<ErpAssemblyOrderItem> items = new ArrayList<>();
         int index = 1;
         for (ErpAssemblyOrderItemRequest request : requests) {
-            ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-                .eq("tenant_id", tenantId)
-                .eq("id", request.productId()));
-            if (product == null) {
-                throw new IllegalArgumentException("商品不存在");
-            }
+            ErpProduct product = requireUsableProduct(tenantId, request.productId(), allowedDisabledProductIds);
             BigDecimal qty = normalizeAmount(request.qty());
             BigDecimal unitCost = product.getCostPrice() == null ? BigDecimal.ZERO : product.getCostPrice();
             ErpAssemblyOrderItem item = new ErpAssemblyOrderItem();
@@ -504,10 +505,13 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
 
     private void validateOrderRequest(Long finishedProductId,
                                       BigDecimal finishedQty,
-                                      List<ErpAssemblyOrderItemRequest> items) {
+                                      List<ErpAssemblyOrderItemRequest> items,
+                                      Long tenantId,
+                                      Set<Long> allowedDisabledProductIds) {
         if (finishedProductId == null) {
             throw new IllegalArgumentException("成品不能为空");
         }
+        requireUsableProduct(tenantId, finishedProductId, allowedDisabledProductIds);
         if (finishedQty == null || finishedQty.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("成品数量必须大于 0");
         }
@@ -522,6 +526,35 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
                 throw new IllegalArgumentException("明细数量必须大于 0");
             }
         }
+    }
+
+    private ErpProduct requireUsableProduct(Long tenantId, Long productId, Set<Long> allowedDisabledProductIds) {
+        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", tenantId)
+            .eq("id", productId));
+        if (product == null) {
+            throw new IllegalArgumentException("商品不存在");
+        }
+        if (Boolean.FALSE.equals(product.getEnabled()) && (allowedDisabledProductIds == null || !allowedDisabledProductIds.contains(productId))) {
+            throw new IllegalArgumentException("商品已停用，不能新增引用");
+        }
+        return product;
+    }
+
+    private Set<Long> existingProductIds(List<ErpAssemblyOrderItem> items, Long finishedProductId) {
+        Set<Long> ids = new HashSet<>();
+        if (finishedProductId != null) {
+            ids.add(finishedProductId);
+        }
+        if (items == null) {
+            return ids;
+        }
+        for (ErpAssemblyOrderItem item : items) {
+            if (item != null && item.getProductId() != null) {
+                ids.add(item.getProductId());
+            }
+        }
+        return ids;
     }
 
     private Instant parseOrderAt(String orderAt) {

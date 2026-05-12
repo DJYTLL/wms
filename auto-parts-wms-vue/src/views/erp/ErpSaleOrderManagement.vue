@@ -74,6 +74,16 @@
             </template>
           </el-table-column>
           <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+          <el-table-column v-if="canShow('netSaleAmount')" :label="$t('field.netSaleAmount')" min-width="140">
+            <template #default="{ row }">
+              {{ formatAmount(row.netSaleAmount) }}
+            </template>
+          </el-table-column>
+          <el-table-column v-if="canShow('netGrossProfit')" :label="$t('field.netGrossProfit')" min-width="140">
+            <template #default="{ row }">
+              {{ formatAmount(row.netGrossProfit) }}
+            </template>
+          </el-table-column>
           <el-table-column v-if="canShow('receivableStatus')" :label="$t('field.receivableStatus')" min-width="150">
             <template #default="{ row }">
               <el-tag :type="financeStatusTagType(row.receivableStatus)" size="small">
@@ -86,6 +96,11 @@
               <el-tag :type="Number(row.approvedReturnCount || 0) > 0 ? 'warning' : 'info'" size="small">
                 {{ formatReturnStatus(row.approvedReturnCount) }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="canShow('redFlushTrace')" :label="$t('field.redFlushTrace')" min-width="160">
+            <template #default="{ row }">
+              <span>{{ row.redFlushTrace || '-' }}</span>
             </template>
           </el-table-column>
           <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
@@ -238,9 +253,14 @@ interface SaleOrder {
   customerId?: number;
   status: string;
   totalAmount?: number;
+  netSaleAmount?: number;
+  netGrossProfit?: number;
+  cumulativeReturnAmount?: number;
+  cumulativeReturnCost?: number;
   receivableStatus?: string;
   receivableUnpaidAmount?: number;
   approvedReturnCount?: number;
+  redFlushTrace?: string;
   createdAt?: string;
 }
 
@@ -300,7 +320,7 @@ const canCreate = computed(() => {
   return true;
 });
 
-const defaultColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'receivableStatus', 'returnStatus', 'createdAt'];
+const defaultColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'netSaleAmount', 'netGrossProfit', 'receivableStatus', 'returnStatus', 'redFlushTrace', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-sale', defaultColumns);
 
 const canShow = (key: string) => isVisible(key);

@@ -6,6 +6,8 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.math.BigDecimal;
+
 // 销售退货单 Mapper
 @Mapper
 public interface ErpSaleReturnMapper extends BaseMapper<ErpSaleReturn> {
@@ -21,6 +23,17 @@ public interface ErpSaleReturnMapper extends BaseMapper<ErpSaleReturn> {
           AND deleted_at IS NULL
         """)
     long countApprovedBySaleOrderId(@Param("tenantId") Long tenantId, @Param("saleOrderId") Long saleOrderId);
+
+    @Select("""
+        SELECT COALESCE(SUM(total_amount_incl_tax), 0)
+        FROM erp_sale_return
+        WHERE tenant_id = #{tenantId}
+          AND sale_order_id = #{saleOrderId}
+          AND status = 'APPROVED'
+          AND deleted_at IS NULL
+        """)
+    BigDecimal sumApprovedAmountBySaleOrderId(@Param("tenantId") Long tenantId,
+                                              @Param("saleOrderId") Long saleOrderId);
 
     @Select("""
         UPDATE erp_sale_return

@@ -1,5 +1,6 @@
 package com.example.wms.dto.erp;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
 import java.math.BigDecimal;
@@ -15,7 +16,7 @@ public record ErpPurchaseReturnCreateRequest(
     String settlementMethod,
     BigDecimal paidAmount,
     BigDecimal discountAmount,
-    @NotEmpty List<ErpPurchaseReturnItemRequest> items,
+    @Valid @NotEmpty List<ErpPurchaseReturnItemRequest> items,
     String remark
 ) {
 }

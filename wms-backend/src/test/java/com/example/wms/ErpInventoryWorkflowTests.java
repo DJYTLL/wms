@@ -2,11 +2,13 @@ package com.example.wms;
 
 import com.example.wms.dto.erp.ErpAssemblyOrderCreateRequest;
 import com.example.wms.dto.erp.ErpAssemblyOrderItemRequest;
+import com.example.wms.dto.erp.ErpAssemblyOrderUpdateRequest;
 import com.example.wms.dto.erp.ErpStockCountCreateRequest;
 import com.example.wms.dto.erp.ErpStockCountItemRequest;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockCount;
 import com.example.wms.entity.erp.ErpStockCountItem;
+import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderItemMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderMapper;
@@ -121,6 +123,7 @@ class ErpInventoryWorkflowTests {
             item.setId(99L);
             return 1;
         }).when(stockCountItemMapper).insert(any(ErpStockCountItem.class));
+        when(productMapper.selectOne(any())).thenReturn(product(100L));
         when(stockBalanceMapper.findByKey(1L, 100L, 200L, null)).thenReturn(null);
 
         ErpStockCountCreateRequest request = new ErpStockCountCreateRequest(
@@ -143,6 +146,7 @@ class ErpInventoryWorkflowTests {
     @Test
     void assemblyCreateRejectsInvalidFinishedQty() {
         ErpAssemblyOrderServiceImpl service = assemblyService();
+        when(productMapper.selectOne(any())).thenReturn(product(100L));
 
         ErpAssemblyOrderCreateRequest request = new ErpAssemblyOrderCreateRequest(
             null,
@@ -160,6 +164,47 @@ class ErpInventoryWorkflowTests {
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("成品数量必须大于 0");
+    }
+
+    @Test
+    void stockCountCreateRejectsDisabledProduct() {
+        ErpStockCountServiceImpl service = stockCountService();
+        when(productMapper.selectOne(any())).thenReturn(disabledProduct(100L));
+
+        ErpStockCountCreateRequest request = new ErpStockCountCreateRequest(
+            null,
+            "COUNT",
+            200L,
+            null,
+            "2026-05-12 08:00:00",
+            List.of(new ErpStockCountItemRequest(100L, 200L, null, new BigDecimal("3"), null, "")),
+            "disabled"
+        );
+
+        assertThatThrownBy(() -> service.create(request, "COUNT"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("商品已停用，不能新增引用");
+    }
+
+    @Test
+    void assemblyUpdateAllowsExistingDisabledProduct() {
+        ErpAssemblyOrderServiceImpl service = assemblyService();
+        when(assemblyOrderMapper.selectOne(any())).thenReturn(draftAssemblyOrder(50L, 101L));
+        when(assemblyOrderItemMapper.findByOrderId(1L, 50L)).thenReturn(List.of(assemblyItem(101L, "1")));
+        when(productMapper.selectOne(any())).thenReturn(disabledProduct(101L));
+
+        service.update(50L, new ErpAssemblyOrderUpdateRequest(
+            "AO-050",
+            "ASSEMBLE",
+            "2026-05-12 08:00:00",
+            101L,
+            BigDecimal.ONE,
+            200L,
+            null,
+            BigDecimal.ZERO,
+            List.of(new ErpAssemblyOrderItemRequest(101L, 200L, null, BigDecimal.ONE, null)),
+            null
+        ));
     }
 
     private ErpStockCountServiceImpl stockCountService() {
@@ -190,5 +235,38 @@ class ErpInventoryWorkflowTests {
 
     private ErpCostService costService() {
         return new ErpCostService(productMapper, stockBalanceMapper);
+    }
+
+    private ErpProduct disabledProduct(Long id) {
+        ErpProduct product = product(id);
+        product.setEnabled(false);
+        return product;
+    }
+
+    private ErpProduct product(Long id) {
+        ErpProduct product = new ErpProduct();
+        product.setId(id);
+        product.setCode("P-" + id);
+        product.setName("Product-" + id);
+        product.setEnabled(true);
+        return product;
+    }
+
+    private com.example.wms.entity.erp.ErpAssemblyOrder draftAssemblyOrder(Long id, Long finishedProductId) {
+        com.example.wms.entity.erp.ErpAssemblyOrder order = new com.example.wms.entity.erp.ErpAssemblyOrder();
+        order.setId(id);
+        order.setTenantId(1L);
+        order.setStatus("DRAFT");
+        order.setFinishedProductId(finishedProductId);
+        order.setOrderType("ASSEMBLE");
+        order.setOrderAt(java.time.Instant.now());
+        return order;
+    }
+
+    private com.example.wms.entity.erp.ErpAssemblyOrderItem assemblyItem(Long productId, String qty) {
+        com.example.wms.entity.erp.ErpAssemblyOrderItem item = new com.example.wms.entity.erp.ErpAssemblyOrderItem();
+        item.setProductId(productId);
+        item.setQty(new BigDecimal(qty));
+        return item;
     }
 }

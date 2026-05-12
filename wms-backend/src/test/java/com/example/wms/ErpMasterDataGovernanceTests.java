@@ -1,6 +1,7 @@
 package com.example.wms;
 
 import com.example.wms.controller.erp.ErpLocationController;
+import com.example.wms.controller.erp.ErpProductController;
 import com.example.wms.controller.erp.ErpWarehouseController;
 import com.example.wms.dto.erp.ErpWarehouseCreateRequest;
 import com.example.wms.dto.erp.ErpLocationCreateRequest;
@@ -22,6 +23,7 @@ import com.example.wms.mapper.erp.ErpStockCountMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.ErpLocationService;
+import com.example.wms.service.erp.ErpProductService;
 import com.example.wms.service.erp.ErpWarehouseService;
 import com.example.wms.service.erp.impl.ErpLocationServiceImpl;
 import com.example.wms.service.erp.impl.ErpWarehouseServiceImpl;
@@ -81,6 +83,8 @@ class ErpMasterDataGovernanceTests {
     private ErpWarehouseService warehouseService;
     @Mock
     private ErpLocationService locationService;
+    @Mock
+    private ErpProductService productService;
 
     @BeforeEach
     void setUpTenant() {
@@ -298,6 +302,18 @@ class ErpMasterDataGovernanceTests {
         verify(locationService).listAll(null, true, 8L);
     }
 
+    @Test
+    void productOptionsOnlyRequestEnabledData() {
+        ErpProductController controller = new ErpProductController(productService);
+        List<com.example.wms.entity.erp.ErpProduct> products = List.of(product(3L, true));
+        when(productService.listAll(null, true, null)).thenReturn(products);
+
+        ResponseEntity<?> response = controller.options(null);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        verify(productService).listAll(null, true, null);
+    }
+
     private ErpWarehouseServiceImpl warehouseServiceImpl() {
         return new ErpWarehouseServiceImpl(
             warehouseMapper,
@@ -368,5 +384,15 @@ class ErpMasterDataGovernanceTests {
         location.setEnabled(enabled);
         location.setTenantId(TENANT_ID);
         return location;
+    }
+
+    private static com.example.wms.entity.erp.ErpProduct product(Long id, boolean enabled) {
+        com.example.wms.entity.erp.ErpProduct product = new com.example.wms.entity.erp.ErpProduct();
+        product.setId(id);
+        product.setCode("P-" + id);
+        product.setName("Product-" + id);
+        product.setEnabled(enabled);
+        product.setTenantId(TENANT_ID);
+        return product;
     }
 }

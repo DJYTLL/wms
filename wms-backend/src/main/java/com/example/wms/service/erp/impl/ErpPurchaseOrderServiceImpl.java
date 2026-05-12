@@ -17,6 +17,7 @@ import com.example.wms.entity.erp.ErpPaymentPayable;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpPurchaseOrder;
 import com.example.wms.entity.erp.ErpPurchaseOrderItem;
+import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockTxn;
 import com.example.wms.mapper.SystemConfigMapper;
@@ -27,6 +28,7 @@ import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderItemMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
+import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.service.erp.ErpPurchaseOrderService;
@@ -45,9 +47,11 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 // 采购单服务实现（ERP进销存）
@@ -73,6 +77,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
     private final ErpPaymentMapper erpPaymentMapper;
     private final ErpPaymentPayableMapper erpPaymentPayableMapper;
+    private final ErpPurchaseReturnMapper erpPurchaseReturnMapper;
     private final ErpCostService erpCostService;
 
     public ErpPurchaseOrderServiceImpl(ErpPurchaseOrderMapper erpPurchaseOrderMapper,
@@ -85,6 +90,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                                       ErpAccountsPayableMapper erpAccountsPayableMapper,
                                       ErpPaymentMapper erpPaymentMapper,
                                       ErpPaymentPayableMapper erpPaymentPayableMapper,
+                                      ErpPurchaseReturnMapper erpPurchaseReturnMapper,
                                       ErpCostService erpCostService) {
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
         this.erpPurchaseOrderItemMapper = erpPurchaseOrderItemMapper;
@@ -96,6 +102,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
         this.erpPaymentMapper = erpPaymentMapper;
         this.erpPaymentPayableMapper = erpPaymentPayableMapper;
+        this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
         this.erpCostService = erpCostService;
     }
 
@@ -196,8 +203,8 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setSupplierId(request.supplierId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setPaymentMethodCode(request.paymentMethodCode());
-        order.setPaidAmount(request.paidAmount());
-        order.setDiscountAmount(request.discountAmount());
+        order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setTotalAmount(BigDecimal.ZERO);
         order.setTotalAmountExclTax(BigDecimal.ZERO);
         order.setTotalTaxAmount(BigDecimal.ZERO);
@@ -208,7 +215,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setUpdatedAt(Instant.now());
         erpPurchaseOrderMapper.insert(order);
 
-        List<ErpPurchaseOrderItem> items = buildItems(tenantId, order.getId(), request.items());
+        List<ErpPurchaseOrderItem> items = buildItems(tenantId, order.getId(), request.items(), Set.of());
         for (ErpPurchaseOrderItem item : items) {
             erpPurchaseOrderItemMapper.insert(item);
         }
@@ -237,16 +244,18 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setSupplierId(request.supplierId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setPaymentMethodCode(request.paymentMethodCode());
-        order.setPaidAmount(request.paidAmount());
-        order.setDiscountAmount(request.discountAmount());
+        order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
+
+        Set<Long> allowedDisabledProductIds = existingProductIds(erpPurchaseOrderItemMapper.findByOrderId(tenantId, id));
 
         erpPurchaseOrderItemMapper.delete(new QueryWrapper<ErpPurchaseOrderItem>()
             .eq("tenant_id", tenantId)
             .eq("order_id", id));
 
-        List<ErpPurchaseOrderItem> items = buildItems(tenantId, id, request.items());
+        List<ErpPurchaseOrderItem> items = buildItems(tenantId, id, request.items(), allowedDisabledProductIds);
         for (ErpPurchaseOrderItem item : items) {
             erpPurchaseOrderItemMapper.insert(item);
         }
@@ -314,25 +323,23 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             throw new IllegalArgumentException("红冲原因不能为空");
         }
         if (STATUS_APPROVED.equals(order.getStatus())) {
-            List<ErpPayment> approvedPayments = erpPaymentMapper.selectList(new QueryWrapper<ErpPayment>()
-                .eq("tenant_id", tenantId)
-                .eq("purchase_order_id", order.getId())
-                .eq("status", STATUS_APPROVED));
-            boolean hasAppliedPayments = approvedPayments.stream()
-                .map(payment -> resolvePaymentAppliedTotal(payment.getAmount(), payment.getDiscountAmount()))
-                .anyMatch(total -> total.compareTo(BigDecimal.ZERO) > 0);
-            if (hasAppliedPayments) {
+            ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, order.getId());
+            if (payable != null && hasApprovedPaymentAllocation(tenantId, payable.getId())) {
                 throw new IllegalArgumentException("请先红冲付款单");
+            }
+            List<ErpPurchaseReturn> approvedReturns = erpPurchaseReturnMapper.findApprovedByPurchaseOrderId(tenantId, order.getId());
+            if (approvedReturns != null && !approvedReturns.isEmpty()) {
+                throw new IllegalArgumentException("请先红冲采购退货单");
             }
             List<ErpPurchaseOrderItem> items = erpPurchaseOrderItemMapper.findByOrderId(tenantId, id);
             reverseInboundCosts(tenantId, items);
             for (ErpPurchaseOrderItem item : items) {
                 applyStockDelta(tenantId, item, item.getQty().negate(), "PURCHASE_CANCEL", id);
             }
-            ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, order.getId());
             if (payable != null) {
                 payable.setTotalAmount(BigDecimal.ZERO);
                 payable.setPaidAmount(BigDecimal.ZERO);
+                payable.setDiscountAmount(BigDecimal.ZERO);
                 payable.setUnpaidAmount(BigDecimal.ZERO);
                 payable.setStatus(STATUS_RED_FLUSHED);
                 payable.setRemark(appendRedFlushReason(payable.getRemark(), reason));
@@ -382,16 +389,21 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         return wrapper;
     }
 
-    private List<ErpPurchaseOrderItem> buildItems(Long tenantId, Long orderId, List<ErpPurchaseOrderItemRequest> requests) {
+    private List<ErpPurchaseOrderItem> buildItems(Long tenantId,
+                                                  Long orderId,
+                                                  List<ErpPurchaseOrderItemRequest> requests,
+                                                  Set<Long> allowedDisabledProductIds) {
+        if (requests == null || requests.isEmpty()) {
+            throw new IllegalArgumentException("采购明细不能为空");
+        }
         List<ErpPurchaseOrderItem> items = new ArrayList<>();
         int index = 1;
         for (ErpPurchaseOrderItemRequest request : requests) {
-            ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-                .eq("tenant_id", tenantId)
-                .eq("id", request.productId()));
-            if (product == null) {
-                throw new IllegalArgumentException("商品不存在");
+            if (request == null) {
+                throw new IllegalArgumentException("采购明细不能为空");
             }
+            validatePositiveQty(request.qty(), "采购数量必须大于0");
+            ErpProduct product = requireUsableProduct(tenantId, request.productId(), allowedDisabledProductIds);
             ErpPurchaseOrderItem item = new ErpPurchaseOrderItem();
             item.setTenantId(tenantId);
             item.setOrderId(orderId);
@@ -432,6 +444,32 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         return items;
     }
 
+    private ErpProduct requireUsableProduct(Long tenantId, Long productId, Set<Long> allowedDisabledProductIds) {
+        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", tenantId)
+            .eq("id", productId));
+        if (product == null) {
+            throw new IllegalArgumentException("商品不存在");
+        }
+        if (Boolean.FALSE.equals(product.getEnabled()) && (allowedDisabledProductIds == null || !allowedDisabledProductIds.contains(productId))) {
+            throw new IllegalArgumentException("商品已停用，不能新增引用");
+        }
+        return product;
+    }
+
+    private Set<Long> existingProductIds(List<ErpPurchaseOrderItem> items) {
+        Set<Long> ids = new HashSet<>();
+        if (items == null) {
+            return ids;
+        }
+        for (ErpPurchaseOrderItem item : items) {
+            if (item != null && item.getProductId() != null) {
+                ids.add(item.getProductId());
+            }
+        }
+        return ids;
+    }
+
     private void applyTotals(ErpPurchaseOrder order, List<ErpPurchaseOrderItem> items) {
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal totalExcl = BigDecimal.ZERO;
@@ -447,6 +485,34 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setTotalAmountExclTax(totalExcl);
         order.setTotalTaxAmount(totalTax);
         order.setTotalAmountInclTax(totalIncl);
+    }
+
+    private void validateSettlementAmounts(ErpPurchaseOrder order, BigDecimal total) {
+        BigDecimal paidAmount = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
+        BigDecimal discountAmount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
+        if (paidAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("付款金额不能小于0");
+        }
+        if (discountAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("优惠金额不能小于0");
+        }
+        BigDecimal totalAmount = total == null ? BigDecimal.ZERO : total;
+        if (paidAmount.add(discountAmount).compareTo(totalAmount) > 0) {
+            throw new IllegalArgumentException("付款金额与优惠金额之和不能大于采购总金额");
+        }
+    }
+
+    private BigDecimal normalizeAmount(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount;
+    }
+
+    private void validatePositiveQty(BigDecimal qty, String message) {
+        if (qty == null) {
+            throw new IllegalArgumentException(message);
+        }
+        if (qty.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(message);
+        }
     }
 
     private void ensurePayable(Long tenantId, ErpPurchaseOrder order) {
@@ -485,10 +551,8 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private void ensurePayableAndPayment(Long tenantId, ErpPurchaseOrder order) {
         BigDecimal total = resolvePayableTotal(order);
         BigDecimal discount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
-        if (discount.compareTo(total) > 0) {
-            discount = total;
-        }
         BigDecimal paidCash = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
+        validateSettlementAmounts(order, total);
         BigDecimal maxPaid = total.subtract(discount);
         if (maxPaid.compareTo(BigDecimal.ZERO) < 0) {
             maxPaid = BigDecimal.ZERO;
@@ -617,7 +681,6 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             if (payment != null
                 && tenantId.equals(payment.getTenantId())
                 && STATUS_APPROVED.equals(payment.getStatus())
-                && !AUTO_PAYMENT_REMARK.equals(payment.getRemark())
                 && resolvePaymentAppliedTotal(payment.getAmount(), payment.getDiscountAmount()).compareTo(BigDecimal.ZERO) > 0) {
                 return true;
             }
@@ -663,28 +726,28 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private void applyStockDelta(Long tenantId, ErpPurchaseOrderItem item, BigDecimal delta, String bizType, Long orderId) {
         Long warehouseId = item.getWarehouseId();
         Long locationId = item.getLocationId();
-        ErpStockBalance balance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
-        BigDecimal before = balance == null ? BigDecimal.ZERO : balance.getQtyOnHand();
-        BigDecimal after = before.add(delta);
-        if (after.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("库存不足，无法完成操作");
-        }
-        if (balance == null) {
-            balance = new ErpStockBalance();
-            balance.setTenantId(tenantId);
-            balance.setProductId(item.getProductId());
-            balance.setWarehouseId(warehouseId);
-            balance.setLocationId(locationId);
-            balance.setQtyOnHand(after);
-            balance.setUpdatedBy(resolveCurrentUsername());
-            balance.setUpdatedAt(Instant.now());
-            erpStockBalanceMapper.insert(balance);
+        String operator = resolveCurrentUsername();
+        ErpStockBalance updatedBalance;
+        if (delta.compareTo(BigDecimal.ZERO) < 0) {
+            updatedBalance = erpStockBalanceMapper.addQtyIfEnough(
+                tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
         } else {
-            balance.setQtyOnHand(after);
-            balance.setUpdatedBy(resolveCurrentUsername());
-            balance.setUpdatedAt(Instant.now());
-            erpStockBalanceMapper.updateById(balance);
+            updatedBalance = erpStockBalanceMapper.upsertAddQty(
+                tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
         }
+        if (updatedBalance == null) {
+            ErpStockBalance currentBalance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
+            BigDecimal currentQty = currentBalance == null || currentBalance.getQtyOnHand() == null
+                ? BigDecimal.ZERO
+                : currentBalance.getQtyOnHand();
+            BigDecimal required = delta.abs();
+            String productLabel = item.getProductName() == null ? item.getProductCode() : item.getProductName();
+            throw new IllegalArgumentException(
+                "库存不足，商品[" + productLabel + "] 可用=" + currentQty + "，需求=" + required
+            );
+        }
+        BigDecimal after = updatedBalance.getQtyOnHand() == null ? BigDecimal.ZERO : updatedBalance.getQtyOnHand();
+        BigDecimal before = after.subtract(delta);
 
         ErpStockTxn txn = new ErpStockTxn();
         txn.setTenantId(tenantId);
@@ -702,7 +765,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         BigDecimal totalCost = unitCost.multiply(delta).setScale(4, RoundingMode.HALF_UP);
         txn.setUnitCost(unitCost);
         txn.setTotalCost(totalCost);
-        txn.setOperator(resolveCurrentUsername());
+        txn.setOperator(operator);
         txn.setOperatorId(null);
         txn.setRemark(item.getRemark());
         txn.setCreatedAt(Instant.now());

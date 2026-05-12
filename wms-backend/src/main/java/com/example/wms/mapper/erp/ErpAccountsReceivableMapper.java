@@ -59,6 +59,16 @@ public interface ErpAccountsReceivableMapper extends BaseMapper<ErpAccountsRecei
                                                                        @Param("keyword") String keyword);
 
     @Select("""
+        SELECT COALESCE(SUM(unpaid_amount), 0)
+        FROM erp_accounts_receivable
+        WHERE tenant_id = #{tenantId}
+          AND customer_id = #{customerId}
+          AND status <> 'RED_FLUSHED'
+          AND deleted_at IS NULL
+        """)
+    BigDecimal sumCustomerDebt(@Param("tenantId") Long tenantId, @Param("customerId") Long customerId);
+
+    @Select("""
         UPDATE erp_accounts_receivable
         SET paid_amount = paid_amount + #{delta},
             unpaid_amount = total_amount - (paid_amount + #{delta}),

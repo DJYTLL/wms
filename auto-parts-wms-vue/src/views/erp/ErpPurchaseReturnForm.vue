@@ -93,7 +93,6 @@
                     :disabled="isReadOnly || !formData.supplierId"
                     @change="handleReturnSourceChange"
                   >
-                    <el-option :label="$t('returnSource.byProduct')" value="BY_PRODUCT" />
                     <el-option :label="$t('returnSource.byPurchaseOrder')" value="BY_PURCHASE_ORDER" />
                   </el-select>
                 </el-form-item>
@@ -146,10 +145,10 @@
                     @change="handleProductChange(row)"
                     @visible-change="(visible: boolean) => handleProductVisibleChange(row, visible)"
                   >
-                    <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
+                    <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                   </el-select>
                   <div
-                    v-if="formData.returnSource === 'BY_PRODUCT' && row.productId"
+                    v-if="false"
                     class="recent-sale-hint"
                   >
                     <div class="recent-sale-hint__title">{{ $t('message.recentPurchaseHint') }}</div>
@@ -319,6 +318,9 @@
         <el-table-column :label="$t('field.quantity')" width="120">
           <template #default="{ row }">{{ row.qty }}</template>
         </el-table-column>
+        <el-table-column :label="$t('field.remainingQty')" width="120">
+          <template #default="{ row }">{{ row.remainingQty }}</template>
+        </el-table-column>
         <el-table-column :label="$t('field.price')" width="120">
           <template #default="{ row }">{{ row.price }}</template>
         </el-table-column>
@@ -398,6 +400,7 @@ interface PurchaseOrderDetailItem {
   warehouseId?: number;
   locationId?: number;
   qty?: number;
+  remainingQty?: number;
   price?: number;
   taxRate?: number;
 }
@@ -409,6 +412,7 @@ interface ProductOption {
   defaultLocationId?: number;
   salePrice?: number;
   costPrice?: number;
+  enabled?: boolean;
 }
 
 interface RecentPurchaseItem {
@@ -494,7 +498,7 @@ const formData = reactive({
   orderAt: '',
   status: '',
   returnType: 'RETURN',
-  returnSource: 'BY_PRODUCT',
+  returnSource: 'BY_PURCHASE_ORDER',
   supplierId: null as number | null,
   purchaseOrderId: null as number | null,
   settlementMethod: '',
@@ -1135,9 +1139,7 @@ const handleReturnSourceChange = () => {
     }
     return;
   }
-  formData.purchaseOrderId = null;
-  purchaseOrderDetailItems.value = [];
-  selectedPurchaseOrderItems.value = [];
+  formData.returnSource = 'BY_PURCHASE_ORDER';
 };
 
 const handlePurchaseOrderChange = (value: number | null) => {
@@ -1162,22 +1164,59 @@ const openPurchaseOrderDetail = async (orderId: number) => {
   try {
     const res: any = await request.get(`/erp/purchase-orders/${orderId}`);
     const data = res.data.data || {};
-    purchaseOrderDetailItems.value = (data.items || []).map((item: any) => ({
+    const returnedQtyMap = await fetchReturnedQtyMap(orderId);
+    purchaseOrderDetailItems.value = (data.items || []).map((item: any) => {
+      const originalQty = Number(item.qty || 0);
+      const returnedQty = returnedQtyMap.get(Number(item.productId)) || 0;
+      const remainingQty = Math.max(0, originalQty - returnedQty);
+      return {
       id: item.id,
       productId: item.productId,
       productCode: item.productCode,
       productName: item.productName,
       warehouseId: item.warehouseId,
       locationId: item.locationId,
-      qty: Number(item.qty || 0),
+      qty: originalQty,
+      remainingQty,
       price: Number(item.price || 0),
       taxRate: Number(item.taxRate || 0)
-    }));
+      };
+    }).filter((item: PurchaseOrderDetailItem) => Number(item.remainingQty || 0) > 0);
+    if (!purchaseOrderDetailItems.value.length) {
+      notifyWarning(t('message.noItems'));
+      return;
+    }
     selectedPurchaseOrderItems.value = [...purchaseOrderDetailItems.value];
     showPurchaseOrderDialog.value = true;
   } catch (error) {
     notifyError(error);
   }
+};
+
+const fetchReturnedQtyMap = async (purchaseOrderId: number) => {
+  const qtyMap = new Map<number, number>();
+  if (!purchaseOrderId || !formData.supplierId) {
+    return qtyMap;
+  }
+  const res: any = await request.get('/erp/purchase-returns', {
+    params: {
+      status: 'APPROVED',
+      supplierId: formData.supplierId
+    }
+  });
+  const returns = Array.isArray(res.data.data) ? res.data.data : [];
+  const relatedReturns = returns.filter((item: any) => Number(item.purchaseOrderId) === Number(purchaseOrderId));
+  await Promise.all(relatedReturns.map(async (item: any) => {
+    const detailRes: any = await request.get(`/erp/purchase-returns/${item.id}`);
+    const detail = detailRes.data.data || {};
+    const detailItems = Array.isArray(detail.items) ? detail.items : [];
+    detailItems.forEach((detailItem: any) => {
+      const productId = Number(detailItem.productId);
+      if (!productId) return;
+      qtyMap.set(productId, (qtyMap.get(productId) || 0) + Number(detailItem.qty || 0));
+    });
+  }));
+  return qtyMap;
 };
 
 const handlePurchaseOrderSelectionChange = (rows: PurchaseOrderDetailItem[]) => {
@@ -1194,7 +1233,7 @@ const applyPurchaseOrderSelection = () => {
     warehouseId: item.warehouseId,
     locationId: item.locationId,
     stockKey: '',
-    qty: item.qty == null ? '' : String(item.qty),
+    qty: item.remainingQty == null ? '' : String(item.remainingQty),
     price: item.price == null ? '' : String(item.price),
     taxRate: item.taxRate || 0,
     remark: '',
@@ -1303,13 +1342,17 @@ const ensureProductOption = async (productId?: number | null) => {
         defaultWarehouseId: product.defaultWarehouseId,
         defaultLocationId: product.defaultLocationId,
         salePrice: product.salePrice,
-        costPrice: product.costPrice
+        costPrice: product.costPrice,
+        enabled: product.enabled
       });
     }
   } catch (error) {
     notifyError(error);
   }
 };
+
+const getSelectableProductOptions = (currentProductId?: number | null) =>
+  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
 
 const ensureWarehouseOption = async (warehouseId?: number | null) => {
   if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
@@ -1368,7 +1411,7 @@ const loadDetail = async () => {
       formData.returnType = data.order?.returnType || data.returnType || 'RETURN';
       formData.supplierId = data.order?.supplierId || data.supplierId || null;
       formData.purchaseOrderId = data.order?.purchaseOrderId || data.purchaseOrderId || null;
-      formData.returnSource = formData.purchaseOrderId ? 'BY_PURCHASE_ORDER' : 'BY_PRODUCT';
+      formData.returnSource = 'BY_PURCHASE_ORDER';
       formData.orderAt = normalizeDateTimeValue(data.order?.orderAt || data.orderAt) || formatDateTime(new Date());
       formData.remark = data.order?.remark || data.remark || '';
       formData.settlementMethod = data.order?.settlementMethod || data.settlementMethod || '';
@@ -1426,7 +1469,7 @@ const resetForm = () => {
   formData.orderAt = '';
   formData.status = '';
   formData.returnType = 'RETURN';
-  formData.returnSource = 'BY_PRODUCT';
+  formData.returnSource = 'BY_PURCHASE_ORDER';
   formData.supplierId = null;
   formData.purchaseOrderId = null;
   formData.settlementMethod = '';
@@ -1461,9 +1504,7 @@ const applyDefaultMethods = () => {
   if (!formData.returnType) {
     formData.returnType = 'RETURN';
   }
-  if (!formData.returnSource) {
-    formData.returnSource = 'BY_PRODUCT';
-  }
+  formData.returnSource = 'BY_PURCHASE_ORDER';
 };
 
 const fetchNextOrderNo = async () => {
@@ -1487,7 +1528,7 @@ const fetchNextOrderNo = async () => {
     notifyWarning(t('message.required'));
     return;
   }
-  if (formData.returnSource === 'BY_PURCHASE_ORDER' && !formData.purchaseOrderId) {
+  if (!formData.purchaseOrderId) {
     notifyWarning(t('message.required'));
     return;
   }

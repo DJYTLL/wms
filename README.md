@@ -45,6 +45,7 @@
 - 库位 `aisle`、`rack`、`bin` 字段在新增和编辑时会真实持久化，不再丢失。
 - 新增业务选项接口 `/api/erp/products/options`、`/api/erp/warehouses/options` 与 `/api/erp/locations/options`，新建和编辑业务单据时默认只返回启用中的商品、仓库和库位。
 - 采购、采购退货、销售、销售退货、组装、拆分、商品默认仓库/库位、盘点等页面在编辑历史单据时，允许回显已停用但仍存在的商品、仓库和库位，避免旧数据打开后丢失当前值。
+- 后端业务保存时会阻止停用商品被新单据或旧单据新增行再次引用；仅允许草稿单据继续保留其原本已引用的停用商品。
 - 仓库管理页和库位管理页的删除提示已明确“已使用主数据应优先停用”，避免误把删除当作常规退出路径。
 
 ### 打印模板与针式打印链路升级
@@ -54,6 +55,14 @@
 - 前端已接入 `QZ Tray` 直打能力，打印时优先尝试本地直打，失败时回退浏览器打印。
 - 后端已补充 `QZ Tray` 可信签名接口，前端通过证书与签名握手连接本地 `QZ Tray`。
 - 仓库根目录新增 `qz-provisioning/`，用于给客户机侧载 QZ 信任配置，减少手工授权成本。
+
+### ERP 商品成本计算补强
+
+- 商品成本统一采用移动加权平均成本，采购入库、销售退货入库、采购退货红冲、销售红冲、盘点盘盈、初始库存、组装成品入库和拆卸子件入库等入库类动作统一走后端成本服务计算。
+- 采购单取消、销售退货红冲、初始库存红冲等会反向回滚本次入库对商品成本的影响，避免库存已回退但 `cost_price` 仍停留在红冲前成本。
+- 销售退货优先使用原销售出库库存流水中的单位成本，取不到原始成本时才回退到当前商品成本。
+- 商品成本更新会通过商品行 `SELECT ... FOR UPDATE` 串行化同商品成本计算，降低并发审批下平均成本被后写覆盖的风险。
+- 成本计算入口已集中到 `ErpCostService`，业务服务不再各自维护重复的移动平均成本算法。
 
 ## 2. 仓库总览
 
@@ -883,6 +892,12 @@ git config core.hooksPath tools/git-hooks
 - 本次变更：将后端系统管理与 ERP 全业务域的运行期删除语义统一改为逻辑删除，并补齐已删除数据的默认过滤。
 - 影响范围：`README.md`、`wms-backend/src/main/resources/db/migration/V55__logical_delete_support.sql`、`wms-backend/src/main/resources/db/migration/V56__logical_delete_relations_and_finance.sql`，以及后端系统管理/ERP 实体、Mapper、部分服务实现。
 - 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q -DskipTests compile`，并复查运行期代码中保留的 `deleteById`/`mapper.delete(...)` 调用目标均已接入 `@TableLogic`。
+
+### 2026-05-12 ERP 商品成本计算补强
+
+- 本次变更：统一商品成本移动加权平均计算入口，补齐采购取消、销售退货红冲、初始库存红冲等撤销类业务的成本回滚，并通过商品行锁降低并发审批下的成本丢失更新风险。
+- 影响范围：`README.md`、`wms-backend/src/main/java/com/example/wms/service/erp/support/ErpCostService.java`、`wms-backend/src/main/java/com/example/wms/mapper/erp/ErpProductMapper.java`、采购/销售/采购退货/销售退货/盘点/组装拆卸相关后端服务，以及 `wms-backend/src/test/java/com/example/wms/ErpCostServiceTests.java`。
+- 验证方式：在 `D:\project\wms-backend` 执行 `mvn -q test`，确认成本服务专项测试与既有后端回归测试通过。
 
 ### 2026-05-10 完善删除治理规范
 

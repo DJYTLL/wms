@@ -77,6 +77,7 @@ public final class PermissionSeedProvider {
             new PermissionSeed("column:audit-logs:entityType", "审计日志-实体类型列", "审计日志实体类型列显示"),
             new PermissionSeed("column:audit-logs:entityId", "审计日志-实体ID列", "审计日志实体ID列显示"),
             new PermissionSeed("column:audit-logs:detail", "审计日志-详情列", "审计日志详情列显示"),
+            new PermissionSeed("column:audit-logs:deleteReason", "审计日志-删除原因列", "审计日志删除原因列显示"),
             new PermissionSeed("column:audit-logs:status", "审计日志-结果列", "审计日志结果列显示"),
             new PermissionSeed("column:audit-logs:requestId", "审计日志-请求ID列", "审计日志请求ID列显示"),
             new PermissionSeed("column:audit-logs:clientIp", "审计日志-客户端IP列", "审计日志客户端IP列显示"),

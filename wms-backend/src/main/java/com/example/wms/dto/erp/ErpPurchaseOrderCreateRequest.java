@@ -1,5 +1,6 @@
 package com.example.wms.dto.erp;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
 import java.util.List;
@@ -12,7 +13,7 @@ public record ErpPurchaseOrderCreateRequest(
     String paymentMethodCode,
     java.math.BigDecimal paidAmount,
     java.math.BigDecimal discountAmount,
-    @NotEmpty List<ErpPurchaseOrderItemRequest> items,
+    @Valid @NotEmpty List<ErpPurchaseOrderItemRequest> items,
     String remark
 ) {
 }

@@ -124,6 +124,21 @@ public class ErpSaleOrder {
     @TableField(exist = false)
     private Long approvedReturnCount;
 
+    @TableField(exist = false)
+    private BigDecimal cumulativeReturnAmount;
+
+    @TableField(exist = false)
+    private BigDecimal cumulativeReturnCost;
+
+    @TableField(exist = false)
+    private BigDecimal netSaleAmount;
+
+    @TableField(exist = false)
+    private BigDecimal netGrossProfit;
+
+    @TableField(exist = false)
+    private String redFlushTrace;
+
     // 创建时间
     @TableField("created_at")
     private Instant createdAt;
@@ -373,6 +388,46 @@ public class ErpSaleOrder {
 
     public void setApprovedReturnCount(Long approvedReturnCount) {
         this.approvedReturnCount = approvedReturnCount;
+    }
+
+    public BigDecimal getCumulativeReturnAmount() {
+        return cumulativeReturnAmount;
+    }
+
+    public void setCumulativeReturnAmount(BigDecimal cumulativeReturnAmount) {
+        this.cumulativeReturnAmount = cumulativeReturnAmount;
+    }
+
+    public BigDecimal getCumulativeReturnCost() {
+        return cumulativeReturnCost;
+    }
+
+    public void setCumulativeReturnCost(BigDecimal cumulativeReturnCost) {
+        this.cumulativeReturnCost = cumulativeReturnCost;
+    }
+
+    public BigDecimal getNetSaleAmount() {
+        return netSaleAmount;
+    }
+
+    public void setNetSaleAmount(BigDecimal netSaleAmount) {
+        this.netSaleAmount = netSaleAmount;
+    }
+
+    public BigDecimal getNetGrossProfit() {
+        return netGrossProfit;
+    }
+
+    public void setNetGrossProfit(BigDecimal netGrossProfit) {
+        this.netGrossProfit = netGrossProfit;
+    }
+
+    public String getRedFlushTrace() {
+        return redFlushTrace;
+    }
+
+    public void setRedFlushTrace(String redFlushTrace) {
+        this.redFlushTrace = redFlushTrace;
     }
 
     public Instant getCreatedAt() {

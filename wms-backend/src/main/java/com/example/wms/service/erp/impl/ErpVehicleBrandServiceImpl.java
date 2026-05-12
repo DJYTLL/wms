@@ -7,7 +7,9 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpVehicleBrandCreateRequest;
 import com.example.wms.dto.erp.ErpVehicleBrandUpdateRequest;
 import com.example.wms.entity.erp.ErpVehicleBrand;
+import com.example.wms.entity.erp.ErpVehicleSeries;
 import com.example.wms.mapper.erp.ErpVehicleBrandMapper;
+import com.example.wms.mapper.erp.ErpVehicleSeriesMapper;
 import com.example.wms.service.erp.ErpVehicleBrandService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -19,9 +21,12 @@ import java.util.List;
 @Service
 public class ErpVehicleBrandServiceImpl implements ErpVehicleBrandService {
     private final ErpVehicleBrandMapper erpVehicleBrandMapper;
+    private final ErpVehicleSeriesMapper erpVehicleSeriesMapper;
 
-    public ErpVehicleBrandServiceImpl(ErpVehicleBrandMapper erpVehicleBrandMapper) {
+    public ErpVehicleBrandServiceImpl(ErpVehicleBrandMapper erpVehicleBrandMapper,
+                                      ErpVehicleSeriesMapper erpVehicleSeriesMapper) {
         this.erpVehicleBrandMapper = erpVehicleBrandMapper;
+        this.erpVehicleSeriesMapper = erpVehicleSeriesMapper;
     }
 
     @Override
@@ -101,6 +106,11 @@ public class ErpVehicleBrandServiceImpl implements ErpVehicleBrandService {
             .eq("id", id));
         if (brand == null) {
             throw new IllegalArgumentException("品牌不存在");
+        }
+        if (erpVehicleSeriesMapper.selectCount(new QueryWrapper<ErpVehicleSeries>()
+            .eq("tenant_id", tenantId)
+            .eq("brand_id", id)) > 0) {
+            throw new IllegalArgumentException("品牌下存在车系，不能删除");
         }
         erpVehicleBrandMapper.deleteById(id);
     }

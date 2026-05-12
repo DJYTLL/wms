@@ -118,7 +118,7 @@
                     :placeholder="$t('placeholder.selectProduct')"
                     :disabled="isReadOnly"
                   >
-                    <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
+                    <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                   </el-select>
                 </template>
               </el-table-column>
@@ -252,6 +252,7 @@ interface OptionItem {
   id: number;
   name: string;
   warehouseId?: number;
+  enabled?: boolean;
 }
 
 interface MethodOption {
@@ -559,13 +560,17 @@ const ensureProductOption = async (productId?: number | null) => {
     if (product) {
       productOptions.value = mergeOptionById(productOptions.value, {
         id: product.id,
-        name: product.name
+        name: product.name,
+        enabled: product.enabled
       });
     }
   } catch (error) {
     notifyError(error);
   }
 };
+
+const getSelectableProductOptions = (currentProductId?: number | null) =>
+  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
 
 const fetchWarehouses = async () => {
   try {

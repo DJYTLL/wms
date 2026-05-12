@@ -6,7 +6,15 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSupplierCreateRequest;
 import com.example.wms.dto.erp.ErpSupplierUpdateRequest;
+import com.example.wms.entity.erp.ErpAccountsPayable;
+import com.example.wms.entity.erp.ErpPayment;
+import com.example.wms.entity.erp.ErpPurchaseOrder;
+import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.entity.erp.ErpSupplier;
+import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
+import com.example.wms.mapper.erp.ErpPaymentMapper;
+import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
+import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.service.erp.ErpSupplierService;
 import com.example.wms.tenant.TenantContext;
@@ -21,11 +29,23 @@ import java.util.List;
 @Service
 public class ErpSupplierServiceImpl implements ErpSupplierService {
     private final ErpSupplierMapper erpSupplierMapper;
+    private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
+    private final ErpPurchaseReturnMapper erpPurchaseReturnMapper;
+    private final ErpPaymentMapper erpPaymentMapper;
+    private final ErpAccountsPayableMapper erpAccountsPayableMapper;
     private final ObjectMapper objectMapper;
 
     public ErpSupplierServiceImpl(ErpSupplierMapper erpSupplierMapper,
+                                  ErpPurchaseOrderMapper erpPurchaseOrderMapper,
+                                  ErpPurchaseReturnMapper erpPurchaseReturnMapper,
+                                  ErpPaymentMapper erpPaymentMapper,
+                                  ErpAccountsPayableMapper erpAccountsPayableMapper,
                                   ObjectMapper objectMapper) {
         this.erpSupplierMapper = erpSupplierMapper;
+        this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
+        this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
+        this.erpPaymentMapper = erpPaymentMapper;
+        this.erpAccountsPayableMapper = erpAccountsPayableMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -107,7 +127,31 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         if (supplier == null) {
             throw new IllegalArgumentException("供应商不存在");
         }
+        ensureSupplierNotReferenced(tenantId, id);
         erpSupplierMapper.deleteById(id);
+    }
+
+    private void ensureSupplierNotReferenced(Long tenantId, Long supplierId) {
+        if (erpPurchaseOrderMapper.selectCount(new QueryWrapper<ErpPurchaseOrder>()
+            .eq("tenant_id", tenantId)
+            .eq("supplier_id", supplierId)) > 0) {
+            throw new IllegalArgumentException("供应商已被采购单引用，不能删除");
+        }
+        if (erpPurchaseReturnMapper.selectCount(new QueryWrapper<ErpPurchaseReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("supplier_id", supplierId)) > 0) {
+            throw new IllegalArgumentException("供应商已被采购退货单引用，不能删除");
+        }
+        if (erpPaymentMapper.selectCount(new QueryWrapper<ErpPayment>()
+            .eq("tenant_id", tenantId)
+            .eq("supplier_id", supplierId)) > 0) {
+            throw new IllegalArgumentException("供应商已被付款单引用，不能删除");
+        }
+        if (erpAccountsPayableMapper.selectCount(new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .eq("supplier_id", supplierId)) > 0) {
+            throw new IllegalArgumentException("供应商已被应付单引用，不能删除");
+        }
     }
 
     private QueryWrapper<ErpSupplier> baseWrapper(String keyword, Boolean enabled) {

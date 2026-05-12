@@ -1,6 +1,7 @@
 package com.example.wms.dto.erp;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 
@@ -9,7 +10,7 @@ public record ErpPurchaseOrderItemRequest(
     @NotNull Long productId,
     Long warehouseId,
     Long locationId,
-    @NotNull BigDecimal qty,
+    @NotNull @Positive BigDecimal qty,
     BigDecimal price,
     BigDecimal priceInclTax,
     BigDecimal taxRate,

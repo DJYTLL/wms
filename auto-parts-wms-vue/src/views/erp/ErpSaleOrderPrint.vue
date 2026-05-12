@@ -54,6 +54,11 @@
       <div v-if="footerNote" class="paper-footer">
         {{ footerNote }}
       </div>
+
+      <div v-if="showCustomerDebtTotal" class="paper-debt-total">
+        <span>{{ $t('field.customerDebtTotal') }}</span>
+        <strong>{{ formatMoney(customerDebtTotal) }}</strong>
+      </div>
     </div>
   </div>
 </template>
@@ -94,6 +99,8 @@ const shouldAutoPrint = computed(() => route.query.auto === '1' || route.query.a
 const headerTitle = computed(() => template.value?.headerTitle || t('print.saleTitle'));
 const subTitle = computed(() => template.value?.subTitle || '');
 const footerNote = computed(() => template.value?.footerNote || t('print.footerNote'));
+const customerDebtTotal = computed(() => order.value?.customerDebtTotal ?? order.value?._customerDebtTotal ?? 0);
+const showCustomerDebtTotal = computed(() => order.value?.status === 'APPROVED');
 
 const headerRows = computed(() => {
   return headerFields.value
@@ -292,6 +299,9 @@ const fetchDetail = async () => {
   const res: any = await request.get(`/erp/sale-orders/${orderId.value}`);
   const data = res.data.data || {};
   order.value = data.order || null;
+  if (order.value) {
+    order.value._customerDebtTotal = data.customerDebtTotal;
+  }
   items.value = data.items || [];
 };
 
@@ -459,6 +469,19 @@ const columnStyle = (col: { width?: number }) => {
   color: #000;
   border-top: 1px solid #b3b3b3;
   padding-top: 6px;
+}
+
+.paper-debt-total {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #000;
+}
+
+.paper-debt-total strong {
+  font-size: 11px;
 }
 
 @page {

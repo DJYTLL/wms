@@ -91,6 +91,12 @@
             clearable
           />
           <el-input
+            v-model="deleteReason"
+            class="table-search table-search--wide"
+            :placeholder="t('field.deleteReason')"
+            clearable
+          />
+          <el-input
             v-model="errorCode"
             class="table-search table-search--narrow"
             :placeholder="t('field.errorCode')"
@@ -238,6 +244,7 @@ const actorUsername = ref('');
 const requestId = ref('');
 const method = ref('');
 const path = ref('');
+const deleteReason = ref('');
 const errorCode = ref('');
 const errorMessage = ref('');
 const httpStatus = ref<number | undefined>();
@@ -389,7 +396,7 @@ const columnPermissionMap: Record<string, string> = {
   entityType: 'column:audit-logs:entityType',
   entityId: 'column:audit-logs:entityId',
   detail: 'column:audit-logs:detail',
-  deleteReason: 'column:audit-logs:detail',
+  deleteReason: 'column:audit-logs:deleteReason',
   status: 'column:audit-logs:status',
   requestId: 'column:audit-logs:requestId',
   clientIp: 'column:audit-logs:clientIp',
@@ -416,6 +423,7 @@ const fetchLogs = async () => {
     if (requestId.value) params.requestId = requestId.value;
     if (method.value) params.method = method.value;
     if (path.value) params.path = path.value;
+    if (deleteReason.value) params.deleteReason = deleteReason.value;
     if (errorCode.value) params.errorCode = errorCode.value;
     if (errorMessage.value) params.errorMessage = errorMessage.value;
     if (httpStatus.value) params.httpStatus = httpStatus.value;
@@ -461,6 +469,7 @@ const exportLogs = async () => {
     if (requestId.value) params.requestId = requestId.value;
     if (method.value) params.method = method.value;
     if (path.value) params.path = path.value;
+    if (deleteReason.value) params.deleteReason = deleteReason.value;
     if (errorCode.value) params.errorCode = errorCode.value;
     if (errorMessage.value) params.errorMessage = errorMessage.value;
     if (httpStatus.value) params.httpStatus = httpStatus.value;

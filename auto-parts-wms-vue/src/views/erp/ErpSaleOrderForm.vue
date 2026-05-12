@@ -129,7 +129,7 @@
                       :disabled="!formData.customerId"
                       @change="handleProductChange(row)"
                     >
-                      <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
+                      <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                     </el-select>
                     <el-tag
                       class="history-inline history-tag history-tag--inline"
@@ -247,6 +247,13 @@
             </div>
           </div>
         </el-form>
+      </div>
+    </div>
+
+    <div v-if="showCustomerDebtTotal" class="table-card compact-card compact-card--inline debt-total-card">
+      <div class="table-body debt-total-body">
+        <span>{{ $t('field.customerDebtTotal') }}</span>
+        <strong>{{ formatMoney(formData.customerDebtTotal) }}</strong>
       </div>
     </div>
 
@@ -533,6 +540,7 @@ interface ProductOption {
   defaultLocationId?: number;
   salePrice?: number;
   costPrice?: number;
+  enabled?: boolean;
 }
 
 interface StockOption {
@@ -642,6 +650,7 @@ const formData = reactive({
   deliveryMethod: '',
   paidAmount: '',
   discountAmount: '',
+  customerDebtTotal: '',
   remark: '',
   items: [] as SaleOrderItem[]
 });
@@ -710,6 +719,7 @@ const canViewProfit = computed(() => {
 
 const canShowProfit = computed(() => canViewProfit.value && showProfitColumn.value);
 const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale:discountAllocated'));
+const showCustomerDebtTotal = computed(() => formData.status === 'APPROVED');
 const isCreditSettlement = computed(() => {
   if (!formData.settlementMethod) return false;
   const code = String(formData.settlementMethod).toUpperCase();
@@ -1188,6 +1198,7 @@ const handleApproveSavedOrder = async () => {
     closeSaveSuccessDialog();
     notifySuccess();
     await router.replace(`/erp/sale-orders/${savedId}/edit`);
+    await loadDetail();
   } catch (error) {
     notifyError(error);
   }
@@ -1547,9 +1558,10 @@ const calcLineProfit = (row: SaleOrderItem) => {
   return amount - (cost * (parseDecimal(row.qty, 4) || 0));
 };
 
-const formatMoney = (value: number | null) => {
-  if (value == null || Number.isNaN(value)) return '-';
-  return value.toFixed(2);
+const formatMoney = (value: number | string | null) => {
+  const num = typeof value === 'string' ? Number(value) : value;
+  if (num == null || Number.isNaN(num)) return '-';
+  return num.toFixed(2);
 };
 
 const formatRate = (value: number | null) => {
@@ -1777,13 +1789,17 @@ const ensureProductOption = async (productId?: number | null) => {
         defaultWarehouseId: product.defaultWarehouseId,
         defaultLocationId: product.defaultLocationId,
         salePrice: product.salePrice,
-        costPrice: product.costPrice
+        costPrice: product.costPrice,
+        enabled: product.enabled
       });
     }
   } catch (error) {
     notifyError(error);
   }
 };
+
+const getSelectableProductOptions = (currentProductId?: number | null) =>
+  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
 
 const fetchWarehouses = async () => {
   try {
@@ -1867,6 +1883,7 @@ const loadDetail = async () => {
       formData.deliveryMethod = data.order?.deliveryMethod || data.deliveryMethod || '';
       formData.paidAmount = String(data.order?.paidAmount ?? data.paidAmount ?? '');
       formData.discountAmount = String(data.order?.discountAmount ?? data.discountAmount ?? '');
+      formData.customerDebtTotal = String(data.customerDebtTotal ?? data.order?.customerDebtTotal ?? '');
       formData.items = (data.items || data.order?.items || []).map((item: any) => ({
         id: item.id,
         productId: item.productId,
@@ -1928,6 +1945,7 @@ const resetForm = () => {
   formData.deliveryMethod = '';
   formData.paidAmount = '';
   formData.discountAmount = '';
+  formData.customerDebtTotal = '';
   formData.remark = '';
   formData.items = [];
   themeMode.value = 'default';
@@ -2604,6 +2622,21 @@ onBeforeUnmount(() => {
 
 .summary-item {
   white-space: nowrap;
+}
+
+.debt-total-body {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 16px !important;
+  font-size: 14px;
+  color: #303133;
+}
+
+.debt-total-body strong {
+  font-size: 16px;
+  color: #c45656;
 }
 
 .payment-card-body {

@@ -7,7 +7,9 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpVehicleModelCreateRequest;
 import com.example.wms.dto.erp.ErpVehicleModelUpdateRequest;
 import com.example.wms.entity.erp.ErpVehicleModel;
+import com.example.wms.entity.erp.ErpProductFitment;
 import com.example.wms.entity.erp.ErpVehicleSeries;
+import com.example.wms.mapper.erp.ErpProductFitmentMapper;
 import com.example.wms.mapper.erp.ErpVehicleModelMapper;
 import com.example.wms.mapper.erp.ErpVehicleSeriesMapper;
 import com.example.wms.service.erp.ErpVehicleModelService;
@@ -22,11 +24,14 @@ import java.util.List;
 public class ErpVehicleModelServiceImpl implements ErpVehicleModelService {
     private final ErpVehicleModelMapper erpVehicleModelMapper;
     private final ErpVehicleSeriesMapper erpVehicleSeriesMapper;
+    private final ErpProductFitmentMapper erpProductFitmentMapper;
 
     public ErpVehicleModelServiceImpl(ErpVehicleModelMapper erpVehicleModelMapper,
-                                      ErpVehicleSeriesMapper erpVehicleSeriesMapper) {
+                                      ErpVehicleSeriesMapper erpVehicleSeriesMapper,
+                                      ErpProductFitmentMapper erpProductFitmentMapper) {
         this.erpVehicleModelMapper = erpVehicleModelMapper;
         this.erpVehicleSeriesMapper = erpVehicleSeriesMapper;
+        this.erpProductFitmentMapper = erpProductFitmentMapper;
     }
 
     @Override
@@ -108,6 +113,11 @@ public class ErpVehicleModelServiceImpl implements ErpVehicleModelService {
             .eq("id", id));
         if (model == null) {
             throw new IllegalArgumentException("车型不存在");
+        }
+        if (erpProductFitmentMapper.selectCount(new QueryWrapper<ErpProductFitment>()
+            .eq("tenant_id", tenantId)
+            .eq("model_id", id)) > 0) {
+            throw new IllegalArgumentException("车型已被商品适配关系引用，不能删除");
         }
         erpVehicleModelMapper.deleteById(id);
     }

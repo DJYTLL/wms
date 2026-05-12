@@ -36,7 +36,9 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 // 库存盘点服务实现（ERP进销存）
@@ -123,7 +125,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         if (TYPE_INIT.equals(type) && hasActiveInit(tenantId)) {
             throw new IllegalArgumentException("初始库存仅允许创建一次");
         }
-        validateCountRequest(request.items());
+        validateCountRequest(request.items(), tenantId, Set.of());
         String countNo = ensureCountNo(tenantId, request.countNo(), type);
         ErpStockCount count = new ErpStockCount();
         count.setTenantId(tenantId);
@@ -138,7 +140,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         count.setUpdatedAt(Instant.now());
         erpStockCountMapper.insert(count);
 
-        List<ErpStockCountItem> items = buildItems(tenantId, count, request.items());
+        List<ErpStockCountItem> items = buildItems(tenantId, count, request.items(), Set.of());
         for (ErpStockCountItem item : items) {
             erpStockCountItemMapper.insert(item);
         }
@@ -159,7 +161,11 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         if (!STATUS_DRAFT.equals(count.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可编辑");
         }
-        validateCountRequest(request.items());
+        Set<Long> allowedDisabledProductIds = existingProductIds(erpStockCountItemMapper.selectList(new QueryWrapper<ErpStockCountItem>()
+            .eq("tenant_id", tenantId)
+            .eq("count_id", id)
+            .orderByAsc("line_no")));
+        validateCountRequest(request.items(), tenantId, allowedDisabledProductIds);
         count.setWarehouseId(request.warehouseId());
         count.setLocationId(request.locationId());
         Instant countAt = parseInstant(request.countAt());
@@ -171,7 +177,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         erpStockCountItemMapper.delete(new QueryWrapper<ErpStockCountItem>()
             .eq("tenant_id", tenantId)
             .eq("count_id", id));
-        List<ErpStockCountItem> items = buildItems(tenantId, count, request.items());
+        List<ErpStockCountItem> items = buildItems(tenantId, count, request.items(), allowedDisabledProductIds);
         for (ErpStockCountItem item : items) {
             erpStockCountItemMapper.insert(item);
         }
@@ -299,10 +305,14 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         return wrapper;
     }
 
-    private List<ErpStockCountItem> buildItems(Long tenantId, ErpStockCount count, List<ErpStockCountItemRequest> requests) {
+    private List<ErpStockCountItem> buildItems(Long tenantId,
+                                               ErpStockCount count,
+                                               List<ErpStockCountItemRequest> requests,
+                                               Set<Long> allowedDisabledProductIds) {
         List<ErpStockCountItem> items = new ArrayList<>();
         int lineNo = 1;
         for (ErpStockCountItemRequest request : requests) {
+            requireUsableProduct(tenantId, request.productId(), allowedDisabledProductIds);
             Long warehouseId = request.warehouseId() != null ? request.warehouseId() : count.getWarehouseId();
             Long locationId = request.locationId() != null ? request.locationId() : count.getLocationId();
             BigDecimal systemQty = resolveSystemQty(tenantId, request.productId(), warehouseId, locationId);
@@ -332,7 +342,9 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         return balance == null ? BigDecimal.ZERO : balance.getQtyOnHand();
     }
 
-    private void validateCountRequest(List<ErpStockCountItemRequest> requests) {
+    private void validateCountRequest(List<ErpStockCountItemRequest> requests,
+                                      Long tenantId,
+                                      Set<Long> allowedDisabledProductIds) {
         if (requests == null || requests.isEmpty()) {
             throw new IllegalArgumentException("盘点明细不能为空");
         }
@@ -340,6 +352,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
             if (request == null || request.productId() == null) {
                 throw new IllegalArgumentException("盘点商品不能为空");
             }
+            requireUsableProduct(tenantId, request.productId(), allowedDisabledProductIds);
             if (request.countedQty() == null) {
                 throw new IllegalArgumentException("盘点数量不能为空");
             }
@@ -347,6 +360,32 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
                 throw new IllegalArgumentException("盘点数量不能小于 0");
             }
         }
+    }
+
+    private ErpProduct requireUsableProduct(Long tenantId, Long productId, Set<Long> allowedDisabledProductIds) {
+        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", tenantId)
+            .eq("id", productId));
+        if (product == null) {
+            throw new IllegalArgumentException("商品不存在");
+        }
+        if (Boolean.FALSE.equals(product.getEnabled()) && (allowedDisabledProductIds == null || !allowedDisabledProductIds.contains(productId))) {
+            throw new IllegalArgumentException("商品已停用，不能新增引用");
+        }
+        return product;
+    }
+
+    private Set<Long> existingProductIds(List<ErpStockCountItem> items) {
+        Set<Long> ids = new HashSet<>();
+        if (items == null) {
+            return ids;
+        }
+        for (ErpStockCountItem item : items) {
+            if (item != null && item.getProductId() != null) {
+                ids.add(item.getProductId());
+            }
+        }
+        return ids;
     }
 
     private void applyStockDelta(Long tenantId,

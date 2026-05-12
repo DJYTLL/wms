@@ -43,7 +43,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 // 销售单服务实现（ERP进销存）
@@ -142,7 +144,11 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             throw new IllegalArgumentException("销售单不存在");
         }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
-        return new ErpSaleOrderDetail(order, items);
+        enrichFlowStatus(tenantId, List.of(order));
+        BigDecimal customerDebtTotal = order.getCustomerId() == null
+            ? BigDecimal.ZERO
+            : erpAccountsReceivableMapper.sumCustomerDebt(tenantId, order.getCustomerId());
+        return new ErpSaleOrderDetail(order, items, customerDebtTotal == null ? BigDecimal.ZERO : customerDebtTotal);
     }
 
     @Override
@@ -179,7 +185,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setUpdatedAt(Instant.now());
         erpSaleOrderMapper.insert(order);
 
-        List<ErpSaleOrderItem> items = buildItems(tenantId, order.getId(), request.items());
+        List<ErpSaleOrderItem> items = buildItems(tenantId, order.getId(), request.items(), Set.of());
         for (ErpSaleOrderItem item : items) {
             erpSaleOrderItemMapper.insert(item);
         }
@@ -218,11 +224,13 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
 
+        Set<Long> allowedDisabledProductIds = existingProductIds(erpSaleOrderItemMapper.findByOrderId(tenantId, id));
+
         erpSaleOrderItemMapper.delete(new QueryWrapper<ErpSaleOrderItem>()
             .eq("tenant_id", tenantId)
             .eq("order_id", id));
 
-        List<ErpSaleOrderItem> items = buildItems(tenantId, id, request.items());
+        List<ErpSaleOrderItem> items = buildItems(tenantId, id, request.items(), allowedDisabledProductIds);
         for (ErpSaleOrderItem item : items) {
             erpSaleOrderItemMapper.insert(item);
         }
@@ -349,8 +357,40 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 order.setReceivableStatus(receivable.getStatus());
                 order.setReceivableUnpaidAmount(receivable.getUnpaidAmount());
             }
-            order.setApprovedReturnCount(erpSaleReturnMapper.countApprovedBySaleOrderId(tenantId, order.getId()));
+            Long approvedReturnCount = erpSaleReturnMapper.countApprovedBySaleOrderId(tenantId, order.getId());
+            order.setApprovedReturnCount(approvedReturnCount);
+            BigDecimal returnAmount = zeroIfNull(erpSaleReturnMapper.sumApprovedAmountBySaleOrderId(tenantId, order.getId()));
+            BigDecimal saleCost = zeroIfNull(erpStockTxnMapper.sumSaleIssueCost(tenantId, order.getId()));
+            BigDecimal returnCost = zeroIfNull(erpStockTxnMapper.sumApprovedSaleReturnCost(tenantId, order.getId()));
+            BigDecimal saleAmount = zeroIfNull(order.getTotalAmountInclTax());
+            BigDecimal netSaleAmount = saleAmount.subtract(returnAmount);
+            BigDecimal netCost = saleCost.subtract(returnCost);
+            order.setCumulativeReturnAmount(returnAmount);
+            order.setCumulativeReturnCost(returnCost);
+            order.setNetSaleAmount(netSaleAmount);
+            order.setNetGrossProfit(netSaleAmount.subtract(netCost));
+            order.setRedFlushTrace(resolveRedFlushTrace(order, approvedReturnCount));
         }
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private String resolveRedFlushTrace(ErpSaleOrder order, Long approvedReturnCount) {
+        if (order == null) {
+            return null;
+        }
+        if (order.getRedFlushSourceType() != null && order.getRedFlushSourceId() != null) {
+            return order.getRedFlushSourceType() + "#" + order.getRedFlushSourceId();
+        }
+        if (STATUS_RED_FLUSHED.equals(order.getStatus())) {
+            return "SALE_ORDER#" + order.getId();
+        }
+        if (approvedReturnCount != null && approvedReturnCount > 0) {
+            return "HAS_RETURN#" + approvedReturnCount;
+        }
+        return null;
     }
 
     @Override
@@ -473,16 +513,14 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
     }
 
-    private List<ErpSaleOrderItem> buildItems(Long tenantId, Long orderId, List<ErpSaleOrderItemRequest> requests) {
+    private List<ErpSaleOrderItem> buildItems(Long tenantId,
+                                              Long orderId,
+                                              List<ErpSaleOrderItemRequest> requests,
+                                              Set<Long> allowedDisabledProductIds) {
         List<ErpSaleOrderItem> items = new ArrayList<>();
         int index = 1;
         for (ErpSaleOrderItemRequest request : requests) {
-            ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-                .eq("tenant_id", tenantId)
-                .eq("id", request.productId()));
-            if (product == null) {
-                throw new IllegalArgumentException("商品不存在");
-            }
+            ErpProduct product = requireUsableProduct(tenantId, request.productId(), allowedDisabledProductIds);
             ErpSaleOrderItem item = new ErpSaleOrderItem();
             item.setTenantId(tenantId);
             item.setOrderId(orderId);
@@ -534,6 +572,32 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             index += 1;
         }
         return items;
+    }
+
+    private ErpProduct requireUsableProduct(Long tenantId, Long productId, Set<Long> allowedDisabledProductIds) {
+        ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", tenantId)
+            .eq("id", productId));
+        if (product == null) {
+            throw new IllegalArgumentException("商品不存在");
+        }
+        if (Boolean.FALSE.equals(product.getEnabled()) && (allowedDisabledProductIds == null || !allowedDisabledProductIds.contains(productId))) {
+            throw new IllegalArgumentException("商品已停用，不能新增引用");
+        }
+        return product;
+    }
+
+    private Set<Long> existingProductIds(List<ErpSaleOrderItem> items) {
+        Set<Long> ids = new HashSet<>();
+        if (items == null) {
+            return ids;
+        }
+        for (ErpSaleOrderItem item : items) {
+            if (item != null && item.getProductId() != null) {
+                ids.add(item.getProductId());
+            }
+        }
+        return ids;
     }
 
     private boolean hasApprovedReceiptImpact(Long tenantId, Long saleOrderId) {

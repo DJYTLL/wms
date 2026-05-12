@@ -8,10 +8,12 @@ import com.example.wms.entity.erp.ErpPayment;
 import com.example.wms.entity.erp.ErpPaymentPayable;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpPurchaseOrder;
+import com.example.wms.entity.erp.ErpPurchaseOrderItem;
 import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.entity.erp.ErpPurchaseReturnItem;
 import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpReceiptReceivable;
+import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.dto.erp.ErpPaymentCreateRequest;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
@@ -260,6 +262,11 @@ class ErpFinanceWorkflowTests {
         when(purchaseReturnItemMapper.findByReturnId(1L, 70L)).thenReturn(List.of(item));
         when(payableMapper.findByPurchaseReturnId(1L, 70L)).thenReturn(payable);
         when(paymentPayableMapper.findByPayableId(1L, 71L)).thenReturn(List.of());
+        ErpStockBalance updatedBalance = new ErpStockBalance();
+        updatedBalance.setQtyOnHand(new BigDecimal("3"));
+        when(stockBalanceMapper.upsertAddQty(eq(1L), eq(700L), any(), any(), eq(new BigDecimal("3")), any()))
+            .thenReturn(updatedBalance);
+        when(stockTxnMapper.findPurchaseReturnIssueUnitCost(1L, 70L, 700L)).thenReturn(new BigDecimal("12.34"));
 
         service.cancel(70L, "wrong qty");
 
@@ -271,6 +278,7 @@ class ErpFinanceWorkflowTests {
         verify(stockTxnMapper).insert(txnCaptor.capture());
         assertThat(txnCaptor.getValue().getBizType()).isEqualTo("PURCHASE_RETURN_RED_FLUSH");
         assertThat(txnCaptor.getValue().getQtyDelta()).isEqualByComparingTo("3");
+        assertThat(txnCaptor.getValue().getUnitCost()).isEqualByComparingTo("12.34");
     }
 
     @Test
@@ -340,6 +348,15 @@ class ErpFinanceWorkflowTests {
         order.setTenantId(1L);
         order.setStatus("APPROVED");
 
+        ErpAccountsPayable payable = new ErpAccountsPayable();
+        payable.setId(42L);
+        payable.setTenantId(1L);
+        payable.setPurchaseOrderId(40L);
+
+        ErpPaymentPayable allocation = new ErpPaymentPayable();
+        allocation.setPayableId(42L);
+        allocation.setPaymentId(41L);
+
         ErpPayment payment = new ErpPayment();
         payment.setId(41L);
         payment.setTenantId(1L);
@@ -348,11 +365,141 @@ class ErpFinanceWorkflowTests {
         payment.setDiscountAmount(new BigDecimal("5"));
 
         when(purchaseOrderMapper.selectOne(any())).thenReturn(order);
-        when(paymentMapper.selectList(any())).thenReturn(List.of(payment));
+        when(payableMapper.findByPurchaseOrderId(1L, 40L)).thenReturn(payable);
+        when(paymentPayableMapper.findByPayableId(1L, 42L)).thenReturn(List.of(allocation));
+        when(paymentMapper.selectBatchIds(List.of(41L))).thenReturn(List.of(payment));
 
         assertThatThrownBy(() -> service.cancel(40L, "redo"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("请先红冲付款单");
+    }
+
+    @Test
+    void purchaseCancelBlocksApprovedPurchaseReturn() {
+        ErpPurchaseOrderServiceImpl service = purchaseOrderService();
+        ErpPurchaseOrder order = new ErpPurchaseOrder();
+        order.setId(90L);
+        order.setTenantId(1L);
+        order.setStatus("APPROVED");
+
+        ErpPurchaseReturn purchaseReturn = new ErpPurchaseReturn();
+        purchaseReturn.setId(91L);
+        purchaseReturn.setStatus("APPROVED");
+
+        when(purchaseOrderMapper.selectOne(any())).thenReturn(order);
+        when(payableMapper.findByPurchaseOrderId(1L, 90L)).thenReturn(null);
+        when(purchaseReturnMapper.findApprovedByPurchaseOrderId(1L, 90L)).thenReturn(List.of(purchaseReturn));
+
+        assertThatThrownBy(() -> service.cancel(90L, "redo"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("请先红冲采购退货单");
+    }
+
+    @Test
+    void purchaseReturnApproveRejectsQtyAboveOriginalPurchase() {
+        ErpPurchaseReturnServiceImpl service = purchaseReturnService();
+        ErpPurchaseReturn order = new ErpPurchaseReturn();
+        order.setId(100L);
+        order.setTenantId(1L);
+        order.setStatus("DRAFT");
+        order.setReturnType("SCRAP");
+        order.setPurchaseOrderId(101L);
+        order.setSupplierId(10L);
+        order.setTotalAmountInclTax(new BigDecimal("30"));
+        order.setPaidAmount(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setVersion(0L);
+
+        ErpPurchaseReturnItem returnItem = new ErpPurchaseReturnItem();
+        returnItem.setReturnId(100L);
+        returnItem.setProductId(1000L);
+        returnItem.setQty(new BigDecimal("4"));
+        returnItem.setAmountInclTax(new BigDecimal("40"));
+
+        ErpPurchaseOrder purchaseOrder = new ErpPurchaseOrder();
+        purchaseOrder.setId(101L);
+        purchaseOrder.setSupplierId(10L);
+        purchaseOrder.setStatus("APPROVED");
+
+        ErpPurchaseOrderItem purchaseItem = new ErpPurchaseOrderItem();
+        purchaseItem.setProductId(1000L);
+        purchaseItem.setQty(new BigDecimal("3"));
+        purchaseItem.setAmountInclTax(new BigDecimal("30"));
+
+        when(purchaseReturnMapper.selectOne(any())).thenReturn(order);
+        when(purchaseReturnItemMapper.findByReturnId(1L, 100L)).thenReturn(List.of(returnItem));
+        when(purchaseOrderMapper.selectOne(any())).thenReturn(purchaseOrder);
+        when(purchaseOrderItemMapper.findByOrderId(1L, 101L)).thenReturn(List.of(purchaseItem));
+        when(purchaseReturnMapper.findApprovedByPurchaseOrderId(1L, 101L)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.approve(100L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("商品退货数量不能超过原采购可退数量");
+    }
+
+    @Test
+    void purchaseReturnApproveCreatesNegativePayableAndAutoRefundPayment() {
+        ErpPurchaseReturnServiceImpl service = purchaseReturnService();
+        ErpPurchaseReturn order = new ErpPurchaseReturn();
+        order.setId(110L);
+        order.setTenantId(1L);
+        order.setOrderNo("PR110");
+        order.setStatus("DRAFT");
+        order.setReturnType("SCRAP");
+        order.setPurchaseOrderId(111L);
+        order.setSupplierId(11L);
+        order.setSettlementMethod("CASH");
+        order.setTotalAmountInclTax(new BigDecimal("50"));
+        order.setPaidAmount(new BigDecimal("20"));
+        order.setDiscountAmount(new BigDecimal("5"));
+        order.setVersion(0L);
+
+        ErpPurchaseReturnItem returnItem = new ErpPurchaseReturnItem();
+        returnItem.setReturnId(110L);
+        returnItem.setProductId(1100L);
+        returnItem.setQty(new BigDecimal("2"));
+        returnItem.setAmountInclTax(new BigDecimal("50"));
+
+        ErpPurchaseOrder purchaseOrder = new ErpPurchaseOrder();
+        purchaseOrder.setId(111L);
+        purchaseOrder.setSupplierId(11L);
+        purchaseOrder.setStatus("APPROVED");
+
+        ErpPurchaseOrderItem purchaseItem = new ErpPurchaseOrderItem();
+        purchaseItem.setProductId(1100L);
+        purchaseItem.setQty(new BigDecimal("2"));
+        purchaseItem.setAmountInclTax(new BigDecimal("50"));
+
+        ErpAccountsPayable originalPayable = new ErpAccountsPayable();
+        originalPayable.setId(112L);
+
+        when(purchaseReturnMapper.selectOne(any())).thenReturn(order);
+        when(purchaseReturnMapper.update(any(ErpPurchaseReturn.class), any(QueryWrapper.class))).thenReturn(1);
+        when(purchaseReturnItemMapper.findByReturnId(1L, 110L)).thenReturn(List.of(returnItem));
+        when(purchaseOrderMapper.selectOne(any())).thenReturn(purchaseOrder);
+        when(purchaseOrderItemMapper.findByOrderId(1L, 111L)).thenReturn(List.of(purchaseItem));
+        when(purchaseReturnMapper.findApprovedByPurchaseOrderId(1L, 111L)).thenReturn(List.of());
+        when(payableMapper.findByPurchaseOrderId(1L, 111L)).thenReturn(originalPayable);
+        when(paymentPayableMapper.sumApprovedAllocatedAmountByPayableId(1L, 112L)).thenReturn(new BigDecimal("50"));
+        when(payableMapper.findByPurchaseReturnId(1L, 110L)).thenReturn(null);
+        when(orderSequenceMapper.incrementAndGet(eq(1L), eq("AP_RETURN"), any())).thenReturn(1L);
+        when(orderSequenceMapper.incrementAndGet(eq(1L), eq("PAYMENT"), any())).thenReturn(1L);
+
+        service.approve(110L);
+
+        ArgumentCaptor<ErpAccountsPayable> payableCaptor = ArgumentCaptor.forClass(ErpAccountsPayable.class);
+        ArgumentCaptor<ErpPayment> paymentCaptor = ArgumentCaptor.forClass(ErpPayment.class);
+        ArgumentCaptor<ErpPaymentPayable> allocationCaptor = ArgumentCaptor.forClass(ErpPaymentPayable.class);
+        verify(payableMapper).insert(payableCaptor.capture());
+        verify(paymentMapper).insert(paymentCaptor.capture());
+        verify(paymentPayableMapper).insert(allocationCaptor.capture());
+        assertThat(payableCaptor.getValue().getTotalAmount()).isEqualByComparingTo("-50");
+        assertThat(payableCaptor.getValue().getPaidAmount()).isEqualByComparingTo("-20");
+        assertThat(payableCaptor.getValue().getDiscountAmount()).isEqualByComparingTo("-5");
+        assertThat(payableCaptor.getValue().getUnpaidAmount()).isEqualByComparingTo("-25");
+        assertThat(paymentCaptor.getValue().getAmount()).isEqualByComparingTo("-20");
+        assertThat(paymentCaptor.getValue().getDiscountAmount()).isEqualByComparingTo("-5");
+        assertThat(allocationCaptor.getValue().getAllocatedTotal()).isEqualByComparingTo("-25");
     }
 
     @Test
@@ -415,6 +562,7 @@ class ErpFinanceWorkflowTests {
             payableMapper,
             paymentMapper,
             paymentPayableMapper,
+            purchaseReturnMapper,
             costService()
         );
     }
@@ -423,6 +571,8 @@ class ErpFinanceWorkflowTests {
         return new ErpPurchaseReturnServiceImpl(
             purchaseReturnMapper,
             purchaseReturnItemMapper,
+            purchaseOrderMapper,
+            purchaseOrderItemMapper,
             productMapper,
             stockBalanceMapper,
             stockTxnMapper,

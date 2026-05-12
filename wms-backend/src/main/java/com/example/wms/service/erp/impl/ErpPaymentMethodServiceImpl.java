@@ -7,8 +7,12 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPaymentMethodCreateRequest;
 import com.example.wms.dto.erp.ErpPaymentMethodUpdateRequest;
+import com.example.wms.entity.erp.ErpPayment;
 import com.example.wms.entity.erp.ErpPaymentMethod;
+import com.example.wms.entity.erp.ErpPurchaseOrder;
+import com.example.wms.mapper.erp.ErpPaymentMapper;
 import com.example.wms.mapper.erp.ErpPaymentMethodMapper;
+import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.service.erp.ErpPaymentMethodService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -20,9 +24,15 @@ import java.util.List;
 @Service
 public class ErpPaymentMethodServiceImpl implements ErpPaymentMethodService {
     private final ErpPaymentMethodMapper erpPaymentMethodMapper;
+    private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
+    private final ErpPaymentMapper erpPaymentMapper;
 
-    public ErpPaymentMethodServiceImpl(ErpPaymentMethodMapper erpPaymentMethodMapper) {
+    public ErpPaymentMethodServiceImpl(ErpPaymentMethodMapper erpPaymentMethodMapper,
+                                       ErpPurchaseOrderMapper erpPurchaseOrderMapper,
+                                       ErpPaymentMapper erpPaymentMapper) {
         this.erpPaymentMethodMapper = erpPaymentMethodMapper;
+        this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
+        this.erpPaymentMapper = erpPaymentMapper;
     }
 
     @Override
@@ -105,7 +115,21 @@ public class ErpPaymentMethodServiceImpl implements ErpPaymentMethodService {
         if (method == null) {
             throw new IllegalArgumentException("付款方式不存在");
         }
+        ensurePaymentMethodNotReferenced(tenantId, method.getCode());
         erpPaymentMethodMapper.deleteById(id);
+    }
+
+    private void ensurePaymentMethodNotReferenced(Long tenantId, String code) {
+        if (erpPurchaseOrderMapper.selectCount(new QueryWrapper<ErpPurchaseOrder>()
+            .eq("tenant_id", tenantId)
+            .eq("payment_method_code", code)) > 0) {
+            throw new IllegalArgumentException("付款方式已被采购单引用，不能删除");
+        }
+        if (erpPaymentMapper.selectCount(new QueryWrapper<ErpPayment>()
+            .eq("tenant_id", tenantId)
+            .eq("payment_method_code", code)) > 0) {
+            throw new IllegalArgumentException("付款方式已被付款单引用，不能删除");
+        }
     }
 
     private QueryWrapper<ErpPaymentMethod> baseWrapper(String keyword, Boolean enabled) {

@@ -74,6 +74,7 @@ public class AuditLogServiceImpl implements AuditLogService {
                                                String requestId,
                                                String method,
                                                String path,
+                                               String deleteReason,
                                                String errorCode,
                                                String errorMessage,
                                                Integer httpStatus,
@@ -84,10 +85,10 @@ public class AuditLogServiceImpl implements AuditLogService {
         long safeSize = Math.max(size, 1);
         long offset = (safePage - 1) * safeSize;
         long total = auditLogMapper.count(
-            resolvedTenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, errorCode, errorMessage, httpStatus, startTime, endTime
+            resolvedTenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, deleteReason, errorCode, errorMessage, httpStatus, startTime, endTime
         );
         List<AuditLog> items = auditLogMapper.page(
-            resolvedTenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, errorCode, errorMessage, httpStatus, startTime, endTime, safeSize, offset
+            resolvedTenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, deleteReason, errorCode, errorMessage, httpStatus, startTime, endTime, safeSize, offset
         );
         List<AuditLogResponse> responses = items.stream().map(this::toResponse).toList();
         return new PageResponse<>(total, safePage, safeSize, responses);
@@ -103,6 +104,7 @@ public class AuditLogServiceImpl implements AuditLogService {
                                          String requestId,
                                          String method,
                                          String path,
+                                         String deleteReason,
                                          String errorCode,
                                          String errorMessage,
                                          Integer httpStatus,
@@ -112,7 +114,7 @@ public class AuditLogServiceImpl implements AuditLogService {
         Long resolvedTenantId = resolveTenantId(tenantId);
         long safeLimit = Math.max(limit, 1);
         List<AuditLog> items = auditLogMapper.export(
-            resolvedTenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, errorCode, errorMessage, httpStatus, startTime, endTime, safeLimit
+            resolvedTenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, deleteReason, errorCode, errorMessage, httpStatus, startTime, endTime, safeLimit
         );
         return items.stream().map(this::toResponse).toList();
     }

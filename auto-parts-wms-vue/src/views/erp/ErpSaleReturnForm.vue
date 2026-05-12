@@ -143,7 +143,7 @@
                     @change="handleProductChange(row)"
                     @visible-change="(visible: boolean) => handleProductVisibleChange(row, visible)"
                   >
-                    <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
+                    <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                   </el-select>
                   <div
                     v-if="formData.returnSource === 'BY_PRODUCT' && row.productId"
@@ -406,6 +406,7 @@ interface ProductOption {
   defaultLocationId?: number;
   salePrice?: number;
   costPrice?: number;
+  enabled?: boolean;
 }
 
 interface RecentSaleItem {
@@ -1317,13 +1318,17 @@ const ensureProductOption = async (productId?: number | null) => {
         defaultWarehouseId: product.defaultWarehouseId,
         defaultLocationId: product.defaultLocationId,
         salePrice: product.salePrice,
-        costPrice: product.costPrice
+        costPrice: product.costPrice,
+        enabled: product.enabled
       });
     }
   } catch (error) {
     notifyError(error);
   }
 };
+
+const getSelectableProductOptions = (currentProductId?: number | null) =>
+  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
 
 const ensureWarehouseOption = async (warehouseId?: number | null) => {
   if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;

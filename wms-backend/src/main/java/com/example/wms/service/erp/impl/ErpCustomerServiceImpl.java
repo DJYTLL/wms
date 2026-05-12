@@ -7,11 +7,19 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpCustomerCreateRequest;
 import com.example.wms.dto.erp.ErpCustomerUpdateRequest;
 import com.example.wms.entity.SystemConfig;
+import com.example.wms.entity.erp.ErpAccountsReceivable;
 import com.example.wms.entity.erp.ErpCustomer;
+import com.example.wms.entity.erp.ErpReceipt;
+import com.example.wms.entity.erp.ErpSaleOrder;
+import com.example.wms.entity.erp.ErpSaleReturn;
+import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
 import com.example.wms.mapper.erp.ErpCustomerCategoryMapper;
 import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpDeliveryMethodMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
+import com.example.wms.mapper.erp.ErpReceiptMapper;
+import com.example.wms.mapper.erp.ErpSaleOrderMapper;
+import com.example.wms.mapper.erp.ErpSaleReturnMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.service.erp.ErpCustomerService;
@@ -37,6 +45,10 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
     private final ErpDeliveryMethodMapper erpDeliveryMethodMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final SystemConfigMapper systemConfigMapper;
+    private final ErpSaleOrderMapper erpSaleOrderMapper;
+    private final ErpSaleReturnMapper erpSaleReturnMapper;
+    private final ErpReceiptMapper erpReceiptMapper;
+    private final ErpAccountsReceivableMapper erpAccountsReceivableMapper;
     private final ObjectMapper objectMapper;
 
     public ErpCustomerServiceImpl(ErpCustomerMapper erpCustomerMapper,
@@ -45,6 +57,10 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
                                   ErpDeliveryMethodMapper erpDeliveryMethodMapper,
                                   ErpOrderSequenceMapper erpOrderSequenceMapper,
                                   SystemConfigMapper systemConfigMapper,
+                                  ErpSaleOrderMapper erpSaleOrderMapper,
+                                  ErpSaleReturnMapper erpSaleReturnMapper,
+                                  ErpReceiptMapper erpReceiptMapper,
+                                  ErpAccountsReceivableMapper erpAccountsReceivableMapper,
                                   ObjectMapper objectMapper) {
         this.erpCustomerMapper = erpCustomerMapper;
         this.erpCustomerCategoryMapper = erpCustomerCategoryMapper;
@@ -52,6 +68,10 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
         this.erpDeliveryMethodMapper = erpDeliveryMethodMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.systemConfigMapper = systemConfigMapper;
+        this.erpSaleOrderMapper = erpSaleOrderMapper;
+        this.erpSaleReturnMapper = erpSaleReturnMapper;
+        this.erpReceiptMapper = erpReceiptMapper;
+        this.erpAccountsReceivableMapper = erpAccountsReceivableMapper;
         this.objectMapper = objectMapper;
     }
 
@@ -152,7 +172,31 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
         if (customer == null) {
             throw new IllegalArgumentException("客户不存在");
         }
+        ensureCustomerNotReferenced(tenantId, id);
         erpCustomerMapper.deleteById(id);
+    }
+
+    private void ensureCustomerNotReferenced(Long tenantId, Long customerId) {
+        if (erpSaleOrderMapper.selectCount(new QueryWrapper<ErpSaleOrder>()
+            .eq("tenant_id", tenantId)
+            .eq("customer_id", customerId)) > 0) {
+            throw new IllegalArgumentException("客户已被销售单引用，不能删除");
+        }
+        if (erpSaleReturnMapper.selectCount(new QueryWrapper<ErpSaleReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("customer_id", customerId)) > 0) {
+            throw new IllegalArgumentException("客户已被销售退货单引用，不能删除");
+        }
+        if (erpReceiptMapper.selectCount(new QueryWrapper<ErpReceipt>()
+            .eq("tenant_id", tenantId)
+            .eq("customer_id", customerId)) > 0) {
+            throw new IllegalArgumentException("客户已被收款单引用，不能删除");
+        }
+        if (erpAccountsReceivableMapper.selectCount(new QueryWrapper<ErpAccountsReceivable>()
+            .eq("tenant_id", tenantId)
+            .eq("customer_id", customerId)) > 0) {
+            throw new IllegalArgumentException("客户已被应收单引用，不能删除");
+        }
     }
 
     private QueryWrapper<ErpCustomer> baseWrapper(String keyword, Boolean enabled, Long categoryId) {

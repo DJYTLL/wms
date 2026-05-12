@@ -142,6 +142,58 @@
                 </el-col>
               </el-row>
 
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.shortName')">
+                    <el-input v-model="formData.shortName" :placeholder="$t('field.shortName')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.spec')">
+                    <el-input v-model="formData.spec" :placeholder="$t('field.spec')" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.model')">
+                    <el-input v-model="formData.model" :placeholder="$t('field.model')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.barcode')">
+                    <el-input v-model="formData.barcode" :placeholder="$t('field.barcode')" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.sku')">
+                    <el-input v-model="formData.sku" :placeholder="$t('field.sku')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.brand')">
+                    <el-input v-model="formData.brand" :placeholder="$t('field.brand')" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.origin')">
+                    <el-input v-model="formData.origin" :placeholder="$t('field.origin')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.remark')">
+                    <el-input v-model="formData.remark" type="textarea" :rows="3" :placeholder="$t('field.remark')" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
               <el-form-item :label="$t('field.status')">
                 <el-switch
                   v-model="formData.enabled"
@@ -149,10 +201,6 @@
                   :inactive-text="$t('status.inactive')"
                   inline-prompt
                 />
-              </el-form-item>
-
-              <el-form-item :label="$t('field.remark')">
-                <el-input v-model="formData.remark" type="textarea" :rows="3" :placeholder="$t('field.remark')" />
               </el-form-item>
             </div>
           </el-tab-pane>
@@ -198,16 +246,33 @@
 
               <el-row :gutter="16">
                 <el-col :span="12">
+                  <el-form-item :label="$t('field.safetyStock')">
+                    <DecimalInput v-model="formData.safetyStock" :scale="4" :placeholder="$t('field.safetyStock')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
                   <el-form-item :label="$t('field.minStock')">
                     <DecimalInput v-model="formData.minStock" :scale="4" :placeholder="$t('field.minStock')" />
                   </el-form-item>
                 </el-col>
+              </el-row>
+
+              <el-row :gutter="16">
                 <el-col :span="12">
                   <el-form-item :label="$t('field.maxStock')">
                     <DecimalInput v-model="formData.maxStock" :scale="4" :placeholder="$t('field.maxStock')" />
                   </el-form-item>
                 </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.shelfLifeDays')">
+                    <el-input v-model="formData.shelfLifeDays" type="number" :placeholder="$t('field.shelfLifeDays')" />
+                  </el-form-item>
+                </el-col>
               </el-row>
+
+              <el-form-item :label="$t('field.batch')">
+                <el-switch v-model="formData.batch" />
+              </el-form-item>
             </div>
           </el-tab-pane>
 
@@ -225,6 +290,21 @@
               <el-form-item :label="$t('field.price')">
                 <el-input v-model="formData.salePrice" type="number" :placeholder="$t('field.price')" />
               </el-form-item>
+              <el-form-item :label="$t('field.taxRate')">
+                <DecimalInput v-model="formData.taxRate" :scale="4" :placeholder="$t('field.taxRate')" />
+              </el-form-item>
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.weight')">
+                    <DecimalInput v-model="formData.weight" :scale="4" :placeholder="$t('field.weight')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.volume')">
+                    <DecimalInput v-model="formData.volume" :scale="4" :placeholder="$t('field.volume')" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
 
               <div class="section-title">{{ $t('field.customerCategoryPrice') }}</div>
               <div class="price-list-container">
@@ -298,6 +378,58 @@
               </el-col>
             </el-row>
 
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item :label="$t('field.shortName')">
+                  <el-input v-model="formData.shortName" :placeholder="$t('field.shortName')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.spec')">
+                  <el-input v-model="formData.spec" :placeholder="$t('field.spec')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item :label="$t('field.model')">
+                  <el-input v-model="formData.model" :placeholder="$t('field.model')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.barcode')">
+                  <el-input v-model="formData.barcode" :placeholder="$t('field.barcode')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item :label="$t('field.sku')">
+                  <el-input v-model="formData.sku" :placeholder="$t('field.sku')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.brand')">
+                  <el-input v-model="formData.brand" :placeholder="$t('field.brand')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item :label="$t('field.origin')">
+                  <el-input v-model="formData.origin" :placeholder="$t('field.origin')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.remark')">
+                  <el-input v-model="formData.remark" type="textarea" :rows="3" :placeholder="$t('field.remark')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
             <el-form-item :label="$t('field.status')">
               <el-switch
                 v-model="formData.enabled"
@@ -305,10 +437,6 @@
                 :inactive-text="$t('status.inactive')"
                 inline-prompt
               />
-            </el-form-item>
-
-            <el-form-item :label="$t('field.remark')">
-              <el-input v-model="formData.remark" type="textarea" :rows="3" :placeholder="$t('field.remark')" />
             </el-form-item>
           </div>
 
@@ -352,16 +480,31 @@
 
             <el-row :gutter="16">
               <el-col :span="12">
+                <el-form-item :label="$t('field.safetyStock')">
+                  <DecimalInput v-model="formData.safetyStock" :scale="4" :placeholder="$t('field.safetyStock')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
                 <el-form-item :label="$t('field.minStock')">
                   <DecimalInput v-model="formData.minStock" :scale="4" :placeholder="$t('field.minStock')" />
                 </el-form-item>
               </el-col>
+            </el-row>
+            <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item :label="$t('field.maxStock')">
                   <DecimalInput v-model="formData.maxStock" :scale="4" :placeholder="$t('field.maxStock')" />
                 </el-form-item>
               </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.shelfLifeDays')">
+                  <el-input v-model="formData.shelfLifeDays" type="number" :placeholder="$t('field.shelfLifeDays')" />
+                </el-form-item>
+              </el-col>
             </el-row>
+            <el-form-item :label="$t('field.batch')">
+              <el-switch v-model="formData.batch" />
+            </el-form-item>
           </div>
 
           <div class="form-section module-card">
@@ -377,6 +520,21 @@
             <el-form-item :label="$t('field.price')">
               <el-input v-model="formData.salePrice" type="number" :placeholder="$t('field.price')" />
             </el-form-item>
+            <el-form-item :label="$t('field.taxRate')">
+              <DecimalInput v-model="formData.taxRate" :scale="4" :placeholder="$t('field.taxRate')" />
+            </el-form-item>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item :label="$t('field.weight')">
+                  <DecimalInput v-model="formData.weight" :scale="4" :placeholder="$t('field.weight')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.volume')">
+                  <DecimalInput v-model="formData.volume" :scale="4" :placeholder="$t('field.volume')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
 
             <div class="section-title">{{ $t('field.customerCategoryPrice') }}</div>
             <div class="price-list-container">

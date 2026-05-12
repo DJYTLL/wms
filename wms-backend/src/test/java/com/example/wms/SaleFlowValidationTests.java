@@ -2,14 +2,18 @@ package com.example.wms;
 
 import com.example.wms.dto.erp.ErpSaleOrderCreateRequest;
 import com.example.wms.dto.erp.ErpSaleOrderItemRequest;
+import com.example.wms.dto.erp.ErpSaleOrderUpdateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnCreateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnItemRequest;
 import com.example.wms.entity.erp.ErpCustomer;
 import com.example.wms.entity.erp.ErpLocation;
 import com.example.wms.entity.erp.ErpProduct;
+import com.example.wms.entity.erp.ErpAccountsReceivable;
 import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.entity.erp.ErpSaleOrderItem;
+import com.example.wms.entity.erp.ErpSaleReturn;
+import com.example.wms.entity.erp.ErpSaleReturnItem;
 import com.example.wms.entity.erp.ErpSettlementMethod;
 import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.SystemConfigMapper;
@@ -42,9 +46,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -136,6 +142,71 @@ class SaleFlowValidationTests {
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("付款金额与优惠金额之和不能大于销售总金额");
+    }
+
+    @Test
+    void saleCreateRejectsDisabledProduct() {
+        ErpSaleOrderServiceImpl service = saleOrderService();
+        stubValidMasterData();
+        when(productMapper.selectOne(any())).thenReturn(disabledProduct(100L));
+
+        ErpSaleOrderCreateRequest request = new ErpSaleOrderCreateRequest(
+            "SO-003",
+            "2026-05-12 09:00:00",
+            10L,
+            "CASH",
+            null,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            List.of(saleOrderItemRequest(100L, "100")),
+            null
+        );
+
+        assertThatThrownBy(() -> service.create(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("商品已停用，不能新增引用");
+    }
+
+    @Test
+    void saleUpdateAllowsExistingDisabledProductButRejectsNewDisabledProduct() {
+        ErpSaleOrderServiceImpl service = saleOrderService();
+        stubValidMasterData();
+        ErpSaleOrder order = draftSaleOrder(77L, 10L);
+        when(saleOrderMapper.selectOne(any())).thenReturn(order);
+        when(saleOrderItemMapper.findByOrderId(1L, 77L)).thenReturn(List.of(soldItem(100L, "1")));
+        when(saleOrderMapper.update(any(), any())).thenReturn(1);
+        when(productMapper.selectOne(any())).thenReturn(disabledProduct(100L));
+
+        ErpSaleOrderUpdateRequest keepExistingRequest = new ErpSaleOrderUpdateRequest(
+            "SO-077",
+            "2026-05-12 09:00:00",
+            10L,
+            "CASH",
+            null,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            List.of(saleOrderItemRequest(100L, "100")),
+            null
+        );
+
+        service.update(77L, keepExistingRequest);
+
+        when(productMapper.selectOne(any())).thenReturn(disabledProduct(200L));
+        ErpSaleOrderUpdateRequest newDisabledRequest = new ErpSaleOrderUpdateRequest(
+            "SO-077",
+            "2026-05-12 09:00:00",
+            10L,
+            "CASH",
+            null,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            List.of(saleOrderItemRequest(200L, "100")),
+            null
+        );
+
+        assertThatThrownBy(() -> service.update(77L, newDisabledRequest))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("商品已停用，不能新增引用");
     }
 
     @Test
@@ -258,6 +329,64 @@ class SaleFlowValidationTests {
     }
 
     @Test
+    void saleReturnCreateRejectsUnitPriceExceedingOriginalSaleUnitPrice() {
+        ErpSaleReturnServiceImpl service = saleReturnService();
+        when(saleOrderMapper.selectOne(any())).thenReturn(approvedSaleOrder(99L, 10L));
+        when(saleOrderItemMapper.findByOrderId(1L, 99L)).thenReturn(List.of(soldItem(100L, "2")));
+        when(saleReturnMapper.selectList(any())).thenReturn(List.of());
+
+        ErpSaleReturnCreateRequest request = new ErpSaleReturnCreateRequest(
+            "SR-004",
+            "2026-05-12 10:00:00",
+            "RESTOCK",
+            10L,
+            99L,
+            "CASH",
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            List.of(new ErpSaleReturnItemRequest(
+                100L,
+                1L,
+                1L,
+                BigDecimal.ONE,
+                new BigDecimal("150"),
+                null,
+                BigDecimal.ZERO,
+                1,
+                null
+            )),
+            null
+        );
+
+        assertThatThrownBy(() -> service.create(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("商品退货单价不能高于原销售单价");
+    }
+
+    @Test
+    void saleReturnApproveRejectsRefundAmountExceedingCollectedCash() {
+        ErpSaleReturnServiceImpl service = saleReturnService();
+        ErpSaleReturn saleReturn = draftSaleReturn(66L, 99L, 10L);
+        saleReturn.setPaidAmount(new BigDecimal("10"));
+        saleReturn.setDiscountAmount(BigDecimal.ZERO);
+        saleReturn.setTotalAmountInclTax(new BigDecimal("100"));
+        ErpAccountsReceivable saleReceivable = new ErpAccountsReceivable();
+        saleReceivable.setId(700L);
+
+        when(saleReturnMapper.selectOne(any())).thenReturn(saleReturn);
+        when(saleReturnItemMapper.findByReturnId(1L, 66L)).thenReturn(List.of(returnItem(100L, "1", "100")));
+        when(saleOrderMapper.selectOne(any())).thenReturn(approvedSaleOrder(99L, 10L));
+        when(saleOrderItemMapper.findByOrderId(1L, 99L)).thenReturn(List.of(soldItem(100L, "2")));
+        when(saleReturnMapper.selectList(any())).thenReturn(List.of());
+        when(accountsReceivableMapper.findBySource(1L, "SALE_ORDER", 99L)).thenReturn(saleReceivable);
+        when(receiptReceivableMapper.sumApprovedAllocatedAmountByReceivableId(1L, 700L)).thenReturn(BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> service.approve(66L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("退款金额不能超过原销售可退实收金额");
+    }
+
+    @Test
     void saleApproveUsesAtomicDraftTransitionBeforeSideEffects() {
         ErpSaleOrderServiceImpl service = saleOrderService();
         ErpSaleOrder order = draftSaleOrder(77L, 10L);
@@ -272,6 +401,30 @@ class SaleFlowValidationTests {
         assertThatThrownBy(() -> service.approve(77L))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("销售单状态已变化，请刷新重试");
+    }
+
+    @Test
+    void saleListIncludesNetSalesProfitAndRedFlushTrace() {
+        ErpSaleOrderServiceImpl service = saleOrderService();
+        ErpSaleOrder order = approvedSaleOrder(88L, 10L);
+        order.setTotalAmountInclTax(new BigDecimal("500"));
+        order.setStatus("RED_FLUSHED");
+
+        when(saleOrderMapper.selectList(any())).thenReturn(List.of(order));
+        when(accountsReceivableMapper.findBySaleOrderId(1L, 88L)).thenReturn(null);
+        when(saleReturnMapper.countApprovedBySaleOrderId(1L, 88L)).thenReturn(1L);
+        when(saleReturnMapper.sumApprovedAmountBySaleOrderId(1L, 88L)).thenReturn(new BigDecimal("120"));
+        when(stockTxnMapper.sumSaleIssueCost(1L, 88L)).thenReturn(new BigDecimal("300"));
+        when(stockTxnMapper.sumApprovedSaleReturnCost(1L, 88L)).thenReturn(new BigDecimal("70"));
+
+        List<ErpSaleOrder> result = service.listAll(null, null, null, null, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getCumulativeReturnAmount()).isEqualByComparingTo("120");
+        assertThat(result.get(0).getCumulativeReturnCost()).isEqualByComparingTo("70");
+        assertThat(result.get(0).getNetSaleAmount()).isEqualByComparingTo("380");
+        assertThat(result.get(0).getNetGrossProfit()).isEqualByComparingTo("150");
+        assertThat(result.get(0).getRedFlushTrace()).isEqualTo("SALE_ORDER#88");
     }
 
     private ErpSaleOrderServiceImpl saleOrderService() {
@@ -327,14 +480,21 @@ class SaleFlowValidationTests {
         product.setCode("P-" + id);
         product.setName("Product-" + id);
         product.setDefaultWarehouseId(1L);
+        product.setEnabled(true);
+        return product;
+    }
+
+    private ErpProduct disabledProduct(Long id) {
+        ErpProduct product = product(id);
+        product.setEnabled(false);
         return product;
     }
 
     private void stubValidMasterData() {
         when(customerMapper.selectOne(any())).thenReturn(customer(10L));
         when(settlementMethodMapper.findByCode(1L, "CASH")).thenReturn(settlementMethod("CASH"));
-        when(warehouseMapper.selectOne(any())).thenReturn(warehouse(1L));
-        when(locationMapper.selectOne(any())).thenReturn(location(1L, 1L));
+        lenient().when(warehouseMapper.selectOne(any())).thenReturn(warehouse(1L));
+        lenient().when(locationMapper.selectOne(any())).thenReturn(location(1L, 1L));
     }
 
     private ErpCustomer customer(Long id) {
@@ -382,11 +542,31 @@ class SaleFlowValidationTests {
         return order;
     }
 
+    private ErpSaleReturn draftSaleReturn(Long id, Long saleOrderId, Long customerId) {
+        ErpSaleReturn order = new ErpSaleReturn();
+        order.setId(id);
+        order.setTenantId(1L);
+        order.setStatus("DRAFT");
+        order.setSaleOrderId(saleOrderId);
+        order.setCustomerId(customerId);
+        order.setReturnType("RESTOCK");
+        order.setVersion(0L);
+        return order;
+    }
+
     private ErpSaleOrderItem soldItem(Long productId, String qty) {
         ErpSaleOrderItem item = new ErpSaleOrderItem();
         item.setProductId(productId);
         item.setQty(new BigDecimal(qty));
         item.setAmountInclTax(new BigDecimal("100").multiply(new BigDecimal(qty)));
+        return item;
+    }
+
+    private ErpSaleReturnItem returnItem(Long productId, String qty, String amountInclTax) {
+        ErpSaleReturnItem item = new ErpSaleReturnItem();
+        item.setProductId(productId);
+        item.setQty(new BigDecimal(qty));
+        item.setAmountInclTax(new BigDecimal(amountInclTax));
         return item;
     }
 

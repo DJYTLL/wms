@@ -7,8 +7,10 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpVehicleSeriesCreateRequest;
 import com.example.wms.dto.erp.ErpVehicleSeriesUpdateRequest;
 import com.example.wms.entity.erp.ErpVehicleBrand;
+import com.example.wms.entity.erp.ErpVehicleModel;
 import com.example.wms.entity.erp.ErpVehicleSeries;
 import com.example.wms.mapper.erp.ErpVehicleBrandMapper;
+import com.example.wms.mapper.erp.ErpVehicleModelMapper;
 import com.example.wms.mapper.erp.ErpVehicleSeriesMapper;
 import com.example.wms.service.erp.ErpVehicleSeriesService;
 import com.example.wms.tenant.TenantContext;
@@ -22,11 +24,14 @@ import java.util.List;
 public class ErpVehicleSeriesServiceImpl implements ErpVehicleSeriesService {
     private final ErpVehicleSeriesMapper erpVehicleSeriesMapper;
     private final ErpVehicleBrandMapper erpVehicleBrandMapper;
+    private final ErpVehicleModelMapper erpVehicleModelMapper;
 
     public ErpVehicleSeriesServiceImpl(ErpVehicleSeriesMapper erpVehicleSeriesMapper,
-                                       ErpVehicleBrandMapper erpVehicleBrandMapper) {
+                                       ErpVehicleBrandMapper erpVehicleBrandMapper,
+                                       ErpVehicleModelMapper erpVehicleModelMapper) {
         this.erpVehicleSeriesMapper = erpVehicleSeriesMapper;
         this.erpVehicleBrandMapper = erpVehicleBrandMapper;
+        this.erpVehicleModelMapper = erpVehicleModelMapper;
     }
 
     @Override
@@ -108,6 +113,11 @@ public class ErpVehicleSeriesServiceImpl implements ErpVehicleSeriesService {
             .eq("id", id));
         if (series == null) {
             throw new IllegalArgumentException("车系不存在");
+        }
+        if (erpVehicleModelMapper.selectCount(new QueryWrapper<ErpVehicleModel>()
+            .eq("tenant_id", tenantId)
+            .eq("series_id", id)) > 0) {
+            throw new IllegalArgumentException("车系下存在车型，不能删除");
         }
         erpVehicleSeriesMapper.deleteById(id);
     }

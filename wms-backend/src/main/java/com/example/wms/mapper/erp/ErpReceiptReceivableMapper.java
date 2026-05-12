@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 // ERP收款单-应收分摊 Mapper
@@ -28,4 +29,19 @@ public interface ErpReceiptReceivableMapper extends BaseMapper<ErpReceiptReceiva
           AND deleted_at IS NULL
         """)
     List<ErpReceiptReceivable> findByReceivableId(@Param("tenantId") Long tenantId, @Param("receivableId") Long receivableId);
+
+    @Select("""
+        SELECT COALESCE(SUM(rr.allocated_amount), 0)
+        FROM erp_receipt_receivable rr
+        JOIN erp_receipt r
+          ON r.tenant_id = rr.tenant_id
+         AND r.id = rr.receipt_id
+         AND r.status = 'APPROVED'
+         AND r.deleted_at IS NULL
+        WHERE rr.tenant_id = #{tenantId}
+          AND rr.receivable_id = #{receivableId}
+          AND rr.deleted_at IS NULL
+        """)
+    BigDecimal sumApprovedAllocatedAmountByReceivableId(@Param("tenantId") Long tenantId,
+                                                        @Param("receivableId") Long receivableId);
 }

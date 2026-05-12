@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 // ERP付款单-应付分摊 Mapper
@@ -28,4 +29,19 @@ public interface ErpPaymentPayableMapper extends BaseMapper<ErpPaymentPayable> {
           AND deleted_at IS NULL
         """)
     List<ErpPaymentPayable> findByPayableId(@Param("tenantId") Long tenantId, @Param("payableId") Long payableId);
+
+    @Select("""
+        SELECT COALESCE(SUM(pp.allocated_amount), 0)
+        FROM erp_payment_payable pp
+        JOIN erp_payment p
+          ON p.tenant_id = pp.tenant_id
+         AND p.id = pp.payment_id
+         AND p.status = 'APPROVED'
+         AND p.deleted_at IS NULL
+        WHERE pp.tenant_id = #{tenantId}
+          AND pp.payable_id = #{payableId}
+          AND pp.deleted_at IS NULL
+        """)
+    BigDecimal sumApprovedAllocatedAmountByPayableId(@Param("tenantId") Long tenantId,
+                                                     @Param("payableId") Long payableId);
 }

@@ -6,7 +6,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPrintTemplateCreateRequest;
 import com.example.wms.dto.erp.ErpPrintTemplateUpdateRequest;
+import com.example.wms.entity.erp.ErpPrintLog;
 import com.example.wms.entity.erp.ErpPrintTemplate;
+import com.example.wms.mapper.erp.ErpPrintLogMapper;
 import com.example.wms.mapper.erp.ErpPrintTemplateMapper;
 import com.example.wms.service.erp.ErpPrintTemplateService;
 import com.example.wms.tenant.TenantContext;
@@ -33,9 +35,12 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
     );
 
     private final ErpPrintTemplateMapper erpPrintTemplateMapper;
+    private final ErpPrintLogMapper erpPrintLogMapper;
 
-    public ErpPrintTemplateServiceImpl(ErpPrintTemplateMapper erpPrintTemplateMapper) {
+    public ErpPrintTemplateServiceImpl(ErpPrintTemplateMapper erpPrintTemplateMapper,
+                                       ErpPrintLogMapper erpPrintLogMapper) {
         this.erpPrintTemplateMapper = erpPrintTemplateMapper;
+        this.erpPrintLogMapper = erpPrintLogMapper;
     }
 
     @Override
@@ -123,6 +128,11 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
             .eq("id", id));
         if (template == null) {
             return;
+        }
+        if (erpPrintLogMapper.selectCount(new QueryWrapper<ErpPrintLog>()
+            .eq("tenant_id", tenantId)
+            .eq("template_id", id)) > 0) {
+            throw new IllegalArgumentException("打印模板已被打印日志引用，不能删除");
         }
         erpPrintTemplateMapper.deleteById(id);
     }

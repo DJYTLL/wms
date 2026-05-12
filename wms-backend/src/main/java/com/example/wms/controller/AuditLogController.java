@@ -45,6 +45,7 @@ public class AuditLogController {
         @RequestParam(required = false) String requestId,
         @RequestParam(required = false) String method,
         @RequestParam(required = false) String path,
+        @RequestParam(required = false) String deleteReason,
         @RequestParam(required = false) String errorCode,
         @RequestParam(required = false) String errorMessage,
         @RequestParam(required = false) Integer httpStatus,
@@ -52,7 +53,7 @@ public class AuditLogController {
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endTime
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-            auditLogService.page(page, size, tenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, errorCode, errorMessage, httpStatus, startTime, endTime)
+            auditLogService.page(page, size, tenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, deleteReason, errorCode, errorMessage, httpStatus, startTime, endTime)
         ));
     }
 
@@ -69,6 +70,7 @@ public class AuditLogController {
                        @RequestParam(required = false) String requestId,
                        @RequestParam(required = false) String method,
                        @RequestParam(required = false) String path,
+                       @RequestParam(required = false) String deleteReason,
                        @RequestParam(required = false) String errorCode,
                        @RequestParam(required = false) String errorMessage,
                        @RequestParam(required = false) Integer httpStatus,
@@ -76,7 +78,7 @@ public class AuditLogController {
                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endTime)
         throws java.io.IOException {
         List<AuditLogResponse> logs = auditLogService.export(
-            tenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, errorCode, errorMessage, httpStatus, startTime, endTime, exportMax
+            tenantId, keyword, action, entityType, actorUsername, status, requestId, method, path, deleteReason, errorCode, errorMessage, httpStatus, startTime, endTime, exportMax
         );
         response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=\"audit-logs.csv\"");

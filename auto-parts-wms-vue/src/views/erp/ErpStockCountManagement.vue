@@ -182,7 +182,7 @@
                   :disabled="viewMode"
                   @change="handleRowChange(row)"
                 >
-                  <el-option v-for="p in productOptions" :key="p.id" :label="p.name" :value="p.id" />
+                  <el-option v-for="p in getSelectableProductOptions(row.productId)" :key="p.id" :label="p.name" :value="p.id" />
                 </el-select>
               </template>
             </el-table-column>
@@ -269,6 +269,7 @@ interface OptionItem {
   id: number;
   name: string;
   warehouseId?: number;
+  enabled?: boolean;
 }
 
 interface StockCountItem {
@@ -387,13 +388,17 @@ const ensureProductOption = async (productId?: number | null) => {
     if (product) {
       productOptions.value = mergeOptionById(productOptions.value, {
         id: product.id,
-        name: product.name
+        name: product.name,
+        enabled: product.enabled
       });
     }
   } catch (error) {
     notifyError(error);
   }
 };
+
+const getSelectableProductOptions = (currentProductId?: number | null) =>
+  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
 
 const ensureWarehouseOption = async (warehouseId?: number | null) => {
   if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
