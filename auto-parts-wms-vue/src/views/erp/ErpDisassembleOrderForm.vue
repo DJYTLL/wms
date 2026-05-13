@@ -72,32 +72,18 @@
             </div>
             <div class="form-group form-group--wide">
               <el-form-item :label="$t('field.warehouseLocation')">
-                <el-select
+                <ProductStockSelect
                   v-model="formData.finishedStockKey"
-                  filterable
-                  clearable
-                  style="width: 100%"
-                  :disabled="isReadOnly || !formData.finishedProductId"
+                  :select-style="'width: 100%'"
+                  :disabled="isReadOnly"
                   :placeholder="$t('placeholder.selectLocation')"
-                  @change="handleFinishedStockLocationChange"
-                  @visible-change="handleFinishedStockVisibleChange"
-                >
-                  <el-option
-                    v-for="item in getFinishedStockOptions()"
-                    :key="item.key"
-                    :label="item.searchLabel"
-                    :value="item.key"
-                  >
-                    <div class="stock-option">
-                      <span class="stock-option__name">{{ item.label }}</span>
-                      <span class="stock-option__qty">
-                        {{ $t('field.qtyOnHand') }}: {{ item.qtyOnHand }}
-                        · {{ $t('field.qtyAvailable') }}: {{ item.qtyAvailable }}
-                        · {{ $t('field.qtyLocked') }}: {{ item.qtyLocked }}
-                      </span>
-                    </div>
-                  </el-option>
-                </el-select>
+                  :product-id="formData.finishedProductId"
+                  :warehouse-id="formData.warehouseId"
+                  :location-id="formData.locationId"
+                  :warehouse-options="warehouseOptions"
+                  :location-options="locationOptions"
+                  @selection-change="handleFinishedStockSelectionChange"
+                />
               </el-form-item>
             </div>
             <div class="form-group">
@@ -144,32 +130,18 @@
               </el-table-column>
               <el-table-column v-if="canShow('warehouseLocation')" :label="$t('field.warehouseLocation')" min-width="240">
                 <template #default="{ row }">
-                  <el-select
+                  <ProductStockSelect
                     v-model="row.stockKey"
-                    filterable
-                    clearable
-                    style="width: 100%"
-                    :disabled="isReadOnly || !row.productId"
+                    :select-style="'width: 100%'"
+                    :disabled="isReadOnly"
                     :placeholder="$t('placeholder.selectLocation')"
-                    @change="() => handleStockLocationChange(row)"
-                    @visible-change="(visible: boolean) => handleStockVisibleChange(row, visible)"
-                  >
-                    <el-option
-                      v-for="item in getStockOptionsForRow(row)"
-                      :key="item.key"
-                      :label="item.searchLabel"
-                      :value="item.key"
-                    >
-                      <div class="stock-option">
-                        <span class="stock-option__name">{{ item.label }}</span>
-                        <span class="stock-option__qty">
-                          {{ $t('field.qtyOnHand') }}: {{ item.qtyOnHand }}
-                          · {{ $t('field.qtyAvailable') }}: {{ item.qtyAvailable }}
-                          · {{ $t('field.qtyLocked') }}: {{ item.qtyLocked }}
-                        </span>
-                      </div>
-                    </el-option>
-                  </el-select>
+                    :product-id="row.productId"
+                    :warehouse-id="row.warehouseId"
+                    :location-id="row.locationId"
+                    :warehouse-options="warehouseOptions"
+                    :location-options="locationOptions"
+                    @selection-change="(payload) => handleRowStockSelectionChange(row, payload)"
+                  />
                 </template>
               </el-table-column>
               <el-table-column v-if="canShow('qty')" :label="$t('field.quantity')" width="140">
@@ -249,6 +221,7 @@ import { useApiError } from '@/composables/useApiError';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
 
 interface OptionItem {
@@ -568,33 +541,14 @@ const handleFinishedProductChange = async () => {
   formData.warehouseId = null;
   formData.locationId = null;
   formData.finishedStockKey = '';
-  await fetchStockOptions(formData.finishedProductId ?? undefined, true);
   applyFinishedProductDefaults(true);
   syncFinishedStockKey();
 };
 
-const handleFinishedStockLocationChange = () => {
-  if (!formData.finishedProductId || !formData.finishedStockKey) {
-    formData.warehouseId = null;
-    formData.locationId = null;
-    return;
-  }
-  const options = getFinishedStockOptions();
-  const selected = options.find(item => item.key === formData.finishedStockKey);
-  if (!selected) {
-    const parsed = parseStockKey(formData.finishedStockKey);
-    formData.warehouseId = parsed.warehouseId ?? null;
-    formData.locationId = parsed.locationId ?? null;
-    return;
-  }
-  formData.warehouseId = selected.warehouseId ?? null;
-  formData.locationId = selected.locationId ?? null;
-};
-
-const handleFinishedStockVisibleChange = async (visible: boolean) => {
-  if (!visible || !formData.finishedProductId) return;
-  await fetchStockOptions(formData.finishedProductId, true);
-  syncFinishedStockKey();
+const handleFinishedStockSelectionChange = (payload: { stockKey: string; warehouseId: number | null; locationId: number | null }) => {
+  formData.finishedStockKey = payload.stockKey;
+  formData.warehouseId = payload.warehouseId;
+  formData.locationId = payload.locationId;
 };
 
 const fetchStockOptionsForItems = async (items: AssemblyItem[]) => {
@@ -742,28 +696,10 @@ const handleProductChange = (row: AssemblyItem) => {
   updateItemAmount(row);
 };
 
-const handleStockLocationChange = (row: AssemblyItem) => {
-  if (!row.productId || !row.stockKey) {
-    row.warehouseId = null;
-    row.locationId = null;
-    return;
-  }
-  const options = getStockOptionsForRow(row);
-  const selected = options.find(item => item.key === row.stockKey);
-  if (!selected) {
-    const parsed = parseStockKey(row.stockKey);
-    row.warehouseId = parsed.warehouseId ?? null;
-    row.locationId = parsed.locationId ?? null;
-    return;
-  }
-  row.warehouseId = selected.warehouseId ?? null;
-  row.locationId = selected.locationId ?? null;
-};
-
-const handleStockVisibleChange = async (row: AssemblyItem, visible: boolean) => {
-  if (!visible || !row.productId) return;
-  await fetchStockOptions(row.productId, true);
-  syncStockKey(row);
+const handleRowStockSelectionChange = (row: AssemblyItem, payload: { stockKey: string; warehouseId: number | null; locationId: number | null }) => {
+  row.stockKey = payload.stockKey;
+  row.warehouseId = payload.warehouseId;
+  row.locationId = payload.locationId;
 };
 
 const updateItemAmount = (row: AssemblyItem) => {

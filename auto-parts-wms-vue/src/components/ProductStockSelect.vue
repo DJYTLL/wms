@@ -207,3 +207,21 @@ watch(() => props.productId, async (productId) => {
   await fetchStockOptions();
 }, { immediate: true });
 </script>
+
+<style scoped>
+.stock-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+}
+
+.stock-option__name {
+  color: #1f2b3d;
+}
+
+.stock-option__qty {
+  color: #6d7b91;
+  font-size: 12px;
+}
+</style>
