@@ -316,6 +316,9 @@
         <el-table-column :label="$t('field.quantity')" width="120">
           <template #default="{ row }">{{ row.qty }}</template>
         </el-table-column>
+        <el-table-column :label="$t('field.remainingQty')" width="120">
+          <template #default="{ row }">{{ row.remainingQty }}</template>
+        </el-table-column>
         <el-table-column :label="$t('field.price')" width="120">
           <template #default="{ row }">{{ row.price }}</template>
         </el-table-column>
@@ -395,6 +398,7 @@ interface SaleOrderDetailItem {
   warehouseId?: number;
   locationId?: number;
   qty?: number;
+  remainingQty?: number;
   price?: number;
   taxRate?: number;
 }
@@ -1183,22 +1187,59 @@ const openSaleOrderDetail = async (orderId: number) => {
   try {
     const res: any = await request.get(`/erp/sale-orders/${orderId}`);
     const data = res.data.data || {};
-    saleOrderDetailItems.value = (data.items || []).map((item: any) => ({
-      id: item.id,
-      productId: item.productId,
-      productCode: item.productCode,
-      productName: item.productName,
-      warehouseId: item.warehouseId,
-      locationId: item.locationId,
-      qty: Number(item.qty || 0),
-      price: Number(item.price || 0),
-      taxRate: Number(item.taxRate || 0)
-    }));
+    const returnedQtyMap = await fetchReturnedQtyMap(orderId);
+    saleOrderDetailItems.value = (data.items || []).map((item: any) => {
+      const originalQty = Number(item.qty || 0);
+      const returnedQty = returnedQtyMap.get(Number(item.productId)) || 0;
+      const remainingQty = Math.max(0, originalQty - returnedQty);
+      return {
+        id: item.id,
+        productId: item.productId,
+        productCode: item.productCode,
+        productName: item.productName,
+        warehouseId: item.warehouseId,
+        locationId: item.locationId,
+        qty: originalQty,
+        remainingQty,
+        price: Number(item.price || 0),
+        taxRate: Number(item.taxRate || 0)
+      };
+    }).filter((item: SaleOrderDetailItem) => Number(item.remainingQty || 0) > 0);
+    if (!saleOrderDetailItems.value.length) {
+      notifyWarning(t('message.noItems'));
+      return;
+    }
     selectedSaleOrderItems.value = [...saleOrderDetailItems.value];
     showSaleOrderDialog.value = true;
   } catch (error) {
     notifyError(error);
   }
+};
+
+const fetchReturnedQtyMap = async (saleOrderId: number) => {
+  const qtyMap = new Map<number, number>();
+  if (!saleOrderId || !formData.customerId) {
+    return qtyMap;
+  }
+  const res: any = await request.get('/erp/sale-returns', {
+    params: {
+      status: 'APPROVED',
+      customerId: formData.customerId
+    }
+  });
+  const returns = Array.isArray(res.data.data) ? res.data.data : [];
+  const relatedReturns = returns.filter((item: any) => Number(item.saleOrderId) === Number(saleOrderId));
+  await Promise.all(relatedReturns.map(async (item: any) => {
+    const detailRes: any = await request.get(`/erp/sale-returns/${item.id}`);
+    const detail = detailRes.data.data || {};
+    const detailItems = Array.isArray(detail.items) ? detail.items : [];
+    detailItems.forEach((detailItem: any) => {
+      const productId = Number(detailItem.productId);
+      if (!productId) return;
+      qtyMap.set(productId, (qtyMap.get(productId) || 0) + Number(detailItem.qty || 0));
+    });
+  }));
+  return qtyMap;
 };
 
 const handleSaleOrderSelectionChange = (rows: SaleOrderDetailItem[]) => {
@@ -1215,7 +1256,7 @@ const applySaleOrderSelection = () => {
     warehouseId: item.warehouseId,
     locationId: item.locationId,
     stockKey: '',
-    qty: item.qty == null ? '' : String(item.qty),
+    qty: item.remainingQty == null ? '' : String(item.remainingQty),
     price: item.price == null ? '' : String(item.price),
     taxRate: item.taxRate || 0,
     remark: '',

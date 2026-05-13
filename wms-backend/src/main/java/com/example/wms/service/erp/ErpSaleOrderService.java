@@ -5,6 +5,7 @@ import com.example.wms.dto.erp.ErpSaleOrderCreateRequest;
 import com.example.wms.dto.erp.ErpSaleOrderDetail;
 import com.example.wms.dto.erp.ErpSaleOrderHistoryItem;
 import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
+import com.example.wms.dto.erp.ErpSaleOrderSummary;
 import com.example.wms.dto.erp.ErpSaleOrderUpdateRequest;
 import com.example.wms.entity.erp.ErpSaleOrder;
 
@@ -18,6 +19,9 @@ public interface ErpSaleOrderService {
 
     // 分页查询销售单
     PageResponse<ErpSaleOrder> page(long page, long size, String keyword, String status, Long customerId, Instant startAt, Instant endAt);
+
+    // 销售单汇总
+    ErpSaleOrderSummary summary(String keyword, String status, Long customerId, Instant startAt, Instant endAt);
 
     // 查询销售单详情
     ErpSaleOrderDetail getDetail(Long id);

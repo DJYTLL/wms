@@ -8,6 +8,7 @@ import com.example.wms.dto.erp.ErpSaleOrderCreateRequest;
 import com.example.wms.dto.erp.ErpSaleOrderDetail;
 import com.example.wms.dto.erp.ErpSaleOrderHistoryItem;
 import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
+import com.example.wms.dto.erp.ErpSaleOrderSummary;
 import com.example.wms.dto.erp.ErpSaleOrderUpdateRequest;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.service.erp.ErpSaleOrderService;
@@ -55,6 +56,21 @@ public class ErpSaleOrderController {
         Instant startInstant = parseInstant(startAt);
         Instant endInstant = parseInstant(endAt);
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.page(page, size, keyword, status, customerId, startInstant, endInstant)));
+    }
+
+    // 销售单汇总
+    @GetMapping("/summary")
+    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderSummary>> summary(@RequestParam(required = false) String keyword,
+                                                                    @RequestParam(required = false) String status,
+                                                                    @RequestParam(required = false) Long customerId,
+                                                                    @RequestParam(required = false) String startAt,
+                                                                    @RequestParam(required = false) String endAt) {
+        Instant startInstant = parseInstant(startAt);
+        Instant endInstant = parseInstant(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(
+            erpSaleOrderService.summary(keyword, status, customerId, startInstant, endInstant)
+        ));
     }
 
     // 查询销售单详情

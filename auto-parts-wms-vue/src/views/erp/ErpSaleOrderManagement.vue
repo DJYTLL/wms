@@ -29,6 +29,7 @@
             type="datetimerange"
             value-format="x"
             format="YYYY-MM-DD HH:mm:ss"
+            :shortcuts="dateRangeShortcuts"
             :start-placeholder="$t('field.startTime')"
             :end-placeholder="$t('field.endTime')"
             class="erp-toolbar__date-range table-date-range table-date-range--compact"
@@ -209,6 +210,26 @@
         </el-table>
       </div>
       <div class="table-pagination">
+        <div v-if="isApprovedPage" class="sale-summary-bar">
+          <div class="sale-summary-bar__items">
+            <div class="sale-summary-item">
+              <span class="sale-summary-item__label">{{ summaryLabel('saleAmount') }}</span>
+              <span class="sale-summary-item__value">{{ formatAmount(summary.saleAmountTotal) }}</span>
+            </div>
+            <div class="sale-summary-item">
+              <span class="sale-summary-item__label">{{ summaryLabel('returnAmount') }}</span>
+              <span class="sale-summary-item__value">{{ formatAmount(summary.returnAmountTotal) }}</span>
+            </div>
+            <div class="sale-summary-item">
+              <span class="sale-summary-item__label">{{ summaryLabel('netSaleAmount') }}</span>
+              <span class="sale-summary-item__value">{{ formatAmount(summary.netSaleAmountTotal) }}</span>
+            </div>
+            <div v-if="canShowProfit" class="sale-summary-item">
+              <span class="sale-summary-item__label">{{ summaryLabel('netGrossProfit') }}</span>
+              <span class="sale-summary-item__value">{{ formatAmount(summary.netGrossProfitTotal) }}</span>
+            </div>
+          </div>
+        </div>
         <el-pagination
           background
           layout="total, sizes, prev, pager, next, jumper"
@@ -345,7 +366,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated, onDeactivated, onBeforeUnmount, computed, watch } from 'vue';
+import { ref, reactive, onMounted, onActivated, onDeactivated, onBeforeUnmount, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import request from '@/utils/request';
@@ -382,6 +403,7 @@ interface SaleOrder {
   customerId?: number;
   status: string;
   totalAmount?: number;
+  totalAmountInclTax?: number;
   netSaleAmount?: number;
   netGrossProfit?: number;
   cumulativeReturnAmount?: number;
@@ -428,6 +450,16 @@ interface SaleReturnDetailData {
   items: SaleReturnDetailItem[];
 }
 
+type SummaryMode = 'page' | 'range';
+
+interface SaleOrderSummary {
+  saleAmountTotal: number;
+  returnAmountTotal: number;
+  netSaleAmountTotal: number;
+  netGrossProfitTotal: number;
+  summaryMode: SummaryMode;
+}
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -452,6 +484,13 @@ const saleReturnDetailDialogVisible = ref(false);
 const saleReturnDetailLoading = ref(false);
 const saleReturnDetail = ref<SaleReturnDetailData | null>(null);
 const saleReturnSummaryCache = ref<Record<number, SaleReturnSummary[]>>({});
+const summary = reactive<SaleOrderSummary>({
+  saleAmountTotal: 0,
+  returnAmountTotal: 0,
+  netSaleAmountTotal: 0,
+  netGrossProfitTotal: 0,
+  summaryMode: 'page'
+});
 
 const customerOptions = ref<OptionItem[]>([]);
 const productOptions = ref<OptionItem[]>([]);
@@ -515,6 +554,29 @@ const canShow = (key: string) => {
   }
   return isVisible(key);
 };
+
+const hasSelectedDateRange = computed(() => {
+  return Array.isArray(dateRange.value) && dateRange.value.length === 2 && !!dateRange.value[0] && !!dateRange.value[1];
+});
+
+const dateRangeShortcuts = computed(() => {
+  const now = new Date();
+  const buildShortcutRange = (year: number, monthIndex: number) => {
+    const start = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+    const end = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+    return [start, end];
+  };
+  return [
+    {
+      text: t('field.thisMonth'),
+      value: buildShortcutRange(now.getFullYear(), now.getMonth())
+    },
+    {
+      text: t('field.lastMonth'),
+      value: buildShortcutRange(now.getFullYear(), now.getMonth() - 1)
+    }
+  ];
+});
 
 const isTypingTarget = (target: EventTarget | null) => {
   if (!target || !(target instanceof HTMLElement)) return false;
@@ -616,6 +678,98 @@ const buildReturnTagIndexes = (count?: number) => {
   return total > 0 ? Array.from({ length: total }, (_, index) => index) : [];
 };
 
+const resetSummary = (mode: SummaryMode = 'page') => {
+  summary.saleAmountTotal = 0;
+  summary.returnAmountTotal = 0;
+  summary.netSaleAmountTotal = 0;
+  summary.netGrossProfitTotal = 0;
+  summary.summaryMode = mode;
+};
+
+const setSummary = (payload: Partial<SaleOrderSummary> & { summaryMode: SummaryMode }) => {
+  summary.saleAmountTotal = Number(payload.saleAmountTotal || 0);
+  summary.returnAmountTotal = Number(payload.returnAmountTotal || 0);
+  summary.netSaleAmountTotal = Number(payload.netSaleAmountTotal || 0);
+  summary.netGrossProfitTotal = Number(payload.netGrossProfitTotal || 0);
+  summary.summaryMode = payload.summaryMode;
+};
+
+const buildListParams = () => {
+  const params: Record<string, any> = {
+    page: page.value,
+    size: size.value
+  };
+  if (searchQuery.value) params.keyword = searchQuery.value.trim();
+  if (statusFilter.value) params.status = statusFilter.value;
+  if (customerFilter.value) params.customerId = customerFilter.value;
+  if (hasSelectedDateRange.value && dateRange.value) {
+    const start = Number(dateRange.value[0]);
+    const end = Number(dateRange.value[1]);
+    params.startAt = start;
+    params.endAt = end;
+  }
+  return params;
+};
+
+const updateCurrentPageSummary = () => {
+  const next = tableData.value.reduce((acc, row) => {
+    acc.saleAmountTotal += Number(row.totalAmountInclTax ?? row.totalAmount ?? 0);
+    acc.returnAmountTotal += Number(row.cumulativeReturnAmount || 0);
+    acc.netSaleAmountTotal += Number(row.netSaleAmount || 0);
+    acc.netGrossProfitTotal += Number(row.netGrossProfit || 0);
+    return acc;
+  }, {
+    saleAmountTotal: 0,
+    returnAmountTotal: 0,
+    netSaleAmountTotal: 0,
+    netGrossProfitTotal: 0
+  });
+  setSummary({
+    ...next,
+    summaryMode: 'page'
+  });
+};
+
+const fetchRangeSummary = async () => {
+  const params = buildListParams();
+  delete params.page;
+  delete params.size;
+  const res: any = await request.get('/erp/sale-orders/summary', { params });
+  if (res.data.code === 200) {
+    setSummary({
+      saleAmountTotal: res.data.data?.saleAmountTotal,
+      returnAmountTotal: res.data.data?.returnAmountTotal,
+      netSaleAmountTotal: res.data.data?.netSaleAmountTotal,
+      netGrossProfitTotal: res.data.data?.netGrossProfitTotal,
+      summaryMode: 'range'
+    });
+    return;
+  }
+  resetSummary('range');
+};
+
+const summaryLabel = (key: 'saleAmount' | 'returnAmount' | 'netSaleAmount' | 'netGrossProfit') => {
+  const labels: Record<typeof key, { page: string; range: string }> = {
+    saleAmount: {
+      page: t('field.currentPageSaleAmount'),
+      range: t('field.rangeSaleAmount')
+    },
+    returnAmount: {
+      page: t('field.currentPageReturnAmount'),
+      range: t('field.rangeReturnAmount')
+    },
+    netSaleAmount: {
+      page: t('field.currentPageNetSaleAmount'),
+      range: t('field.rangeNetSaleAmount')
+    },
+    netGrossProfit: {
+      page: t('field.currentPageNetGrossProfit'),
+      range: t('field.rangeNetGrossProfit')
+    }
+  };
+  return labels[key][summary.summaryMode];
+};
+
 const fetchCustomers = async () => {
   try {
     const res: any = await request.get('/erp/customers');
@@ -655,26 +809,25 @@ const fetchLocations = async () => {
 const fetchList = async () => {
   loading.value = true;
   try {
-    const params: Record<string, any> = {
-      page: page.value,
-      size: size.value
-    };
-    if (searchQuery.value) params.keyword = searchQuery.value.trim();
-    if (statusFilter.value) params.status = statusFilter.value;
-    if (customerFilter.value) params.customerId = customerFilter.value;
-    if (dateRange.value && dateRange.value.length === 2) {
-      const start = Number(dateRange.value[0]);
-      const end = Number(dateRange.value[1]);
-      params.startAt = start;
-      params.endAt = end;
-    }
-
+    const params = buildListParams();
     const res: any = await request.get('/erp/sale-orders/page', { params });
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
+      if (isApprovedPage.value) {
+        if (hasSelectedDateRange.value) {
+          await fetchRangeSummary();
+        } else {
+          updateCurrentPageSummary();
+        }
+      }
+    } else if (isApprovedPage.value) {
+      resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
     }
   } catch (error) {
+    if (isApprovedPage.value) {
+      resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
+    }
     notifyError(error);
   } finally {
     loading.value = false;
@@ -931,6 +1084,9 @@ watch(
   () => route.fullPath,
   () => {
     applyRouteStatus();
+    if (isApprovedPage.value) {
+      resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
+    }
     handleSearch();
   },
   { flush: 'sync' }
@@ -1020,6 +1176,41 @@ watch(saleReturnDetailDialogVisible, (visible) => {
   overflow: auto;
 }
 
+.sale-summary-bar {
+  width: 100%;
+  padding: 0 0 10px;
+  border-bottom: 1px solid #eef2f7;
+  margin-bottom: 10px;
+}
+
+.sale-summary-bar__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.sale-summary-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.sale-summary-item__label {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.sale-summary-item__value {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 .erp-toolbar {
   width: 100%;
   padding: 16px 18px;
@@ -1096,6 +1287,10 @@ watch(saleReturnDetailDialogVisible, (visible) => {
   .table-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .sale-summary-bar__items {
+    gap: 10px 14px;
   }
 
   :deep(.erp-toolbar__search--wide),

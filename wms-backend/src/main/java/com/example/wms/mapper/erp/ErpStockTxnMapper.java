@@ -1,6 +1,7 @@
 package com.example.wms.mapper.erp;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.example.wms.dto.erp.ErpIdAmountPair;
 import com.example.wms.dto.erp.ErpSaleOrderItemCostSnapshot;
 import com.example.wms.entity.erp.ErpStockTxn;
 import org.apache.ibatis.annotations.Mapper;
@@ -73,6 +74,45 @@ public interface ErpStockTxnMapper extends BaseMapper<ErpStockTxn> {
         """)
     BigDecimal sumApprovedSaleReturnCost(@Param("tenantId") Long tenantId,
                                          @Param("saleOrderId") Long saleOrderId);
+
+    @Select("""
+        <script>
+        SELECT biz_id AS id,
+               COALESCE(SUM(ABS(total_cost)), 0) AS amount
+        FROM erp_stock_txn
+        WHERE tenant_id = #{tenantId}
+          AND biz_type = 'SALE_APPROVE'
+          AND biz_id IN
+          <foreach collection='saleOrderIds' item='saleOrderId' open='(' separator=',' close=')'>
+            #{saleOrderId}
+          </foreach>
+        GROUP BY biz_id
+        </script>
+        """)
+    List<ErpIdAmountPair> sumSaleIssueCostsBySaleOrderIds(@Param("tenantId") Long tenantId,
+                                                          @Param("saleOrderIds") List<Long> saleOrderIds);
+
+    @Select("""
+        <script>
+        SELECT r.sale_order_id AS id,
+               COALESCE(SUM(ABS(txn.total_cost)), 0) AS amount
+        FROM erp_stock_txn txn
+        JOIN erp_sale_return r
+          ON r.id = txn.biz_id
+         AND r.tenant_id = txn.tenant_id
+        WHERE txn.tenant_id = #{tenantId}
+          AND txn.biz_type = 'SALE_RETURN_RESTOCK'
+          AND r.status = 'APPROVED'
+          AND r.deleted_at IS NULL
+          AND r.sale_order_id IN
+          <foreach collection='saleOrderIds' item='saleOrderId' open='(' separator=',' close=')'>
+            #{saleOrderId}
+          </foreach>
+        GROUP BY r.sale_order_id
+        </script>
+        """)
+    List<ErpIdAmountPair> sumApprovedSaleReturnCostsBySaleOrderIds(@Param("tenantId") Long tenantId,
+                                                                   @Param("saleOrderIds") List<Long> saleOrderIds);
 
     @Select("""
         SELECT biz_item_id AS bizItemId,

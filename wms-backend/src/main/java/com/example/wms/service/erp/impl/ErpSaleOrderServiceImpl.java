@@ -7,9 +7,11 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSaleOrderCreateRequest;
 import com.example.wms.dto.erp.ErpSaleOrderDetail;
 import com.example.wms.dto.erp.ErpSaleOrderHistoryItem;
+import com.example.wms.dto.erp.ErpIdAmountPair;
 import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
 import com.example.wms.dto.erp.ErpSaleOrderItemRequest;
 import com.example.wms.dto.erp.ErpSaleOrderItemCostSnapshot;
+import com.example.wms.dto.erp.ErpSaleOrderSummary;
 import com.example.wms.dto.erp.ErpSaleOrderUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.*;
@@ -44,6 +46,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -135,6 +138,58 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         Page<ErpSaleOrder> result = erpSaleOrderMapper.selectPage(pageReq, wrapper);
         enrichFlowStatus(tenantId(), result.getRecords());
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+    }
+
+    @Override
+    public ErpSaleOrderSummary summary(String keyword, String status, Long customerId, Instant startAt, Instant endAt) {
+        Long tenantId = tenantId();
+        QueryWrapper<ErpSaleOrder> wrapper = baseWrapper(keyword, status, customerId, startAt, endAt);
+        wrapper.select("id", "total_amount_incl_tax");
+        List<ErpSaleOrder> orders = erpSaleOrderMapper.selectList(wrapper);
+        if (orders == null || orders.isEmpty()) {
+            return new ErpSaleOrderSummary(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+
+        List<Long> saleOrderIds = orders.stream()
+            .map(ErpSaleOrder::getId)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        Map<Long, BigDecimal> returnAmountByOrderId = toAmountMap(
+            erpSaleReturnMapper.sumApprovedAmountsBySaleOrderIds(tenantId, saleOrderIds)
+        );
+        Map<Long, BigDecimal> saleCostByOrderId = toAmountMap(
+            erpStockTxnMapper.sumSaleIssueCostsBySaleOrderIds(tenantId, saleOrderIds)
+        );
+        Map<Long, BigDecimal> returnCostByOrderId = toAmountMap(
+            erpStockTxnMapper.sumApprovedSaleReturnCostsBySaleOrderIds(tenantId, saleOrderIds)
+        );
+
+        BigDecimal saleAmountTotal = BigDecimal.ZERO;
+        BigDecimal returnAmountTotal = BigDecimal.ZERO;
+        BigDecimal netGrossProfitTotal = BigDecimal.ZERO;
+        for (ErpSaleOrder order : orders) {
+            if (order == null || order.getId() == null) {
+                continue;
+            }
+            BigDecimal saleAmount = zeroIfNull(order.getTotalAmountInclTax());
+            BigDecimal returnAmount = zeroIfNull(returnAmountByOrderId.get(order.getId()));
+            BigDecimal saleCost = zeroIfNull(saleCostByOrderId.get(order.getId()));
+            BigDecimal returnCost = zeroIfNull(returnCostByOrderId.get(order.getId()));
+            BigDecimal netSaleAmount = saleAmount.subtract(returnAmount);
+            BigDecimal netCost = saleCost.subtract(returnCost);
+
+            saleAmountTotal = saleAmountTotal.add(saleAmount);
+            returnAmountTotal = returnAmountTotal.add(returnAmount);
+            netGrossProfitTotal = netGrossProfitTotal.add(netSaleAmount.subtract(netCost));
+        }
+
+        BigDecimal netSaleAmountTotal = saleAmountTotal.subtract(returnAmountTotal);
+        return new ErpSaleOrderSummary(
+            saleAmountTotal,
+            returnAmountTotal,
+            netSaleAmountTotal,
+            netGrossProfitTotal
+        );
     }
 
     @Override
@@ -379,6 +434,20 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
 
     private BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private Map<Long, BigDecimal> toAmountMap(List<ErpIdAmountPair> rows) {
+        Map<Long, BigDecimal> result = new HashMap<>();
+        if (rows == null || rows.isEmpty()) {
+            return result;
+        }
+        for (ErpIdAmountPair row : rows) {
+            if (row == null || row.getId() == null) {
+                continue;
+            }
+            result.put(row.getId(), zeroIfNull(row.getAmount()));
+        }
+        return result;
     }
 
     private String resolveRedFlushTrace(ErpSaleOrder order, Long approvedReturnCount) {
