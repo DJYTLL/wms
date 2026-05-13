@@ -45,6 +45,7 @@ declare module 'vue' {
     ElTree: typeof import('element-plus/es')['ElTree']
     FuzzyProductSelect: typeof import('./src/components/FuzzyProductSelect.vue')['default']
     PrintPreviewDialog: typeof import('./src/components/PrintPreviewDialog.vue')['default']
+    ProductStockSelect: typeof import('./src/components/ProductStockSelect.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SearchableSelect: typeof import('./src/components/SearchableSelect.vue')['default']
