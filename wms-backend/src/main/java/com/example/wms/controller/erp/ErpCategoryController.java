@@ -50,6 +50,13 @@ public class ErpCategoryController {
         return ResponseEntity.ok(ApiResponse.ok(erpCategoryService.getById(id)));
     }
 
+    // 获取下一个分类编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-category:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpCategoryService.nextCode()));
+    }
+
     // 新增分类
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-category:add')")

@@ -6,26 +6,41 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpCategoryCreateRequest;
 import com.example.wms.dto.erp.ErpCategoryUpdateRequest;
+import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpCategory;
 import com.example.wms.entity.erp.ErpProduct;
+import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpCategoryMapper;
+import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.service.erp.ErpCategoryService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 // 分类服务实现（ERP进销存）
 @Service
 public class ErpCategoryServiceImpl implements ErpCategoryService {
+    private static final String CATEGORY_CODE_TYPE = "CATEGORY";
+
     private final ErpCategoryMapper erpCategoryMapper;
     private final ErpProductMapper erpProductMapper;
+    private final ErpOrderSequenceMapper erpOrderSequenceMapper;
+    private final SystemConfigMapper systemConfigMapper;
 
-    public ErpCategoryServiceImpl(ErpCategoryMapper erpCategoryMapper, ErpProductMapper erpProductMapper) {
+    public ErpCategoryServiceImpl(ErpCategoryMapper erpCategoryMapper,
+                                  ErpProductMapper erpProductMapper,
+                                  ErpOrderSequenceMapper erpOrderSequenceMapper,
+                                  SystemConfigMapper systemConfigMapper) {
         this.erpCategoryMapper = erpCategoryMapper;
         this.erpProductMapper = erpProductMapper;
+        this.erpOrderSequenceMapper = erpOrderSequenceMapper;
+        this.systemConfigMapper = systemConfigMapper;
     }
 
     @Override
@@ -53,6 +68,12 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
             throw new IllegalArgumentException("分类不存在");
         }
         return category;
+    }
+
+    @Override
+    public String nextCode() {
+        Long tenantId = TenantContext.requireTenantId();
+        return generateCategoryCode(tenantId);
     }
 
     @Override
@@ -181,5 +202,33 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
         category.setLevel(request.level());
         category.setSortNo(request.sortNo());
         category.setRemark(request.remark());
+    }
+
+    private String generateCategoryCode(Long tenantId) {
+        String prefix = readConfig("erp.category.code.prefix", "CA");
+        String dateFormat = readConfig("erp.category.code.date-format", "yyyyMMdd");
+        int seqLength = readIntConfig("erp.category.code.seq-length", 4);
+        String dateKey = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(dateFormat));
+        erpOrderSequenceMapper.insertIgnore(tenantId, CATEGORY_CODE_TYPE, dateKey);
+        Long seq = erpOrderSequenceMapper.incrementAndGet(tenantId, CATEGORY_CODE_TYPE, dateKey);
+        String seqStr = String.format("%0" + seqLength + "d", seq == null ? 1 : seq);
+        return prefix + dateKey + seqStr;
+    }
+
+    private String readConfig(String key, String fallback) {
+        SystemConfig config = systemConfigMapper.findByKey(key);
+        if (config == null || config.getConfigValue() == null || config.getConfigValue().isBlank()) {
+            return fallback;
+        }
+        return config.getConfigValue().trim();
+    }
+
+    private int readIntConfig(String key, int fallback) {
+        String value = readConfig(key, String.valueOf(fallback));
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
     }
 }

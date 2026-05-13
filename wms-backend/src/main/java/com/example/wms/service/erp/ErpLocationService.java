@@ -18,6 +18,9 @@ public interface ErpLocationService {
     // 查询库位详情
     ErpLocation getById(Long id);
 
+    // 获取下一个库位编码
+    String nextCode();
+
     // 新增库位
     ErpLocation create(ErpLocationCreateRequest request);
 

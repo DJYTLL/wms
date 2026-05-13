@@ -46,7 +46,7 @@ public class ErpStockCountController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-stock-count:view')")
     public ResponseEntity<ApiResponse<ErpStockCountDetail>> get(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.getDetail(id)));
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.getDetail(id, "COUNT")));
     }
 
     // 预生成盘点单号
@@ -68,14 +68,14 @@ public class ErpStockCountController {
     @PreAuthorize("hasAuthority('PERM_erp-stock-count:edit')")
     public ResponseEntity<ApiResponse<ErpStockCountDetail>> update(@PathVariable Long id,
                                                                    @Valid @RequestBody ErpStockCountUpdateRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.update(id, request)));
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.update(id, request, "COUNT")));
     }
 
     // 审核盘点单
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('PERM_erp-stock-count:approve')")
     public ResponseEntity<ApiResponse<Void>> approve(@PathVariable Long id) {
-        erpStockCountService.approve(id);
+        erpStockCountService.approve(id, "COUNT");
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
@@ -83,7 +83,7 @@ public class ErpStockCountController {
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('PERM_erp-stock-count:cancel')")
     public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id) {
-        erpStockCountService.cancel(id);
+        erpStockCountService.cancel(id, "COUNT");
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

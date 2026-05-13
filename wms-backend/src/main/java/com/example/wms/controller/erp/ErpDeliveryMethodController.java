@@ -50,6 +50,13 @@ public class ErpDeliveryMethodController {
         return ResponseEntity.ok(ApiResponse.ok(erpDeliveryMethodService.getById(id)));
     }
 
+    // 获取下一个送货方式编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-delivery-method:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpDeliveryMethodService.nextCode()));
+    }
+
     // 新增送货方式
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-delivery-method:add')")

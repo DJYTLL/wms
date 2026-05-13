@@ -144,7 +144,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     public ErpSaleOrderSummary summary(String keyword, String status, Long customerId, Instant startAt, Instant endAt) {
         Long tenantId = tenantId();
         QueryWrapper<ErpSaleOrder> wrapper = baseWrapper(keyword, status, customerId, startAt, endAt);
-        wrapper.select("id", "total_amount_incl_tax");
+        wrapper.select("id", "status", "total_amount_incl_tax");
         List<ErpSaleOrder> orders = erpSaleOrderMapper.selectList(wrapper);
         if (orders == null || orders.isEmpty()) {
             return new ErpSaleOrderSummary(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
@@ -157,6 +157,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         Map<Long, BigDecimal> returnAmountByOrderId = toAmountMap(
             erpSaleReturnMapper.sumApprovedAmountsBySaleOrderIds(tenantId, saleOrderIds)
         );
+        Map<Long, BigDecimal> estimatedDraftCostByOrderId = estimateDraftCostsByOrderId(tenantId, saleOrderIds);
         Map<Long, BigDecimal> saleCostByOrderId = toAmountMap(
             erpStockTxnMapper.sumSaleIssueCostsBySaleOrderIds(tenantId, saleOrderIds)
         );
@@ -173,7 +174,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             }
             BigDecimal saleAmount = zeroIfNull(order.getTotalAmountInclTax());
             BigDecimal returnAmount = zeroIfNull(returnAmountByOrderId.get(order.getId()));
-            BigDecimal saleCost = zeroIfNull(saleCostByOrderId.get(order.getId()));
+            BigDecimal saleCost = STATUS_DRAFT.equals(order.getStatus())
+                ? zeroIfNull(estimatedDraftCostByOrderId.get(order.getId()))
+                : zeroIfNull(saleCostByOrderId.get(order.getId()));
             BigDecimal returnCost = zeroIfNull(returnCostByOrderId.get(order.getId()));
             BigDecimal netSaleAmount = saleAmount.subtract(returnAmount);
             BigDecimal netCost = saleCost.subtract(returnCost);
@@ -239,6 +242,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setTotalTaxAmount(BigDecimal.ZERO);
         order.setTotalAmountInclTax(BigDecimal.ZERO);
         order.setVersion(0L);
+        order.setInventoryReserved(false);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
         order.setUpdatedAt(Instant.now());
@@ -250,6 +254,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         applyTotals(order, items);
         validateSettlementAmounts(order);
+        reserveDraftStock(tenantId, items);
+        order.setInventoryReserved(true);
         order.setUpdatedAt(Instant.now());
         updateWithVersion(tenantId, order);
         return new ErpSaleOrderDetail(order, items);
@@ -283,7 +289,12 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
 
-        Set<Long> allowedDisabledProductIds = existingProductIds(erpSaleOrderItemMapper.findByOrderId(tenantId, id));
+        List<ErpSaleOrderItem> existingItems = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
+        Set<Long> allowedDisabledProductIds = existingProductIds(existingItems);
+        if (Boolean.TRUE.equals(order.getInventoryReserved())) {
+            releaseDraftStock(tenantId, existingItems);
+            order.setInventoryReserved(false);
+        }
 
         erpSaleOrderItemMapper.delete(new QueryWrapper<ErpSaleOrderItem>()
             .eq("tenant_id", tenantId)
@@ -295,6 +306,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         applyTotals(order, items);
         validateSettlementAmounts(order);
+        reserveDraftStock(tenantId, items);
+        order.setInventoryReserved(true);
         updateWithVersion(tenantId, order);
         return new ErpSaleOrderDetail(order, items);
     }
@@ -313,6 +326,10 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (!STATUS_DRAFT.equals(order.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可删除");
         }
+        List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
+        if (Boolean.TRUE.equals(order.getInventoryReserved())) {
+            releaseDraftStock(tenantId, items);
+        }
         erpSaleOrderItemMapper.delete(new QueryWrapper<ErpSaleOrderItem>()
             .eq("tenant_id", tenantId)
             .eq("order_id", id));
@@ -330,13 +347,17 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
         validateSettlementAmounts(order);
+        boolean inventoryReserved = Boolean.TRUE.equals(order.getInventoryReserved());
         ErpSaleOrder approved = erpSaleOrderMapper.approveDraft(tenantId, id, resolveCurrentUsername());
         if (approved == null) {
             throw new IllegalArgumentException("销售单状态已变化，请刷新重试");
         }
         for (ErpSaleOrderItem item : items) {
-            applyStockDelta(tenantId, item, item.getQty().negate(), "SALE_APPROVE", id);
+            applyStockDelta(tenantId, item, item.getQty().negate(), "SALE_APPROVE", id, inventoryReserved);
         }
+        approved.setInventoryReserved(false);
+        approved.setUpdatedAt(Instant.now());
+        erpSaleOrderMapper.updateById(approved);
         ensureReceivableAndReceipt(tenantId, order);
     }
 
@@ -350,6 +371,11 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         if (!STATUS_DRAFT.equals(order.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可取消");
+        }
+        if (Boolean.TRUE.equals(order.getInventoryReserved())) {
+            List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
+            releaseDraftStock(tenantId, items);
+            order.setInventoryReserved(false);
         }
         order.setStatus(STATUS_CANCELLED);
         order.setCancelledBy(resolveCurrentUsername());
@@ -383,7 +409,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
         for (ErpSaleOrderItem item : items) {
-            applyStockDelta(tenantId, item, item.getQty(), "SALE_RED_FLUSH", id);
+            applyStockDelta(tenantId, item, item.getQty(), "SALE_RED_FLUSH", id, false);
         }
         ErpAccountsReceivable receivable = erpAccountsReceivableMapper.findBySaleOrderId(tenantId, order.getId());
         if (receivable != null) {
@@ -407,6 +433,11 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (orders == null || orders.isEmpty()) {
             return;
         }
+        List<Long> orderIds = orders.stream()
+            .map(ErpSaleOrder::getId)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        Map<Long, BigDecimal> estimatedDraftCostByOrderId = estimateDraftCostsByOrderId(tenantId, orderIds);
         for (ErpSaleOrder order : orders) {
             if (order == null || order.getId() == null) {
                 continue;
@@ -419,7 +450,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             Long approvedReturnCount = erpSaleReturnMapper.countApprovedBySaleOrderId(tenantId, order.getId());
             order.setApprovedReturnCount(approvedReturnCount);
             BigDecimal returnAmount = zeroIfNull(erpSaleReturnMapper.sumApprovedAmountBySaleOrderId(tenantId, order.getId()));
-            BigDecimal saleCost = zeroIfNull(erpStockTxnMapper.sumSaleIssueCost(tenantId, order.getId()));
+            BigDecimal saleCost = STATUS_DRAFT.equals(order.getStatus())
+                ? zeroIfNull(estimatedDraftCostByOrderId.get(order.getId()))
+                : zeroIfNull(erpStockTxnMapper.sumSaleIssueCost(tenantId, order.getId()));
             BigDecimal returnCost = zeroIfNull(erpStockTxnMapper.sumApprovedSaleReturnCost(tenantId, order.getId()));
             BigDecimal saleAmount = zeroIfNull(order.getTotalAmountInclTax());
             BigDecimal netSaleAmount = saleAmount.subtract(returnAmount);
@@ -446,6 +479,44 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 continue;
             }
             result.put(row.getId(), zeroIfNull(row.getAmount()));
+        }
+        return result;
+    }
+
+    private Map<Long, BigDecimal> estimateDraftCostsByOrderId(Long tenantId, List<Long> orderIds) {
+        Map<Long, BigDecimal> result = new HashMap<>();
+        if (orderIds == null || orderIds.isEmpty()) {
+            return result;
+        }
+        List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderIds(tenantId, orderIds);
+        if (items == null || items.isEmpty()) {
+            return result;
+        }
+        List<Long> productIds = items.stream()
+            .map(ErpSaleOrderItem::getProductId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        Map<Long, BigDecimal> productCostById = new HashMap<>();
+        if (!productIds.isEmpty()) {
+            List<ErpProduct> products = erpProductMapper.selectList(new QueryWrapper<ErpProduct>()
+                .eq("tenant_id", tenantId)
+                .in("id", productIds));
+            for (ErpProduct product : products) {
+                if (product == null || product.getId() == null) {
+                    continue;
+                }
+                productCostById.put(product.getId(), zeroIfNull(product.getCostPrice()));
+            }
+        }
+        for (ErpSaleOrderItem item : items) {
+            if (item == null || item.getOrderId() == null) {
+                continue;
+            }
+            BigDecimal qty = zeroIfNull(item.getQty());
+            BigDecimal costPrice = zeroIfNull(productCostById.get(item.getProductId()));
+            BigDecimal lineEstimatedCost = costPrice.multiply(qty);
+            result.merge(item.getOrderId(), lineEstimatedCost, BigDecimal::add);
         }
         return result;
     }
@@ -815,7 +886,35 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
     }
 
-    private void applyStockDelta(Long tenantId, ErpSaleOrderItem item, BigDecimal delta, String bizType, Long orderId) {
+    private void reserveDraftStock(Long tenantId, List<ErpSaleOrderItem> items) {
+        for (ErpSaleOrderItem item : items) {
+            changeReservedStock(tenantId, item, item.getQty(), "销售单");
+        }
+    }
+
+    private void releaseDraftStock(Long tenantId, List<ErpSaleOrderItem> items) {
+        for (ErpSaleOrderItem item : items) {
+            changeReservedStock(tenantId, item, item.getQty().negate(), "销售单");
+        }
+    }
+
+    private void changeReservedStock(Long tenantId, ErpSaleOrderItem item, BigDecimal delta, String bizName) {
+        if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        ErpStockBalance updatedBalance = erpStockBalanceMapper.addReservedQtyIfEnough(
+            tenantId, item.getProductId(), item.getWarehouseId(), item.getLocationId(), delta, resolveCurrentUsername());
+        if (updatedBalance != null) {
+            return;
+        }
+        if (delta.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalStateException(bizName + "库存占用数据异常，请刷新后重试");
+        }
+        String productLabel = item.getProductName() == null ? item.getProductCode() : item.getProductName();
+        throw insufficientStockException(tenantId, item.getProductId(), item.getWarehouseId(), item.getLocationId(), productLabel, delta);
+    }
+
+    private void applyStockDelta(Long tenantId, ErpSaleOrderItem item, BigDecimal delta, String bizType, Long orderId, boolean consumeReserved) {
         Long warehouseId = item.getWarehouseId();
         Long locationId = item.getLocationId();
         String operator = resolveCurrentUsername();
@@ -825,20 +924,20 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         ErpStockBalance updatedBalance;
         if (delta.compareTo(BigDecimal.ZERO) < 0) {
-            updatedBalance = erpStockBalanceMapper.addQtyIfEnough(
-                tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
+            if (consumeReserved) {
+                updatedBalance = erpStockBalanceMapper.consumeReservedQty(
+                    tenantId, item.getProductId(), warehouseId, locationId, delta.abs(), operator);
+            } else {
+                updatedBalance = erpStockBalanceMapper.addQtyIfEnoughAvailable(
+                    tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
+            }
         } else {
             updatedBalance = erpStockBalanceMapper.upsertAddQty(
                 tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
         }
         if (updatedBalance == null) {
-            ErpStockBalance currentBalance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
-            BigDecimal currentQty = currentBalance == null ? BigDecimal.ZERO : currentBalance.getQtyOnHand();
-            BigDecimal required = delta.abs();
             String productLabel = item.getProductName() == null ? item.getProductCode() : item.getProductName();
-            throw new IllegalArgumentException(
-                "库存不足，商品[" + productLabel + "] 可用=" + currentQty + "，需求=" + required
-            );
+            throw insufficientStockException(tenantId, item.getProductId(), warehouseId, locationId, productLabel, delta.abs());
         }
         BigDecimal after = updatedBalance.getQtyOnHand() == null ? BigDecimal.ZERO : updatedBalance.getQtyOnHand();
         BigDecimal before = after.subtract(delta);
@@ -863,6 +962,24 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         txn.setRemark(item.getRemark());
         txn.setCreatedAt(Instant.now());
         erpStockTxnMapper.insert(txn);
+    }
+
+    private IllegalArgumentException insufficientStockException(Long tenantId,
+                                                                Long productId,
+                                                                Long warehouseId,
+                                                                Long locationId,
+                                                                String productLabel,
+                                                                BigDecimal required) {
+        ErpStockBalance currentBalance = erpStockBalanceMapper.findByKey(tenantId, productId, warehouseId, locationId);
+        BigDecimal currentQty = currentBalance == null || currentBalance.getQtyOnHand() == null
+            ? BigDecimal.ZERO
+            : currentBalance.getQtyOnHand();
+        BigDecimal lockedQty = currentBalance == null || currentBalance.getQtyLocked() == null
+            ? BigDecimal.ZERO
+            : currentBalance.getQtyLocked();
+        return new IllegalArgumentException(
+            "库存不足，商品[" + productLabel + "] 可用=" + currentQty.subtract(lockedQty) + "，需求=" + required
+        );
     }
 
     private BigDecimal resolveSaleStockUnitCost(Long tenantId, Long productId, String bizType, Long orderId) {

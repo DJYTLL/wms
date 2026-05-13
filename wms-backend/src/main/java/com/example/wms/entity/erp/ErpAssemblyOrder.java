@@ -61,6 +61,9 @@ public class ErpAssemblyOrder {
     @TableField("approved_at")
     private Instant approvedAt;
 
+    @TableField("inventory_reserved")
+    private Boolean inventoryReserved;
+
     @TableField("created_at")
     private Instant createdAt;
 
@@ -203,6 +206,14 @@ public class ErpAssemblyOrder {
 
     public void setApprovedAt(Instant approvedAt) {
         this.approvedAt = approvedAt;
+    }
+
+    public Boolean getInventoryReserved() {
+        return inventoryReserved;
+    }
+
+    public void setInventoryReserved(Boolean inventoryReserved) {
+        this.inventoryReserved = inventoryReserved;
     }
 
     public Instant getCreatedAt() {

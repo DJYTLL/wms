@@ -18,6 +18,21 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
     List<ErpSaleOrderItem> findByOrderId(@Param("tenantId") Long tenantId, @Param("orderId") Long orderId);
 
     @Select("""
+        <script>
+        SELECT *
+        FROM erp_sale_order_item
+        WHERE tenant_id = #{tenantId}
+          AND deleted_at IS NULL
+          AND order_id IN
+          <foreach collection='orderIds' item='orderId' open='(' separator=',' close=')'>
+            #{orderId}
+          </foreach>
+        ORDER BY order_id, sort_no, id
+        </script>
+        """)
+    List<ErpSaleOrderItem> findByOrderIds(@Param("tenantId") Long tenantId, @Param("orderIds") List<Long> orderIds);
+
+    @Select("""
         SELECT o.id AS orderId,
                o.order_no AS orderNo,
                o.order_at AS orderAt,

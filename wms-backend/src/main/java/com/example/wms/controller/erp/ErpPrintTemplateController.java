@@ -55,6 +55,12 @@ public class ErpPrintTemplateController {
         return ResponseEntity.ok(ApiResponse.ok(erpPrintTemplateService.getById(id)));
     }
 
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-print-template:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpPrintTemplateService.nextCode()));
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-print-template:add')")
     public ResponseEntity<ApiResponse<ErpPrintTemplate>> create(@Valid @RequestBody ErpPrintTemplateCreateRequest request) {

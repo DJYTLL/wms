@@ -15,6 +15,8 @@ public interface ErpSettlementMethodService {
 
     ErpSettlementMethod getById(Long id);
 
+    String nextCode();
+
     ErpSettlementMethod create(ErpSettlementMethodCreateRequest request);
 
     ErpSettlementMethod update(Long id, ErpSettlementMethodUpdateRequest request);

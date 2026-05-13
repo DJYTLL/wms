@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 // 库存流水 Mapper（ERP进销存）
@@ -129,4 +130,32 @@ public interface ErpStockTxnMapper extends BaseMapper<ErpStockTxn> {
         """)
     List<ErpSaleOrderItemCostSnapshot> findSaleItemCostSnapshots(@Param("tenantId") Long tenantId,
                                                                  @Param("saleOrderId") Long saleOrderId);
+
+    @Select("""
+        <script>
+        SELECT EXISTS (
+            SELECT 1
+            FROM erp_stock_txn txn
+            JOIN erp_stock_count_item item
+              ON item.tenant_id = txn.tenant_id
+             AND item.count_id = #{countId}
+             AND item.deleted_at IS NULL
+             AND item.product_id = txn.product_id
+             AND (
+                    (item.warehouse_id = txn.warehouse_id)
+                 OR (item.warehouse_id IS NULL AND txn.warehouse_id IS NULL)
+             )
+             AND (
+                    (item.location_id = txn.location_id)
+                 OR (item.location_id IS NULL AND txn.location_id IS NULL)
+             )
+            WHERE txn.tenant_id = #{tenantId}
+              AND txn.created_at > #{approvedAt}
+              AND NOT (txn.biz_type = 'STOCK_INIT' AND txn.biz_id = #{countId})
+        )
+        </script>
+        """)
+    boolean existsLaterTxnForInit(@Param("tenantId") Long tenantId,
+                                  @Param("countId") Long countId,
+                                  @Param("approvedAt") Instant approvedAt);
 }

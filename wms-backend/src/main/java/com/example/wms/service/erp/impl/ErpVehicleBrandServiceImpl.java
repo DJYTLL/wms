@@ -11,6 +11,7 @@ import com.example.wms.entity.erp.ErpVehicleSeries;
 import com.example.wms.mapper.erp.ErpVehicleBrandMapper;
 import com.example.wms.mapper.erp.ErpVehicleSeriesMapper;
 import com.example.wms.service.erp.ErpVehicleBrandService;
+import com.example.wms.service.erp.support.ErpMasterDataCodeGenerator;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -22,11 +23,14 @@ import java.util.List;
 public class ErpVehicleBrandServiceImpl implements ErpVehicleBrandService {
     private final ErpVehicleBrandMapper erpVehicleBrandMapper;
     private final ErpVehicleSeriesMapper erpVehicleSeriesMapper;
+    private final ErpMasterDataCodeGenerator codeGenerator;
 
     public ErpVehicleBrandServiceImpl(ErpVehicleBrandMapper erpVehicleBrandMapper,
-                                      ErpVehicleSeriesMapper erpVehicleSeriesMapper) {
+                                      ErpVehicleSeriesMapper erpVehicleSeriesMapper,
+                                      ErpMasterDataCodeGenerator codeGenerator) {
         this.erpVehicleBrandMapper = erpVehicleBrandMapper;
         this.erpVehicleSeriesMapper = erpVehicleSeriesMapper;
+        this.codeGenerator = codeGenerator;
     }
 
     @Override
@@ -54,6 +58,17 @@ public class ErpVehicleBrandServiceImpl implements ErpVehicleBrandService {
             throw new IllegalArgumentException("品牌不存在");
         }
         return brand;
+    }
+
+    @Override
+    public String nextCode() {
+        return codeGenerator.nextCode(
+            "VEHICLE_BRAND",
+            "erp.vehicle-brand.code.prefix",
+            "VB",
+            "erp.vehicle-brand.code.date-format",
+            "erp.vehicle-brand.code.seq-length"
+        );
     }
 
     @Override

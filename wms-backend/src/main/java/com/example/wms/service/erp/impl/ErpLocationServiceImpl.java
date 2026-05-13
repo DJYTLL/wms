@@ -6,6 +6,7 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpLocationCreateRequest;
 import com.example.wms.dto.erp.ErpLocationUpdateRequest;
+import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAssemblyOrder;
 import com.example.wms.entity.erp.ErpAssemblyOrderItem;
 import com.example.wms.entity.erp.ErpLocation;
@@ -19,9 +20,11 @@ import com.example.wms.entity.erp.ErpStockCount;
 import com.example.wms.entity.erp.ErpStockCountItem;
 import com.example.wms.entity.erp.ErpStockTxn;
 import com.example.wms.entity.erp.ErpWarehouse;
+import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderItemMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderMapper;
 import com.example.wms.mapper.erp.ErpLocationMapper;
+import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderItemMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnItemMapper;
@@ -38,11 +41,16 @@ import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 // 库位服务实现（ERP进销存）
 @Service
 public class ErpLocationServiceImpl implements ErpLocationService {
+    private static final String LOCATION_CODE_TYPE = "LOCATION";
+
     private final ErpLocationMapper erpLocationMapper;
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpProductMapper erpProductMapper;
@@ -56,6 +64,8 @@ public class ErpLocationServiceImpl implements ErpLocationService {
     private final ErpStockCountMapper erpStockCountMapper;
     private final ErpStockCountItemMapper erpStockCountItemMapper;
     private final ErpStockTxnMapper erpStockTxnMapper;
+    private final ErpOrderSequenceMapper erpOrderSequenceMapper;
+    private final SystemConfigMapper systemConfigMapper;
 
     public ErpLocationServiceImpl(ErpLocationMapper erpLocationMapper,
                                   ErpWarehouseMapper erpWarehouseMapper,
@@ -69,7 +79,9 @@ public class ErpLocationServiceImpl implements ErpLocationService {
                                   ErpAssemblyOrderItemMapper erpAssemblyOrderItemMapper,
                                   ErpStockCountMapper erpStockCountMapper,
                                   ErpStockCountItemMapper erpStockCountItemMapper,
-                                  ErpStockTxnMapper erpStockTxnMapper) {
+                                  ErpStockTxnMapper erpStockTxnMapper,
+                                  ErpOrderSequenceMapper erpOrderSequenceMapper,
+                                  SystemConfigMapper systemConfigMapper) {
         this.erpLocationMapper = erpLocationMapper;
         this.erpWarehouseMapper = erpWarehouseMapper;
         this.erpProductMapper = erpProductMapper;
@@ -83,6 +95,8 @@ public class ErpLocationServiceImpl implements ErpLocationService {
         this.erpStockCountMapper = erpStockCountMapper;
         this.erpStockCountItemMapper = erpStockCountItemMapper;
         this.erpStockTxnMapper = erpStockTxnMapper;
+        this.erpOrderSequenceMapper = erpOrderSequenceMapper;
+        this.systemConfigMapper = systemConfigMapper;
     }
 
     @Override
@@ -110,6 +124,12 @@ public class ErpLocationServiceImpl implements ErpLocationService {
             throw new IllegalArgumentException("库位不存在");
         }
         return location;
+    }
+
+    @Override
+    public String nextCode() {
+        Long tenantId = TenantContext.requireTenantId();
+        return generateLocationCode(tenantId);
     }
 
     @Override
@@ -349,5 +369,33 @@ public class ErpLocationServiceImpl implements ErpLocationService {
             tenantId,
             ErpMasterDataRules.pendingStatusSqlList()
         );
+    }
+
+    private String generateLocationCode(Long tenantId) {
+        String prefix = readConfig("erp.location.code.prefix", "LO");
+        String dateFormat = readConfig("erp.location.code.date-format", "yyyyMMdd");
+        int seqLength = readIntConfig("erp.location.code.seq-length", 4);
+        String dateKey = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(dateFormat));
+        erpOrderSequenceMapper.insertIgnore(tenantId, LOCATION_CODE_TYPE, dateKey);
+        Long seq = erpOrderSequenceMapper.incrementAndGet(tenantId, LOCATION_CODE_TYPE, dateKey);
+        String seqStr = String.format("%0" + seqLength + "d", seq == null ? 1 : seq);
+        return prefix + dateKey + seqStr;
+    }
+
+    private String readConfig(String key, String fallback) {
+        SystemConfig config = systemConfigMapper.findByKey(key);
+        if (config == null || config.getConfigValue() == null || config.getConfigValue().isBlank()) {
+            return fallback;
+        }
+        return config.getConfigValue().trim();
+    }
+
+    private int readIntConfig(String key, int fallback) {
+        String value = readConfig(key, String.valueOf(fallback));
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
     }
 }

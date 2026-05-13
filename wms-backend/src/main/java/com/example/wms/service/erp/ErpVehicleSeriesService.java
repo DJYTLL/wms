@@ -15,6 +15,8 @@ public interface ErpVehicleSeriesService {
 
     ErpVehicleSeries getById(Long id);
 
+    String nextCode();
+
     ErpVehicleSeries create(ErpVehicleSeriesCreateRequest request);
 
     ErpVehicleSeries update(Long id, ErpVehicleSeriesUpdateRequest request);

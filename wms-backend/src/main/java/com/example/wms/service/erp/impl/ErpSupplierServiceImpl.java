@@ -3,6 +3,7 @@ package com.example.wms.service.erp.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.wms.aop.AuditLog;
+import com.example.wms.entity.SystemConfig;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSupplierCreateRequest;
 import com.example.wms.dto.erp.ErpSupplierUpdateRequest;
@@ -16,6 +17,8 @@ import com.example.wms.mapper.erp.ErpPaymentMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
+import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
+import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.service.erp.ErpSupplierService;
 import com.example.wms.tenant.TenantContext;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,16 +26,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 // 供应商服务实现（ERP进销存）
 @Service
 public class ErpSupplierServiceImpl implements ErpSupplierService {
+    private static final String SUPPLIER_CODE_TYPE = "SUPPLIER";
+
     private final ErpSupplierMapper erpSupplierMapper;
     private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
     private final ErpPurchaseReturnMapper erpPurchaseReturnMapper;
     private final ErpPaymentMapper erpPaymentMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
+    private final ErpOrderSequenceMapper erpOrderSequenceMapper;
+    private final SystemConfigMapper systemConfigMapper;
     private final ObjectMapper objectMapper;
 
     public ErpSupplierServiceImpl(ErpSupplierMapper erpSupplierMapper,
@@ -40,28 +50,37 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
                                   ErpPurchaseReturnMapper erpPurchaseReturnMapper,
                                   ErpPaymentMapper erpPaymentMapper,
                                   ErpAccountsPayableMapper erpAccountsPayableMapper,
+                                  ErpOrderSequenceMapper erpOrderSequenceMapper,
+                                  SystemConfigMapper systemConfigMapper,
                                   ObjectMapper objectMapper) {
         this.erpSupplierMapper = erpSupplierMapper;
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
         this.erpPaymentMapper = erpPaymentMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
+        this.erpOrderSequenceMapper = erpOrderSequenceMapper;
+        this.systemConfigMapper = systemConfigMapper;
         this.objectMapper = objectMapper;
     }
 
     @Override
-    public List<ErpSupplier> listAll(String keyword, Boolean enabled) {
-        QueryWrapper<ErpSupplier> wrapper = baseWrapper(keyword, enabled);
+    public List<ErpSupplier> listAll(String keyword, String status) {
+        Long tenantId = TenantContext.requireTenantId();
+        QueryWrapper<ErpSupplier> wrapper = baseWrapper(tenantId, keyword, status);
         wrapper.orderByAsc("id");
-        return erpSupplierMapper.selectList(wrapper);
+        List<ErpSupplier> suppliers = erpSupplierMapper.selectList(wrapper);
+        enrichRecentTransactionAt(tenantId, suppliers);
+        return suppliers;
     }
 
     @Override
-    public PageResponse<ErpSupplier> page(long page, long size, String keyword, Boolean enabled) {
+    public PageResponse<ErpSupplier> page(long page, long size, String keyword, String status) {
+        Long tenantId = TenantContext.requireTenantId();
         Page<ErpSupplier> pageReq = Page.of(page, size);
-        QueryWrapper<ErpSupplier> wrapper = baseWrapper(keyword, enabled);
+        QueryWrapper<ErpSupplier> wrapper = baseWrapper(tenantId, keyword, status);
         wrapper.orderByAsc("id");
         Page<ErpSupplier> result = erpSupplierMapper.selectPage(pageReq, wrapper);
+        enrichRecentTransactionAt(tenantId, result.getRecords());
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
     }
 
@@ -77,6 +96,12 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
     }
 
     @Override
+    public String nextCode() {
+        Long tenantId = TenantContext.requireTenantId();
+        return generateSupplierCode(tenantId);
+    }
+
+    @Override
     @AuditLog(action = "ERP_SUPPLIER_CREATE", entityType = "erp_supplier", entityId = "{result.id}", detail = "code={arg0.code}")
     public ErpSupplier create(ErpSupplierCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
@@ -87,7 +112,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         ErpSupplier supplier = new ErpSupplier();
         supplier.setTenantId(tenantId);
         applyRequest(supplier, request);
-        supplier.setEnabled(request.enabled() == null || request.enabled());
+        applyStatus(supplier, request.enabled(), request.blacklisted());
         supplier.setCreatedAt(Instant.now());
         supplier.setUpdatedAt(Instant.now());
         erpSupplierMapper.insert(supplier);
@@ -109,8 +134,8 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
             throw new IllegalArgumentException("供应商编码已存在");
         }
         applyRequest(supplier, request);
-        if (request.enabled() != null) {
-            supplier.setEnabled(request.enabled());
+        if (request.enabled() != null || request.blacklisted() != null) {
+            applyStatus(supplier, request.enabled(), request.blacklisted());
         }
         supplier.setUpdatedAt(Instant.now());
         erpSupplierMapper.updateById(supplier);
@@ -154,9 +179,9 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         }
     }
 
-    private QueryWrapper<ErpSupplier> baseWrapper(String keyword, Boolean enabled) {
+    private QueryWrapper<ErpSupplier> baseWrapper(Long tenantId, String keyword, String status) {
         QueryWrapper<ErpSupplier> wrapper = new QueryWrapper<ErpSupplier>()
-            .eq("tenant_id", TenantContext.requireTenantId());
+            .eq("tenant_id", tenantId);
         if (keyword != null && !keyword.isBlank()) {
             wrapper.and(q -> q.like("code", keyword)
                 .or()
@@ -164,12 +189,47 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
                 .or()
                 .like("short_name", keyword)
                 .or()
-                .like("contact", keyword));
+                .like("contact", keyword)
+                .or()
+                .like("phone", keyword)
+                .or()
+                .like("mobile", keyword)
+                .or()
+                .like("email", keyword)
+                .or()
+                .like("tax_no", keyword)
+                .or()
+                .like("bank_account", keyword)
+                .or()
+                .like("address", keyword));
         }
-        if (enabled != null) {
-            wrapper.eq("is_enabled", enabled);
+        if ("enabled".equalsIgnoreCase(status)) {
+            wrapper.eq("is_enabled", true).eq("is_blacklisted", false);
+        } else if ("disabled".equalsIgnoreCase(status)) {
+            wrapper.eq("is_enabled", false).eq("is_blacklisted", false);
+        } else if ("blacklisted".equalsIgnoreCase(status)) {
+            wrapper.eq("is_blacklisted", true);
         }
         return wrapper;
+    }
+
+    private void applyStatus(ErpSupplier supplier, Boolean enabled, Boolean blacklisted) {
+        boolean finalBlacklisted = blacklisted != null && blacklisted;
+        boolean finalEnabled = enabled == null || enabled;
+        if (finalBlacklisted) {
+            finalEnabled = false;
+        }
+        supplier.setBlacklisted(finalBlacklisted);
+        supplier.setEnabled(finalEnabled);
+    }
+
+    private void enrichRecentTransactionAt(Long tenantId, List<ErpSupplier> suppliers) {
+        for (ErpSupplier supplier : suppliers) {
+            if (supplier.getId() == null) {
+                continue;
+            }
+            supplier.setRecentTransactionAt(erpSupplierMapper.findRecentTransactionAt(tenantId, supplier.getId()));
+        }
     }
 
     private void applyRequest(ErpSupplier supplier, ErpSupplierCreateRequest request) {
@@ -214,6 +274,34 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
             return objectMapper.readTree(rawContacts);
         } catch (Exception ex) {
             throw new IllegalArgumentException("联系人列表格式不正确", ex);
+        }
+    }
+
+    private String generateSupplierCode(Long tenantId) {
+        String prefix = readConfig("erp.supplier.code.prefix", "SU");
+        String dateFormat = readConfig("erp.supplier.code.date-format", "yyyyMMdd");
+        int seqLength = readIntConfig("erp.supplier.code.seq-length", 4);
+        String dateKey = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(dateFormat));
+        erpOrderSequenceMapper.insertIgnore(tenantId, SUPPLIER_CODE_TYPE, dateKey);
+        Long seq = erpOrderSequenceMapper.incrementAndGet(tenantId, SUPPLIER_CODE_TYPE, dateKey);
+        String seqStr = String.format("%0" + seqLength + "d", seq == null ? 1 : seq);
+        return prefix + dateKey + seqStr;
+    }
+
+    private String readConfig(String key, String fallback) {
+        SystemConfig config = systemConfigMapper.findByKey(key);
+        if (config == null || config.getConfigValue() == null || config.getConfigValue().isBlank()) {
+            return fallback;
+        }
+        return config.getConfigValue().trim();
+    }
+
+    private int readIntConfig(String key, int fallback) {
+        String value = readConfig(key, String.valueOf(fallback));
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return fallback;
         }
     }
 }

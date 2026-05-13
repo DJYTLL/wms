@@ -8,6 +8,7 @@ import java.util.List;
 public record ErpStockCountCreateRequest(
     String countNo,
     String countType,
+    String adjustmentReason,
     Long warehouseId,
     Long locationId,
     String countAt,

@@ -12,11 +12,13 @@ export default defineConfig(({ command }) => ({
   plugins: [
     vue(),
     AutoImport({
+      dts: false,
       resolvers: [
         ElementPlusResolver(),
       ],
     }),
     Components({
+      dts: false,
       resolvers: [
         ElementPlusResolver({
           importStyle: 'css',

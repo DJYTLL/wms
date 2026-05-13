@@ -67,7 +67,7 @@
               {{ getCustomerName(row.customerId) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          <el-table-column v-if="isApprovedPage && canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ formatStatus(row.status) }}
@@ -85,14 +85,14 @@
               {{ formatAmount(row.netGrossProfit) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="canShow('receivableStatus')" :label="$t('field.receivableStatus')" min-width="150">
+          <el-table-column v-if="isApprovedPage && canShow('receivableStatus')" :label="$t('field.receivableStatus')" min-width="150">
             <template #default="{ row }">
               <el-tag :type="financeStatusTagType(row.receivableStatus)" size="small">
                 {{ formatFinanceStatus(row.receivableStatus, row.receivableUnpaidAmount) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="canShow('returnStatus')" :label="$t('field.returnStatus')" min-width="130">
+          <el-table-column v-if="isApprovedPage && canShow('returnStatus')" :label="$t('field.returnStatus')" min-width="130">
             <template #default="{ row }">
               <div class="return-tag-list">
                 <template v-if="Number(row.approvedReturnCount || 0) > 0">
@@ -114,7 +114,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column v-if="canShow('redFlushTrace')" :label="$t('field.redFlushTrace')" min-width="160">
+          <el-table-column v-if="isApprovedPage && canShow('redFlushTrace')" :label="$t('field.redFlushTrace')" min-width="160">
             <template #default="{ row }">
               <span>{{ row.redFlushTrace || '-' }}</span>
             </template>
@@ -210,7 +210,7 @@
         </el-table>
       </div>
       <div class="table-pagination">
-        <div v-if="isApprovedPage" class="sale-summary-bar">
+        <div v-if="showSaleSummaryBar" class="sale-summary-bar">
           <div class="sale-summary-bar__items">
             <div class="sale-summary-item">
               <span class="sale-summary-item__label">{{ summaryLabel('saleAmount') }}</span>
@@ -499,6 +499,7 @@ const locationOptions = ref<OptionItem[]>([]);
 
 const isDraftPage = computed(() => route.meta.defaultStatus === 'DRAFT');
 const isApprovedPage = computed(() => route.meta.defaultStatus === 'APPROVED');
+const showSaleSummaryBar = computed(() => isApprovedPage.value || isDraftPage.value);
 
 const statusOptions = computed(() => {
   const base = [
@@ -814,18 +815,18 @@ const fetchList = async () => {
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
-      if (isApprovedPage.value) {
+      if (showSaleSummaryBar.value) {
         if (hasSelectedDateRange.value) {
           await fetchRangeSummary();
         } else {
           updateCurrentPageSummary();
         }
       }
-    } else if (isApprovedPage.value) {
+    } else if (showSaleSummaryBar.value) {
       resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
     }
   } catch (error) {
-    if (isApprovedPage.value) {
+    if (showSaleSummaryBar.value) {
       resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
     }
     notifyError(error);
@@ -1032,7 +1033,10 @@ const handleDelete = async (row: SaleOrder) => {
         type: 'warning'
       }
     );
-    await request.delete(`/erp/sale-orders/${row.id}`);
+    await request.delete(`/erp/sale-orders/${row.id}`, {
+      data: { reason: '删除销售单草稿' },
+      skipDeleteReasonPrompt: true
+    } as any);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -1084,7 +1088,7 @@ watch(
   () => route.fullPath,
   () => {
     applyRouteStatus();
-    if (isApprovedPage.value) {
+    if (showSaleSummaryBar.value) {
       resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
     }
     handleSearch();

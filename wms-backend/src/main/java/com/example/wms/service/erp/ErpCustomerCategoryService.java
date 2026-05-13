@@ -18,6 +18,9 @@ public interface ErpCustomerCategoryService {
     // 查询客户类别详情
     ErpCustomerCategory getById(Long id);
 
+    // 获取下一个客户类别编码
+    String nextCode();
+
     // 新增客户类别
     ErpCustomerCategory create(ErpCustomerCategoryCreateRequest request);
 

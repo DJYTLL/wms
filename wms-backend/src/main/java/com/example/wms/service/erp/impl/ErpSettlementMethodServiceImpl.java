@@ -28,6 +28,7 @@ import com.example.wms.mapper.erp.ErpSaleReturnMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.service.erp.ErpSettlementMethodService;
+import com.example.wms.service.erp.support.ErpMasterDataCodeGenerator;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -37,6 +38,8 @@ import java.util.List;
 // 结算方式服务实现（ERP进销存）
 @Service
 public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodService {
+    private static final String SETTLEMENT_METHOD_CODE_TYPE = "SETTLEMENT_METHOD";
+
     private final ErpSettlementMethodMapper erpSettlementMethodMapper;
     private final ErpCustomerMapper erpCustomerMapper;
     private final ErpSupplierMapper erpSupplierMapper;
@@ -47,6 +50,7 @@ public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodServic
     private final ErpPaymentMapper erpPaymentMapper;
     private final ErpAccountsReceivableMapper erpAccountsReceivableMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
+    private final ErpMasterDataCodeGenerator codeGenerator;
 
     public ErpSettlementMethodServiceImpl(ErpSettlementMethodMapper erpSettlementMethodMapper,
                                           ErpCustomerMapper erpCustomerMapper,
@@ -57,7 +61,8 @@ public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodServic
                                           ErpReceiptMapper erpReceiptMapper,
                                           ErpPaymentMapper erpPaymentMapper,
                                           ErpAccountsReceivableMapper erpAccountsReceivableMapper,
-                                          ErpAccountsPayableMapper erpAccountsPayableMapper) {
+                                          ErpAccountsPayableMapper erpAccountsPayableMapper,
+                                          ErpMasterDataCodeGenerator codeGenerator) {
         this.erpSettlementMethodMapper = erpSettlementMethodMapper;
         this.erpCustomerMapper = erpCustomerMapper;
         this.erpSupplierMapper = erpSupplierMapper;
@@ -68,6 +73,7 @@ public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodServic
         this.erpPaymentMapper = erpPaymentMapper;
         this.erpAccountsReceivableMapper = erpAccountsReceivableMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
+        this.codeGenerator = codeGenerator;
     }
 
     @Override
@@ -95,6 +101,17 @@ public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodServic
             throw new IllegalArgumentException("结算方式不存在");
         }
         return method;
+    }
+
+    @Override
+    public String nextCode() {
+        return codeGenerator.nextCode(
+            SETTLEMENT_METHOD_CODE_TYPE,
+            "erp.settlement-method.code.prefix",
+            "SM",
+            "erp.settlement-method.code.date-format",
+            "erp.settlement-method.code.seq-length"
+        );
     }
 
     @Override

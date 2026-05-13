@@ -42,6 +42,66 @@ public interface ErpStockBalanceMapper extends BaseMapper<ErpStockBalance> {
                                    @Param("updatedBy") String updatedBy);
 
     @Select("""
+        UPDATE erp_stock_balance
+        SET qty_on_hand = qty_on_hand + #{delta},
+            updated_by = #{updatedBy},
+            updated_at = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND product_id = #{productId}
+          AND warehouse_id IS NOT DISTINCT FROM #{warehouseId}
+          AND location_id IS NOT DISTINCT FROM #{locationId}
+          AND qty_on_hand + #{delta} >= qty_reserved
+        RETURNING *
+        """)
+    ErpStockBalance addQtyIfEnoughAvailable(@Param("tenantId") Long tenantId,
+                                            @Param("productId") Long productId,
+                                            @Param("warehouseId") Long warehouseId,
+                                            @Param("locationId") Long locationId,
+                                            @Param("delta") BigDecimal delta,
+                                            @Param("updatedBy") String updatedBy);
+
+    @Select("""
+        UPDATE erp_stock_balance
+        SET qty_reserved = qty_reserved + #{delta},
+            updated_by = #{updatedBy},
+            updated_at = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND product_id = #{productId}
+          AND warehouse_id IS NOT DISTINCT FROM #{warehouseId}
+          AND location_id IS NOT DISTINCT FROM #{locationId}
+          AND qty_reserved + #{delta} >= 0
+          AND qty_reserved + #{delta} <= qty_on_hand
+        RETURNING *
+        """)
+    ErpStockBalance addReservedQtyIfEnough(@Param("tenantId") Long tenantId,
+                                           @Param("productId") Long productId,
+                                           @Param("warehouseId") Long warehouseId,
+                                           @Param("locationId") Long locationId,
+                                           @Param("delta") BigDecimal delta,
+                                           @Param("updatedBy") String updatedBy);
+
+    @Select("""
+        UPDATE erp_stock_balance
+        SET qty_on_hand = qty_on_hand - #{qty},
+            qty_reserved = qty_reserved - #{qty},
+            updated_by = #{updatedBy},
+            updated_at = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND product_id = #{productId}
+          AND warehouse_id IS NOT DISTINCT FROM #{warehouseId}
+          AND location_id IS NOT DISTINCT FROM #{locationId}
+          AND qty_on_hand >= #{qty}
+          AND qty_reserved >= #{qty}
+        RETURNING *
+        """)
+    ErpStockBalance consumeReservedQty(@Param("tenantId") Long tenantId,
+                                       @Param("productId") Long productId,
+                                       @Param("warehouseId") Long warehouseId,
+                                       @Param("locationId") Long locationId,
+                                       @Param("qty") BigDecimal qty,
+                                       @Param("updatedBy") String updatedBy);
+
+    @Select("""
         INSERT INTO erp_stock_balance (
             tenant_id, product_id, warehouse_id, location_id, qty_on_hand, updated_by, updated_at
         )

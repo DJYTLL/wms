@@ -95,7 +95,7 @@ public class ErpStockServiceImpl implements ErpStockService {
         Page<ErpStockBalance> result = erpStockBalanceMapper.selectPage(pageReq, wrapper);
         for (ErpStockBalance balance : result.getRecords()) {
             BigDecimal onHand = balance.getQtyOnHand() == null ? BigDecimal.ZERO : balance.getQtyOnHand();
-            BigDecimal locked = BigDecimal.ZERO;
+            BigDecimal locked = balance.getQtyLocked() == null ? BigDecimal.ZERO : balance.getQtyLocked();
             balance.setQtyLocked(locked);
             balance.setQtyAvailable(onHand.subtract(locked));
         }
@@ -131,7 +131,7 @@ public class ErpStockServiceImpl implements ErpStockService {
         Map<Long, String> saleNos = orderNoMap(txns, tenantId, Set.of("SALE_APPROVE", "SALE_RED_FLUSH"), erpSaleOrderMapper, ErpSaleOrder::getOrderNo);
         Map<Long, String> purchaseReturnNos = orderNoMap(txns, tenantId, Set.of("PURCHASE_RETURN", "PURCHASE_RETURN_SCRAP", "PURCHASE_RETURN_RED_FLUSH"), erpPurchaseReturnMapper, ErpPurchaseReturn::getOrderNo);
         Map<Long, String> saleReturnNos = orderNoMap(txns, tenantId, Set.of("SALE_RETURN_RESTOCK", "SALE_RETURN_SCRAP", "SALE_RETURN_RED_FLUSH"), erpSaleReturnMapper, ErpSaleReturn::getOrderNo);
-        Map<Long, String> stockCountNos = stockCountNoMap(txns, tenantId);
+        Map<Long, ErpStockCount> stockCountDocs = stockCountDocMap(txns, tenantId);
         Map<Long, String> assemblyNos = orderNoMap(txns, tenantId, Set.of("ASSEMBLE_OUT", "ASSEMBLE_IN", "DISASSEMBLE_OUT", "DISASSEMBLE_IN"), erpAssemblyOrderMapper, ErpAssemblyOrder::getOrderNo);
 
         for (ErpStockTxn txn : txns) {
@@ -148,7 +148,11 @@ public class ErpStockServiceImpl implements ErpStockService {
             } else if (bizType.startsWith("SALE")) {
                 txn.setDocNo(saleNos.getOrDefault(bizId, txn.getTxnNo()));
             } else if (bizType.startsWith("STOCK_")) {
-                txn.setDocNo(stockCountNos.getOrDefault(bizId, txn.getTxnNo()));
+                ErpStockCount doc = stockCountDocs.get(bizId);
+                txn.setDocNo(doc == null ? txn.getTxnNo() : doc.getCountNo());
+                if ("STOCK_COUNT".equals(bizType) && doc != null) {
+                    txn.setAdjustmentReason(doc.getAdjustmentReason());
+                }
             } else if (bizType.startsWith("ASSEMBLE") || bizType.startsWith("DISASSEMBLE")) {
                 txn.setDocNo(assemblyNos.getOrDefault(bizId, txn.getTxnNo()));
             } else {
@@ -191,7 +195,7 @@ public class ErpStockServiceImpl implements ErpStockService {
         return result;
     }
 
-    private Map<Long, String> stockCountNoMap(List<ErpStockTxn> txns, Long tenantId) {
+    private Map<Long, ErpStockCount> stockCountDocMap(List<ErpStockTxn> txns, Long tenantId) {
         Set<Long> ids = txns.stream()
             .filter(txn -> txn.getBizType() != null && txn.getBizType().startsWith("STOCK_"))
             .map(ErpStockTxn::getBizId)
@@ -204,9 +208,9 @@ public class ErpStockServiceImpl implements ErpStockService {
             .eq("tenant_id", tenantId)
             .in("id", ids)
             .isNull("deleted_at"));
-        Map<Long, String> result = new HashMap<>();
+        Map<Long, ErpStockCount> result = new HashMap<>();
         for (ErpStockCount doc : docs) {
-            result.put(doc.getId(), doc.getCountNo());
+            result.put(doc.getId(), doc);
         }
         return result;
     }
@@ -262,9 +266,10 @@ public class ErpStockServiceImpl implements ErpStockService {
                 ? "未指定库位"
                 : locationNameMap.getOrDefault(balance.getLocationId(), "-"));
             BigDecimal onHand = balance.getQtyOnHand() == null ? BigDecimal.ZERO : balance.getQtyOnHand();
+            BigDecimal locked = balance.getQtyLocked() == null ? BigDecimal.ZERO : balance.getQtyLocked();
             option.setQtyOnHand(onHand);
-            option.setQtyAvailable(onHand);
-            option.setQtyLocked(BigDecimal.ZERO);
+            option.setQtyAvailable(onHand.subtract(locked));
+            option.setQtyLocked(locked);
             options.add(option);
         }
         return options;

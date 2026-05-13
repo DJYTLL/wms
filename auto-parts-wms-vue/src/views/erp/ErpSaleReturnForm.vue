@@ -86,20 +86,12 @@
                 </el-form-item>
               </div>
               <div class="form-group">
-                <el-form-item :label="$t('field.returnSource')" required>
-                  <el-select
-                    v-model="formData.returnSource"
-                    style="width: 100%"
-                    :disabled="isReadOnly || !formData.customerId"
-                    @change="handleReturnSourceChange"
-                  >
-                    <el-option :label="$t('returnSource.byProduct')" value="BY_PRODUCT" />
-                    <el-option :label="$t('returnSource.bySaleOrder')" value="BY_SALE_ORDER" />
-                  </el-select>
+                <el-form-item :label="$t('field.returnSource')">
+                  <el-input :model-value="$t('returnSource.bySaleOrder')" disabled />
                 </el-form-item>
               </div>
-              <div v-if="formData.returnSource === 'BY_SALE_ORDER'" class="form-group">
-                <el-form-item :label="$t('field.saleOrderNo')">
+              <div class="form-group">
+                <el-form-item :label="$t('field.saleOrderNo')" required>
                   <el-select v-model="formData.saleOrderId" filterable clearable style="width: 100%" :disabled="isReadOnly" @change="handleSaleOrderChange">
                     <el-option v-for="item in saleOrderOptions" :key="item.id" :label="item.orderNo" :value="item.id" />
                   </el-select>
@@ -141,34 +133,9 @@
                     :placeholder="$t('placeholder.selectProduct')"
                     :disabled="isReadOnly || !formData.customerId"
                     @change="handleProductChange(row)"
-                    @visible-change="(visible: boolean) => handleProductVisibleChange(row, visible)"
                   >
                     <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                   </el-select>
-                  <div
-                    v-if="formData.returnSource === 'BY_PRODUCT' && row.productId"
-                    class="recent-sale-hint"
-                  >
-                    <div class="recent-sale-hint__title">{{ $t('message.recentSaleHint') }}</div>
-                    <div v-if="getRecentSaleItems(row.productId).length" class="recent-sale-hint__list">
-                      <div
-                        v-for="item in getRecentSaleItems(row.productId)"
-                        :key="`${item.orderId}-${item.productId}`"
-                        class="recent-sale-hint__item"
-                      >
-                        <span class="recent-sale-hint__no">{{ item.orderNo }}</span>
-                        <span class="recent-sale-hint__meta">
-                          {{ $t('field.quantity') }}: {{ item.qty }}
-                        </span>
-                        <span class="recent-sale-hint__meta">
-                          {{ $t('field.price') }}: {{ item.price }}
-                        </span>
-                      </div>
-                    </div>
-                    <div v-else class="recent-sale-hint__empty">
-                      {{ $t('message.noRecentSale') }}
-                    </div>
-                  </div>
                 </template>
               </el-table-column>
               <el-table-column :label="$t('field.warehouse')" min-width="160">
@@ -413,15 +380,6 @@ interface ProductOption {
   enabled?: boolean;
 }
 
-interface RecentSaleItem {
-  orderId: number;
-  orderNo: string;
-  orderAt?: string;
-  productId: number;
-  qty: number;
-  price: number;
-}
-
 interface StockOption {
   key: string;
   warehouseId: number | null;
@@ -492,7 +450,6 @@ const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const settlementMethodOptions = ref<CodeOptionItem[]>([]);
 const productStockMap = ref<Record<number, StockOption[]>>({});
-const productRecentSalesMap = ref<Record<number, RecentSaleItem[]>>({});
 const saleOrderDetailItems = ref<SaleOrderDetailItem[]>([]);
 const selectedSaleOrderItems = ref<SaleOrderDetailItem[]>([]);
 const showSaleOrderDialog = ref(false);
@@ -502,7 +459,7 @@ const formData = reactive({
   orderAt: '',
   status: '',
   returnType: 'RESTOCK',
-  returnSource: 'BY_PRODUCT',
+  returnSource: 'BY_SALE_ORDER',
   customerId: null as number | null,
   saleOrderId: null as number | null,
   settlementMethod: '',
@@ -1070,36 +1027,8 @@ const handleProductChange = async (row: SaleReturnItem) => {
   row.price = '';
   applyProductDefaults(row, true);
   await fetchStockOptions(row.productId, true);
-  await fetchRecentSaleItems(row.productId);
   syncStockKey(row);
   await applyPriceForRow(row, true);
-};
-
-const handleProductVisibleChange = async (row: SaleReturnItem, visible: boolean) => {
-  if (!visible || !row.productId) return;
-  await fetchRecentSaleItems(row.productId);
-};
-
-const fetchRecentSaleItems = async (productId?: number) => {
-  if (!productId || !formData.customerId) return;
-  if (productRecentSalesMap.value[productId]) return;
-  try {
-    const res: any = await request.get('/erp/sale-orders/recent-items', {
-      params: {
-        customerId: formData.customerId,
-        productId,
-        limit: 10
-      }
-    });
-    productRecentSalesMap.value[productId] = res.data.data || [];
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const getRecentSaleItems = (productId?: number) => {
-  if (!productId) return [];
-  return productRecentSalesMap.value[productId] || [];
 };
 
 const handleWarehouseChange = (row: SaleReturnItem) => {
@@ -1144,7 +1073,6 @@ const handleCustomerChange = (value: number | null) => {
     return;
   }
   if (value === lastCustomerId.value) return;
-  productRecentSalesMap.value = {};
   formData.saleOrderId = null;
   const hasItems = formData.items.some(item => item.productId);
   if (hasItems) {
@@ -1156,21 +1084,9 @@ const handleCustomerChange = (value: number | null) => {
   applyMethodsForCustomer();
 };
 
-const handleReturnSourceChange = () => {
-  if (formData.returnSource === 'BY_SALE_ORDER') {
-    formData.items = [];
-    addItem();
-    return;
-  }
-  formData.saleOrderId = null;
-  saleOrderDetailItems.value = [];
-  selectedSaleOrderItems.value = [];
-};
-
 const handleSaleOrderChange = (value: number | null) => {
   if (isReadOnly.value) return;
   if (!value) return;
-  if (formData.returnSource !== 'BY_SALE_ORDER') return;
   const selected = saleOrderOptions.value.find(item => item.id === value);
   if (!selected) return;
   if (selected.customerId && selected.customerId !== formData.customerId) {
@@ -1428,7 +1344,7 @@ const loadDetail = async () => {
       formData.returnType = data.order?.returnType || data.returnType || 'RESTOCK';
       formData.customerId = data.order?.customerId || data.customerId || null;
       formData.saleOrderId = data.order?.saleOrderId || data.saleOrderId || null;
-      formData.returnSource = formData.saleOrderId ? 'BY_SALE_ORDER' : 'BY_PRODUCT';
+      formData.returnSource = 'BY_SALE_ORDER';
       formData.orderAt = normalizeDateTimeValue(data.order?.orderAt || data.orderAt) || formatDateTime(new Date());
       formData.remark = data.order?.remark || data.remark || '';
       formData.settlementMethod = data.order?.settlementMethod || data.settlementMethod || '';
@@ -1486,7 +1402,7 @@ const resetForm = () => {
   formData.orderAt = '';
   formData.status = '';
   formData.returnType = 'RESTOCK';
-  formData.returnSource = 'BY_PRODUCT';
+  formData.returnSource = 'BY_SALE_ORDER';
   formData.customerId = null;
   formData.saleOrderId = null;
   formData.settlementMethod = '';
@@ -1495,7 +1411,6 @@ const resetForm = () => {
   formData.remark = '';
   formData.items = [];
   themeMode.value = 'default';
-  productRecentSalesMap.value = {};
   saleOrderDetailItems.value = [];
   selectedSaleOrderItems.value = [];
 };
@@ -1522,7 +1437,7 @@ const applyDefaultMethods = () => {
     formData.returnType = 'RESTOCK';
   }
   if (!formData.returnSource) {
-    formData.returnSource = 'BY_PRODUCT';
+    formData.returnSource = 'BY_SALE_ORDER';
   }
 };
 
@@ -1547,7 +1462,7 @@ const fetchNextOrderNo = async () => {
     notifyWarning(t('message.required'));
     return;
   }
-  if (formData.returnSource === 'BY_SALE_ORDER' && !formData.saleOrderId) {
+  if (!formData.saleOrderId) {
     notifyWarning(t('message.required'));
     return;
   }
@@ -2031,48 +1946,6 @@ onBeforeUnmount(() => {
 
 .summary-item {
   white-space: nowrap;
-}
-
-.recent-sale-hint {
-  margin-top: 6px;
-  padding: 6px 8px;
-  background: #f8fafc;
-  border: 1px dashed #dcdfe6;
-  border-radius: 8px;
-  font-size: 12px;
-  color: #606266;
-}
-
-.recent-sale-hint__title {
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: #409eff;
-}
-
-.recent-sale-hint__list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.recent-sale-hint__item {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  line-height: 1.4;
-}
-
-.recent-sale-hint__no {
-  font-weight: 600;
-  color: #303133;
-}
-
-.recent-sale-hint__meta {
-  color: #909399;
-}
-
-.recent-sale-hint__empty {
-  color: #909399;
 }
 
 .payment-card-body {

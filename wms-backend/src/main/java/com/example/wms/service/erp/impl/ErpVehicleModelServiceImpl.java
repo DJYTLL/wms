@@ -13,6 +13,7 @@ import com.example.wms.mapper.erp.ErpProductFitmentMapper;
 import com.example.wms.mapper.erp.ErpVehicleModelMapper;
 import com.example.wms.mapper.erp.ErpVehicleSeriesMapper;
 import com.example.wms.service.erp.ErpVehicleModelService;
+import com.example.wms.service.erp.support.ErpMasterDataCodeGenerator;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -25,13 +26,16 @@ public class ErpVehicleModelServiceImpl implements ErpVehicleModelService {
     private final ErpVehicleModelMapper erpVehicleModelMapper;
     private final ErpVehicleSeriesMapper erpVehicleSeriesMapper;
     private final ErpProductFitmentMapper erpProductFitmentMapper;
+    private final ErpMasterDataCodeGenerator codeGenerator;
 
     public ErpVehicleModelServiceImpl(ErpVehicleModelMapper erpVehicleModelMapper,
                                       ErpVehicleSeriesMapper erpVehicleSeriesMapper,
-                                      ErpProductFitmentMapper erpProductFitmentMapper) {
+                                      ErpProductFitmentMapper erpProductFitmentMapper,
+                                      ErpMasterDataCodeGenerator codeGenerator) {
         this.erpVehicleModelMapper = erpVehicleModelMapper;
         this.erpVehicleSeriesMapper = erpVehicleSeriesMapper;
         this.erpProductFitmentMapper = erpProductFitmentMapper;
+        this.codeGenerator = codeGenerator;
     }
 
     @Override
@@ -59,6 +63,17 @@ public class ErpVehicleModelServiceImpl implements ErpVehicleModelService {
             throw new IllegalArgumentException("车型不存在");
         }
         return model;
+    }
+
+    @Override
+    public String nextCode() {
+        return codeGenerator.nextCode(
+            "VEHICLE_MODEL",
+            "erp.vehicle-model.code.prefix",
+            "VM",
+            "erp.vehicle-model.code.date-format",
+            "erp.vehicle-model.code.seq-length"
+        );
     }
 
     @Override

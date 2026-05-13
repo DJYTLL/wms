@@ -54,6 +54,48 @@
               </el-form-item>
             </div>
             <div class="form-group">
+              <el-form-item label="组装模板">
+                <el-select
+                  v-model="selectedTemplateId"
+                  clearable
+                  filterable
+                  placeholder="选择模板后自动带出物料信息"
+                  style="width: 100%"
+                  :disabled="isReadOnly"
+                  @change="handleTemplateChange"
+                >
+                  <el-option
+                    v-for="item in templateOptions"
+                    :key="item.id"
+                    :label="item.name"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="form-group">
+              <el-form-item label="模板操作">
+                <div class="template-actions">
+                  <el-button
+                    class="action-button"
+                    plain
+                    :disabled="isReadOnly"
+                    @click="openTemplateDialog(false)"
+                  >
+                    保存为模板
+                  </el-button>
+                  <el-button
+                    class="action-button"
+                    plain
+                    :disabled="isReadOnly || !selectedTemplateId"
+                    @click="openTemplateDialog(true)"
+                  >
+                    更新模板
+                  </el-button>
+                </div>
+              </el-form-item>
+            </div>
+            <div class="form-group">
               <el-form-item :label="$t('field.finishedProduct')" required>
                 <FuzzyProductSelect
                   v-model="formData.finishedProductId"
@@ -203,11 +245,38 @@
         </el-form>
       </div>
     </div>
+
+    <el-dialog
+      v-model="templateDialog.visible"
+      :title="templateDialog.isEditing ? '更新组装模板' : '保存组装模板'"
+      width="520px"
+    >
+      <el-form label-position="top">
+        <el-form-item label="模板名称" required>
+          <el-input v-model="templateDialog.name" maxlength="120" show-word-limit />
+        </el-form-item>
+        <el-form-item label="模板备注">
+          <el-input
+            v-model="templateDialog.remark"
+            type="textarea"
+            :autosize="{ minRows: 3, maxRows: 4 }"
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="templateDialog.visible = false">取消</el-button>
+          <el-button type="primary" @click="saveTemplate">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
@@ -254,6 +323,12 @@ interface StockOption {
   searchLabel: string;
 }
 
+interface TemplateOptionItem {
+  id: number;
+  name: string;
+  remark?: string;
+}
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -264,6 +339,14 @@ const productOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const productStockMap = ref<Record<number, StockOption[]>>({});
+const templateOptions = ref<TemplateOptionItem[]>([]);
+const selectedTemplateId = ref<number | null>(null);
+const templateDialog = reactive({
+  visible: false,
+  isEditing: false,
+  name: '',
+  remark: ''
+});
 
 const formData = reactive({
   orderNo: '',
@@ -285,12 +368,18 @@ const lastRouteKey = ref(route.fullPath);
 const needsReload = ref(false);
 
 const isEditing = computed(() => Boolean(route.params.id));
-const isReadOnly = computed(() => route.query.mode === 'view');
+const isReadOnly = computed(() => {
+  if (route.query.mode === 'view') return true;
+  if (!formData.status) return false;
+  return formData.status !== 'DRAFT';
+});
 
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 
 const canApprove = computed(() => {
-  return !isReadOnly.value && isEditing.value && formData.status === 'DRAFT' && hasPermission('erp-assembly:approve');
+  return !isReadOnly.value
+    && (!formData.status || formData.status === 'DRAFT')
+    && hasPermission('erp-assembly:approve');
 });
 
 const canShow = (_key?: string) => true;
@@ -570,6 +659,10 @@ const resetForm = async () => {
   formData.laborCost = '';
   formData.remark = '';
   formData.items = [];
+  selectedTemplateId.value = null;
+  templateDialog.visible = false;
+  templateDialog.name = '';
+  templateDialog.remark = '';
   addItem();
   await loadNextOrderNo();
 };
@@ -587,14 +680,16 @@ const loadNextOrderNo = async () => {
 
 const fetchOptions = async () => {
   try {
-    const [productsRes, warehousesRes, locationsRes] = await Promise.all([
+    const [productsRes, warehousesRes, locationsRes, templatesRes] = await Promise.all([
       request.get('/erp/products/options'),
       request.get('/erp/warehouses/options'),
-      request.get('/erp/locations/options')
+      request.get('/erp/locations/options'),
+      request.get('/erp/assembly-templates', { params: { orderType: formData.orderType } })
     ]);
     productOptions.value = productsRes.data.data || [];
     warehouseOptions.value = warehousesRes.data.data || [];
     locationOptions.value = locationsRes.data.data || [];
+    templateOptions.value = templatesRes.data.data || [];
   } catch (error) {
     notifyError(error);
   }
@@ -667,6 +762,101 @@ const addItem = () => {
     amount: 0,
     remark: ''
   });
+};
+
+const applyTemplateDetail = async (detail: any) => {
+  const template = detail?.template;
+  if (!template) return;
+  formData.finishedProductId = template.finishedProductId || null;
+  await ensureProductOption(formData.finishedProductId);
+  formData.finishedQty = String(template.finishedQty ?? '');
+  formData.warehouseId = template.warehouseId || null;
+  formData.locationId = template.locationId || null;
+  await ensureWarehouseOption(formData.warehouseId);
+  await ensureLocationOption(formData.locationId);
+  formData.laborCost = String(template.laborCost ?? '');
+  formData.remark = template.remark || '';
+  if (formData.finishedProductId) {
+    await fetchStockOptions(formData.finishedProductId, true);
+    applyFinishedProductDefaults(false);
+    syncFinishedStockKey();
+  }
+  formData.items = (detail.items || []).map((item: any) => ({
+    productId: item.productId || null,
+    warehouseId: item.warehouseId ?? template.warehouseId ?? null,
+    locationId: item.locationId ?? template.locationId ?? null,
+    stockKey: buildStockKey(item.warehouseId ?? template.warehouseId ?? null, item.locationId ?? template.locationId ?? null),
+    qty: String(item.qty ?? ''),
+    unitCost: 0,
+    amount: 0,
+    remark: item.remark || ''
+  }));
+  await Promise.all(formData.items.flatMap(item => [
+    ensureProductOption(item.productId),
+    ensureWarehouseOption(item.warehouseId),
+    ensureLocationOption(item.locationId)
+  ]));
+  await fetchStockOptionsForItems(formData.items);
+  formData.items.forEach(row => {
+    handleProductChange(row);
+    syncStockKey(row);
+  });
+  if (!formData.items.length) {
+    addItem();
+  }
+};
+
+const handleTemplateChange = async (templateId: number | null) => {
+  if (!templateId) {
+    selectedTemplateId.value = null;
+    return;
+  }
+  try {
+    const res: any = await request.get(`/erp/assembly-templates/${templateId}`);
+    await applyTemplateDetail(res.data?.data);
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const openTemplateDialog = (isEditingTemplate: boolean) => {
+  if (isEditingTemplate && !selectedTemplateId.value) {
+    notifyWarning('请先选择模板');
+    return;
+  }
+  const currentTemplate = templateOptions.value.find(item => item.id === selectedTemplateId.value);
+  templateDialog.visible = true;
+  templateDialog.isEditing = isEditingTemplate;
+  templateDialog.name = isEditingTemplate ? currentTemplate?.name || '' : '';
+  templateDialog.remark = isEditingTemplate ? currentTemplate?.remark || formData.remark : formData.remark;
+};
+
+const saveTemplate = async () => {
+  if (!validateForm()) return;
+  if (!templateDialog.name.trim()) {
+    notifyWarning('请输入模板名称');
+    return;
+  }
+  const payload = {
+    ...buildPayload(),
+    name: templateDialog.name.trim(),
+    remark: templateDialog.remark.trim() || null
+  };
+  try {
+    let templateId = selectedTemplateId.value;
+    if (templateDialog.isEditing && templateId) {
+      await request.put(`/erp/assembly-templates/${templateId}`, payload);
+    } else {
+      const res: any = await request.post('/erp/assembly-templates', payload);
+      templateId = res.data?.data?.template?.id || null;
+    }
+    templateDialog.visible = false;
+    await fetchOptions();
+    selectedTemplateId.value = templateId;
+    notifySuccess('模板已保存');
+  } catch (error) {
+    notifyError(error);
+  }
 };
 
 const removeItem = (index: number) => {
@@ -756,6 +946,7 @@ const saveData = async (closeOnSuccess = false) => {
   if (!validateForm()) return null;
   const payload = buildPayload();
   try {
+    let savedId: string | number | null = route.params.id ? String(route.params.id) : null;
     if (isEditing.value) {
       await request.put(`/erp/assembly-orders/${route.params.id}`, payload);
       notifySuccess();
@@ -763,7 +954,9 @@ const saveData = async (closeOnSuccess = false) => {
       const res: any = await request.post('/erp/assembly-orders', payload);
       if (res.data?.data?.order?.id) {
         const id = res.data.data.order.id;
+        savedId = id;
         await router.replace(`/erp/assemble-orders/${id}/edit`);
+        await fetchDetail();
       }
       notifySuccess();
     }
@@ -771,7 +964,7 @@ const saveData = async (closeOnSuccess = false) => {
       closePage();
       await router.push('/erp/assemble-orders');
     }
-    return route.params.id || null;
+    return savedId;
   } catch (error) {
     notifyError(error);
     return null;
@@ -790,6 +983,23 @@ const handleApprove = async () => {
   if (!canApprove.value) return;
   try {
     await ElMessageBox.confirm(
+      t('message.confirmSaveBeforeApprove'),
+      t('action.confirm'),
+      {
+        confirmButtonText: t('action.save'),
+        cancelButtonText: t('action.cancel'),
+        type: 'warning'
+      }
+    );
+  } catch {
+    return;
+  }
+
+  const savedId = await saveData(false);
+  if (!savedId) return;
+
+  try {
+    await ElMessageBox.confirm(
       t('message.confirmApprove'),
       t('action.confirm'),
       {
@@ -798,7 +1008,7 @@ const handleApprove = async () => {
         type: 'warning'
       }
     );
-    await request.post(`/erp/assembly-orders/${route.params.id}/approve`);
+    await request.post(`/erp/assembly-orders/${savedId}/approve`);
     formData.status = 'APPROVED';
     notifySuccess();
     closePage();
@@ -835,6 +1045,7 @@ const fetchDetail = async () => {
     await ensureLocationOption(formData.locationId);
     formData.laborCost = String(order.laborCost ?? '');
     formData.remark = order.remark || '';
+    selectedTemplateId.value = null;
     if (formData.finishedProductId) {
       await fetchStockOptions(formData.finishedProductId);
       syncFinishedStockKey();
@@ -870,13 +1081,27 @@ const handleTagClosing = (event: Event) => {
   }
 };
 
-onMounted(async () => {
+const loadPageData = async () => {
+  pagePath.value = route.path;
   await fetchOptions();
   if (isEditing.value) {
     await fetchDetail();
   } else {
     await resetForm();
   }
+};
+
+watch(
+  () => route.fullPath,
+  async (newPath) => {
+    if (newPath === lastRouteKey.value) return;
+    lastRouteKey.value = newPath;
+    await loadPageData();
+  }
+);
+
+onMounted(async () => {
+  await loadPageData();
   if (typeof window !== 'undefined') {
     window.addEventListener('tags:closing', handleTagClosing as EventListener);
     window.addEventListener('tags:close', handleTagClosing as EventListener);
@@ -898,12 +1123,7 @@ onActivated(async () => {
   }
   if (!needsReload.value) return;
   needsReload.value = false;
-  await fetchOptions();
-  if (isEditing.value) {
-    await fetchDetail();
-  } else {
-    await resetForm();
-  }
+  await loadPageData();
 });
 
 </script>
@@ -937,6 +1157,12 @@ onActivated(async () => {
   font-weight: 800;
   font-size: 24px;
   line-height: 32px;
+}
+
+.template-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .sale-page-header {

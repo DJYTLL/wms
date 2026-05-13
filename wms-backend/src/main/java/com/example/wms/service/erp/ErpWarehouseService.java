@@ -18,6 +18,9 @@ public interface ErpWarehouseService {
     // 查询仓库详情
     ErpWarehouse getById(Long id);
 
+    // 获取下一个仓库编码
+    String nextCode();
+
     // 新增仓库
     ErpWarehouse create(ErpWarehouseCreateRequest request);
 

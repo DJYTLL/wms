@@ -15,6 +15,8 @@ public interface ErpPrintTemplateService {
 
     ErpPrintTemplate getById(Long id);
 
+    String nextCode();
+
     ErpPrintTemplate getDefaultByDocType(String docType);
 
     ErpPrintTemplate create(ErpPrintTemplateCreateRequest request);

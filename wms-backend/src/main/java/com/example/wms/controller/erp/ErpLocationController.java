@@ -59,6 +59,13 @@ public class ErpLocationController {
         return ResponseEntity.ok(ApiResponse.ok(erpLocationService.getById(id)));
     }
 
+    // 获取下一个库位编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-location:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpLocationService.nextCode()));
+    }
+
     // 新增库位
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-location:add')")

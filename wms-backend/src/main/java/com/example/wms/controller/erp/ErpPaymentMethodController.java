@@ -50,6 +50,13 @@ public class ErpPaymentMethodController {
         return ResponseEntity.ok(ApiResponse.ok(erpPaymentMethodService.getById(id)));
     }
 
+    // 获取下一个付款方式编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-payment-method:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpPaymentMethodService.nextCode()));
+    }
+
     // 新增付款方式
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-payment-method:add')")

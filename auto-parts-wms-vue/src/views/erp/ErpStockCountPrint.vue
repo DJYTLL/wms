@@ -99,6 +99,7 @@ const headerFieldLabel = (key: string) => {
   const mapping: Record<string, string> = {
     countNo: t('field.countNo'),
     countAt: t('field.countAt'),
+    adjustmentReason: t('field.adjustmentReason'),
     status: t('field.status'),
     printCount: t('field.printCount'),
     lastPrintedAt: t('field.lastPrintedAt'),
@@ -128,6 +129,8 @@ const headerFieldValue = (key: string) => {
       return current.countNo || '-';
     case 'countAt':
       return formatDateTime(current.countAt || current.createdAt);
+    case 'adjustmentReason':
+      return formatAdjustmentReason(current.adjustmentReason);
     case 'status':
       return current.status ? statusLabel(current.status) : '-';
     case 'printCount':
@@ -148,6 +151,13 @@ const statusLabel = (value?: string) => {
   if (value === 'CANCELLED') return t('status.cancelled');
   if (value === 'RED_FLUSHED') return t('status.redFlushed');
   return value;
+};
+
+const formatAdjustmentReason = (value?: string) => {
+  if (!value) return '-';
+  const key = `adjustmentReason.${value}`;
+  const translated = t(key);
+  return translated === key ? value : translated;
 };
 
 const formatItemValue = (row: any, key: string) => {
@@ -201,7 +211,7 @@ const getWarehouseName = (id?: number) => warehouses.value.find((item) => item.i
 const getLocationName = (id?: number) => locations.value.find((item) => item.id === id)?.name || '-';
 
 const buildDefaultConfig = (): TemplateConfig => ({
-  headerFields: ['countNo', 'countAt', 'status', 'printCount', 'lastPrintedAt', 'remark'],
+  headerFields: ['countNo', 'countAt', 'adjustmentReason', 'status', 'printCount', 'lastPrintedAt', 'remark'],
   detailColumns: ['productCode', 'productName', 'warehouse', 'location', 'systemQty', 'countedQty', 'diffQty', 'remark'],
   showTotals: false,
   columnWidths: {

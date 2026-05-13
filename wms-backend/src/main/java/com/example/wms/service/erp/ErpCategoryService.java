@@ -18,6 +18,9 @@ public interface ErpCategoryService {
     // 查询分类详情
     ErpCategory getById(Long id);
 
+    // 获取下一个分类编码
+    String nextCode();
+
     // 新增分类
     ErpCategory create(ErpCategoryCreateRequest request);
 

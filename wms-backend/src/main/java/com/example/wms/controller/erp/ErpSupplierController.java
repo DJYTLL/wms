@@ -29,8 +29,8 @@ public class ErpSupplierController {
     @GetMapping
     @PreAuthorize("hasAuthority('PERM_erp-supplier:view')")
     public ResponseEntity<ApiResponse<List<ErpSupplier>>> list(@RequestParam(required = false) String keyword,
-                                                               @RequestParam(required = false) Boolean enabled) {
-        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.listAll(keyword, enabled)));
+                                                               @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.listAll(keyword, status)));
     }
 
     // 分页查询供应商
@@ -39,8 +39,8 @@ public class ErpSupplierController {
     public ResponseEntity<ApiResponse<PageResponse<ErpSupplier>>> page(@RequestParam(defaultValue = "1") long page,
                                                                        @RequestParam(defaultValue = "20") long size,
                                                                        @RequestParam(required = false) String keyword,
-                                                                       @RequestParam(required = false) Boolean enabled) {
-        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.page(page, size, keyword, enabled)));
+                                                                       @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.page(page, size, keyword, status)));
     }
 
     // 查询供应商详情
@@ -48,6 +48,13 @@ public class ErpSupplierController {
     @PreAuthorize("hasAuthority('PERM_erp-supplier:view')")
     public ResponseEntity<ApiResponse<ErpSupplier>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.getById(id)));
+    }
+
+    // 获取下一个供应商编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-supplier:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.nextCode()));
     }
 
     // 新增供应商

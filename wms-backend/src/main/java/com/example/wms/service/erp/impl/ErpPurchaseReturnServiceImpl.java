@@ -164,6 +164,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setVersion(0L);
+        order.setInventoryReserved(false);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
         order.setUpdatedAt(Instant.now());
@@ -176,6 +177,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         applyTotals(order, items);
         validatePurchaseReturnSourceFromRequest(tenantId, order.getPurchaseOrderId(), order.getSupplierId(), request.items(), null);
         validateSettlementAmounts(tenantId, order, null);
+        if (requiresInventoryReservation(order.getReturnType())) {
+            reserveDraftStock(tenantId, items);
+            order.setInventoryReserved(true);
+        }
         erpPurchaseReturnMapper.updateById(order);
         return new ErpPurchaseReturnDetail(order, items);
     }
@@ -199,7 +204,12 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
 
-        Set<Long> allowedDisabledProductIds = existingProductIds(erpPurchaseReturnItemMapper.findByReturnId(tenantId, id));
+        List<ErpPurchaseReturnItem> existingItems = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
+        Set<Long> allowedDisabledProductIds = existingProductIds(existingItems);
+        if (Boolean.TRUE.equals(order.getInventoryReserved())) {
+            releaseDraftStock(tenantId, existingItems);
+            order.setInventoryReserved(false);
+        }
 
         erpPurchaseReturnItemMapper.delete(new QueryWrapper<ErpPurchaseReturnItem>()
             .eq("tenant_id", tenantId)
@@ -211,6 +221,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         applyTotals(order, items);
         validatePurchaseReturnSourceFromRequest(tenantId, order.getPurchaseOrderId(), order.getSupplierId(), request.items(), id);
         validateSettlementAmounts(tenantId, order, id);
+        if (requiresInventoryReservation(order.getReturnType())) {
+            reserveDraftStock(tenantId, items);
+            order.setInventoryReserved(true);
+        }
         updateWithVersion(tenantId, order);
         return new ErpPurchaseReturnDetail(order, items);
     }
@@ -223,6 +237,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         ErpPurchaseReturn order = loadForUpdate(tenantId, id);
         if (!STATUS_DRAFT.equals(order.getStatus())) {
             throw new IllegalArgumentException("仅草稿可删除");
+        }
+        List<ErpPurchaseReturnItem> items = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
+        if (Boolean.TRUE.equals(order.getInventoryReserved())) {
+            releaseDraftStock(tenantId, items);
         }
         erpPurchaseReturnItemMapper.delete(new QueryWrapper<ErpPurchaseReturnItem>()
             .eq("tenant_id", tenantId)
@@ -242,9 +260,11 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         List<ErpPurchaseReturnItem> items = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
         validatePurchaseReturnSourceFromItems(tenantId, order.getPurchaseOrderId(), order.getSupplierId(), items, id);
         validateSettlementAmounts(tenantId, order, id);
+        boolean inventoryReserved = Boolean.TRUE.equals(order.getInventoryReserved());
         order.setStatus(STATUS_APPROVED);
         order.setApprovedBy(resolveCurrentUsername());
         order.setApprovedAt(Instant.now());
+        order.setInventoryReserved(false);
         order.setUpdatedAt(Instant.now());
         updateWithVersion(tenantId, order);
 
@@ -254,9 +274,9 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                 throw new IllegalArgumentException("退货数量不能为空");
             }
             if (RETURN_GOODS.equals(returnType)) {
-                applyStockDelta(tenantId, item, item.getQty().negate(), "PURCHASE_RETURN", id, true);
+                applyStockDelta(tenantId, item, item.getQty().negate(), "PURCHASE_RETURN", id, true, inventoryReserved);
             } else {
-                applyStockDelta(tenantId, item, BigDecimal.ZERO, "PURCHASE_RETURN_SCRAP", id, false);
+                applyStockDelta(tenantId, item, BigDecimal.ZERO, "PURCHASE_RETURN_SCRAP", id, false, false);
             }
         }
         createReturnPayable(tenantId, order, resolveReturnTotal(order));
@@ -312,9 +332,9 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                 throw new IllegalArgumentException("退货数量不能为空");
             }
             if (RETURN_GOODS.equals(returnType)) {
-                applyStockDelta(tenantId, item, item.getQty(), "PURCHASE_RETURN_RED_FLUSH", id, true);
+                applyStockDelta(tenantId, item, item.getQty(), "PURCHASE_RETURN_RED_FLUSH", id, true, false);
             } else {
-                applyStockDelta(tenantId, item, BigDecimal.ZERO, "PURCHASE_RETURN_RED_FLUSH", id, false);
+                applyStockDelta(tenantId, item, BigDecimal.ZERO, "PURCHASE_RETURN_RED_FLUSH", id, false, false);
             }
         }
         redFlushReturnPayable(tenantId, order, reasonText);
@@ -774,7 +794,45 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         }
     }
 
-    private void applyStockDelta(Long tenantId, ErpPurchaseReturnItem item, BigDecimal delta, String bizType, Long orderId, boolean updateBalance) {
+    private boolean requiresInventoryReservation(String returnType) {
+        return RETURN_GOODS.equals(resolveReturnType(returnType));
+    }
+
+    private void reserveDraftStock(Long tenantId, List<ErpPurchaseReturnItem> items) {
+        for (ErpPurchaseReturnItem item : items) {
+            changeReservedStock(tenantId, item, item.getQty(), "采购退货单");
+        }
+    }
+
+    private void releaseDraftStock(Long tenantId, List<ErpPurchaseReturnItem> items) {
+        for (ErpPurchaseReturnItem item : items) {
+            changeReservedStock(tenantId, item, item.getQty().negate(), "采购退货单");
+        }
+    }
+
+    private void changeReservedStock(Long tenantId, ErpPurchaseReturnItem item, BigDecimal delta, String bizName) {
+        if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        ErpStockBalance updatedBalance = erpStockBalanceMapper.addReservedQtyIfEnough(
+            tenantId, item.getProductId(), item.getWarehouseId(), item.getLocationId(), delta, resolveCurrentUsername());
+        if (updatedBalance != null) {
+            return;
+        }
+        if (delta.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalStateException(bizName + "库存占用数据异常，请刷新后重试");
+        }
+        String productLabel = item.getProductName() == null ? item.getProductCode() : item.getProductName();
+        throw insufficientStockException(tenantId, item.getProductId(), item.getWarehouseId(), item.getLocationId(), productLabel, delta);
+    }
+
+    private void applyStockDelta(Long tenantId,
+                                 ErpPurchaseReturnItem item,
+                                 BigDecimal delta,
+                                 String bizType,
+                                 Long orderId,
+                                 boolean updateBalance,
+                                 boolean consumeReserved) {
         Long warehouseId = item.getWarehouseId();
         Long locationId = item.getLocationId();
         String operator = resolveCurrentUsername();
@@ -787,22 +845,20 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         if (updateBalance) {
             ErpStockBalance updatedBalance;
             if (delta.compareTo(BigDecimal.ZERO) < 0) {
-                updatedBalance = erpStockBalanceMapper.addQtyIfEnough(
-                    tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
+                if (consumeReserved) {
+                    updatedBalance = erpStockBalanceMapper.consumeReservedQty(
+                        tenantId, item.getProductId(), warehouseId, locationId, delta.abs(), operator);
+                } else {
+                    updatedBalance = erpStockBalanceMapper.addQtyIfEnoughAvailable(
+                        tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
+                }
             } else {
                 updatedBalance = erpStockBalanceMapper.upsertAddQty(
                     tenantId, item.getProductId(), warehouseId, locationId, delta, operator);
             }
             if (updatedBalance == null) {
-                ErpStockBalance currentBalance = erpStockBalanceMapper.findByKey(tenantId, item.getProductId(), warehouseId, locationId);
-                BigDecimal currentQty = currentBalance == null || currentBalance.getQtyOnHand() == null
-                    ? BigDecimal.ZERO
-                    : currentBalance.getQtyOnHand();
-                BigDecimal required = delta.abs();
                 String productLabel = item.getProductName() == null ? item.getProductCode() : item.getProductName();
-                throw new IllegalArgumentException(
-                    "库存不足，商品[" + productLabel + "] 可用=" + currentQty + "，需求=" + required
-                );
+                throw insufficientStockException(tenantId, item.getProductId(), warehouseId, locationId, productLabel, delta.abs());
             }
             after = updatedBalance.getQtyOnHand() == null ? BigDecimal.ZERO : updatedBalance.getQtyOnHand();
             before = after.subtract(delta);
@@ -832,6 +888,24 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         txn.setRemark(item.getRemark());
         txn.setCreatedAt(Instant.now());
         erpStockTxnMapper.insert(txn);
+    }
+
+    private IllegalArgumentException insufficientStockException(Long tenantId,
+                                                                Long productId,
+                                                                Long warehouseId,
+                                                                Long locationId,
+                                                                String productLabel,
+                                                                BigDecimal required) {
+        ErpStockBalance currentBalance = erpStockBalanceMapper.findByKey(tenantId, productId, warehouseId, locationId);
+        BigDecimal currentQty = currentBalance == null || currentBalance.getQtyOnHand() == null
+            ? BigDecimal.ZERO
+            : currentBalance.getQtyOnHand();
+        BigDecimal lockedQty = currentBalance == null || currentBalance.getQtyLocked() == null
+            ? BigDecimal.ZERO
+            : currentBalance.getQtyLocked();
+        return new IllegalArgumentException(
+            "库存不足，商品[" + productLabel + "] 可用=" + currentQty.subtract(lockedQty) + "，需求=" + required
+        );
     }
 
     private void createReturnPayable(Long tenantId, ErpPurchaseReturn order, BigDecimal delta) {

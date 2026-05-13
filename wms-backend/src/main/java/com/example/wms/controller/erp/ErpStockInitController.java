@@ -46,7 +46,7 @@ public class ErpStockInitController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-stock-init:view')")
     public ResponseEntity<ApiResponse<ErpStockCountDetail>> get(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.getDetail(id)));
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.getDetail(id, "INIT")));
     }
 
     // 预生成初始库存单号
@@ -68,22 +68,24 @@ public class ErpStockInitController {
     @PreAuthorize("hasAuthority('PERM_erp-stock-init:edit')")
     public ResponseEntity<ApiResponse<ErpStockCountDetail>> update(@PathVariable Long id,
                                                                    @Valid @RequestBody ErpStockCountUpdateRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.update(id, request)));
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.update(id, request, "INIT")));
     }
 
     // 审核初始库存
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('PERM_erp-stock-init:approve')")
     public ResponseEntity<ApiResponse<Void>> approve(@PathVariable Long id) {
-        erpStockCountService.approve(id);
+        erpStockCountService.approve(id, "INIT");
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     // 红冲初始库存
     @PostMapping("/{id}/red-flush")
     @PreAuthorize("hasAuthority('PERM_erp-stock-init:redflush')")
-    public ResponseEntity<ApiResponse<Void>> redFlush(@PathVariable Long id) {
-        erpStockCountService.redFlush(id);
+    public ResponseEntity<ApiResponse<Void>> redFlush(@PathVariable Long id,
+                                                      @RequestBody(required = false) RedFlushRequest request) {
+        String reason = request == null ? null : request.reason();
+        erpStockCountService.redFlush(id, "INIT", reason);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
@@ -91,7 +93,9 @@ public class ErpStockInitController {
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('PERM_erp-stock-init:cancel')")
     public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id) {
-        erpStockCountService.cancel(id);
+        erpStockCountService.cancel(id, "INIT");
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
+
+    public record RedFlushRequest(String reason) {}
 }

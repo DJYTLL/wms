@@ -50,6 +50,13 @@ public class ErpSettlementMethodController {
         return ResponseEntity.ok(ApiResponse.ok(erpSettlementMethodService.getById(id)));
     }
 
+    // 获取下一个结算方式编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-settlement-method:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpSettlementMethodService.nextCode()));
+    }
+
     // 新增结算方式
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-settlement-method:add')")

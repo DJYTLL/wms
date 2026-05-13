@@ -15,6 +15,8 @@ public interface ErpVehicleBrandService {
 
     ErpVehicleBrand getById(Long id);
 
+    String nextCode();
+
     ErpVehicleBrand create(ErpVehicleBrandCreateRequest request);
 
     ErpVehicleBrand update(Long id, ErpVehicleBrandUpdateRequest request);

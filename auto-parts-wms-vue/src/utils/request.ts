@@ -111,6 +111,7 @@ const DELETE_PROMPT_ROUTES: Array<{ pattern: RegExp; entityName: string }> = [
   { pattern: /^\/menus(\/|$)/, entityName: '菜单' },
   { pattern: /^\/tenants(\/|$)/, entityName: '租户' },
   { pattern: /^\/erp\/assembly-orders(\/|$)/, entityName: '组装单' },
+  { pattern: /^\/erp\/assembly-templates(\/|$)/, entityName: '组装模板' },
   { pattern: /^\/erp\/categories(\/|$)/, entityName: '分类' },
   { pattern: /^\/erp\/customer-categories(\/|$)/, entityName: '客户类别' },
   { pattern: /^\/erp\/customers(\/|$)/, entityName: '客户' },
@@ -171,7 +172,7 @@ const ensureDeleteReason = async (config: any & DeletePromptConfig) => {
     {
       confirmButtonText: prompt.confirmButtonText,
       cancelButtonText: '取消',
-      inputPattern: /^(?=.*\\S).{2,500}$/,
+      inputPattern: /^(?=.*\S).{2,500}$/,
       inputErrorMessage: '删除原因至少 2 个字符',
       inputPlaceholder: prompt.placeholder,
       type: 'warning',

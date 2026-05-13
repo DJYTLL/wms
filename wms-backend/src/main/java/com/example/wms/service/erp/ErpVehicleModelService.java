@@ -15,6 +15,8 @@ public interface ErpVehicleModelService {
 
     ErpVehicleModel getById(Long id);
 
+    String nextCode();
+
     ErpVehicleModel create(ErpVehicleModelCreateRequest request);
 
     ErpVehicleModel update(Long id, ErpVehicleModelUpdateRequest request);

@@ -11,6 +11,8 @@ public record ErpStockCountItemRequest(
     Long warehouseId,
     Long locationId,
     @NotNull @PositiveOrZero BigDecimal countedQty,
+    @PositiveOrZero BigDecimal initUnitCost,
+    @PositiveOrZero BigDecimal initTotalAmount,
     BigDecimal systemQty,
     String remark
 ) {

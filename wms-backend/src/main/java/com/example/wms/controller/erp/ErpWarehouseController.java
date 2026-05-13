@@ -57,6 +57,13 @@ public class ErpWarehouseController {
         return ResponseEntity.ok(ApiResponse.ok(erpWarehouseService.getById(id)));
     }
 
+    // 获取下一个仓库编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-warehouse:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpWarehouseService.nextCode()));
+    }
+
     // 新增仓库
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-warehouse:add')")

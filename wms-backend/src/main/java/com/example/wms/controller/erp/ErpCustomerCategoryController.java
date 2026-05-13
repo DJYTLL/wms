@@ -50,6 +50,13 @@ public class ErpCustomerCategoryController {
         return ResponseEntity.ok(ApiResponse.ok(erpCustomerCategoryService.getById(id)));
     }
 
+    // 获取下一个客户类别编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-customer-category:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpCustomerCategoryService.nextCode()));
+    }
+
     // 新增客户类别
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-customer-category:add')")

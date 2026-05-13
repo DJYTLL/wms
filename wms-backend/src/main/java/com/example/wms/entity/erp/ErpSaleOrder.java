@@ -81,6 +81,10 @@ public class ErpSaleOrder {
     @TableField("approved_at")
     private Instant approvedAt;
 
+    // 草稿是否已占用库存
+    @TableField("inventory_reserved")
+    private Boolean inventoryReserved;
+
     // 反审核人
     @TableField("unapproved_by")
     private String unapprovedBy;
@@ -292,6 +296,14 @@ public class ErpSaleOrder {
 
     public void setApprovedAt(Instant approvedAt) {
         this.approvedAt = approvedAt;
+    }
+
+    public Boolean getInventoryReserved() {
+        return inventoryReserved;
+    }
+
+    public void setInventoryReserved(Boolean inventoryReserved) {
+        this.inventoryReserved = inventoryReserved;
     }
 
     public String getUnapprovedBy() {

@@ -10,13 +10,16 @@ import java.util.List;
 // 供应商服务接口（ERP进销存）
 public interface ErpSupplierService {
     // 查询供应商列表
-    List<ErpSupplier> listAll(String keyword, Boolean enabled);
+    List<ErpSupplier> listAll(String keyword, String status);
 
     // 分页查询供应商列表
-    PageResponse<ErpSupplier> page(long page, long size, String keyword, Boolean enabled);
+    PageResponse<ErpSupplier> page(long page, long size, String keyword, String status);
 
     // 查询供应商详情
     ErpSupplier getById(Long id);
+
+    // 获取下一个供应商编码
+    String nextCode();
 
     // 新增供应商
     ErpSupplier create(ErpSupplierCreateRequest request);

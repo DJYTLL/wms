@@ -115,6 +115,8 @@ const detailColumnLabel = (key: string) => {
     location: t('field.location'),
     systemQty: t('field.systemQty'),
     countedQty: t('field.countedQty'),
+    initUnitCost: t('field.initUnitCost'),
+    initTotalAmount: t('field.initTotalAmount'),
     diffQty: t('field.diffQty'),
     remark: t('field.remark')
   };
@@ -164,6 +166,10 @@ const formatItemValue = (row: any, key: string) => {
       return formatNumber(row.systemQty);
     case 'countedQty':
       return formatNumber(row.countedQty);
+    case 'initUnitCost':
+      return formatNumber(row.initUnitCost);
+    case 'initTotalAmount':
+      return formatNumber(row.initTotalAmount);
     case 'diffQty':
       return formatNumber(calcDiff(row));
     case 'remark':
@@ -202,7 +208,7 @@ const getLocationName = (id?: number) => locations.value.find((item) => item.id 
 
 const buildDefaultConfig = (): TemplateConfig => ({
   headerFields: ['stockInitNo', 'countAt', 'status', 'printCount', 'lastPrintedAt', 'remark'],
-  detailColumns: ['productCode', 'productName', 'warehouse', 'location', 'systemQty', 'countedQty', 'diffQty', 'remark'],
+  detailColumns: ['productCode', 'productName', 'warehouse', 'location', 'systemQty', 'countedQty', 'initUnitCost', 'initTotalAmount', 'diffQty', 'remark'],
   showTotals: false,
   columnWidths: {
     productCode: 10,
@@ -211,6 +217,8 @@ const buildDefaultConfig = (): TemplateConfig => ({
     location: 12,
     systemQty: 8,
     countedQty: 8,
+    initUnitCost: 8,
+    initTotalAmount: 10,
     diffQty: 8,
     remark: 16
   }

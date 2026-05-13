@@ -70,9 +70,16 @@
               {{ getLocationName(row.locationId) }}
             </template>
           </el-table-column>
+          <el-table-column v-if="canShow('adjustmentReason')" :label="$t('field.adjustmentReason')" min-width="140">
+            <template #default="{ row }">
+              {{ formatAdjustmentReason(row.adjustmentReason) }}
+            </template>
+          </el-table-column>
           <el-table-column v-if="canShow('qtyDelta')" prop="qtyDelta" :label="$t('field.qtyDelta')" min-width="120" />
           <el-table-column v-if="canShow('qtyBefore')" prop="qtyBefore" :label="$t('field.qtyBefore')" min-width="120" />
           <el-table-column v-if="canShow('qtyAfter')" prop="qtyAfter" :label="$t('field.qtyAfter')" min-width="120" />
+          <el-table-column v-if="canShow('operator')" prop="operator" :label="$t('field.actor')" min-width="120" />
+          <el-table-column v-if="canShow('remark')" prop="remark" :label="$t('field.remark')" min-width="180" />
           <el-table-column v-if="canShow('unitCost')" :label="$t('field.unitCost')" min-width="120">
             <template #default="{ row }">
               {{ formatMoney(row.unitCost) }}
@@ -146,6 +153,9 @@ interface StockTxn {
   unitCost?: number;
   totalCost?: number;
   createdAt?: string;
+  operator?: string;
+  remark?: string;
+  adjustmentReason?: string;
 }
 
 type PrintDocType = 'SALE_ORDER' | 'PURCHASE_ORDER' | 'SALE_RETURN' | 'PURCHASE_RETURN' | 'STOCK_COUNT' | 'STOCK_INIT';
@@ -177,7 +187,7 @@ const printPreviewDocId = ref<number | null>(null);
 const printPreviewDocType = ref<PrintDocType>('SALE_ORDER');
 const printPreviewTitle = ref('');
 
-const defaultColumns = ['docNo', 'bizType', 'product', 'warehouse', 'location', 'qtyDelta', 'qtyBefore', 'qtyAfter', 'unitCost', 'totalCost', 'createdAt'];
+const defaultColumns = ['docNo', 'bizType', 'product', 'warehouse', 'location', 'adjustmentReason', 'qtyDelta', 'qtyBefore', 'qtyAfter', 'operator', 'remark', 'unitCost', 'totalCost', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-stock-txn', defaultColumns);
 
 const canShow = (key: string) => key === 'docNo' || isVisible(key);
@@ -208,6 +218,13 @@ const formatMoney = (value?: number) => {
 const formatBizType = (value?: string) => {
   if (!value) return '-';
   const key = `bizType.${value}`;
+  const translated = t(key);
+  return translated === key ? value : translated;
+};
+
+const formatAdjustmentReason = (value?: string) => {
+  if (!value) return '-';
+  const key = `adjustmentReason.${value}`;
   const translated = t(key);
   return translated === key ? value : translated;
 };

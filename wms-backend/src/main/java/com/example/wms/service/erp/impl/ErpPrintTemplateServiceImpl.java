@@ -11,6 +11,7 @@ import com.example.wms.entity.erp.ErpPrintTemplate;
 import com.example.wms.mapper.erp.ErpPrintLogMapper;
 import com.example.wms.mapper.erp.ErpPrintTemplateMapper;
 import com.example.wms.service.erp.ErpPrintTemplateService;
+import com.example.wms.service.erp.support.ErpMasterDataCodeGenerator;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,8 @@ import java.util.Set;
 // 打印模板服务实现（ERP进销存）
 @Service
 public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
+    private static final String PRINT_TEMPLATE_CODE_TYPE = "PRINT_TEMPLATE";
+
     private static final Set<String> DOC_TYPES = Set.of(
         "SALE_ORDER",
         "PURCHASE_ORDER",
@@ -36,11 +39,14 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
 
     private final ErpPrintTemplateMapper erpPrintTemplateMapper;
     private final ErpPrintLogMapper erpPrintLogMapper;
+    private final ErpMasterDataCodeGenerator codeGenerator;
 
     public ErpPrintTemplateServiceImpl(ErpPrintTemplateMapper erpPrintTemplateMapper,
-                                       ErpPrintLogMapper erpPrintLogMapper) {
+                                       ErpPrintLogMapper erpPrintLogMapper,
+                                       ErpMasterDataCodeGenerator codeGenerator) {
         this.erpPrintTemplateMapper = erpPrintTemplateMapper;
         this.erpPrintLogMapper = erpPrintLogMapper;
+        this.codeGenerator = codeGenerator;
     }
 
     @Override
@@ -69,6 +75,17 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
             throw new IllegalArgumentException("打印模板不存在");
         }
         return template;
+    }
+
+    @Override
+    public String nextCode() {
+        return codeGenerator.nextCode(
+            PRINT_TEMPLATE_CODE_TYPE,
+            "erp.print-template.code.prefix",
+            "PT",
+            "erp.print-template.code.date-format",
+            "erp.print-template.code.seq-length"
+        );
     }
 
     @Override

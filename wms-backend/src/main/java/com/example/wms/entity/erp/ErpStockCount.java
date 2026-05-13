@@ -29,6 +29,10 @@ public class ErpStockCount extends TenantAuditableSoftDeleteEntity {
     @TableField("location_id")
     private Long locationId;
 
+    // 调整原因
+    @TableField("adjustment_reason")
+    private String adjustmentReason;
+
     // 盘点时间
     @TableField("count_at")
     private Instant countAt;
@@ -97,6 +101,14 @@ public class ErpStockCount extends TenantAuditableSoftDeleteEntity {
 
     public void setLocationId(Long locationId) {
         this.locationId = locationId;
+    }
+
+    public String getAdjustmentReason() {
+        return adjustmentReason;
+    }
+
+    public void setAdjustmentReason(String adjustmentReason) {
+        this.adjustmentReason = adjustmentReason;
     }
 
     public Instant getCountAt() {

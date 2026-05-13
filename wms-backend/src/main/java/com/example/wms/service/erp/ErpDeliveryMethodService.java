@@ -15,6 +15,8 @@ public interface ErpDeliveryMethodService {
 
     ErpDeliveryMethod getById(Long id);
 
+    String nextCode();
+
     ErpDeliveryMethod create(ErpDeliveryMethodCreateRequest request);
 
     ErpDeliveryMethod update(Long id, ErpDeliveryMethodUpdateRequest request);

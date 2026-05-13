@@ -40,6 +40,7 @@ import com.example.wms.mapper.erp.ErpPrintTemplateMapper;
 import com.example.wms.mapper.erp.ErpProductFitmentMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpProductPriceMapper;
+import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
@@ -65,6 +66,7 @@ import com.example.wms.service.erp.impl.ErpUnitServiceImpl;
 import com.example.wms.service.erp.impl.ErpVehicleBrandServiceImpl;
 import com.example.wms.service.erp.impl.ErpVehicleModelServiceImpl;
 import com.example.wms.service.erp.impl.ErpVehicleSeriesServiceImpl;
+import com.example.wms.service.erp.support.ErpMasterDataCodeGenerator;
 import com.example.wms.tenant.TenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -178,7 +180,7 @@ class ErpMasterDataGuardTests {
 
     @Test
     void categoryUpdateRejectsCycleParent() {
-        ErpCategoryServiceImpl service = new ErpCategoryServiceImpl(categoryMapper, productMapper);
+        ErpCategoryServiceImpl service = new ErpCategoryServiceImpl(categoryMapper, productMapper, orderSequenceMapper, systemConfigMapper);
         ErpCategory self = category(10L, 20L);
         ErpCategory parent = category(20L, 10L);
 
@@ -194,7 +196,7 @@ class ErpMasterDataGuardTests {
 
     @Test
     void categoryDeleteRejectsReferencedProduct() {
-        ErpCategoryServiceImpl service = new ErpCategoryServiceImpl(categoryMapper, productMapper);
+        ErpCategoryServiceImpl service = new ErpCategoryServiceImpl(categoryMapper, productMapper, orderSequenceMapper, systemConfigMapper);
         when(categoryMapper.selectOne(any())).thenReturn(category(10L, null));
         when(categoryMapper.selectCount(any())).thenReturn(0L);
         when(productMapper.selectCount(any())).thenReturn(1L);
@@ -207,7 +209,7 @@ class ErpMasterDataGuardTests {
     @Test
     void customerCategoryDeleteRejectsReferencedPrices() {
         ErpCustomerCategoryServiceImpl service = new ErpCustomerCategoryServiceImpl(
-            customerCategoryMapper, customerMapper, productPriceMapper
+            customerCategoryMapper, customerMapper, productPriceMapper, orderSequenceMapper, systemConfigMapper
         );
         when(customerCategoryMapper.selectOne(any())).thenReturn(new com.example.wms.entity.erp.ErpCustomerCategory());
         when(customerMapper.selectCount(any())).thenReturn(0L);
@@ -220,7 +222,7 @@ class ErpMasterDataGuardTests {
 
     @Test
     void unitDeleteRejectsReferencedProduct() {
-        ErpUnitServiceImpl service = new ErpUnitServiceImpl(unitMapper, productMapper);
+        ErpUnitServiceImpl service = new ErpUnitServiceImpl(unitMapper, productMapper, codeGenerator());
         when(unitMapper.selectOne(any())).thenReturn(new com.example.wms.entity.erp.ErpUnit());
         when(productMapper.selectCount(any())).thenReturn(1L);
 
@@ -293,7 +295,7 @@ class ErpMasterDataGuardTests {
 
     @Test
     void printTemplateDeleteRejectsReferencedLog() {
-        ErpPrintTemplateServiceImpl service = new ErpPrintTemplateServiceImpl(printTemplateMapper, printLogMapper);
+        ErpPrintTemplateServiceImpl service = new ErpPrintTemplateServiceImpl(printTemplateMapper, printLogMapper, codeGenerator());
         ErpPrintTemplate template = new ErpPrintTemplate();
         template.setId(11L);
         when(printTemplateMapper.selectOne(any())).thenReturn(template);
@@ -306,7 +308,7 @@ class ErpMasterDataGuardTests {
 
     @Test
     void vehicleBrandDeleteRejectsChildSeries() {
-        ErpVehicleBrandServiceImpl service = new ErpVehicleBrandServiceImpl(vehicleBrandMapper, vehicleSeriesMapper);
+        ErpVehicleBrandServiceImpl service = new ErpVehicleBrandServiceImpl(vehicleBrandMapper, vehicleSeriesMapper, codeGenerator());
         when(vehicleBrandMapper.selectOne(any())).thenReturn(vehicleBrand(12L));
         when(vehicleSeriesMapper.selectCount(any())).thenReturn(1L);
 
@@ -317,7 +319,7 @@ class ErpMasterDataGuardTests {
 
     @Test
     void vehicleSeriesDeleteRejectsChildModels() {
-        ErpVehicleSeriesServiceImpl service = new ErpVehicleSeriesServiceImpl(vehicleSeriesMapper, vehicleBrandMapper, vehicleModelMapper);
+        ErpVehicleSeriesServiceImpl service = new ErpVehicleSeriesServiceImpl(vehicleSeriesMapper, vehicleBrandMapper, vehicleModelMapper, codeGenerator());
         when(vehicleSeriesMapper.selectOne(any())).thenReturn(vehicleSeries(13L, 12L));
         when(vehicleModelMapper.selectCount(any())).thenReturn(1L);
 
@@ -328,7 +330,7 @@ class ErpMasterDataGuardTests {
 
     @Test
     void vehicleModelDeleteRejectsProductFitmentReference() {
-        ErpVehicleModelServiceImpl service = new ErpVehicleModelServiceImpl(vehicleModelMapper, vehicleSeriesMapper, productFitmentMapper);
+        ErpVehicleModelServiceImpl service = new ErpVehicleModelServiceImpl(vehicleModelMapper, vehicleSeriesMapper, productFitmentMapper, codeGenerator());
         when(vehicleModelMapper.selectOne(any())).thenReturn(vehicleModel(14L, 13L));
         when(productFitmentMapper.selectCount(any())).thenReturn(1L);
 
@@ -375,6 +377,8 @@ class ErpMasterDataGuardTests {
             purchaseReturnMapper,
             paymentMapper,
             accountsPayableMapper,
+            orderSequenceMapper,
+            systemConfigMapper,
             objectMapper
         );
     }
@@ -390,16 +394,21 @@ class ErpMasterDataGuardTests {
             receiptMapper,
             paymentMapper,
             accountsReceivableMapper,
-            accountsPayableMapper
+            accountsPayableMapper,
+            codeGenerator()
         );
     }
 
     private ErpPaymentMethodServiceImpl paymentMethodService() {
-        return new ErpPaymentMethodServiceImpl(paymentMethodMapper, purchaseOrderMapper, paymentMapper);
+        return new ErpPaymentMethodServiceImpl(paymentMethodMapper, purchaseOrderMapper, paymentMapper, codeGenerator());
     }
 
     private ErpDeliveryMethodServiceImpl deliveryMethodService() {
-        return new ErpDeliveryMethodServiceImpl(deliveryMethodMapper, customerMapper, saleOrderMapper);
+        return new ErpDeliveryMethodServiceImpl(deliveryMethodMapper, customerMapper, saleOrderMapper, codeGenerator());
+    }
+
+    private ErpMasterDataCodeGenerator codeGenerator() {
+        return new ErpMasterDataCodeGenerator(orderSequenceMapper, systemConfigMapper);
     }
 
     private ErpCategory category(Long id, Long parentId) {

@@ -49,6 +49,14 @@ public class ErpStockCountItem {
     @TableField("counted_qty")
     private BigDecimal countedQty;
 
+    // 期初单价
+    @TableField("init_unit_cost")
+    private BigDecimal initUnitCost;
+
+    // 期初金额
+    @TableField("init_total_amount")
+    private BigDecimal initTotalAmount;
+
     // 差异数量
     @TableField("diff_qty")
     private BigDecimal diffQty;
@@ -146,6 +154,22 @@ public class ErpStockCountItem {
 
     public void setCountedQty(BigDecimal countedQty) {
         this.countedQty = countedQty;
+    }
+
+    public BigDecimal getInitUnitCost() {
+        return initUnitCost;
+    }
+
+    public void setInitUnitCost(BigDecimal initUnitCost) {
+        this.initUnitCost = initUnitCost;
+    }
+
+    public BigDecimal getInitTotalAmount() {
+        return initTotalAmount;
+    }
+
+    public void setInitTotalAmount(BigDecimal initTotalAmount) {
+        this.initTotalAmount = initTotalAmount;
     }
 
     public BigDecimal getDiffQty() {

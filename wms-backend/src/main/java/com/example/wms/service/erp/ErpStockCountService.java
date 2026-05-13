@@ -14,17 +14,17 @@ public interface ErpStockCountService {
 
     PageResponse<ErpStockCount> page(long page, long size, String keyword, String status, String countType);
 
-    ErpStockCountDetail getDetail(Long id);
+    ErpStockCountDetail getDetail(Long id, String countType);
 
     String nextCountNo(String countType);
 
     ErpStockCountDetail create(ErpStockCountCreateRequest request, String countType);
 
-    ErpStockCountDetail update(Long id, ErpStockCountUpdateRequest request);
+    ErpStockCountDetail update(Long id, ErpStockCountUpdateRequest request, String countType);
 
-    void approve(Long id);
+    void approve(Long id, String countType);
 
-    void redFlush(Long id);
+    void redFlush(Long id, String countType, String reason);
 
-    void cancel(Long id);
+    void cancel(Long id, String countType);
 }

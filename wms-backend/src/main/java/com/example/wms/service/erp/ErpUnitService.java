@@ -18,6 +18,9 @@ public interface ErpUnitService {
     // 查询单位详情
     ErpUnit getById(Long id);
 
+    // 获取下一个单位编码
+    String nextCode();
+
     // 新增单位
     ErpUnit create(ErpUnitCreateRequest request);
 

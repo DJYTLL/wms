@@ -50,6 +50,13 @@ public class ErpUnitController {
         return ResponseEntity.ok(ApiResponse.ok(erpUnitService.getById(id)));
     }
 
+    // 获取下一个单位编码
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-unit:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpUnitService.nextCode()));
+    }
+
     // 新增单位
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-unit:add')")

@@ -87,6 +87,10 @@ public class ErpStockTxn {
     @TableField(exist = false)
     private String docNo;
 
+    // 库存调整原因（非数据库字段，用于库存流水展示）
+    @TableField(exist = false)
+    private String adjustmentReason;
+
     public Long getId() {
         return id;
     }
@@ -237,5 +241,13 @@ public class ErpStockTxn {
 
     public void setDocNo(String docNo) {
         this.docNo = docNo;
+    }
+
+    public String getAdjustmentReason() {
+        return adjustmentReason;
+    }
+
+    public void setAdjustmentReason(String adjustmentReason) {
+        this.adjustmentReason = adjustmentReason;
     }
 }

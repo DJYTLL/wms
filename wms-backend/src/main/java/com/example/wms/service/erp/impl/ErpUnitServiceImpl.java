@@ -11,6 +11,7 @@ import com.example.wms.entity.erp.ErpUnit;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpUnitMapper;
 import com.example.wms.service.erp.ErpUnitService;
+import com.example.wms.service.erp.support.ErpMasterDataCodeGenerator;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -20,12 +21,18 @@ import java.util.List;
 // 单位服务实现（ERP进销存）
 @Service
 public class ErpUnitServiceImpl implements ErpUnitService {
+    private static final String UNIT_CODE_TYPE = "UNIT";
+
     private final ErpUnitMapper erpUnitMapper;
     private final ErpProductMapper erpProductMapper;
+    private final ErpMasterDataCodeGenerator codeGenerator;
 
-    public ErpUnitServiceImpl(ErpUnitMapper erpUnitMapper, ErpProductMapper erpProductMapper) {
+    public ErpUnitServiceImpl(ErpUnitMapper erpUnitMapper,
+                              ErpProductMapper erpProductMapper,
+                              ErpMasterDataCodeGenerator codeGenerator) {
         this.erpUnitMapper = erpUnitMapper;
         this.erpProductMapper = erpProductMapper;
+        this.codeGenerator = codeGenerator;
     }
 
     @Override
@@ -53,6 +60,17 @@ public class ErpUnitServiceImpl implements ErpUnitService {
             throw new IllegalArgumentException("单位不存在");
         }
         return unit;
+    }
+
+    @Override
+    public String nextCode() {
+        return codeGenerator.nextCode(
+            UNIT_CODE_TYPE,
+            "erp.unit.code.prefix",
+            "UN",
+            "erp.unit.code.date-format",
+            "erp.unit.code.seq-length"
+        );
     }
 
     @Override

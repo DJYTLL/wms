@@ -176,6 +176,10 @@ class SaleFlowValidationTests {
         when(saleOrderItemMapper.findByOrderId(1L, 77L)).thenReturn(List.of(soldItem(100L, "1")));
         when(saleOrderMapper.update(any(), any())).thenReturn(1);
         when(productMapper.selectOne(any())).thenReturn(disabledProduct(100L));
+        when(stockBalanceMapper.addReservedQtyIfEnough(1L, 100L, 1L, 1L, BigDecimal.ONE, "system"))
+            .thenReturn(stockBalance("1", "1"));
+        when(stockBalanceMapper.addReservedQtyIfEnough(1L, 100L, 1L, 1L, new BigDecimal("-1"), "system"))
+            .thenReturn(stockBalance("1", "0"));
 
         ErpSaleOrderUpdateRequest keepExistingRequest = new ErpSaleOrderUpdateRequest(
             "SO-077",
@@ -557,6 +561,8 @@ class SaleFlowValidationTests {
     private ErpSaleOrderItem soldItem(Long productId, String qty) {
         ErpSaleOrderItem item = new ErpSaleOrderItem();
         item.setProductId(productId);
+        item.setWarehouseId(1L);
+        item.setLocationId(1L);
         item.setQty(new BigDecimal(qty));
         item.setAmountInclTax(new BigDecimal("100").multiply(new BigDecimal(qty)));
         return item;
@@ -596,5 +602,12 @@ class SaleFlowValidationTests {
             1,
             null
         );
+    }
+
+    private com.example.wms.entity.erp.ErpStockBalance stockBalance(String onHand, String locked) {
+        com.example.wms.entity.erp.ErpStockBalance balance = new com.example.wms.entity.erp.ErpStockBalance();
+        balance.setQtyOnHand(new BigDecimal(onHand));
+        balance.setQtyLocked(new BigDecimal(locked));
+        return balance;
     }
 }

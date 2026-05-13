@@ -7,11 +7,13 @@ import com.example.wms.dto.erp.ErpWarehouseCreateRequest;
 import com.example.wms.dto.erp.ErpLocationCreateRequest;
 import com.example.wms.dto.erp.ErpLocationUpdateRequest;
 import com.example.wms.dto.erp.ErpWarehouseUpdateRequest;
+import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.entity.erp.ErpLocation;
 import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.erp.ErpAssemblyOrderItemMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderMapper;
 import com.example.wms.mapper.erp.ErpLocationMapper;
+import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderItemMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnItemMapper;
@@ -79,6 +81,10 @@ class ErpMasterDataGovernanceTests {
     private ErpStockCountItemMapper stockCountItemMapper;
     @Mock
     private ErpStockTxnMapper stockTxnMapper;
+    @Mock
+    private ErpOrderSequenceMapper orderSequenceMapper;
+    @Mock
+    private SystemConfigMapper systemConfigMapper;
     @Mock
     private ErpWarehouseService warehouseService;
     @Mock
@@ -328,7 +334,9 @@ class ErpMasterDataGovernanceTests {
             assemblyOrderItemMapper,
             stockCountMapper,
             stockCountItemMapper,
-            stockTxnMapper
+            stockTxnMapper,
+            orderSequenceMapper,
+            systemConfigMapper
         );
     }
 
@@ -346,7 +354,9 @@ class ErpMasterDataGovernanceTests {
             assemblyOrderItemMapper,
             stockCountMapper,
             stockCountItemMapper,
-            stockTxnMapper
+            stockTxnMapper,
+            orderSequenceMapper,
+            systemConfigMapper
         );
     }
 

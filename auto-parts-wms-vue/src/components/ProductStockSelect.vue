@@ -6,6 +6,7 @@
     :style="selectStyle"
     :disabled="disabled || !productId"
     :placeholder="placeholder"
+    popper-class="product-stock-select-popper"
     @update:model-value="handleUpdate"
     @visible-change="handleVisibleChange"
   >
@@ -223,5 +224,42 @@ watch(() => props.productId, async (productId) => {
 .stock-option__qty {
   color: #6d7b91;
   font-size: 12px;
+}
+</style>
+
+<style>
+.product-stock-select-popper .el-select-dropdown__item {
+  height: auto;
+  min-height: 56px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+}
+
+.product-stock-select-popper .el-select-dropdown__item.hover,
+.product-stock-select-popper .el-select-dropdown__item.is-hovering {
+  background-color: #f5f9ff;
+}
+
+.product-stock-select-popper .stock-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal;
+}
+
+.product-stock-select-popper .stock-option__name {
+  color: #1f2b3d;
+  font-weight: 500;
+}
+
+.product-stock-select-popper .stock-option__qty {
+  color: #6d7b91;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
 }
 </style>

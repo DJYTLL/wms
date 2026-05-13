@@ -79,7 +79,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/erp/stock-counts/:id/print',
     name: 'erp-stock-count-print',
     component: () => import('../views/erp/ErpStockCountPrint.vue'),
-    meta: { title: '库存盘点打印', permission: 'erp-stock-count:view' }
+    meta: { title: '库存调整打印', permission: 'erp-stock-count:view' }
   },
   {
     path: '/erp/stock-inits/:id/print',
@@ -383,7 +383,7 @@ const routes: Array<RouteRecordRaw> = [
         path: 'erp/stock-counts',
         name: 'erp-stock-counts',
         component: () => import('../views/erp/ErpStockCountManagement.vue'),
-        meta: { title: '库存盘点', permission: 'erp-stock-count:view', titleKey: 'page.erpStockCountManagement', countType: 'COUNT' }
+        meta: { title: '库存调整', permission: 'erp-stock-count:view', titleKey: 'page.erpStockCountManagement', countType: 'COUNT' }
       },
       {
         path: 'erp/stock-inits',

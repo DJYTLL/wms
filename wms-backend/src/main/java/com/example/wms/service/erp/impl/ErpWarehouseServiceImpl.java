@@ -6,6 +6,7 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpWarehouseCreateRequest;
 import com.example.wms.dto.erp.ErpWarehouseUpdateRequest;
+import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAssemblyOrder;
 import com.example.wms.entity.erp.ErpAssemblyOrderItem;
 import com.example.wms.entity.erp.ErpLocation;
@@ -30,19 +31,26 @@ import com.example.wms.mapper.erp.ErpSaleReturnItemMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockCountItemMapper;
 import com.example.wms.mapper.erp.ErpStockCountMapper;
+import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
+import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.service.erp.ErpWarehouseService;
 import com.example.wms.service.erp.support.ErpMasterDataRules;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 // 仓库服务实现（ERP进销存）
 @Service
 public class ErpWarehouseServiceImpl implements ErpWarehouseService {
+    private static final String WAREHOUSE_CODE_TYPE = "WAREHOUSE";
+
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpLocationMapper erpLocationMapper;
     private final ErpProductMapper erpProductMapper;
@@ -56,6 +64,8 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
     private final ErpStockCountMapper erpStockCountMapper;
     private final ErpStockCountItemMapper erpStockCountItemMapper;
     private final ErpStockTxnMapper erpStockTxnMapper;
+    private final ErpOrderSequenceMapper erpOrderSequenceMapper;
+    private final SystemConfigMapper systemConfigMapper;
 
     public ErpWarehouseServiceImpl(ErpWarehouseMapper erpWarehouseMapper,
                                    ErpLocationMapper erpLocationMapper,
@@ -69,7 +79,9 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
                                    ErpAssemblyOrderItemMapper erpAssemblyOrderItemMapper,
                                    ErpStockCountMapper erpStockCountMapper,
                                    ErpStockCountItemMapper erpStockCountItemMapper,
-                                   ErpStockTxnMapper erpStockTxnMapper) {
+                                   ErpStockTxnMapper erpStockTxnMapper,
+                                   ErpOrderSequenceMapper erpOrderSequenceMapper,
+                                   SystemConfigMapper systemConfigMapper) {
         this.erpWarehouseMapper = erpWarehouseMapper;
         this.erpLocationMapper = erpLocationMapper;
         this.erpProductMapper = erpProductMapper;
@@ -83,6 +95,8 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         this.erpStockCountMapper = erpStockCountMapper;
         this.erpStockCountItemMapper = erpStockCountItemMapper;
         this.erpStockTxnMapper = erpStockTxnMapper;
+        this.erpOrderSequenceMapper = erpOrderSequenceMapper;
+        this.systemConfigMapper = systemConfigMapper;
     }
 
     @Override
@@ -110,6 +124,12 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
             throw new IllegalArgumentException("仓库不存在");
         }
         return warehouse;
+    }
+
+    @Override
+    public String nextCode() {
+        Long tenantId = TenantContext.requireTenantId();
+        return generateWarehouseCode(tenantId);
     }
 
     @Override
@@ -346,5 +366,33 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
             tenantId,
             ErpMasterDataRules.pendingStatusSqlList()
         );
+    }
+
+    private String generateWarehouseCode(Long tenantId) {
+        String prefix = readConfig("erp.warehouse.code.prefix", "WH");
+        String dateFormat = readConfig("erp.warehouse.code.date-format", "yyyyMMdd");
+        int seqLength = readIntConfig("erp.warehouse.code.seq-length", 4);
+        String dateKey = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(dateFormat));
+        erpOrderSequenceMapper.insertIgnore(tenantId, WAREHOUSE_CODE_TYPE, dateKey);
+        Long seq = erpOrderSequenceMapper.incrementAndGet(tenantId, WAREHOUSE_CODE_TYPE, dateKey);
+        String seqStr = String.format("%0" + seqLength + "d", seq == null ? 1 : seq);
+        return prefix + dateKey + seqStr;
+    }
+
+    private String readConfig(String key, String fallback) {
+        SystemConfig config = systemConfigMapper.findByKey(key);
+        if (config == null || config.getConfigValue() == null || config.getConfigValue().isBlank()) {
+            return fallback;
+        }
+        return config.getConfigValue().trim();
+    }
+
+    private int readIntConfig(String key, int fallback) {
+        String value = readConfig(key, String.valueOf(fallback));
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
     }
 }

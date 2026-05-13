@@ -12,4 +12,7 @@ public interface ErpWarehouseMapper extends BaseMapper<ErpWarehouse> {
     // 按编码查询
     @Select("SELECT * FROM erp_warehouse WHERE tenant_id = #{tenantId} AND code = #{code} AND deleted_at IS NULL")
     ErpWarehouse findByCode(@Param("tenantId") Long tenantId, @Param("code") String code);
+
+    @Select("SELECT * FROM erp_warehouse WHERE tenant_id = #{tenantId} AND id = #{id} AND deleted_at IS NULL")
+    ErpWarehouse findActiveById(@Param("tenantId") Long tenantId, @Param("id") Long id);
 }

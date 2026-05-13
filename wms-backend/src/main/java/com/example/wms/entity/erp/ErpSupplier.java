@@ -78,6 +78,10 @@ public class ErpSupplier {
     @TableField("is_enabled")
     private Boolean enabled;
 
+    // 是否黑名单
+    @TableField("is_blacklisted")
+    private Boolean blacklisted;
+
     // 备注
     @TableField("remark")
     private String remark;
@@ -100,6 +104,9 @@ public class ErpSupplier {
     @TableLogic(value = "null", delval = "now()")
     @TableField("deleted_at")
     private Instant deletedAt;
+
+    @TableField(exist = false)
+    private Instant recentTransactionAt;
 
     public Long getId() {
         return id;
@@ -229,6 +236,14 @@ public class ErpSupplier {
         this.enabled = enabled;
     }
 
+    public Boolean getBlacklisted() {
+        return blacklisted;
+    }
+
+    public void setBlacklisted(Boolean blacklisted) {
+        this.blacklisted = blacklisted;
+    }
+
     public String getRemark() {
         return remark;
     }
@@ -275,5 +290,13 @@ public class ErpSupplier {
 
     public void setDeletedAt(Instant deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    public Instant getRecentTransactionAt() {
+        return recentTransactionAt;
+    }
+
+    public void setRecentTransactionAt(Instant recentTransactionAt) {
+        this.recentTransactionAt = recentTransactionAt;
     }
 }

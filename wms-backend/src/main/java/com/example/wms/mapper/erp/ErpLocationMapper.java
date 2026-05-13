@@ -14,4 +14,7 @@ public interface ErpLocationMapper extends BaseMapper<ErpLocation> {
     ErpLocation findByCode(@Param("tenantId") Long tenantId,
                            @Param("warehouseId") Long warehouseId,
                            @Param("code") String code);
+
+    @Select("SELECT * FROM erp_location WHERE tenant_id = #{tenantId} AND id = #{id} AND deleted_at IS NULL")
+    ErpLocation findActiveById(@Param("tenantId") Long tenantId, @Param("id") Long id);
 }

@@ -67,6 +67,9 @@ public class ErpPurchaseReturn {
     @TableField("approved_at")
     private Instant approvedAt;
 
+    @TableField("inventory_reserved")
+    private Boolean inventoryReserved;
+
     @TableField("remark")
     private String remark;
 
@@ -234,6 +237,14 @@ public class ErpPurchaseReturn {
 
     public void setApprovedAt(Instant approvedAt) {
         this.approvedAt = approvedAt;
+    }
+
+    public Boolean getInventoryReserved() {
+        return inventoryReserved;
+    }
+
+    public void setInventoryReserved(Boolean inventoryReserved) {
+        this.inventoryReserved = inventoryReserved;
     }
 
     public String getRemark() {

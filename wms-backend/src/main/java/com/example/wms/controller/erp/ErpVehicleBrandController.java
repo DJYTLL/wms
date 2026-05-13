@@ -47,6 +47,12 @@ public class ErpVehicleBrandController {
         return ResponseEntity.ok(ApiResponse.ok(erpVehicleBrandService.getById(id)));
     }
 
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-vehicle-brand:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpVehicleBrandService.nextCode()));
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-vehicle-brand:add')")
     public ResponseEntity<ApiResponse<ErpVehicleBrand>> create(@Valid @RequestBody ErpVehicleBrandCreateRequest request) {

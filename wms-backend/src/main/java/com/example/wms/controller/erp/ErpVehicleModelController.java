@@ -49,6 +49,12 @@ public class ErpVehicleModelController {
         return ResponseEntity.ok(ApiResponse.ok(erpVehicleModelService.getById(id)));
     }
 
+    @GetMapping("/next-code")
+    @PreAuthorize("hasAuthority('PERM_erp-vehicle-model:add')")
+    public ResponseEntity<ApiResponse<String>> nextCode() {
+        return ResponseEntity.ok(ApiResponse.ok(erpVehicleModelService.nextCode()));
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-vehicle-model:add')")
     public ResponseEntity<ApiResponse<ErpVehicleModel>> create(@Valid @RequestBody ErpVehicleModelCreateRequest request) {

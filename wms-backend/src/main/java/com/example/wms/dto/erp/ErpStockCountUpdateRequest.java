@@ -6,6 +6,7 @@ import java.util.List;
 
 // 更新库存盘点单请求（ERP进销存）
 public record ErpStockCountUpdateRequest(
+    String adjustmentReason,
     String countAt,
     Long warehouseId,
     Long locationId,

@@ -14,6 +14,7 @@ import com.example.wms.mapper.erp.ErpPaymentMapper;
 import com.example.wms.mapper.erp.ErpPaymentMethodMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.service.erp.ErpPaymentMethodService;
+import com.example.wms.service.erp.support.ErpMasterDataCodeGenerator;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -23,16 +24,21 @@ import java.util.List;
 // 付款方式服务实现（ERP进销存）
 @Service
 public class ErpPaymentMethodServiceImpl implements ErpPaymentMethodService {
+    private static final String PAYMENT_METHOD_CODE_TYPE = "PAYMENT_METHOD";
+
     private final ErpPaymentMethodMapper erpPaymentMethodMapper;
     private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
     private final ErpPaymentMapper erpPaymentMapper;
+    private final ErpMasterDataCodeGenerator codeGenerator;
 
     public ErpPaymentMethodServiceImpl(ErpPaymentMethodMapper erpPaymentMethodMapper,
                                        ErpPurchaseOrderMapper erpPurchaseOrderMapper,
-                                       ErpPaymentMapper erpPaymentMapper) {
+                                       ErpPaymentMapper erpPaymentMapper,
+                                       ErpMasterDataCodeGenerator codeGenerator) {
         this.erpPaymentMethodMapper = erpPaymentMethodMapper;
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
         this.erpPaymentMapper = erpPaymentMapper;
+        this.codeGenerator = codeGenerator;
     }
 
     @Override
@@ -60,6 +66,17 @@ public class ErpPaymentMethodServiceImpl implements ErpPaymentMethodService {
             throw new IllegalArgumentException("付款方式不存在");
         }
         return method;
+    }
+
+    @Override
+    public String nextCode() {
+        return codeGenerator.nextCode(
+            PAYMENT_METHOD_CODE_TYPE,
+            "erp.payment-method.code.prefix",
+            "PM",
+            "erp.payment-method.code.date-format",
+            "erp.payment-method.code.seq-length"
+        );
     }
 
     @Override

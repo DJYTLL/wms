@@ -15,6 +15,8 @@ public interface ErpPaymentMethodService {
 
     ErpPaymentMethod getById(Long id);
 
+    String nextCode();
+
     ErpPaymentMethod create(ErpPaymentMethodCreateRequest request);
 
     ErpPaymentMethod update(Long id, ErpPaymentMethodUpdateRequest request);

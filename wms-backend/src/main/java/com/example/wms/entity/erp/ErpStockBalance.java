@@ -35,8 +35,8 @@ public class ErpStockBalance {
     @TableField("qty_on_hand")
     private BigDecimal qtyOnHand;
 
-    // 锁定数量（非持久化）
-    @TableField(exist = false)
+    // 锁定数量
+    @TableField("qty_reserved")
     private BigDecimal qtyLocked;
 
     // 可用数量（非持久化）

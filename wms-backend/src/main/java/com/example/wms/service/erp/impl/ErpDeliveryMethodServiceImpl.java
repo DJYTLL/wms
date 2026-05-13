@@ -14,6 +14,7 @@ import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpDeliveryMethodMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.service.erp.ErpDeliveryMethodService;
+import com.example.wms.service.erp.support.ErpMasterDataCodeGenerator;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
@@ -23,16 +24,21 @@ import java.util.List;
 // 送货方式服务实现（ERP进销存）
 @Service
 public class ErpDeliveryMethodServiceImpl implements ErpDeliveryMethodService {
+    private static final String DELIVERY_METHOD_CODE_TYPE = "DELIVERY_METHOD";
+
     private final ErpDeliveryMethodMapper erpDeliveryMethodMapper;
     private final ErpCustomerMapper erpCustomerMapper;
     private final ErpSaleOrderMapper erpSaleOrderMapper;
+    private final ErpMasterDataCodeGenerator codeGenerator;
 
     public ErpDeliveryMethodServiceImpl(ErpDeliveryMethodMapper erpDeliveryMethodMapper,
                                         ErpCustomerMapper erpCustomerMapper,
-                                        ErpSaleOrderMapper erpSaleOrderMapper) {
+                                        ErpSaleOrderMapper erpSaleOrderMapper,
+                                        ErpMasterDataCodeGenerator codeGenerator) {
         this.erpDeliveryMethodMapper = erpDeliveryMethodMapper;
         this.erpCustomerMapper = erpCustomerMapper;
         this.erpSaleOrderMapper = erpSaleOrderMapper;
+        this.codeGenerator = codeGenerator;
     }
 
     @Override
@@ -60,6 +66,17 @@ public class ErpDeliveryMethodServiceImpl implements ErpDeliveryMethodService {
             throw new IllegalArgumentException("送货方式不存在");
         }
         return method;
+    }
+
+    @Override
+    public String nextCode() {
+        return codeGenerator.nextCode(
+            DELIVERY_METHOD_CODE_TYPE,
+            "erp.delivery-method.code.prefix",
+            "DM",
+            "erp.delivery-method.code.date-format",
+            "erp.delivery-method.code.seq-length"
+        );
     }
 
     @Override

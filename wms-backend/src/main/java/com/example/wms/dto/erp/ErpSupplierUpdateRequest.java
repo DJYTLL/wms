@@ -18,6 +18,7 @@ public record ErpSupplierUpdateRequest(
     String paymentTerms,
     String contacts,
     Boolean enabled,
+    Boolean blacklisted,
     String remark
 ) {
 }
