@@ -93,9 +93,24 @@
           </el-table-column>
           <el-table-column v-if="canShow('returnStatus')" :label="$t('field.returnStatus')" min-width="130">
             <template #default="{ row }">
-              <el-tag :type="Number(row.approvedReturnCount || 0) > 0 ? 'warning' : 'info'" size="small">
-                {{ formatReturnStatus(row.approvedReturnCount) }}
-              </el-tag>
+              <div class="return-tag-list">
+                <template v-if="Number(row.approvedReturnCount || 0) > 0">
+                  <el-tag
+                    v-for="(_, index) in buildReturnTagIndexes(row.approvedReturnCount)"
+                    :key="`${row.id}-return-${index}`"
+                    type="warning"
+                    size="small"
+                    class="return-tag-item"
+                    :class="{ 'return-tag-item--clickable': canViewSaleReturn }"
+                    @click="handleReturnTagClick(row, index)"
+                  >
+                    {{ `退货${index + 1}` }}
+                  </el-tag>
+                </template>
+                <el-tag v-else type="info" size="small">
+                  {{ formatReturnStatus(row.approvedReturnCount) }}
+                </el-tag>
+              </div>
             </template>
           </el-table-column>
           <el-table-column v-if="canShow('redFlushTrace')" :label="$t('field.redFlushTrace')" min-width="160">
@@ -213,21 +228,135 @@
       :doc-id="printDocId"
       :title="$t('page.erpSaleOrderPrint')"
     />
+
+    <el-dialog
+      v-model="saleReturnDetailDialogVisible"
+      title="销售退货详情"
+      width="1100px"
+      destroy-on-close
+    >
+      <div v-loading="saleReturnDetailLoading" class="sale-return-detail-dialog">
+        <template v-if="saleReturnDetail?.order">
+          <div class="sale-return-detail-summary">
+            <div class="sale-return-detail-summary__item">
+              <span class="sale-return-detail-summary__label">{{ $t('field.orderNo') }}</span>
+              <span>{{ saleReturnDetail.order.orderNo || '-' }}</span>
+            </div>
+            <div class="sale-return-detail-summary__item">
+              <span class="sale-return-detail-summary__label">{{ $t('field.status') }}</span>
+              <el-tag :type="statusTagType(saleReturnDetail.order.status)" size="small">
+                {{ formatStatus(saleReturnDetail.order.status) }}
+              </el-tag>
+            </div>
+            <div class="sale-return-detail-summary__item">
+              <span class="sale-return-detail-summary__label">{{ $t('field.customer') }}</span>
+              <span>{{ getCustomerName(saleReturnDetail.order.customerId) }}</span>
+            </div>
+            <div class="sale-return-detail-summary__item">
+              <span class="sale-return-detail-summary__label">{{ $t('field.returnType') }}</span>
+              <span>{{ formatReturnType(saleReturnDetail.order.returnType) }}</span>
+            </div>
+            <div class="sale-return-detail-summary__item">
+              <span class="sale-return-detail-summary__label">{{ $t('field.orderTime') }}</span>
+              <span>{{ formatDateTime(saleReturnDetail.order.orderAt) }}</span>
+            </div>
+            <div class="sale-return-detail-summary__item">
+              <span class="sale-return-detail-summary__label">{{ $t('field.settlementMethod') }}</span>
+              <span>{{ saleReturnDetail.order.settlementMethod || '-' }}</span>
+            </div>
+            <div class="sale-return-detail-summary__item">
+              <span class="sale-return-detail-summary__label">{{ $t('field.paidAmount') }}</span>
+              <span>{{ formatAmount(saleReturnDetail.order.paidAmount) }}</span>
+            </div>
+            <div class="sale-return-detail-summary__item">
+              <span class="sale-return-detail-summary__label">{{ $t('field.discountAmount') }}</span>
+              <span>{{ formatAmount(saleReturnDetail.order.discountAmount) }}</span>
+            </div>
+            <div class="sale-return-detail-summary__item sale-return-detail-summary__item--wide">
+              <span class="sale-return-detail-summary__label">{{ $t('field.remark') }}</span>
+              <span>{{ saleReturnDetail.order.remark || '-' }}</span>
+            </div>
+          </div>
+
+          <el-table
+            :data="saleReturnDetail.items || []"
+            stripe
+            border
+            class="sale-return-detail-table"
+            :empty-text="$t('table.empty')"
+          >
+            <el-table-column type="index" :label="$t('table.index')" width="70" />
+            <el-table-column :label="$t('field.product')" min-width="220">
+              <template #default="{ row }">
+                {{ row.productName || row.productCode || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="productCode" label="商品编码" min-width="140" />
+            <el-table-column :label="$t('field.warehouse')" min-width="140">
+              <template #default="{ row }">
+                {{ getWarehouseName(row.warehouseId) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.location')" min-width="140">
+              <template #default="{ row }">
+                {{ getLocationName(row.locationId) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.quantity')" min-width="110">
+              <template #default="{ row }">
+                {{ formatAmount(row.qty) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.price')" min-width="110">
+              <template #default="{ row }">
+                {{ formatAmount(row.price) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.lineTotal')" min-width="120">
+              <template #default="{ row }">
+                {{ formatAmount(row.amount) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.taxRate')" min-width="110">
+              <template #default="{ row }">
+                {{ formatTaxRate(row.taxRate) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="税额" min-width="120">
+              <template #default="{ row }">
+                {{ formatAmount(row.taxAmount) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="含税金额" min-width="130">
+              <template #default="{ row }">
+                {{ formatAmount(row.amountInclTax) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.remark')" min-width="180">
+              <template #default="{ row }">
+                {{ row.remark || '-' }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated, computed, watch } from 'vue';
+import { ref, onMounted, onActivated, onDeactivated, onBeforeUnmount, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-  import { useSystemConfig } from '@/composables/useSystemConfig';
-  import { useColumnSettings } from '@/composables/useColumnSettings';
-  import { useRouter } from 'vue-router';
-  import { ElMessageBox } from 'element-plus';
-  import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
-  import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
+import { useSystemConfig } from '@/composables/useSystemConfig';
+import { useColumnSettings } from '@/composables/useColumnSettings';
+import { useAuthStore } from '@/stores/auth';
+import { useRouter } from 'vue-router';
+import { ElMessageBox } from 'element-plus';
+import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
 interface OptionItem {
   id: number;
@@ -264,9 +393,45 @@ interface SaleOrder {
   createdAt?: string;
 }
 
+interface SaleReturnSummary {
+  id: number;
+  orderNo?: string;
+  status: string;
+  returnType?: string;
+  customerId?: number;
+  saleOrderId?: number;
+  orderAt?: string;
+  settlementMethod?: string;
+  paidAmount?: number;
+  discountAmount?: number;
+  remark?: string;
+}
+
+interface SaleReturnDetailItem {
+  id?: number;
+  productId?: number;
+  productCode?: string;
+  productName?: string;
+  warehouseId?: number;
+  locationId?: number;
+  qty?: number;
+  price?: number;
+  amount?: number;
+  amountInclTax?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  remark?: string;
+}
+
+interface SaleReturnDetailData {
+  order: SaleReturnSummary;
+  items: SaleReturnDetailItem[];
+}
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 
@@ -282,6 +447,11 @@ const total = ref(0);
 const tableData = ref<SaleOrder[]>([]);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const showProfitColumn = ref(false);
+const saleReturnDetailDialogVisible = ref(false);
+const saleReturnDetailLoading = ref(false);
+const saleReturnDetail = ref<SaleReturnDetailData | null>(null);
+const saleReturnSummaryCache = ref<Record<number, SaleReturnSummary[]>>({});
 
 const customerOptions = ref<OptionItem[]>([]);
 const productOptions = ref<OptionItem[]>([]);
@@ -309,6 +479,10 @@ const pageTitle = computed(() => {
   return key ? t(key) : t('page.erpSaleOrderManagement');
 });
 
+const hasPermission = (code: string) => {
+  return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
+};
+
 const canCreate = computed(() => {
   const defaultStatus = route.meta.defaultStatus as string | undefined;
   if (defaultStatus === 'APPROVED') {
@@ -320,10 +494,42 @@ const canCreate = computed(() => {
   return true;
 });
 
+const canViewSaleReturn = computed(() => hasPermission('erp-sale-return:view'));
+
+const canViewProfit = computed(() => {
+  return hasPermission('column:erp-sale:profit')
+    && (hasPermission('erp-product:cost:view') || hasPermission('erp-product:cost:edit'));
+});
+
+const canShowProfit = computed(() => {
+  if (!canViewProfit.value) return false;
+  return showProfitColumn.value && isVisible('netGrossProfit');
+});
+
 const defaultColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'netSaleAmount', 'netGrossProfit', 'receivableStatus', 'returnStatus', 'redFlushTrace', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-sale', defaultColumns);
 
-const canShow = (key: string) => isVisible(key);
+const canShow = (key: string) => {
+  if (key === 'netGrossProfit') {
+    return canShowProfit.value;
+  }
+  return isVisible(key);
+};
+
+const isTypingTarget = (target: EventTarget | null) => {
+  if (!target || !(target instanceof HTMLElement)) return false;
+  const tag = target.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  return target.isContentEditable;
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if ((!isApprovedPage.value && !isDraftPage.value) || !canViewProfit.value) return;
+  if (isTypingTarget(event.target)) return;
+  if (event.key && event.key.toLowerCase() === 'u') {
+    showProfitColumn.value = !showProfitColumn.value;
+  }
+};
 
 const statusTagType = (status: string) => {
   if (status === 'APPROVED') return 'success';
@@ -365,9 +571,20 @@ const formatReturnStatus = (count?: number) => {
   return value > 0 ? `${t('status.hasReturn')} ${value}` : t('status.noReturn');
 };
 
-const formatAmount = (value?: number) => {
+const formatAmount = (value?: number | string) => {
   const num = Number(value || 0);
   return Number.isFinite(num) ? num.toFixed(2) : '0.00';
+};
+
+const formatTaxRate = (value?: number | string) => {
+  const num = Number(value || 0);
+  return Number.isFinite(num) ? `${num.toFixed(2)}%` : '0.00%';
+};
+
+const formatReturnType = (value?: string) => {
+  if (value === 'RESTOCK') return t('returnType.restock');
+  if (value === 'SCRAP') return t('returnType.scrap');
+  return value || '-';
 };
 
 const formatDateTime = (value?: string) => {
@@ -386,10 +603,17 @@ const formatDateTime = (value?: string) => {
 };
 
 const getCustomerName = (id?: number) => customerOptions.value.find(item => item.id === id)?.name || '-';
+const getWarehouseName = (id?: number) => warehouseOptions.value.find(item => item.id === id)?.name || '-';
+const getLocationName = (id?: number) => locationOptions.value.find(item => item.id === id)?.name || '-';
 
 const getLocationOptions = (warehouseId?: number) => {
   if (!warehouseId) return locationOptions.value;
   return locationOptions.value.filter(item => item.warehouseId === warehouseId);
+};
+
+const buildReturnTagIndexes = (count?: number) => {
+  const total = Number(count || 0);
+  return total > 0 ? Array.from({ length: total }, (_, index) => index) : [];
 };
 
 const fetchCustomers = async () => {
@@ -493,12 +717,14 @@ const handleSizeChange = (newSize: number) => {
 };
 
 const openCreatePage = () => {
-  const query = isDraftPage.value ? { from: 'draft' } : undefined;
+  const query: Record<string, string> = { returnTo: route.path };
+  if (isDraftPage.value) query.from = 'draft';
   router.push({ path: '/erp/sale-orders/create', query });
 };
 
 const openEditPage = (row: SaleOrder) => {
-  const query = isDraftPage.value ? { from: 'draft' } : undefined;
+  const query: Record<string, string> = { returnTo: route.path };
+  if (isDraftPage.value) query.from = 'draft';
   router.push({ path: `/erp/sale-orders/${row.id}/edit`, query });
 };
 
@@ -509,6 +735,42 @@ const openViewPage = (row: SaleOrder) => {
 const openPrintPage = (row: SaleOrder) => {
   printDocId.value = row.id;
   printDialogVisible.value = true;
+};
+
+const fetchApprovedSaleReturns = async (saleOrderId: number) => {
+  if (saleReturnSummaryCache.value[saleOrderId]) {
+    return saleReturnSummaryCache.value[saleOrderId];
+  }
+  const res: any = await request.get(`/erp/sale-returns/sale-order/${saleOrderId}`);
+  const records = res.data?.data || [];
+  saleReturnSummaryCache.value = {
+    ...saleReturnSummaryCache.value,
+    [saleOrderId]: records
+  };
+  return records as SaleReturnSummary[];
+};
+
+const handleReturnTagClick = async (row: SaleOrder, index: number) => {
+  if (!canViewSaleReturn.value) return;
+  try {
+    saleReturnDetailLoading.value = true;
+    saleReturnDetailDialogVisible.value = true;
+    const returns = await fetchApprovedSaleReturns(row.id);
+    const targetReturn = returns[index];
+    if (!targetReturn?.id) {
+      saleReturnDetailDialogVisible.value = false;
+      notifyWarning('未找到对应的退货单');
+      return;
+    }
+    const res: any = await request.get(`/erp/sale-returns/${targetReturn.id}`);
+    saleReturnDetail.value = res.data?.data || null;
+  } catch (error) {
+    saleReturnDetailDialogVisible.value = false;
+    saleReturnDetail.value = null;
+    notifyError(error);
+  } finally {
+    saleReturnDetailLoading.value = false;
+  }
 };
 
 const handleApprove = async (row: SaleOrder) => {
@@ -641,9 +903,12 @@ onMounted(() => {
   fetchList();
   bindPageSizeSync(size, fetchList);
   fetchTenantKeys();
+  window.addEventListener('keydown', handleKeydown);
 });
 
 onActivated(() => {
+  window.removeEventListener('keydown', handleKeydown);
+  window.addEventListener('keydown', handleKeydown);
   applyRouteStatus();
   tableData.value = [];
   total.value = 0;
@@ -654,6 +919,14 @@ onActivated(() => {
   fetchList();
 });
 
+onDeactivated(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
+
 watch(
   () => route.fullPath,
   () => {
@@ -662,6 +935,13 @@ watch(
   },
   { flush: 'sync' }
 );
+
+watch(saleReturnDetailDialogVisible, (visible) => {
+  if (!visible) {
+    saleReturnDetail.value = null;
+    saleReturnDetailLoading.value = false;
+  }
+});
 </script>
 
 <style scoped>
@@ -692,6 +972,47 @@ watch(
 
 :deep(.row-red-flushed:hover > td) {
   background-color: #fff1f0 !important;
+}
+
+.return-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.return-tag-item--clickable {
+  cursor: pointer;
+}
+
+.sale-return-detail-dialog {
+  min-height: 160px;
+}
+
+.sale-return-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.sale-return-detail-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sale-return-detail-summary__item--wide {
+  grid-column: span 4;
+}
+
+.sale-return-detail-summary__label {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.sale-return-detail-table {
+  width: 100%;
 }
 
 .sale-approved-card .table-body {

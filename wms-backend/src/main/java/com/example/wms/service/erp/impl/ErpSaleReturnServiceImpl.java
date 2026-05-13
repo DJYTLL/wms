@@ -153,6 +153,23 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     }
 
     @Override
+    public List<ErpSaleReturn> listApprovedBySaleOrderId(Long saleOrderId) {
+        Long tenantId = TenantContext.requireTenantId();
+        if (saleOrderId == null) {
+            return List.of();
+        }
+        List<ErpSaleReturn> returns = erpSaleReturnMapper.selectList(new QueryWrapper<ErpSaleReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("sale_order_id", saleOrderId)
+            .eq("status", STATUS_APPROVED)
+            .orderByAsc("approved_at")
+            .orderByAsc("created_at")
+            .orderByAsc("id"));
+        enrichFlowStatus(tenantId, returns);
+        return returns;
+    }
+
+    @Override
     public ErpSaleReturnDetail getDetail(Long id) {
         Long tenantId = TenantContext.requireTenantId();
         ErpSaleReturn order = erpSaleReturnMapper.selectOne(new QueryWrapper<ErpSaleReturn>()

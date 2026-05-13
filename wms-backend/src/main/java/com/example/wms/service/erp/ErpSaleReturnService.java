@@ -14,6 +14,8 @@ public interface ErpSaleReturnService {
 
     PageResponse<ErpSaleReturn> page(long page, long size, String keyword, String status, Long customerId, Instant startAt, Instant endAt);
 
+    List<ErpSaleReturn> listApprovedBySaleOrderId(Long saleOrderId);
+
     ErpSaleReturnDetail getDetail(Long id);
 
     String nextOrderNo();

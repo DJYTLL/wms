@@ -54,6 +54,12 @@ public class ErpSaleReturnController {
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:view')")
+    @GetMapping("/sale-order/{saleOrderId}")
+    public ResponseEntity<ApiResponse<List<ErpSaleReturn>>> listApprovedBySaleOrderId(@PathVariable Long saleOrderId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.listApprovedBySaleOrderId(saleOrderId)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return:view')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getDetail(id)));

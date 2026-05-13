@@ -181,11 +181,11 @@ const isEmbedded = computed(() => {
 });
 const currentTenantCode = computed(() => authStore.tenantCode || '-');
 const handleCloseTagEvent = (event: Event) => {
-  const customEvent = event as CustomEvent<{ path?: string }>;
+  const customEvent = event as CustomEvent<{ path?: string; redirectPath?: string }>;
   const targetPath = customEvent.detail?.path || route.path;
   const targetView = visitedViews.find(v => v.path === targetPath);
   if (targetView) {
-    closeView(targetView);
+    closeView(targetView, customEvent.detail?.redirectPath);
   }
 };
 
@@ -444,7 +444,7 @@ watch(() => route.path, () => {
   }
 }, { immediate: true });
 
-const closeView = (view: { id?: string; title: string; path: string }) => {
+const closeView = (view: { id?: string; title: string; path: string }, redirectPath?: string) => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('tags:closing', { detail: { path: view.path } }));
   }
@@ -454,6 +454,13 @@ const closeView = (view: { id?: string; title: string; path: string }) => {
     visitedViews.splice(index, 1);
     // 如果关闭的是当前页，跳转到最后一个 tag
     if (view.path === route.path) {
+      const target = redirectPath && redirectPath !== view.path
+        ? visitedViews.find(v => v.path === redirectPath)
+        : null;
+      if (target) {
+        router.push(target.path);
+        return;
+      }
       const last = visitedViews[visitedViews.length - 1];
       if (last) router.push(last.path);
       else router.push('/');

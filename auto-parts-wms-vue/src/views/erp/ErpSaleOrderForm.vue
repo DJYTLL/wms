@@ -1089,9 +1089,20 @@ watch(() => formData.customerId, () => {
   }
 });
 
-const closePage = () => {
+const getReturnPath = () => {
+  const returnTo = route.query.returnTo;
+  if (typeof returnTo === 'string' && returnTo.trim()) {
+    return returnTo.trim();
+  }
+  if (route.query.from === 'draft') {
+    return '/erp/sale-orders/draft';
+  }
+  return '/erp/sale-orders';
+};
+
+const closePage = (redirectPath = getReturnPath()) => {
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('tags:close', { detail: { path: route.path } }));
+    window.dispatchEvent(new CustomEvent('tags:close', { detail: { path: route.path, redirectPath } }));
   }
 };
 
@@ -2187,8 +2198,7 @@ const fetchNextOrderNo = async () => {
       }
       notifySuccess(t('message.saveSuccess'));
       if (closeOnSuccess) {
-        closePage();
-        await router.push('/erp/sale-orders/draft');
+        closePage(getReturnPath());
       }
       return savedId;
     }
