@@ -9,6 +9,7 @@ public record ErpSettlementMethodUpdateRequest(
     Integer sortNo,
     Boolean enabled,
     Boolean isDefault,
+    String fundInputMode,
     String remark
 ) {
 }

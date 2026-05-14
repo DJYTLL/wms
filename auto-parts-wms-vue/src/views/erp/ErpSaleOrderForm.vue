@@ -318,7 +318,7 @@
                 </el-select>
               </el-form-item>
             </div>
-            <div class="form-group form-group--settlement">
+            <div v-if="!isCreditSettlement" class="form-group form-group--settlement">
               <el-form-item :label="$t('field.receiptMethod')">
                 <div v-if="isReadOnly" class="readonly-inline">{{ currentReceiptMethodName }}</div>
                 <el-select v-else v-model="formData.receiptMethodCode" clearable style="width: 100%">
@@ -781,6 +781,7 @@ interface CodeOptionItem {
   code: string;
   name: string;
   isDefault?: boolean;
+  fundInputMode?: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED';
 }
 
 interface SaleHistoryItem {
@@ -820,6 +821,7 @@ interface SaleOrderItem {
   taxRate?: number;
   remark?: string;
   sortNo?: number;
+  _priceRequestSeq?: number;
 }
 
 interface AssemblyTemplateOption {
@@ -1046,6 +1048,7 @@ const isCreditSettlement = computed(() => {
   const code = String(formData.settlementMethod).toUpperCase();
   if (code === 'CREDIT' || code === 'ON_ACCOUNT' || code === 'AR') return true;
   const selected = settlementMethodOptions.value.find(item => item.code === formData.settlementMethod);
+  if (selected?.fundInputMode === 'HIDDEN') return true;
   if (!selected || !selected.name) return false;
   return String(selected.name).includes('挂账');
 });
@@ -1896,10 +1899,31 @@ const fetchLastSalePrice = async (row: SaleOrderItem) => {
   }
 };
 
+const beginRowPriceRequest = (row: SaleOrderItem) => {
+  const nextSeq = (row._priceRequestSeq || 0) + 1;
+  row._priceRequestSeq = nextSeq;
+  return nextSeq;
+};
+
+const isLatestRowPriceRequest = (
+  row: SaleOrderItem,
+  requestSeq: number,
+  productId?: number,
+  customerId?: number | null
+) => {
+  return row._priceRequestSeq === requestSeq
+    && row.productId === productId
+    && formData.customerId === customerId;
+};
+
 const applyPriceForRow = async (row: SaleOrderItem, force = false) => {
   if (!row.productId) return;
   if (!force && row.price) return;
+  const productId = row.productId;
+  const customerId = formData.customerId;
+  const requestSeq = beginRowPriceRequest(row);
   const lastPrice = await fetchLastSalePrice(row);
+  if (!isLatestRowPriceRequest(row, requestSeq, productId, customerId)) return;
   if (lastPrice != null) {
     row.price = String(lastPrice);
     return;
@@ -1908,8 +1932,9 @@ const applyPriceForRow = async (row: SaleOrderItem, force = false) => {
   if (categoryId) {
     try {
       const res: any = await request.get('/erp/product-prices/resolve', {
-        params: { productId: row.productId, customerCategoryId: categoryId }
+        params: { productId, customerCategoryId: categoryId }
       });
+      if (!isLatestRowPriceRequest(row, requestSeq, productId, customerId)) return;
       const resolved = res.data.data?.salePrice;
       if (resolved != null && resolved !== '') {
         row.price = String(resolved);
@@ -1919,7 +1944,8 @@ const applyPriceForRow = async (row: SaleOrderItem, force = false) => {
       notifyError(error);
     }
   }
-  const product = productOptions.value.find(item => item.id === row.productId);
+  if (!isLatestRowPriceRequest(row, requestSeq, productId, customerId)) return;
+  const product = productOptions.value.find(item => item.id === productId);
   if (product && product.salePrice != null) {
     row.price = String(product.salePrice);
   }
@@ -2068,8 +2094,11 @@ const applyMethodsForCustomer = () => {
   if (settlement) {
     formData.settlementMethod = settlement;
   }
-  if (receiptMethod) {
+  if (!isCreditSettlement.value && receiptMethod) {
     formData.receiptMethodCode = receiptMethod;
+  } else if (isCreditSettlement.value) {
+    formData.receiptMethodCode = '';
+    formData.paidAmount = '0';
   }
   if (delivery) {
     formData.deliveryMethod = delivery;
@@ -2082,6 +2111,7 @@ const handleProductChange = async (row: SaleOrderItem) => {
   row.locationId = undefined;
   row.stockKey = '';
   row.price = '';
+  row._priceRequestSeq = (row._priceRequestSeq || 0) + 1;
   applyProductDefaults(row, true);
   await fetchStockOptions(row.productId, true);
   syncStockKey(row);
@@ -2456,7 +2486,7 @@ const applyDefaultMethods = () => {
       formData.settlementMethod = defaultItem.code;
     }
   }
-  if (!formData.receiptMethodCode && receiptMethodOptions.value.length) {
+  if (!isCreditSettlement.value && !formData.receiptMethodCode && receiptMethodOptions.value.length) {
     const defaultItem = receiptMethodOptions.value.find(item => item.isDefault) ?? receiptMethodOptions.value[0];
     if (defaultItem) {
       formData.receiptMethodCode = defaultItem.code;
@@ -2512,7 +2542,7 @@ const fetchNextOrderNo = async () => {
     }
   }
 
-  const paidAmount = parseAmount(formData.paidAmount);
+  const paidAmount = isCreditSettlement.value ? 0 : parseAmount(formData.paidAmount);
   const discountAmount = parseAmount(formData.discountAmount);
   if (paidAmount == null || discountAmount == null) {
     notifyWarning(t('message.invalidNumber'));
@@ -2524,7 +2554,7 @@ const fetchNextOrderNo = async () => {
       orderAt: formData.orderAt || undefined,
       customerId: formData.customerId,
       settlementMethod: formData.settlementMethod,
-      receiptMethodCode: formData.receiptMethodCode || undefined,
+      receiptMethodCode: isCreditSettlement.value ? undefined : (formData.receiptMethodCode || undefined),
       deliveryMethod: formData.deliveryMethod || undefined,
       paidAmount,
       discountAmount,
@@ -2876,6 +2906,18 @@ watch(
     lastRouteKey.value = newPath;
     pagePath.value = route.path;
     loadDetail();
+  }
+);
+
+watch(
+  () => formData.settlementMethod,
+  () => {
+    if (isCreditSettlement.value) {
+      formData.receiptMethodCode = '';
+      formData.paidAmount = '0';
+    } else if (!formData.receiptMethodCode) {
+      formData.receiptMethodCode = getDefaultReceiptMethod();
+    }
   }
 );
 
@@ -3705,8 +3747,8 @@ onBeforeUnmount(() => {
 
 .payment-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 430px) minmax(220px, 320px) minmax(220px, 320px) minmax(220px, 320px);
-  gap: 16px 32px;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 16px 24px;
   align-items: start;
 }
 
@@ -3777,7 +3819,6 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1280px) {
   .sale-header-grid,
-  .payment-grid,
   .assembly-quick__grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
@@ -3795,6 +3836,12 @@ onBeforeUnmount(() => {
     flex-wrap: wrap;
     justify-content: flex-start;
     margin-left: 0;
+  }
+}
+
+@media (max-width: 1024px) {
+  .payment-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 }
 

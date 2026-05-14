@@ -178,7 +178,7 @@
                       clearable
                       style="width: 100%"
                       :placeholder="$t('placeholder.selectProduct')"
-                      :disabled="isReadOnly || !formData.supplierId"
+                      :disabled="isProductSelectDisabled"
                       @change="handleProductChange(row)"
                       @visible-change="(visible: boolean) => handleProductVisibleChange(row, visible)"
                     >
@@ -257,7 +257,7 @@
           </el-table>
           </div>
           <div class="detail-actions">
-            <el-button class="paper-add-item-button" type="primary" plain size="small" :disabled="isReadOnly" @click="addItem">
+            <el-button class="paper-add-item-button" type="primary" plain size="small" :disabled="isReadOnly || mustSelectPurchaseOrderBeforeProduct" @click="addItem">
               + {{ $t('action.addItem') }}
             </el-button>
           </div>
@@ -292,7 +292,7 @@
                 </el-select>
               </el-form-item>
             </div>
-            <div class="form-group form-group--settlement">
+            <div v-if="!isCreditSettlement" class="form-group form-group--settlement">
               <el-form-item :label="$t('field.paymentMethod')">
                 <el-select v-model="formData.paymentMethodCode" clearable style="width: 100%" :disabled="isReadOnly">
                   <el-option v-for="item in paymentMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
@@ -554,6 +554,7 @@ interface CodeOptionItem {
   code: string;
   name: string;
   isDefault?: boolean;
+  fundInputMode?: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED';
 }
 
 interface PurchaseReturnItem {
@@ -704,11 +705,18 @@ const resolvedPurchaseOrderNo = computed(() => {
   if (!formData.purchaseOrderId) return '';
   return purchaseOrderOptions.value.find(item => Number(item.id) === Number(formData.purchaseOrderId))?.orderNo || '';
 });
+const mustSelectPurchaseOrderBeforeProduct = computed(() => {
+  return formData.returnSource === 'BY_PURCHASE_ORDER' && !formData.purchaseOrderId;
+});
+const isProductSelectDisabled = computed(() => {
+  return isReadOnly.value || !formData.supplierId || mustSelectPurchaseOrderBeforeProduct.value;
+});
 const isCreditSettlement = computed(() => {
   if (!formData.settlementMethod) return false;
   const code = String(formData.settlementMethod).toUpperCase();
   if (code === 'CREDIT' || code === 'ON_ACCOUNT' || code === 'AP') return true;
   const selected = settlementMethodOptions.value.find(item => item.code === formData.settlementMethod);
+  if (selected?.fundInputMode === 'HIDDEN') return true;
   if (!selected?.name) return false;
   return String(selected.name).includes('挂账');
 });
@@ -1323,6 +1331,11 @@ const resolveLocationLabel = (id?: number) => {
 };
 
 const handleProductChange = async (row: PurchaseReturnItem) => {
+  if (mustSelectPurchaseOrderBeforeProduct.value) {
+    row.productId = undefined;
+    notifyWarning(t('message.required'));
+    return;
+  }
   row.warehouseId = undefined;
   row.locationId = undefined;
   row.stockKey = '';
@@ -1338,6 +1351,10 @@ const handleProductChange = async (row: PurchaseReturnItem) => {
 };
 
 const handleProductVisibleChange = async (row: PurchaseReturnItem, visible: boolean) => {
+  if (visible && mustSelectPurchaseOrderBeforeProduct.value) {
+    notifyWarning(t('message.required'));
+    return;
+  }
   if (!visible || !row.productId) return;
   await fetchRecentPurchaseItems(row.productId);
 };
@@ -2040,7 +2057,7 @@ const fetchNextOrderNo = async () => {
     }
   }
 
-  const paidAmount = parseAmount(formData.paidAmount);
+  const paidAmount = isCreditSettlement.value ? 0 : parseAmount(formData.paidAmount);
   const discountAmount = parseAmount(formData.discountAmount);
   if (paidAmount == null || discountAmount == null) {
     notifyWarning(t('message.invalidNumber'));
@@ -2054,7 +2071,7 @@ const fetchNextOrderNo = async () => {
       supplierId: formData.supplierId,
       purchaseOrderId: formData.purchaseOrderId || undefined,
       settlementMethod: formData.settlementMethod,
-      paymentMethodCode: formData.paymentMethodCode || undefined,
+      paymentMethodCode: isCreditSettlement.value ? undefined : (formData.paymentMethodCode || undefined),
       refundAction: formData.refundAction,
       paidAmount,
       discountAmount,
@@ -2351,8 +2368,8 @@ onBeforeUnmount(() => {
 
 .sale-page-surface .payment-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 430px) minmax(220px, 320px) minmax(220px, 320px);
-  gap: 16px 32px;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 16px 24px;
   align-items: start;
 }
 
@@ -2933,7 +2950,12 @@ onBeforeUnmount(() => {
   }
 
   .sale-page-surface .sale-header-grid,
-  .sale-page-surface .sale-return-header-grid,
+  .sale-page-surface .sale-return-header-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
   .sale-page-surface .payment-grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
   }

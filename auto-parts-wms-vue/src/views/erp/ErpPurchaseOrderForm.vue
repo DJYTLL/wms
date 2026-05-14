@@ -283,7 +283,7 @@
                 </el-select>
               </el-form-item>
             </div>
-            <div class="form-group form-group--settlement">
+            <div v-if="!isCreditSettlement" class="form-group form-group--settlement">
               <el-form-item :label="$t('field.paymentMethod')">
                 <div v-if="isReadOnly" class="readonly-inline">{{ currentPaymentMethodName }}</div>
                 <el-select v-else v-model="formData.paymentMethodCode" clearable style="width: 100%">
@@ -291,7 +291,7 @@
                 </el-select>
               </el-form-item>
             </div>
-            <div class="form-group form-group--amount">
+            <div v-if="!isCreditSettlement" class="form-group form-group--amount">
               <el-form-item :label="$t('field.paidAmount')">
                 <div v-if="isReadOnly" class="readonly-inline">{{ formatMoney(parseDecimal(formData.paidAmount, 2) || 0) }}</div>
                 <DecimalInput v-else v-model="formData.paidAmount" :scale="2" style="width: 100%" />
@@ -461,6 +461,7 @@ interface MethodOption {
   code: string;
   name: string;
   isDefault?: boolean;
+  fundInputMode?: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED';
 }
 
 interface PurchaseOrderItem {
@@ -563,6 +564,14 @@ const currentSupplierName = computed(() => supplierOptions.value.find(item => it
 const currentSettlementMethodName = computed(() => settlementMethodOptions.value.find(item => item.code === formData.settlementMethod)?.name || '-');
 const currentPaymentMethodName = computed(() => paymentMethodOptions.value.find(item => item.code === formData.paymentMethodCode)?.name || '-');
 const historyProductName = computed(() => historyProduct.value?.name || '-');
+const isCreditSettlement = computed(() => {
+  if (!formData.settlementMethod) return false;
+  const code = String(formData.settlementMethod).toUpperCase();
+  if (code === 'CREDIT' || code === 'ON_ACCOUNT' || code === 'AP') return true;
+  const selected = settlementMethodOptions.value.find(item => item.code === formData.settlementMethod);
+  if (selected?.fundInputMode === 'HIDDEN') return true;
+  return !!selected?.name && String(selected.name).includes('挂账');
+});
 
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 
@@ -847,6 +856,38 @@ const removeItem = (index: number) => {
   }
 };
 
+const getDefaultSettlementMethod = () => {
+  if (!settlementMethodOptions.value.length) return '';
+  const defaultItem = settlementMethodOptions.value.find(item => item.isDefault) ?? settlementMethodOptions.value[0];
+  return defaultItem?.code || '';
+};
+
+const getDefaultPaymentMethod = () => {
+  if (!paymentMethodOptions.value.length) return '';
+  const defaultItem = paymentMethodOptions.value.find(item => item.isDefault) ?? paymentMethodOptions.value[0];
+  return defaultItem?.code || '';
+};
+
+const applyMethodsForSupplier = () => {
+  const supplier = supplierOptions.value.find(item => item.id === formData.supplierId);
+  const settlement = supplier?.defaultSettlementMethodCode || getDefaultSettlementMethod();
+  const paymentMethod = supplier?.defaultPaymentMethodCode || getDefaultPaymentMethod();
+
+  if (settlement) {
+    formData.settlementMethod = settlement;
+  }
+
+  if (isCreditSettlement.value) {
+    formData.paymentMethodCode = '';
+    formData.paidAmount = '0';
+    return;
+  }
+
+  if (paymentMethod) {
+    formData.paymentMethodCode = paymentMethod;
+  }
+};
+
 const applyDefaultMethods = () => {
   if (!formData.settlementMethod) {
     const defaultSettlement = settlementMethodOptions.value.find(item => item.isDefault) ?? settlementMethodOptions.value[0];
@@ -854,11 +895,14 @@ const applyDefaultMethods = () => {
       formData.settlementMethod = defaultSettlement.code;
     }
   }
-  if (!formData.paymentMethodCode) {
+  if (!isCreditSettlement.value && !formData.paymentMethodCode) {
     const defaultPayment = paymentMethodOptions.value.find(item => item.isDefault) ?? paymentMethodOptions.value[0];
     if (defaultPayment) {
       formData.paymentMethodCode = defaultPayment.code;
     }
+  } else if (isCreditSettlement.value) {
+    formData.paymentMethodCode = '';
+    formData.paidAmount = '0';
   }
 };
 
@@ -866,6 +910,9 @@ const fetchSuppliers = async () => {
   try {
     const res: any = await request.get('/erp/suppliers');
     supplierOptions.value = res.data.data || [];
+    if (formData.supplierId) {
+      applyMethodsForSupplier();
+    }
   } catch (error) {
     notifyError(error);
   }
@@ -909,7 +956,11 @@ const fetchSettlementMethods = async () => {
   try {
     const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
     settlementMethodOptions.value = res.data.data || [];
-    applyDefaultMethods();
+    if (formData.supplierId) {
+      applyMethodsForSupplier();
+    } else {
+      applyDefaultMethods();
+    }
   } catch (error) {
     notifyError(error);
   }
@@ -919,7 +970,11 @@ const fetchPaymentMethods = async () => {
   try {
     const res: any = await request.get('/erp/payment-methods');
     paymentMethodOptions.value = res.data.data || [];
-    applyDefaultMethods();
+    if (formData.supplierId) {
+      applyMethodsForSupplier();
+    } else {
+      applyDefaultMethods();
+    }
   } catch (error) {
     notifyError(error);
   }
@@ -1212,8 +1267,8 @@ const saveData = async (
     orderAt: formData.orderAt || undefined,
     supplierId: formData.supplierId,
     settlementMethod: formData.settlementMethod || undefined,
-    paymentMethodCode: formData.paymentMethodCode || undefined,
-    paidAmount: parseDecimal(formData.paidAmount, 2),
+    paymentMethodCode: isCreditSettlement.value ? undefined : (formData.paymentMethodCode || undefined),
+    paidAmount: isCreditSettlement.value ? 0 : parseDecimal(formData.paidAmount, 2),
     discountAmount: parseDecimal(formData.discountAmount, 2),
     remark: formData.remark,
     items: validItems.map((item, index) => ({
@@ -1408,18 +1463,11 @@ const handleCopy = async () => {
   }
 };
 
-const handleSupplierChange = async () => {
-  const supplier = supplierOptions.value.find(item => item.id === formData.supplierId);
-  if (supplier?.defaultSettlementMethodCode) {
-    formData.settlementMethod = supplier.defaultSettlementMethodCode;
-  } else {
-    applyDefaultMethods();
+const handleSupplierChange = async (value?: number | null) => {
+  if (value !== undefined) {
+    formData.supplierId = value;
   }
-  if (supplier?.defaultPaymentMethodCode) {
-    formData.paymentMethodCode = supplier.defaultPaymentMethodCode;
-  } else {
-    applyDefaultMethods();
-  }
+  applyMethodsForSupplier();
   productRecentPurchaseMap.value = {};
   for (const item of formData.items) {
     if (shouldRefreshPriceOnSupplierChange(item)) {
@@ -1505,6 +1553,19 @@ watch(
     lastRouteKey.value = newPath;
     pagePath.value = route.path;
     loadDetail();
+  }
+);
+
+watch(
+  () => formData.settlementMethod,
+  () => {
+    if (isCreditSettlement.value) {
+      formData.paymentMethodCode = '';
+      formData.paidAmount = '0';
+    } else if (!formData.paymentMethodCode) {
+      const defaultPayment = paymentMethodOptions.value.find(item => item.isDefault) ?? paymentMethodOptions.value[0];
+      formData.paymentMethodCode = defaultPayment?.code || '';
+    }
   }
 );
 
@@ -2061,8 +2122,8 @@ onBeforeUnmount(() => {
 
 .payment-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(220px, 320px));
-  gap: 16px 32px;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 16px 24px;
   align-items: start;
 }
 
@@ -2151,8 +2212,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1280px) {
-  .purchase-header-grid,
-  .payment-grid {
+  .purchase-header-grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 
@@ -2168,6 +2228,12 @@ onBeforeUnmount(() => {
   .detail-summary {
     justify-content: flex-start;
     margin-left: 0;
+  }
+}
+
+@media (max-width: 1024px) {
+  .payment-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 }
 

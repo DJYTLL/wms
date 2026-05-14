@@ -38,6 +38,10 @@ import java.util.List;
 // 结算方式服务实现（ERP进销存）
 @Service
 public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodService {
+    private static final String FUND_INPUT_HIDDEN = "HIDDEN";
+    private static final String FUND_INPUT_OPTIONAL = "OPTIONAL";
+    private static final String FUND_INPUT_REQUIRED = "REQUIRED";
+
     private static final String SETTLEMENT_METHOD_CODE_TYPE = "SETTLEMENT_METHOD";
 
     private final ErpSettlementMethodMapper erpSettlementMethodMapper;
@@ -237,6 +241,7 @@ public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodServic
         method.setCode(request.code());
         method.setName(request.name());
         method.setSortNo(request.sortNo() == null ? 0 : request.sortNo());
+        method.setFundInputMode(normalizeFundInputMode(request.fundInputMode()));
         method.setRemark(request.remark());
     }
 
@@ -244,7 +249,18 @@ public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodServic
         method.setCode(request.code());
         method.setName(request.name());
         method.setSortNo(request.sortNo() == null ? 0 : request.sortNo());
+        method.setFundInputMode(normalizeFundInputMode(request.fundInputMode()));
         method.setRemark(request.remark());
+    }
+
+    private String normalizeFundInputMode(String mode) {
+        String normalized = mode == null || mode.isBlank() ? FUND_INPUT_OPTIONAL : mode.trim().toUpperCase();
+        if (FUND_INPUT_HIDDEN.equals(normalized)
+            || FUND_INPUT_OPTIONAL.equals(normalized)
+            || FUND_INPUT_REQUIRED.equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("即时收付款录入模式无效");
     }
 
     private void applyDefaultFlag(Long tenantId, ErpSettlementMethod method, Boolean isDefault) {

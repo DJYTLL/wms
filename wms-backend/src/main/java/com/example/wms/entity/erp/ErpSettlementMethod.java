@@ -40,6 +40,10 @@ public class ErpSettlementMethod {
     @TableField("is_default")
     private Boolean isDefault;
 
+    // 即时收付款录入模式：HIDDEN不显示，OPTIONAL允许录入，REQUIRED必填
+    @TableField("fund_input_mode")
+    private String fundInputMode;
+
     // 备注
     @TableField("remark")
     private String remark;
@@ -117,6 +121,14 @@ public class ErpSettlementMethod {
 
     public void setIsDefault(Boolean isDefault) {
         this.isDefault = isDefault;
+    }
+
+    public String getFundInputMode() {
+        return fundInputMode;
+    }
+
+    public void setFundInputMode(String fundInputMode) {
+        this.fundInputMode = fundInputMode;
     }
 
     public String getRemark() {

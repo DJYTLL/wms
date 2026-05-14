@@ -10,11 +10,13 @@ import com.example.wms.entity.erp.ErpLocation;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpAccountsReceivable;
 import com.example.wms.entity.erp.ErpReceipt;
+import com.example.wms.entity.erp.ErpReceiptMethod;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.entity.erp.ErpSaleOrderItem;
 import com.example.wms.entity.erp.ErpSaleReturn;
 import com.example.wms.entity.erp.ErpSaleReturnItem;
 import com.example.wms.entity.erp.ErpSettlementMethod;
+import com.example.wms.entity.erp.ErpProductPrice;
 import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
@@ -22,7 +24,9 @@ import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
+import com.example.wms.mapper.erp.ErpProductPriceMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
+import com.example.wms.mapper.erp.ErpReceiptMethodMapper;
 import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
@@ -70,6 +74,8 @@ class SaleFlowValidationTests {
     @Mock
     private ErpSettlementMethodMapper settlementMethodMapper;
     @Mock
+    private ErpReceiptMethodMapper receiptMethodMapper;
+    @Mock
     private ErpStockBalanceMapper stockBalanceMapper;
     @Mock
     private ErpStockTxnMapper stockTxnMapper;
@@ -79,6 +85,8 @@ class SaleFlowValidationTests {
     private ErpAccountsReceivableMapper accountsReceivableMapper;
     @Mock
     private ErpReceiptMapper receiptMapper;
+    @Mock
+    private ErpProductPriceMapper productPriceMapper;
     @Mock
     private ErpReceiptReceivableMapper receiptReceivableMapper;
     @Mock
@@ -110,6 +118,7 @@ class SaleFlowValidationTests {
             10L,
             "CASH",
             null,
+            null,
             new BigDecimal("-1"),
             BigDecimal.ZERO,
             List.of(saleOrderItemRequest(100L, "100")),
@@ -122,6 +131,68 @@ class SaleFlowValidationTests {
     }
 
     @Test
+    void saleCreateFallsBackToCustomerCategoryPriceWhenPriceMissing() {
+        ErpSaleOrderServiceImpl service = saleOrderService();
+        stubValidMasterData();
+        when(productMapper.selectOne(any())).thenReturn(product(100L));
+        ErpProductPrice categoryPrice = new ErpProductPrice();
+        categoryPrice.setSalePrice(new BigDecimal("128"));
+        when(productPriceMapper.findByProductAndCategory(1L, 100L, 99L)).thenReturn(categoryPrice);
+
+        ErpSaleOrderCreateRequest request = new ErpSaleOrderCreateRequest(
+            "SO-001A",
+            "2026-05-12 09:00:00",
+            10L,
+            "CASH",
+            null,
+            null,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            List.of(new ErpSaleOrderItemRequest(
+                100L,
+                1L,
+                1L,
+                BigDecimal.ONE,
+                null,
+                null,
+                BigDecimal.ZERO,
+                1,
+                null
+            )),
+            null
+        );
+
+        var detail = service.create(request);
+
+        assertThat(detail.items()).hasSize(1);
+        assertThat(detail.items().get(0).getPrice()).isEqualByComparingTo("128");
+    }
+
+    @Test
+    void saleCreateRejectsNegativeUnitPrice() {
+        ErpSaleOrderServiceImpl service = saleOrderService();
+        stubValidMasterData();
+        when(productMapper.selectOne(any())).thenReturn(product(100L));
+
+        ErpSaleOrderCreateRequest request = new ErpSaleOrderCreateRequest(
+            "SO-001B",
+            "2026-05-12 09:00:00",
+            10L,
+            "CASH",
+            null,
+            null,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            List.of(saleOrderItemRequest(100L, "-1")),
+            null
+        );
+
+        assertThatThrownBy(() -> service.create(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("销售单价不能小于0");
+    }
+
+    @Test
     void saleCreateRejectsSettlementAmountsExceedingTotal() {
         ErpSaleOrderServiceImpl service = saleOrderService();
         stubValidMasterData();
@@ -131,6 +202,7 @@ class SaleFlowValidationTests {
             "SO-002",
             "2026-05-12 09:00:00",
             10L,
+            "CASH",
             "CASH",
             null,
             new BigDecimal("70"),
@@ -155,6 +227,7 @@ class SaleFlowValidationTests {
             "2026-05-12 09:00:00",
             10L,
             "CASH",
+            null,
             null,
             BigDecimal.ZERO,
             BigDecimal.ZERO,
@@ -187,6 +260,7 @@ class SaleFlowValidationTests {
             10L,
             "CASH",
             null,
+            null,
             BigDecimal.ZERO,
             BigDecimal.ZERO,
             List.of(saleOrderItemRequest(100L, "100")),
@@ -201,6 +275,7 @@ class SaleFlowValidationTests {
             "2026-05-12 09:00:00",
             10L,
             "CASH",
+            null,
             null,
             BigDecimal.ZERO,
             BigDecimal.ZERO,
@@ -259,6 +334,8 @@ class SaleFlowValidationTests {
             10L,
             99L,
             "CASH",
+            null,
+            null,
             BigDecimal.ZERO,
             BigDecimal.ZERO,
             List.of(saleReturnItemRequest(100L, "2")),
@@ -286,6 +363,8 @@ class SaleFlowValidationTests {
             10L,
             99L,
             "CASH",
+            null,
+            null,
             new BigDecimal("-1"),
             BigDecimal.ZERO,
             List.of(saleReturnItemRequest(100L, "1")),
@@ -311,6 +390,8 @@ class SaleFlowValidationTests {
             10L,
             99L,
             "CASH",
+            null,
+            null,
             BigDecimal.ZERO,
             BigDecimal.ZERO,
             List.of(new ErpSaleReturnItemRequest(
@@ -346,6 +427,8 @@ class SaleFlowValidationTests {
             10L,
             99L,
             "CASH",
+            null,
+            null,
             BigDecimal.ZERO,
             BigDecimal.ZERO,
             List.of(new ErpSaleReturnItemRequest(
@@ -436,10 +519,12 @@ class SaleFlowValidationTests {
             saleOrderMapper,
             saleOrderItemMapper,
             productMapper,
+            productPriceMapper,
             customerMapper,
             warehouseMapper,
             locationMapper,
             settlementMethodMapper,
+            receiptMethodMapper,
             stockBalanceMapper,
             stockTxnMapper,
             orderSequenceMapper,
@@ -461,6 +546,7 @@ class SaleFlowValidationTests {
             warehouseMapper,
             locationMapper,
             settlementMethodMapper,
+            receiptMethodMapper,
             stockBalanceMapper,
             stockTxnMapper,
             orderSequenceMapper,
@@ -484,6 +570,7 @@ class SaleFlowValidationTests {
         product.setCode("P-" + id);
         product.setName("Product-" + id);
         product.setDefaultWarehouseId(1L);
+        product.setSalePrice(new BigDecimal("88"));
         product.setEnabled(true);
         return product;
     }
@@ -497,6 +584,7 @@ class SaleFlowValidationTests {
     private void stubValidMasterData() {
         when(customerMapper.selectOne(any())).thenReturn(customer(10L));
         when(settlementMethodMapper.findByCode(1L, "CASH")).thenReturn(settlementMethod("CASH"));
+        lenient().when(receiptMethodMapper.findByCode(1L, "CASH")).thenReturn(receiptMethod("CASH"));
         lenient().when(warehouseMapper.selectOne(any())).thenReturn(warehouse(1L));
         lenient().when(locationMapper.selectOne(any())).thenReturn(location(1L, 1L));
     }
@@ -504,6 +592,7 @@ class SaleFlowValidationTests {
     private ErpCustomer customer(Long id) {
         ErpCustomer customer = new ErpCustomer();
         customer.setId(id);
+        customer.setCategoryId(99L);
         customer.setEnabled(true);
         return customer;
     }
@@ -525,6 +614,13 @@ class SaleFlowValidationTests {
 
     private ErpSettlementMethod settlementMethod(String code) {
         ErpSettlementMethod method = new ErpSettlementMethod();
+        method.setCode(code);
+        method.setEnabled(true);
+        return method;
+    }
+
+    private ErpReceiptMethod receiptMethod(String code) {
+        ErpReceiptMethod method = new ErpReceiptMethod();
         method.setCode(code);
         method.setEnabled(true);
         return method;

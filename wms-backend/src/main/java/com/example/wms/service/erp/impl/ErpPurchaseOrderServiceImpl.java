@@ -242,6 +242,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setSettlementMethod(normalizeCode(request.settlementMethod()));
         order.setPaymentMethodCode(request.paymentMethodCode());
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        normalizeCreditSettlementFields(tenantId, order);
         validateHeaderMasterData(tenantId, order.getSupplierId(), order.getSettlementMethod(), order.getPaymentMethodCode(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setTotalAmount(BigDecimal.ZERO);
@@ -285,6 +286,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setSettlementMethod(normalizeCode(request.settlementMethod()));
         order.setPaymentMethodCode(request.paymentMethodCode());
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        normalizeCreditSettlementFields(tenantId, order);
         validateHeaderMasterData(tenantId, order.getSupplierId(), order.getSettlementMethod(), order.getPaymentMethodCode(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
@@ -588,6 +590,32 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         }
     }
 
+    private void normalizeCreditSettlementFields(Long tenantId, ErpPurchaseOrder order) {
+        if (!isCreditSettlement(tenantId, order.getSettlementMethod())) {
+            return;
+        }
+        order.setPaidAmount(BigDecimal.ZERO);
+        order.setPaymentMethodCode(null);
+    }
+
+    private boolean isCreditSettlement(Long tenantId, String settlementMethod) {
+        if (settlementMethod == null || settlementMethod.isBlank()) {
+            return false;
+        }
+        String code = settlementMethod.trim().toUpperCase();
+        if ("CREDIT".equals(code) || "ON_ACCOUNT".equals(code) || "AP".equals(code)) {
+            return true;
+        }
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        if (method == null) {
+            return false;
+        }
+        if ("HIDDEN".equalsIgnoreCase(method.getFundInputMode())) {
+            return true;
+        }
+        return method.getName() != null && method.getName().contains("挂账");
+    }
+
     private void ensurePayable(Long tenantId, ErpPurchaseOrder order) {
         ErpAccountsPayable existing = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, order.getId());
         if (existing == null) {
@@ -633,59 +661,61 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         if (paidCash.compareTo(maxPaid) > 0) {
             paidCash = maxPaid;
         }
-        BigDecimal totalApplied = paidCash.add(discount);
-        if (totalApplied.compareTo(total) > 0) {
-            totalApplied = total;
+        if (isCreditSettlement(tenantId, order.getSettlementMethod())) {
+            paidCash = BigDecimal.ZERO;
         }
-
-        BigDecimal unpaid = total.subtract(totalApplied);
-        if (unpaid.compareTo(BigDecimal.ZERO) < 0) {
-            unpaid = BigDecimal.ZERO;
+        BigDecimal netAmount = total.subtract(discount);
+        if (netAmount.compareTo(BigDecimal.ZERO) < 0) {
+            netAmount = BigDecimal.ZERO;
+        }
+        BigDecimal payableAmount = netAmount.subtract(paidCash);
+        if (payableAmount.compareTo(BigDecimal.ZERO) < 0) {
+            payableAmount = BigDecimal.ZERO;
         }
 
         ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, order.getId());
-        if (payable == null) {
+        if (payable == null && payableAmount.compareTo(BigDecimal.ZERO) > 0) {
             payable = new ErpAccountsPayable();
             payable.setTenantId(tenantId);
             payable.setPurchaseOrderId(order.getId());
             payable.setOrderNo(order.getOrderNo());
             payable.setSupplierId(order.getSupplierId());
-            payable.setTotalAmount(total);
-            payable.setPaidAmount(paidCash);
-            payable.setDiscountAmount(discount);
-            payable.setUnpaidAmount(unpaid);
-            payable.setStatus(totalApplied.compareTo(total) == 0 ? STATUS_SETTLED : STATUS_OPEN);
+            payable.setTotalAmount(payableAmount);
+            payable.setPaidAmount(BigDecimal.ZERO);
+            payable.setDiscountAmount(BigDecimal.ZERO);
+            payable.setUnpaidAmount(payableAmount);
+            payable.setStatus(STATUS_OPEN);
             payable.setSettlementMethod(order.getSettlementMethod());
             payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setCreatedAt(Instant.now());
             payable.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.insert(payable);
-        } else {
+        } else if (payable != null) {
             payable.setOrderNo(order.getOrderNo());
             payable.setSupplierId(order.getSupplierId());
-            payable.setTotalAmount(total);
-            payable.setPaidAmount(paidCash);
-            payable.setDiscountAmount(discount);
-            payable.setUnpaidAmount(unpaid);
+            payable.setTotalAmount(payableAmount);
+            payable.setPaidAmount(BigDecimal.ZERO);
+            payable.setDiscountAmount(BigDecimal.ZERO);
+            payable.setUnpaidAmount(payableAmount);
             if (!STATUS_RED_FLUSHED.equals(payable.getStatus())) {
-                payable.setStatus(totalApplied.compareTo(total) == 0 ? STATUS_SETTLED : STATUS_OPEN);
+                payable.setStatus(payableAmount.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
             }
             payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.updateById(payable);
         }
 
-        if (totalApplied.compareTo(BigDecimal.ZERO) > 0) {
-            ErpPayment paymentExisting = erpPaymentMapper.findByPurchaseOrderId(tenantId, order.getId());
+        ErpPayment paymentExisting = erpPaymentMapper.findByPurchaseOrderId(tenantId, order.getId());
+        if (paidCash.compareTo(BigDecimal.ZERO) > 0) {
             if (paymentExisting == null) {
                 ErpPayment payment = new ErpPayment();
                 payment.setTenantId(tenantId);
-                payment.setPayableId(payable.getId());
+                payment.setPayableId(null);
                 payment.setPurchaseOrderId(order.getId());
                 payment.setPaymentNo(generatePaymentNo(tenantId));
                 payment.setSupplierId(order.getSupplierId());
                 payment.setAmount(paidCash);
-                payment.setDiscountAmount(discount);
+                payment.setDiscountAmount(BigDecimal.ZERO);
                 payment.setSettlementMethod(order.getSettlementMethod());
                 payment.setPaymentMethodCode(order.getPaymentMethodCode());
                 payment.setStatus(STATUS_APPROVED);
@@ -694,21 +724,11 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 payment.setCreatedAt(Instant.now());
                 payment.setUpdatedAt(Instant.now());
                 erpPaymentMapper.insert(payment);
-
-                ErpPaymentPayable allocation = new ErpPaymentPayable();
-                allocation.setTenantId(tenantId);
-                allocation.setPaymentId(payment.getId());
-                allocation.setPayableId(payable.getId());
-                allocation.setAllocatedAmount(paidCash);
-                allocation.setAllocatedDiscount(discount);
-                allocation.setAllocatedTotal(totalApplied);
-                allocation.setCreatedAt(Instant.now());
-                erpPaymentPayableMapper.insert(allocation);
             } else if (AUTO_PAYMENT_REMARK.equals(paymentExisting.getRemark())) {
-                paymentExisting.setPayableId(payable.getId());
+                paymentExisting.setPayableId(null);
                 paymentExisting.setSupplierId(order.getSupplierId());
                 paymentExisting.setAmount(paidCash);
-                paymentExisting.setDiscountAmount(discount);
+                paymentExisting.setDiscountAmount(BigDecimal.ZERO);
                 paymentExisting.setSettlementMethod(order.getSettlementMethod());
                 paymentExisting.setPaymentMethodCode(order.getPaymentMethodCode());
                 paymentExisting.setStatus(STATUS_APPROVED);
@@ -720,16 +740,21 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
                     .eq("tenant_id", tenantId)
                     .eq("payment_id", paymentExisting.getId()));
-                ErpPaymentPayable allocation = new ErpPaymentPayable();
-                allocation.setTenantId(tenantId);
-                allocation.setPaymentId(paymentExisting.getId());
-                allocation.setPayableId(payable.getId());
-                allocation.setAllocatedAmount(paidCash);
-                allocation.setAllocatedDiscount(discount);
-                allocation.setAllocatedTotal(totalApplied);
-                allocation.setCreatedAt(Instant.now());
-                erpPaymentPayableMapper.insert(allocation);
             }
+        } else if (paymentExisting != null && AUTO_PAYMENT_REMARK.equals(paymentExisting.getRemark())) {
+            paymentExisting.setPayableId(null);
+            paymentExisting.setSupplierId(order.getSupplierId());
+            paymentExisting.setAmount(BigDecimal.ZERO);
+            paymentExisting.setDiscountAmount(BigDecimal.ZERO);
+            paymentExisting.setSettlementMethod(order.getSettlementMethod());
+            paymentExisting.setPaymentMethodCode(null);
+            paymentExisting.setStatus(STATUS_APPROVED);
+            paymentExisting.setPaidAt(Instant.now());
+            paymentExisting.setUpdatedAt(Instant.now());
+            erpPaymentMapper.updateById(paymentExisting);
+            erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
+                .eq("tenant_id", tenantId)
+                .eq("payment_id", paymentExisting.getId()));
         }
     }
 

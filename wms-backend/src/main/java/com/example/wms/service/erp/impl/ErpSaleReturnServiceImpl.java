@@ -214,6 +214,10 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setRefundAction(resolveRefundAction(request.refundAction()));
         BigDecimal requestedPaidAmount = request.paidAmount() == null ? BigDecimal.ZERO : request.paidAmount();
         BigDecimal requestedDiscountAmount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
+        if (isFundInputHidden(tenantId, order.getSettlementMethod())) {
+            order.setReceiptMethodCode(null);
+            requestedPaidAmount = BigDecimal.ZERO;
+        }
         validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod(),
             order.getReceiptMethodCode(), order.getRefundAction(), requestedPaidAmount);
         order.setPaidAmount(BigDecimal.ZERO);
@@ -257,6 +261,10 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setRefundAction(resolveRefundAction(request.refundAction()));
         order.setPaidAmount(request.paidAmount());
         order.setDiscountAmount(request.discountAmount());
+        if (isFundInputHidden(tenantId, order.getSettlementMethod())) {
+            order.setReceiptMethodCode(null);
+            order.setPaidAmount(BigDecimal.ZERO);
+        }
         validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod(),
             order.getReceiptMethodCode(), order.getRefundAction(), order.getPaidAmount());
         order.setRemark(request.remark());
@@ -448,6 +456,24 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             return REFUND_ACTION_REFUND;
         }
         return REFUND_ACTION_OFFSET_AR;
+    }
+
+    private boolean isFundInputHidden(Long tenantId, String settlementMethod) {
+        if (settlementMethod == null || settlementMethod.isBlank()) {
+            return false;
+        }
+        String code = settlementMethod.trim().toUpperCase();
+        if ("CREDIT".equals(code) || "ON_ACCOUNT".equals(code) || "AR".equals(code)) {
+            return true;
+        }
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        if (method == null) {
+            return false;
+        }
+        if ("HIDDEN".equalsIgnoreCase(method.getFundInputMode())) {
+            return true;
+        }
+        return method.getName() != null && method.getName().contains("挂账");
     }
 
     private void validateStockBinding(Long tenantId, Long warehouseId, Long locationId) {

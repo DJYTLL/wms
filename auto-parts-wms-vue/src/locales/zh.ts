@@ -742,6 +742,7 @@ const zh = {
         confirmSaveDraft: '当前已有明细，是否保存为草稿后关闭？',
         confirmClosePage: '暂无明细，确认关闭页面吗？',
         selectProductFirst: '请先选择商品',
+        selectSaleOrderFirst: '请先选择销售单',
         historyShortcutHint: '快捷键：Ctrl + H',
         discountAllocationHint: '优惠金额将按分摊规则分配到各商品中',
         confirmCustomerChangeTitle: '切换客户',

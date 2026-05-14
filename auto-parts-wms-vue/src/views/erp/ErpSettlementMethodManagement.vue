@@ -39,6 +39,13 @@
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column v-if="canShow('fundInputMode')" prop="fundInputMode" label="即时收/付款" min-width="140">
+            <template #default="{ row }">
+              <el-tag :type="row.fundInputMode === 'HIDDEN' ? 'info' : row.fundInputMode === 'REQUIRED' ? 'warning' : 'success'" size="small">
+                {{ formatFundInputMode(row.fundInputMode) }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column v-if="canShow('sort')" prop="sortNo" :label="$t('field.sortNo')" min-width="120" />
           <el-table-column v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
@@ -80,6 +87,13 @@
         <el-form-item :label="$t('field.sortNo')">
           <el-input-number v-model="formData.sortNo" :min="0" style="width: 100%" />
         </el-form-item>
+        <el-form-item label="即时收/付款">
+          <el-select v-model="formData.fundInputMode" style="width: 100%">
+            <el-option label="不显示资金方式和金额" value="HIDDEN" />
+            <el-option label="允许录入，金额可为0" value="OPTIONAL" />
+            <el-option label="必须录入即时金额" value="REQUIRED" />
+          </el-select>
+        </el-form-item>
         <el-form-item :label="$t('field.status')">
           <el-switch v-model="formData.enabled" />
         </el-form-item>
@@ -111,6 +125,7 @@ interface SettlementMethod {
   code: string;
   name: string;
   sortNo?: number;
+  fundInputMode?: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED';
   enabled: boolean;
   isDefault?: boolean;
   remark?: string;
@@ -131,19 +146,26 @@ const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
 
-const defaultColumns = ['code', 'name', 'sort', 'status'];
+const defaultColumns = ['code', 'name', 'fundInputMode', 'sort', 'status'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-settlement-method', defaultColumns);
 
 const formData = reactive({
   code: '',
   name: '',
   sortNo: 0,
+  fundInputMode: 'OPTIONAL' as 'HIDDEN' | 'OPTIONAL' | 'REQUIRED',
   enabled: true,
   isDefault: false,
   remark: ''
 });
 
 const canShow = (key: string) => isVisible(key);
+
+const formatFundInputMode = (mode?: string) => {
+  if (mode === 'HIDDEN') return '不显示';
+  if (mode === 'REQUIRED') return '必填';
+  return '允许';
+};
 
 const fetchList = async () => {
   loading.value = true;
@@ -197,6 +219,7 @@ const openEditModal = (row: SettlementMethod) => {
   formData.code = row.code;
   formData.name = row.name;
   formData.sortNo = row.sortNo || 0;
+  formData.fundInputMode = row.fundInputMode || 'OPTIONAL';
   formData.enabled = row.enabled;
   formData.isDefault = Boolean(row.isDefault);
   formData.remark = row.remark || '';
@@ -207,6 +230,7 @@ const resetForm = () => {
   formData.code = '';
   formData.name = '';
   formData.sortNo = 0;
+  formData.fundInputMode = 'OPTIONAL';
   formData.enabled = true;
   formData.isDefault = false;
   formData.remark = '';
