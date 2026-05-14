@@ -454,11 +454,17 @@ const closeView = (view: { id?: string; title: string; path: string }, redirectP
     visitedViews.splice(index, 1);
     // 如果关闭的是当前页，跳转到最后一个 tag
     if (view.path === route.path) {
-      const target = redirectPath && redirectPath !== view.path
-        ? visitedViews.find(v => v.path === redirectPath)
+      const queryReturnTo = typeof route.query.returnTo === 'string' ? route.query.returnTo.trim() : '';
+      const resolvedRedirectPath = redirectPath || queryReturnTo;
+      const target = resolvedRedirectPath && resolvedRedirectPath !== view.path
+        ? visitedViews.find(v => v.path === resolvedRedirectPath)
         : null;
       if (target) {
         router.push(target.path);
+        return;
+      }
+      if (resolvedRedirectPath && resolvedRedirectPath !== view.path) {
+        router.push(resolvedRedirectPath);
         return;
       }
       const last = visitedViews[visitedViews.length - 1];

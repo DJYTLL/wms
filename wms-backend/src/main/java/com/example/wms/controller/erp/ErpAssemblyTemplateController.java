@@ -33,6 +33,13 @@ public class ErpAssemblyTemplateController {
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @GetMapping("/by-finished-product")
+    public ResponseEntity<ApiResponse<List<ErpAssemblyTemplate>>> listByFinishedProduct(@RequestParam String orderType,
+                                                                                        @RequestParam Long productId) {
+        return ResponseEntity.ok(ApiResponse.ok(assemblyTemplateService.listByFinishedProduct(orderType, productId)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpAssemblyTemplateDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(assemblyTemplateService.getDetail(id)));

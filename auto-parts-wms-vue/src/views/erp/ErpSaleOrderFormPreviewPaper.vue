@@ -264,7 +264,7 @@ interface OptionItem {
   name: string;
   warehouseId?: number;
   categoryId?: number;
-  paymentTerms?: string;
+  defaultSettlementMethodCode?: string;
   deliveryMethodCode?: string;
 }
 
@@ -812,7 +812,7 @@ const getDefaultDeliveryMethod = () => {
 
 const applyMethodsForCustomer = () => {
   const customer = customerOptions.value.find(item => item.id === formData.customerId);
-  const settlement = customer?.paymentTerms || getDefaultSettlementMethod();
+  const settlement = customer?.defaultSettlementMethodCode || getDefaultSettlementMethod();
   const delivery = customer?.deliveryMethodCode || getDefaultDeliveryMethod();
   if (settlement) {
     formData.settlementMethod = settlement;

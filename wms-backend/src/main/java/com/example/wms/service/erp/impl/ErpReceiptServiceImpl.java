@@ -236,6 +236,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         receipt.setAmount(amount);
         receipt.setDiscountAmount(discountAmount);
         receipt.setSettlementMethod(request.settlementMethod());
+        receipt.setReceiptMethodCode(request.receiptMethodCode());
         receipt.setStatus(STATUS_DRAFT);
         receipt.setReceivedAt(parseReceivedAt(request.receivedAt()));
         receipt.setRemark(request.remark());
@@ -387,6 +388,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         receipt.setAmount(amount);
         receipt.setDiscountAmount(discountAmount);
         receipt.setSettlementMethod(request.settlementMethod());
+        receipt.setReceiptMethodCode(request.receiptMethodCode());
         receipt.setReceivedAt(parseReceivedAt(request.receivedAt()));
         receipt.setRemark(request.remark());
         receipt.setUpdatedAt(Instant.now());

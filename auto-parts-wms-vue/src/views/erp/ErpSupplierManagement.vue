@@ -125,10 +125,20 @@
         <el-form-item :label="$t('field.bankAccount')">
           <el-input v-model="formData.bankAccount" />
         </el-form-item>
-        <el-form-item :label="$t('field.paymentTerms')">
-          <el-select v-model="formData.paymentTerms" clearable style="width: 100%">
+        <el-form-item :label="$t('field.defaultSettlementMethod')">
+          <el-select v-model="formData.defaultSettlementMethodCode" clearable style="width: 100%">
             <el-option
               v-for="item in settlementMethodOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.code"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('field.defaultPaymentMethod')">
+          <el-select v-model="formData.defaultPaymentMethodCode" clearable style="width: 100%">
+            <el-option
+              v-for="item in paymentMethodOptions"
               :key="item.code"
               :label="item.name"
               :value="item.code"
@@ -178,7 +188,8 @@ interface ErpSupplier {
   taxNo?: string;
   bankName?: string;
   bankAccount?: string;
-  paymentTerms?: string;
+  defaultSettlementMethodCode?: string;
+  defaultPaymentMethodCode?: string;
   enabled: boolean;
   blacklisted?: boolean;
   recentTransactionAt?: string;
@@ -209,6 +220,7 @@ const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
 const settlementMethodOptions = ref<CodeOptionItem[]>([]);
+const paymentMethodOptions = ref<CodeOptionItem[]>([]);
 
 const defaultColumns = [
   'code',
@@ -239,7 +251,8 @@ const formData = reactive({
   taxNo: '',
   bankName: '',
   bankAccount: '',
-  paymentTerms: '',
+  defaultSettlementMethodCode: '',
+  defaultPaymentMethodCode: '',
   status: 'enabled' as SupplierStatus,
   remark: ''
 });
@@ -299,19 +312,25 @@ const buildPayload = () => ({
   taxNo: formData.taxNo || undefined,
   bankName: formData.bankName || undefined,
   bankAccount: formData.bankAccount || undefined,
-  paymentTerms: formData.paymentTerms || undefined,
+  defaultSettlementMethodCode: formData.defaultSettlementMethodCode || undefined,
+  defaultPaymentMethodCode: formData.defaultPaymentMethodCode || undefined,
   enabled: formData.status === 'enabled',
   blacklisted: formData.status === 'blacklisted',
   remark: formData.remark || undefined
 });
 
-const applyDefaultSettlementMethod = () => {
-  if (formData.paymentTerms || !settlementMethodOptions.value.length) {
-    return;
+const applyDefaultMethods = () => {
+  if (!formData.defaultSettlementMethodCode && settlementMethodOptions.value.length) {
+    const defaultItem = settlementMethodOptions.value.find(item => item.isDefault) ?? settlementMethodOptions.value[0];
+    if (defaultItem) {
+      formData.defaultSettlementMethodCode = defaultItem.code;
+    }
   }
-  const defaultItem = settlementMethodOptions.value.find(item => item.isDefault) ?? settlementMethodOptions.value[0];
-  if (defaultItem) {
-    formData.paymentTerms = defaultItem.code;
+  if (!formData.defaultPaymentMethodCode && paymentMethodOptions.value.length) {
+    const defaultItem = paymentMethodOptions.value.find(item => item.isDefault) ?? paymentMethodOptions.value[0];
+    if (defaultItem) {
+      formData.defaultPaymentMethodCode = defaultItem.code;
+    }
   }
 };
 
@@ -320,7 +339,19 @@ const fetchSettlementMethods = async () => {
     const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
     settlementMethodOptions.value = res.data.data || [];
     if (showModal.value && !isEditing.value) {
-      applyDefaultSettlementMethod();
+      applyDefaultMethods();
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const fetchPaymentMethods = async () => {
+  try {
+    const res: any = await request.get('/erp/payment-methods', { params: { enabled: true } });
+    paymentMethodOptions.value = res.data.data || [];
+    if (showModal.value && !isEditing.value) {
+      applyDefaultMethods();
     }
   } catch (error) {
     notifyError(error);
@@ -386,7 +417,7 @@ const openAddModal = () => {
   isEditing.value = false;
   currentId.value = null;
   resetForm();
-  applyDefaultSettlementMethod();
+  applyDefaultMethods();
   showModal.value = true;
   fetchNextSupplierCode();
 };
@@ -405,7 +436,8 @@ const openEditModal = (row: ErpSupplier) => {
   formData.taxNo = row.taxNo || '';
   formData.bankName = row.bankName || '';
   formData.bankAccount = row.bankAccount || '';
-  formData.paymentTerms = row.paymentTerms || '';
+  formData.defaultSettlementMethodCode = row.defaultSettlementMethodCode || '';
+  formData.defaultPaymentMethodCode = row.defaultPaymentMethodCode || '';
   syncFormStatus(row);
   formData.remark = row.remark || '';
   showModal.value = true;
@@ -423,7 +455,8 @@ const resetForm = () => {
   formData.taxNo = '';
   formData.bankName = '';
   formData.bankAccount = '';
-  formData.paymentTerms = '';
+  formData.defaultSettlementMethodCode = '';
+  formData.defaultPaymentMethodCode = '';
   formData.status = 'enabled';
   formData.remark = '';
 };
@@ -480,6 +513,7 @@ const handleDelete = async (row: ErpSupplier) => {
 
 onMounted(() => {
   fetchSettlementMethods();
+  fetchPaymentMethods();
   fetchList();
   bindPageSizeSync(size, fetchList);
   fetchTenantKeys();
@@ -487,6 +521,7 @@ onMounted(() => {
 
 onActivated(() => {
   fetchSettlementMethods();
+  fetchPaymentMethods();
   fetchList();
 });
 </script>

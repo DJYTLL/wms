@@ -49,6 +49,15 @@ public class ErpAssemblyTemplateServiceImpl implements ErpAssemblyTemplateServic
     }
 
     @Override
+    public List<ErpAssemblyTemplate> listByFinishedProduct(String orderType, Long finishedProductId) {
+        if (finishedProductId == null) {
+            throw new IllegalArgumentException("商品不能为空");
+        }
+        Long tenantId = TenantContext.requireTenantId();
+        return templateMapper.findByFinishedProduct(tenantId, normalizeType(orderType), finishedProductId);
+    }
+
+    @Override
     public ErpAssemblyTemplateDetail getDetail(Long id) {
         Long tenantId = TenantContext.requireTenantId();
         ErpAssemblyTemplate template = requireTemplate(tenantId, id);

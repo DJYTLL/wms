@@ -73,6 +73,16 @@ public class ErpPurchaseOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseOrderService.recentItemsByProduct(supplierId, productId, limit)));
     }
 
+    // 分页查询包含指定商品的采购单明细（商品退货选择来源单）
+    @GetMapping("/recent-items/page")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase:view')")
+    public ResponseEntity<ApiResponse<PageResponse<ErpPurchaseOrderRecentItem>>> recentItemsPage(@RequestParam Long supplierId,
+                                                                                                  @RequestParam Long productId,
+                                                                                                  @RequestParam(defaultValue = "1") long page,
+                                                                                                  @RequestParam(defaultValue = "10") long size) {
+        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseOrderService.recentItemsByProduct(supplierId, productId, page, size)));
+    }
+
     // 商品采购历史（用于商品历史弹窗）
     @GetMapping("/product-history")
     @PreAuthorize("hasAuthority('PERM_erp-purchase:view')")

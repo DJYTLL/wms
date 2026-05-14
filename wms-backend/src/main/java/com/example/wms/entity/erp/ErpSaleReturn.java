@@ -40,6 +40,12 @@ public class ErpSaleReturn {
     @TableField("settlement_method")
     private String settlementMethod;
 
+    @TableField("receipt_method_code")
+    private String receiptMethodCode;
+
+    @TableField("refund_action")
+    private String refundAction;
+
     @TableField("paid_amount")
     private BigDecimal paidAmount;
 
@@ -174,6 +180,22 @@ public class ErpSaleReturn {
 
     public void setSettlementMethod(String settlementMethod) {
         this.settlementMethod = settlementMethod;
+    }
+
+    public String getReceiptMethodCode() {
+        return receiptMethodCode;
+    }
+
+    public void setReceiptMethodCode(String receiptMethodCode) {
+        this.receiptMethodCode = receiptMethodCode;
+    }
+
+    public String getRefundAction() {
+        return refundAction;
+    }
+
+    public void setRefundAction(String refundAction) {
+        this.refundAction = refundAction;
     }
 
     public BigDecimal getPaidAmount() {

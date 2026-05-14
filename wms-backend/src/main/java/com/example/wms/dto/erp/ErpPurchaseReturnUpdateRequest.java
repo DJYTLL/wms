@@ -14,6 +14,8 @@ public record ErpPurchaseReturnUpdateRequest(
     Long supplierId,
     Long purchaseOrderId,
     String settlementMethod,
+    String paymentMethodCode,
+    String refundAction,
     BigDecimal paidAmount,
     BigDecimal discountAmount,
     @Valid @NotEmpty List<ErpPurchaseReturnItemRequest> items,

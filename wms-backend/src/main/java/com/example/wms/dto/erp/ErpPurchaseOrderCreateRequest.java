@@ -10,6 +10,7 @@ public record ErpPurchaseOrderCreateRequest(
     String orderNo,
     String orderAt,
     Long supplierId,
+    String settlementMethod,
     String paymentMethodCode,
     java.math.BigDecimal paidAmount,
     java.math.BigDecimal discountAmount,

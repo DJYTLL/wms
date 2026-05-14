@@ -14,6 +14,7 @@ import com.example.wms.entity.erp.ErpCustomer;
 import com.example.wms.entity.erp.ErpLocation;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpReceipt;
+import com.example.wms.entity.erp.ErpReceiptMethod;
 import com.example.wms.entity.erp.ErpReceiptReceivable;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.entity.erp.ErpSaleOrderItem;
@@ -30,6 +31,7 @@ import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
+import com.example.wms.mapper.erp.ErpReceiptMethodMapper;
 import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
@@ -78,6 +80,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
 
     private static final String RETURN_RESTOCK = "RESTOCK";
     private static final String RETURN_SCRAP = "SCRAP";
+    private static final String REFUND_ACTION_REFUND = "REFUND";
+    private static final String REFUND_ACTION_OFFSET_AR = "OFFSET_AR";
 
     private final ErpSaleReturnMapper erpSaleReturnMapper;
     private final ErpSaleReturnItemMapper erpSaleReturnItemMapper;
@@ -86,6 +90,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpLocationMapper erpLocationMapper;
     private final ErpSettlementMethodMapper erpSettlementMethodMapper;
+    private final ErpReceiptMethodMapper erpReceiptMethodMapper;
     private final ErpStockBalanceMapper erpStockBalanceMapper;
     private final ErpStockTxnMapper erpStockTxnMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
@@ -104,6 +109,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
                                     ErpWarehouseMapper erpWarehouseMapper,
                                     ErpLocationMapper erpLocationMapper,
                                     ErpSettlementMethodMapper erpSettlementMethodMapper,
+                                    ErpReceiptMethodMapper erpReceiptMethodMapper,
                                     ErpStockBalanceMapper erpStockBalanceMapper,
                                     ErpStockTxnMapper erpStockTxnMapper,
                                     ErpOrderSequenceMapper erpOrderSequenceMapper,
@@ -121,6 +127,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         this.erpWarehouseMapper = erpWarehouseMapper;
         this.erpLocationMapper = erpLocationMapper;
         this.erpSettlementMethodMapper = erpSettlementMethodMapper;
+        this.erpReceiptMethodMapper = erpReceiptMethodMapper;
         this.erpStockBalanceMapper = erpStockBalanceMapper;
         this.erpStockTxnMapper = erpStockTxnMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
@@ -203,9 +210,15 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setSaleOrderId(request.saleOrderId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setSettlementMethod(request.settlementMethod());
-        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod());
-        order.setPaidAmount(request.paidAmount());
-        order.setDiscountAmount(request.discountAmount());
+        order.setReceiptMethodCode(normalizeCode(request.receiptMethodCode()));
+        order.setRefundAction(resolveRefundAction(request.refundAction()));
+        BigDecimal requestedPaidAmount = request.paidAmount() == null ? BigDecimal.ZERO : request.paidAmount();
+        BigDecimal requestedDiscountAmount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
+        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod(),
+            order.getReceiptMethodCode(), order.getRefundAction(), requestedPaidAmount);
+        order.setPaidAmount(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        applyTotals(order, List.of());
         order.setVersion(0L);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
@@ -217,6 +230,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             erpSaleReturnItemMapper.insert(item);
         }
         applyTotals(order, items);
+        order.setPaidAmount(requestedPaidAmount);
+        order.setDiscountAmount(requestedDiscountAmount);
         validateSettlementAmounts(tenantId, order, null);
         erpSaleReturnMapper.updateById(order);
 
@@ -238,9 +253,12 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setSaleOrderId(request.saleOrderId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setSettlementMethod(request.settlementMethod());
-        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod());
+        order.setReceiptMethodCode(normalizeCode(request.receiptMethodCode()));
+        order.setRefundAction(resolveRefundAction(request.refundAction()));
         order.setPaidAmount(request.paidAmount());
         order.setDiscountAmount(request.discountAmount());
+        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod(),
+            order.getReceiptMethodCode(), order.getRefundAction(), order.getPaidAmount());
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
 
@@ -388,7 +406,12 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         return wrapper;
     }
 
-    private void validateHeaderMasterData(Long tenantId, Long customerId, String settlementMethod) {
+    private void validateHeaderMasterData(Long tenantId,
+                                          Long customerId,
+                                          String settlementMethod,
+                                          String receiptMethodCode,
+                                          String refundAction,
+                                          BigDecimal paidAmount) {
         if (customerId == null) {
             throw new IllegalArgumentException("请选择客户");
         }
@@ -405,6 +428,26 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (method == null || Boolean.FALSE.equals(method.getEnabled())) {
             throw new IllegalArgumentException("结算方式不存在或已停用");
         }
+        if (REFUND_ACTION_REFUND.equals(refundAction) && paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            if (receiptMethodCode == null || receiptMethodCode.isBlank()) {
+                throw new IllegalArgumentException("请选择收款方式");
+            }
+            ErpReceiptMethod receiptMethod = erpReceiptMethodMapper.findByCode(tenantId, receiptMethodCode);
+            if (receiptMethod == null || Boolean.FALSE.equals(receiptMethod.getEnabled())) {
+                throw new IllegalArgumentException("收款方式不存在或已停用");
+            }
+        }
+    }
+
+    private String resolveRefundAction(String action) {
+        if (action == null || action.isBlank()) {
+            return REFUND_ACTION_OFFSET_AR;
+        }
+        String normalized = action.trim().toUpperCase();
+        if (REFUND_ACTION_REFUND.equals(normalized)) {
+            return REFUND_ACTION_REFUND;
+        }
+        return REFUND_ACTION_OFFSET_AR;
     }
 
     private void validateStockBinding(Long tenantId, Long warehouseId, Long locationId) {
@@ -991,7 +1034,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         ar.setUpdatedAt(Instant.now());
         erpAccountsReceivableMapper.insert(ar);
 
-        if (applied.compareTo(BigDecimal.ZERO) > 0) {
+        if (applied.compareTo(BigDecimal.ZERO) > 0 && REFUND_ACTION_REFUND.equals(order.getRefundAction())) {
             ErpReceipt receipt = new ErpReceipt();
             receipt.setTenantId(tenantId);
             receipt.setReceivableId(ar.getId());
@@ -1001,6 +1044,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             receipt.setAmount(refundAmount.negate());
             receipt.setDiscountAmount(discountAmount.negate());
             receipt.setSettlementMethod(order.getSettlementMethod());
+            receipt.setReceiptMethodCode(order.getReceiptMethodCode());
             receipt.setStatus(STATUS_APPROVED);
             receipt.setReceivedAt(Instant.now());
             receipt.setRemark("销售退货单审核自动退款/优惠:" + order.getOrderNo());
@@ -1215,6 +1259,13 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             return fallback;
         }
         return config.getConfigValue().trim();
+    }
+
+    private String normalizeCode(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private int readIntConfig(String key, int fallback) {

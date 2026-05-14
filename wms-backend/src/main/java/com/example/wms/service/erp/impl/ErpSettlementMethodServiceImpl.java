@@ -174,12 +174,12 @@ public class ErpSettlementMethodServiceImpl implements ErpSettlementMethodServic
     private void ensureSettlementMethodNotReferenced(Long tenantId, String code) {
         if (erpCustomerMapper.selectCount(new QueryWrapper<ErpCustomer>()
             .eq("tenant_id", tenantId)
-            .eq("payment_terms", code)) > 0) {
+            .eq("default_settlement_method_code", code)) > 0) {
             throw new IllegalArgumentException("结算方式已被客户引用，不能删除");
         }
         if (erpSupplierMapper.selectCount(new QueryWrapper<ErpSupplier>()
             .eq("tenant_id", tenantId)
-            .eq("payment_terms", code)) > 0) {
+            .eq("default_settlement_method_code", code)) > 0) {
             throw new IllegalArgumentException("结算方式已被供应商引用，不能删除");
         }
         if (erpSaleOrderMapper.selectCount(new QueryWrapper<ErpSaleOrder>()

@@ -10,6 +10,7 @@ import java.util.List;
 // Assembly template service
 public interface ErpAssemblyTemplateService {
     List<ErpAssemblyTemplate> listAll(String orderType, String keyword);
+    List<ErpAssemblyTemplate> listByFinishedProduct(String orderType, Long finishedProductId);
     ErpAssemblyTemplateDetail getDetail(Long id);
     ErpAssemblyTemplateDetail create(ErpAssemblyTemplateCreateRequest request);
     ErpAssemblyTemplateDetail update(Long id, ErpAssemblyTemplateUpdateRequest request);

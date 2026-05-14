@@ -10,6 +10,7 @@ public record ErpPurchaseOrderRecentItem(
     Instant orderAt,
     Long productId,
     BigDecimal qty,
+    BigDecimal remainingQty,
     BigDecimal price
 ) {
 }

@@ -1,38 +1,40 @@
-﻿<template>
+<template>
   <div class="page-shell page-shell--system">
     <div class="page-header">
       <div class="page-title">{{ $t('page.erpPurchaseOrderDraft') }}</div>
       <div class="erp-toolbar">
         <div class="table-toolbar">
           <div class="table-filters">
-          <el-input
-            v-model="searchQuery"
-            :placeholder="$t('action.search')"
-            class="erp-toolbar__search erp-toolbar__search--wide"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
-          <FuzzyProductSelect
-            v-model="supplierFilter"
-            :options="supplierOptions"
-            :placeholder="$t('field.supplier')"
-            class="erp-toolbar__search erp-toolbar__search--wide"
-            @change="handleSearch"
-          />
-          <el-date-picker
-            v-model="dateRange"
-            type="datetimerange"
-            value-format="x"
-            format="YYYY-MM-DD HH:mm:ss"
-            :start-placeholder="$t('field.startTime')"
-            :end-placeholder="$t('field.endTime')"
-            @change="handleSearch"
-            class="erp-toolbar__date-range table-date-range--compact"
-          />
+            <el-input
+              v-model="searchQuery"
+              :placeholder="$t('action.search')"
+              class="erp-toolbar__search erp-toolbar__search--wide"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <FuzzyProductSelect
+              v-model="supplierFilter"
+              :options="supplierOptions"
+              :placeholder="$t('field.supplier')"
+              class="erp-toolbar__search erp-toolbar__search--wide"
+              @change="handleSearch"
+            />
+            <el-date-picker
+              v-model="dateRange"
+              type="datetimerange"
+              value-format="x"
+              format="YYYY-MM-DD HH:mm:ss"
+              :start-placeholder="$t('field.startTime')"
+              :end-placeholder="$t('field.endTime')"
+              class="erp-toolbar__date-range table-date-range--compact"
+              @change="handleSearch"
+            />
           </div>
           <div class="table-actions">
-            <el-button type="primary" v-permission="'erp-purchase:add'" @click="openCreatePage">{{ $t('action.add') }}</el-button>
+            <el-button type="primary" v-permission="'erp-purchase:add'" @click="openCreatePage">
+              {{ $t('action.add') }}
+            </el-button>
           </div>
         </div>
       </div>
@@ -42,31 +44,38 @@
       <div class="table-body">
         <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
           <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
-          <el-table-column v-if="canShow('supplier')" :label="$t('field.supplier')" min-width="160">
+          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="170" />
+          <el-table-column v-if="canShow('supplier')" :label="$t('field.supplier')" min-width="170" show-overflow-tooltip>
             <template #default="{ row }">
               {{ getSupplierName(row.supplierId) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
-            <template #default="{ row }">
-              <el-tag :type="statusTagType(row.status)" size="small">
-                {{ formatStatus(row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.orderTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
           </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="300" fixed="right">
+          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="130" align="right">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" v-permission="'erp-purchase:edit'" :disabled="row.status !== 'DRAFT'" @click="openEditPage(row)">{{ $t('action.edit') }}</el-button>
-              <el-button link type="primary" size="small" v-permission="'erp-purchase:view'" @click="openPrintPage(row)">{{ $t('action.print') }}</el-button>
-              <el-button link type="success" size="small" v-permission="'erp-purchase:approve'" :disabled="row.status !== 'DRAFT'" @click="handleApprove(row)">{{ $t('action.approve') }}</el-button>
-              <el-button link type="danger" size="small" v-permission="'erp-purchase:cancel'" :disabled="row.status === 'CANCELLED'" @click="handleCancel(row)">{{ $t('action.cancel') }}</el-button>
+              <span class="amount-text">{{ formatAmount(row.totalAmount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag type="info" size="small">{{ formatStatus(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('table.actions')" width="220" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" v-permission="'erp-purchase:edit'" @click="openEditPage(row)">
+                {{ $t('action.edit') }}
+              </el-button>
+              <el-button link type="primary" size="small" v-permission="'erp-purchase:view'" @click="openPrintPage(row)">
+                {{ $t('action.print') }}
+              </el-button>
+              <el-button link type="success" size="small" v-permission="'erp-purchase:approve'" @click="handleApprove(row)">
+                {{ $t('action.approve') }}
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -95,21 +104,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated } from 'vue';
+import { onActivated, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
+import { ElMessageBox } from 'element-plus';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
-import { ElMessageBox } from 'element-plus';
 
 interface OptionItem {
   id: number;
   name: string;
-  warehouseId?: number;
 }
 
 interface PurchaseOrder {
@@ -143,12 +151,6 @@ const { isVisible, fetchTenantKeys } = useColumnSettings('erp-purchase', default
 
 const canShow = (key: string) => isVisible(key);
 
-const statusTagType = (status: string) => {
-  if (status === 'APPROVED') return 'success';
-  if (status === 'CANCELLED') return 'danger';
-  return 'info';
-};
-
 const formatStatus = (status: string) => {
   const mapping: Record<string, string> = {
     DRAFT: t('status.draft'),
@@ -173,6 +175,8 @@ const formatDateTime = (value?: string) => {
   });
 };
 
+const formatAmount = (value?: number | string) => Number(value || 0).toFixed(2);
+
 const getSupplierName = (id?: number) => supplierOptions.value.find(item => item.id === id)?.name || '-';
 
 const fetchSuppliers = async () => {
@@ -189,18 +193,15 @@ const fetchList = async () => {
   try {
     const params: Record<string, any> = {
       page: page.value,
-      size: size.value
+      size: size.value,
+      status: 'DRAFT'
     };
     if (searchQuery.value) params.keyword = searchQuery.value.trim();
-    params.status = 'DRAFT';
     if (supplierFilter.value) params.supplierId = supplierFilter.value;
-    if (dateRange.value && dateRange.value.length === 2) {
-      const start = Number(dateRange.value[0]);
-      const end = Number(dateRange.value[1]);
-      params.startAt = start;
-      params.endAt = end;
+    if (dateRange.value?.length === 2) {
+      params.startAt = Number(dateRange.value[0]);
+      params.endAt = Number(dateRange.value[1]);
     }
-
     const res: any = await request.get('/erp/purchase-orders/page', { params });
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
@@ -230,12 +231,23 @@ const handleSizeChange = (newSize: number) => {
 };
 
 const openCreatePage = () => {
-  router.push({ path: '/erp/purchase-orders/create', query: { from: 'draft' } });
+  router.push({
+    path: '/erp/purchase-orders/create',
+    query: {
+      returnTo: '/erp/purchase-orders/draft',
+      from: 'draft'
+    }
+  });
 };
 
 const openEditPage = (row: PurchaseOrder) => {
-  if (row.status !== 'DRAFT') return;
-  router.push({ path: `/erp/purchase-orders/${row.id}/edit`, query: { from: 'draft' } });
+  router.push({
+    path: `/erp/purchase-orders/${row.id}/edit`,
+    query: {
+      returnTo: '/erp/purchase-orders/draft',
+      from: 'draft'
+    }
+  });
 };
 
 const openPrintPage = (row: PurchaseOrder) => {
@@ -245,30 +257,17 @@ const openPrintPage = (row: PurchaseOrder) => {
 
 const handleApprove = async (row: PurchaseOrder) => {
   try {
-    await request.post(`/erp/purchase-orders/${row.id}/approve`);
-    notifySuccess();
-    fetchList();
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const handleCancel = async (row: PurchaseOrder) => {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      t('message.confirmRedFlush'),
-      t('action.cancel'),
+    await ElMessageBox.confirm(
+      t('message.confirmApprove'),
+      t('action.confirm'),
       {
-        inputPlaceholder: t('placeholder.required'),
-        confirmButtonText: t('action.confirm'),
-        cancelButtonText: t('action.cancel')
+        confirmButtonText: t('action.approve'),
+        cancelButtonText: t('action.cancel'),
+        type: 'warning'
       }
     );
-    if (!value || !String(value).trim()) {
-      return;
-    }
-    await request.post(`/erp/purchase-orders/${row.id}/cancel`, { reason: String(value).trim() });
-    notifySuccess();
+    await request.post(`/erp/purchase-orders/${row.id}/approve`);
+    notifySuccess(t('message.approveSuccess'));
     fetchList();
   } catch (error) {
     if (error && error !== 'cancel' && error !== 'close') {
@@ -343,6 +342,11 @@ onActivated(() => {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: nowrap;
+}
+
+.amount-text {
+  color: #1677ff;
+  font-weight: 600;
 }
 
 @media (max-width: 1280px) {

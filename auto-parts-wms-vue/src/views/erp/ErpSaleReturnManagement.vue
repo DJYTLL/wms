@@ -457,17 +457,24 @@ const handleSizeChange = (newSize: number) => {
 };
 
 const openCreatePage = () => {
-  const query = isDraftPage.value ? { from: 'draft' } : undefined;
+  const query = isDraftPage.value
+    ? { from: 'draft', returnTo: route.path }
+    : { returnTo: route.path };
   router.push({ path: '/erp/sale-returns/create', query });
 };
 
 const openEditPage = (row: SaleReturn) => {
-  const query = isDraftPage.value ? { from: 'draft' } : undefined;
+  const query = isDraftPage.value
+    ? { from: 'draft', returnTo: route.path }
+    : { returnTo: route.path };
   router.push({ path: `/erp/sale-returns/${row.id}/edit`, query });
 };
 
 const openViewPage = (row: SaleReturn) => {
-  router.push({ path: `/erp/sale-returns/${row.id}/edit`, query: { mode: 'view' } });
+  router.push({
+    path: `/erp/sale-returns/${row.id}/edit`,
+    query: { mode: 'view', from: 'approved', returnTo: route.path }
+  });
 };
 
 const handleApprove = async (row: SaleReturn) => {
@@ -560,7 +567,10 @@ const handleCopy = async (row: SaleReturn) => {
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
-        await router.push({ path: `/erp/sale-returns/${newId}/edit`, query: { from: 'draft' } });
+        await router.push({
+          path: `/erp/sale-returns/${newId}/edit`,
+          query: { from: 'draft', returnTo: '/erp/sale-returns/draft' }
+        });
       }
     }
   } catch (error) {

@@ -31,6 +31,9 @@ public class ErpReceipt extends TenantAuditableSoftDeleteEntity {
     @TableField("settlement_method")
     private String settlementMethod;
 
+    @TableField("receipt_method_code")
+    private String receiptMethodCode;
+
     @TableField("status")
     private String status;
 
@@ -106,6 +109,14 @@ public class ErpReceipt extends TenantAuditableSoftDeleteEntity {
 
     public void setSettlementMethod(String settlementMethod) {
         this.settlementMethod = settlementMethod;
+    }
+
+    public String getReceiptMethodCode() {
+        return receiptMethodCode;
+    }
+
+    public void setReceiptMethodCode(String receiptMethodCode) {
+        this.receiptMethodCode = receiptMethodCode;
     }
 
     public String getStatus() {

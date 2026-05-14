@@ -5,6 +5,7 @@
     width="92%"
     top="4vh"
     class="print-preview-dialog"
+    append-to-body
     @closed="handleClosed"
   >
     <div class="print-preview-toolbar">

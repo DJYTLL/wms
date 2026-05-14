@@ -17,6 +17,7 @@ import com.example.wms.mapper.erp.ErpCustomerCategoryMapper;
 import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpDeliveryMethodMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
+import com.example.wms.mapper.erp.ErpReceiptMethodMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnMapper;
@@ -42,6 +43,7 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
     private final ErpCustomerMapper erpCustomerMapper;
     private final ErpCustomerCategoryMapper erpCustomerCategoryMapper;
     private final ErpSettlementMethodMapper erpSettlementMethodMapper;
+    private final ErpReceiptMethodMapper erpReceiptMethodMapper;
     private final ErpDeliveryMethodMapper erpDeliveryMethodMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final SystemConfigMapper systemConfigMapper;
@@ -54,6 +56,7 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
     public ErpCustomerServiceImpl(ErpCustomerMapper erpCustomerMapper,
                                   ErpCustomerCategoryMapper erpCustomerCategoryMapper,
                                   ErpSettlementMethodMapper erpSettlementMethodMapper,
+                                  ErpReceiptMethodMapper erpReceiptMethodMapper,
                                   ErpDeliveryMethodMapper erpDeliveryMethodMapper,
                                   ErpOrderSequenceMapper erpOrderSequenceMapper,
                                   SystemConfigMapper systemConfigMapper,
@@ -65,6 +68,7 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
         this.erpCustomerMapper = erpCustomerMapper;
         this.erpCustomerCategoryMapper = erpCustomerCategoryMapper;
         this.erpSettlementMethodMapper = erpSettlementMethodMapper;
+        this.erpReceiptMethodMapper = erpReceiptMethodMapper;
         this.erpDeliveryMethodMapper = erpDeliveryMethodMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.systemConfigMapper = systemConfigMapper;
@@ -234,7 +238,8 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
         customer.setBankName(request.bankName());
         customer.setBankAccount(request.bankAccount());
         customer.setInvoiceTitle(request.invoiceTitle());
-        customer.setPaymentTerms(request.paymentTerms());
+        customer.setDefaultSettlementMethodCode(request.defaultSettlementMethodCode());
+        customer.setDefaultReceiptMethodCode(request.defaultReceiptMethodCode());
         customer.setDeliveryMethodCode(request.deliveryMethodCode());
         customer.setCreditLimit(request.creditLimit());
         customer.setContacts(parseContacts(request.contacts()));
@@ -255,7 +260,8 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
         customer.setBankName(request.bankName());
         customer.setBankAccount(request.bankAccount());
         customer.setInvoiceTitle(request.invoiceTitle());
-        customer.setPaymentTerms(request.paymentTerms());
+        customer.setDefaultSettlementMethodCode(request.defaultSettlementMethodCode());
+        customer.setDefaultReceiptMethodCode(request.defaultReceiptMethodCode());
         customer.setDeliveryMethodCode(request.deliveryMethodCode());
         customer.setCreditLimit(request.creditLimit());
         customer.setContacts(parseContacts(request.contacts()));
@@ -263,10 +269,16 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
     }
 
     private void applyDefaultMethodsIfMissing(ErpCustomer customer, Long tenantId) {
-        if (customer.getPaymentTerms() == null || customer.getPaymentTerms().isBlank()) {
+        if (customer.getDefaultSettlementMethodCode() == null || customer.getDefaultSettlementMethodCode().isBlank()) {
             var defaultSettlement = erpSettlementMethodMapper.findDefault(tenantId);
             if (defaultSettlement != null) {
-                customer.setPaymentTerms(defaultSettlement.getCode());
+                customer.setDefaultSettlementMethodCode(defaultSettlement.getCode());
+            }
+        }
+        if (customer.getDefaultReceiptMethodCode() == null || customer.getDefaultReceiptMethodCode().isBlank()) {
+            var defaultReceiptMethod = erpReceiptMethodMapper.findDefault(tenantId);
+            if (defaultReceiptMethod != null) {
+                customer.setDefaultReceiptMethodCode(defaultReceiptMethod.getCode());
             }
         }
         if (customer.getDeliveryMethodCode() == null || customer.getDeliveryMethodCode().isBlank()) {

@@ -14,8 +14,10 @@ import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.entity.erp.ErpSupplier;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
 import com.example.wms.mapper.erp.ErpPaymentMapper;
+import com.example.wms.mapper.erp.ErpPaymentMethodMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.SystemConfigMapper;
@@ -41,6 +43,8 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
     private final ErpPurchaseReturnMapper erpPurchaseReturnMapper;
     private final ErpPaymentMapper erpPaymentMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
+    private final ErpSettlementMethodMapper erpSettlementMethodMapper;
+    private final ErpPaymentMethodMapper erpPaymentMethodMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final ObjectMapper objectMapper;
@@ -50,6 +54,8 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
                                   ErpPurchaseReturnMapper erpPurchaseReturnMapper,
                                   ErpPaymentMapper erpPaymentMapper,
                                   ErpAccountsPayableMapper erpAccountsPayableMapper,
+                                  ErpSettlementMethodMapper erpSettlementMethodMapper,
+                                  ErpPaymentMethodMapper erpPaymentMethodMapper,
                                   ErpOrderSequenceMapper erpOrderSequenceMapper,
                                   SystemConfigMapper systemConfigMapper,
                                   ObjectMapper objectMapper) {
@@ -58,6 +64,8 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
         this.erpPaymentMapper = erpPaymentMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
+        this.erpSettlementMethodMapper = erpSettlementMethodMapper;
+        this.erpPaymentMethodMapper = erpPaymentMethodMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.systemConfigMapper = systemConfigMapper;
         this.objectMapper = objectMapper;
@@ -112,6 +120,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         ErpSupplier supplier = new ErpSupplier();
         supplier.setTenantId(tenantId);
         applyRequest(supplier, request);
+        applyDefaultMethodsIfMissing(supplier, tenantId);
         applyStatus(supplier, request.enabled(), request.blacklisted());
         supplier.setCreatedAt(Instant.now());
         supplier.setUpdatedAt(Instant.now());
@@ -134,6 +143,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
             throw new IllegalArgumentException("供应商编码已存在");
         }
         applyRequest(supplier, request);
+        applyDefaultMethodsIfMissing(supplier, tenantId);
         if (request.enabled() != null || request.blacklisted() != null) {
             applyStatus(supplier, request.enabled(), request.blacklisted());
         }
@@ -244,7 +254,8 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         supplier.setTaxNo(request.taxNo());
         supplier.setBankName(request.bankName());
         supplier.setBankAccount(request.bankAccount());
-        supplier.setPaymentTerms(request.paymentTerms());
+        supplier.setDefaultSettlementMethodCode(request.defaultSettlementMethodCode());
+        supplier.setDefaultPaymentMethodCode(request.defaultPaymentMethodCode());
         supplier.setContacts(parseContacts(request.contacts()));
         supplier.setRemark(request.remark());
     }
@@ -261,9 +272,25 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         supplier.setTaxNo(request.taxNo());
         supplier.setBankName(request.bankName());
         supplier.setBankAccount(request.bankAccount());
-        supplier.setPaymentTerms(request.paymentTerms());
+        supplier.setDefaultSettlementMethodCode(request.defaultSettlementMethodCode());
+        supplier.setDefaultPaymentMethodCode(request.defaultPaymentMethodCode());
         supplier.setContacts(parseContacts(request.contacts()));
         supplier.setRemark(request.remark());
+    }
+
+    private void applyDefaultMethodsIfMissing(ErpSupplier supplier, Long tenantId) {
+        if (supplier.getDefaultSettlementMethodCode() == null || supplier.getDefaultSettlementMethodCode().isBlank()) {
+            var defaultSettlement = erpSettlementMethodMapper.findDefault(tenantId);
+            if (defaultSettlement != null) {
+                supplier.setDefaultSettlementMethodCode(defaultSettlement.getCode());
+            }
+        }
+        if (supplier.getDefaultPaymentMethodCode() == null || supplier.getDefaultPaymentMethodCode().isBlank()) {
+            var defaultPayment = erpPaymentMethodMapper.findDefault(tenantId);
+            if (defaultPayment != null) {
+                supplier.setDefaultPaymentMethodCode(defaultPayment.getCode());
+            }
+        }
     }
 
     private JsonNode parseContacts(String rawContacts) {

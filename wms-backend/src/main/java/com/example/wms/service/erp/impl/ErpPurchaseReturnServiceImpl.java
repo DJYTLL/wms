@@ -11,26 +11,32 @@ import com.example.wms.dto.erp.ErpPurchaseReturnUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsPayable;
 import com.example.wms.entity.erp.ErpPayment;
+import com.example.wms.entity.erp.ErpPaymentMethod;
 import com.example.wms.entity.erp.ErpPaymentPayable;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpPurchaseOrder;
 import com.example.wms.entity.erp.ErpPurchaseOrderItem;
 import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.entity.erp.ErpPurchaseReturnItem;
+import com.example.wms.entity.erp.ErpSettlementMethod;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockTxn;
+import com.example.wms.entity.erp.ErpSupplier;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpPaymentMapper;
+import com.example.wms.mapper.erp.ErpPaymentMethodMapper;
 import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderItemMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnItemMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
+import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.service.erp.ErpPurchaseReturnService;
 import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
@@ -66,6 +72,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private static final String PAYABLE_ORDER_TYPE = "AP_RETURN";
     private static final String PAYMENT_ORDER_TYPE = "PAYMENT";
     private static final String AUTO_RETURN_PAYMENT_REMARK = "采购退货审核自动退款/优惠";
+    private static final String REFUND_ACTION_REFUND = "REFUND";
+    private static final String REFUND_ACTION_OFFSET_AP = "OFFSET_AP";
 
     private static final String RETURN_GOODS = "RETURN";
     private static final String RETURN_SCRAP = "SCRAP";
@@ -80,7 +88,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
     private final ErpPaymentMapper erpPaymentMapper;
+    private final ErpPaymentMethodMapper erpPaymentMethodMapper;
     private final ErpPaymentPayableMapper erpPaymentPayableMapper;
+    private final ErpSettlementMethodMapper erpSettlementMethodMapper;
+    private final ErpSupplierMapper erpSupplierMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final ErpCostService erpCostService;
 
@@ -94,7 +105,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                                         ErpOrderSequenceMapper erpOrderSequenceMapper,
                                         ErpAccountsPayableMapper erpAccountsPayableMapper,
                                         ErpPaymentMapper erpPaymentMapper,
+                                        ErpPaymentMethodMapper erpPaymentMethodMapper,
                                         ErpPaymentPayableMapper erpPaymentPayableMapper,
+                                        ErpSettlementMethodMapper erpSettlementMethodMapper,
+                                        ErpSupplierMapper erpSupplierMapper,
                                         SystemConfigMapper systemConfigMapper,
                                         ErpCostService erpCostService) {
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
@@ -107,7 +121,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
         this.erpPaymentMapper = erpPaymentMapper;
+        this.erpPaymentMethodMapper = erpPaymentMethodMapper;
         this.erpPaymentPayableMapper = erpPaymentPayableMapper;
+        this.erpSettlementMethodMapper = erpSettlementMethodMapper;
+        this.erpSupplierMapper = erpSupplierMapper;
         this.systemConfigMapper = systemConfigMapper;
         this.erpCostService = erpCostService;
     }
@@ -161,7 +178,11 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         order.setPurchaseOrderId(request.purchaseOrderId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setSettlementMethod(request.settlementMethod());
+        order.setPaymentMethodCode(normalizeCode(request.paymentMethodCode()));
+        order.setRefundAction(resolveRefundAction(request.refundAction()));
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        validateHeaderMasterData(tenantId, order.getSupplierId(), order.getSettlementMethod(),
+            order.getPaymentMethodCode(), order.getRefundAction(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setVersion(0L);
         order.setInventoryReserved(false);
@@ -199,7 +220,11 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         order.setPurchaseOrderId(request.purchaseOrderId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
         order.setSettlementMethod(request.settlementMethod());
+        order.setPaymentMethodCode(normalizeCode(request.paymentMethodCode()));
+        order.setRefundAction(resolveRefundAction(request.refundAction()));
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        validateHeaderMasterData(tenantId, order.getSupplierId(), order.getSettlementMethod(),
+            order.getPaymentMethodCode(), order.getRefundAction(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
@@ -735,6 +760,50 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         }
     }
 
+    private String resolveRefundAction(String action) {
+        if (action == null || action.isBlank()) {
+            return REFUND_ACTION_OFFSET_AP;
+        }
+        String normalized = action.trim().toUpperCase();
+        if (REFUND_ACTION_REFUND.equals(normalized)) {
+            return REFUND_ACTION_REFUND;
+        }
+        return REFUND_ACTION_OFFSET_AP;
+    }
+
+    private void validateHeaderMasterData(Long tenantId,
+                                          Long supplierId,
+                                          String settlementMethod,
+                                          String paymentMethodCode,
+                                          String refundAction,
+                                          BigDecimal paidAmount) {
+        if (supplierId == null) {
+            throw new IllegalArgumentException("请选择供应商");
+        }
+        ErpSupplier supplier = erpSupplierMapper.selectOne(new QueryWrapper<ErpSupplier>()
+            .eq("tenant_id", tenantId)
+            .eq("id", supplierId));
+        if (supplier == null || Boolean.FALSE.equals(supplier.getEnabled()) || Boolean.TRUE.equals(supplier.getBlacklisted())) {
+            throw new IllegalArgumentException("供应商不存在、已停用或已拉黑");
+        }
+        if (settlementMethod == null || settlementMethod.isBlank()) {
+            throw new IllegalArgumentException("请选择结算方式");
+        }
+        ErpSettlementMethod settlementMethodEntity = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        if (settlementMethodEntity == null || Boolean.FALSE.equals(settlementMethodEntity.getEnabled())) {
+            throw new IllegalArgumentException("结算方式不存在或已停用");
+        }
+        if (REFUND_ACTION_REFUND.equals(refundAction) && paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            if (paymentMethodCode == null || paymentMethodCode.isBlank()) {
+                throw new IllegalArgumentException("请选择付款方式");
+            }
+            ErpPaymentMethod paymentMethod = erpPaymentMethodMapper.findByCode(tenantId, paymentMethodCode);
+            if (paymentMethod == null || Boolean.FALSE.equals(paymentMethod.getEnabled())) {
+                throw new IllegalArgumentException("付款方式不存在或已停用");
+            }
+        }
+    }
+
     private BigDecimal calculateRefundableCash(Long tenantId, Long purchaseOrderId, Long currentReturnId) {
         if (purchaseOrderId == null) {
             return BigDecimal.ZERO;
@@ -960,7 +1029,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                                          BigDecimal refundAmount,
                                          BigDecimal discountAmount,
                                          BigDecimal negativeApplied) {
-        if (negativeApplied.compareTo(BigDecimal.ZERO) == 0) {
+        if (negativeApplied.compareTo(BigDecimal.ZERO) == 0 || !REFUND_ACTION_REFUND.equals(order.getRefundAction())) {
             return;
         }
         ErpPayment payment = new ErpPayment();
@@ -972,7 +1041,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         payment.setAmount(refundAmount.negate());
         payment.setDiscountAmount(discountAmount.negate());
         payment.setSettlementMethod(order.getSettlementMethod());
-        payment.setPaymentMethodCode(null);
+        payment.setPaymentMethodCode(order.getPaymentMethodCode());
         payment.setStatus(STATUS_APPROVED);
         payment.setPaidAt(Instant.now());
         payment.setRemark(AUTO_RETURN_PAYMENT_REMARK + ":" + order.getOrderNo());
@@ -1134,6 +1203,13 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             return fallback;
         }
         return config.getConfigValue().trim();
+    }
+
+    private String normalizeCode(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private int readIntConfig(String key, int fallback) {

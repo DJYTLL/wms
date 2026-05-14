@@ -28,6 +28,19 @@ public interface ErpAssemblyTemplateMapper extends BaseMapper<ErpAssemblyTemplat
                                          @Param("orderType") String orderType,
                                          @Param("keyword") String keyword);
 
+    @Select("""
+        SELECT *
+        FROM erp_assembly_template
+        WHERE tenant_id = #{tenantId}
+          AND order_type = #{orderType}
+          AND finished_product_id = #{finishedProductId}
+          AND deleted_at IS NULL
+        ORDER BY updated_at DESC, id DESC
+        """)
+    List<ErpAssemblyTemplate> findByFinishedProduct(@Param("tenantId") Long tenantId,
+                                                    @Param("orderType") String orderType,
+                                                    @Param("finishedProductId") Long finishedProductId);
+
     @Select("SELECT * FROM erp_assembly_template WHERE tenant_id = #{tenantId} AND order_type = #{orderType} AND name = #{name} AND deleted_at IS NULL LIMIT 1")
     ErpAssemblyTemplate findByName(@Param("tenantId") Long tenantId,
                                    @Param("orderType") String orderType,

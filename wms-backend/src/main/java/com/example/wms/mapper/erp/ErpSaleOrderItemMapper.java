@@ -38,11 +38,28 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
                o.order_at AS orderAt,
                i.product_id AS productId,
                i.qty AS qty,
+               GREATEST(i.qty - COALESCE(r.returned_qty, 0), 0) AS remainingQty,
                i.price AS price
         FROM erp_sale_order o
         JOIN erp_sale_order_item i
           ON i.order_id = o.id
          AND i.tenant_id = o.tenant_id
+        LEFT JOIN (
+            SELECT r.sale_order_id,
+                   ri.product_id,
+                   SUM(ri.qty) AS returned_qty
+            FROM erp_sale_return r
+            JOIN erp_sale_return_item ri
+              ON ri.return_id = r.id
+             AND ri.tenant_id = r.tenant_id
+             AND ri.deleted_at IS NULL
+            WHERE r.tenant_id = #{tenantId}
+              AND r.deleted_at IS NULL
+              AND r.status = 'APPROVED'
+            GROUP BY r.sale_order_id, ri.product_id
+        ) r
+          ON r.sale_order_id = o.id
+         AND r.product_id = i.product_id
         WHERE o.tenant_id = #{tenantId}
           AND o.deleted_at IS NULL
           AND i.deleted_at IS NULL
@@ -56,6 +73,66 @@ public interface ErpSaleOrderItemMapper extends BaseMapper<ErpSaleOrderItem> {
                                                  @Param("customerId") Long customerId,
                                                  @Param("productId") Long productId,
                                                  @Param("limit") int limit);
+
+    @Select("""
+        SELECT COUNT(1)
+        FROM erp_sale_order o
+        JOIN erp_sale_order_item i
+          ON i.order_id = o.id
+         AND i.tenant_id = o.tenant_id
+        WHERE o.tenant_id = #{tenantId}
+          AND o.deleted_at IS NULL
+          AND i.deleted_at IS NULL
+          AND o.customer_id = #{customerId}
+          AND i.product_id = #{productId}
+          AND o.status = 'APPROVED'
+        """)
+    long countRecentItems(@Param("tenantId") Long tenantId,
+                          @Param("customerId") Long customerId,
+                          @Param("productId") Long productId);
+
+    @Select("""
+        SELECT o.id AS orderId,
+               o.order_no AS orderNo,
+               o.order_at AS orderAt,
+               i.product_id AS productId,
+               i.qty AS qty,
+               GREATEST(i.qty - COALESCE(r.returned_qty, 0), 0) AS remainingQty,
+               i.price AS price
+        FROM erp_sale_order o
+        JOIN erp_sale_order_item i
+          ON i.order_id = o.id
+         AND i.tenant_id = o.tenant_id
+        LEFT JOIN (
+            SELECT r.sale_order_id,
+                   ri.product_id,
+                   SUM(ri.qty) AS returned_qty
+            FROM erp_sale_return r
+            JOIN erp_sale_return_item ri
+              ON ri.return_id = r.id
+             AND ri.tenant_id = r.tenant_id
+             AND ri.deleted_at IS NULL
+            WHERE r.tenant_id = #{tenantId}
+              AND r.deleted_at IS NULL
+              AND r.status = 'APPROVED'
+            GROUP BY r.sale_order_id, ri.product_id
+        ) r
+          ON r.sale_order_id = o.id
+         AND r.product_id = i.product_id
+        WHERE o.tenant_id = #{tenantId}
+          AND o.deleted_at IS NULL
+          AND i.deleted_at IS NULL
+          AND o.customer_id = #{customerId}
+          AND i.product_id = #{productId}
+          AND o.status = 'APPROVED'
+        ORDER BY o.order_at DESC NULLS LAST, o.id DESC
+        LIMIT #{size} OFFSET #{offset}
+        """)
+    List<ErpSaleOrderRecentItem> findRecentItemsPage(@Param("tenantId") Long tenantId,
+                                                     @Param("customerId") Long customerId,
+                                                     @Param("productId") Long productId,
+                                                     @Param("size") int size,
+                                                     @Param("offset") long offset);
 
     @Select("""
         <script>

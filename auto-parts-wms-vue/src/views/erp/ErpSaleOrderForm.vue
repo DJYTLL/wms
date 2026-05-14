@@ -14,33 +14,44 @@
       <div class="table-actions sale-page-toolbar__actions">
         <el-button class="action-button" @click="handleBack">{{ $t('action.back') }}</el-button>
         <el-button
-          v-if="canCopy"
-          class="action-button"
-          type="primary"
+          v-if="shouldShowCopyButton"
+          class="action-button action-button--secondary"
+          :disabled="isInitializing || !canCopy"
           @click="handleCopy"
         >
           {{ $t('action.copy') }}
         </el-button>
         <el-button
           v-if="canPrint"
-          class="action-button"
+          class="action-button action-button--primary"
           type="primary"
           @click="handlePrint"
         >
           {{ $t('action.print') }}
         </el-button>
         <el-button
-          v-if="canRedFlush"
+          v-if="shouldShowRedFlushButton"
           type="danger"
           plain
           class="action-button action-button--danger"
+          :disabled="isInitializing || !canRedFlush"
           @click="handleRedFlush"
         >
           {{ $t('action.redFlush') }}
         </el-button>
-        <el-button v-if="!isReadOnly" class="action-button" :loading="isSaving" :disabled="isSaving" @click="handleSave">{{ $t('action.save') }}</el-button>
-        <el-button v-if="canApprove" type="success" plain class="action-button action-button--success" :loading="isSaving" :disabled="isSaving" @click="handleApprove">{{ $t('action.approve') }}</el-button>
-        <el-button v-if="!isReadOnly" type="primary" class="action-button" :loading="isSaving" :disabled="isSaving" @click="handleSaveAndBack">{{ $t('action.saveAndBack') }}</el-button>
+        <el-button v-if="!isReadOnly" class="action-button action-button--save" :loading="isSaving" :disabled="isSaving" @click="handleSave">{{ $t('action.save') }}</el-button>
+        <el-button
+          v-if="shouldShowApproveButton"
+          type="success"
+          plain
+          class="action-button action-button--success"
+          :loading="isSaving"
+          :disabled="isSaving || isInitializing || !canApprove"
+          @click="handleApprove"
+        >
+          {{ $t('action.approve') }}
+        </el-button>
+        <!-- <el-button v-if="!isReadOnly" type="primary" class="action-button" :loading="isSaving" :disabled="isSaving" @click="handleSaveAndBack">{{ $t('action.saveAndBack') }}</el-button> -->
       </div>
     </div>
 
@@ -168,6 +179,20 @@
                     >
                       <el-icon class="history-icon"><View /></el-icon>
                     </el-tag>
+                    <el-tooltip
+                      v-if="canUseQuickAssembly && row.productId && getAssemblyTemplateCount(row) > 0"
+                      content="快捷组装"
+                      placement="top"
+                    >
+                      <el-button
+                        class="assembly-inline-button"
+                        link
+                        type="success"
+                        @click.stop="openAssemblyForRow(row)"
+                      >
+                        <el-icon><Operation /></el-icon>
+                      </el-button>
+                    </el-tooltip>
                   </div>
                 </template>
               </el-table-column>
@@ -290,6 +315,14 @@
                 <div v-if="isReadOnly" class="readonly-inline">{{ currentSettlementMethodName }}</div>
                 <el-select v-else v-model="formData.settlementMethod" style="width: 100%">
                   <el-option v-for="item in settlementMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="form-group form-group--settlement">
+              <el-form-item :label="$t('field.receiptMethod')">
+                <div v-if="isReadOnly" class="readonly-inline">{{ currentReceiptMethodName }}</div>
+                <el-select v-else v-model="formData.receiptMethodCode" clearable style="width: 100%">
+                  <el-option v-for="item in receiptMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
                 </el-select>
               </el-form-item>
             </div>
@@ -543,15 +576,16 @@
 
     <el-dialog
       v-model="saveSuccessDialogVisible"
-      :title="$t('message.saveSuccess')"
+      :title="successDialogTitle"
       width="460px"
       append-to-body
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       :show-close="false"
+      @closed="handleSaveSuccessDialogClosed"
     >
       <div class="save-success-dialog__content">
-        <div class="save-success-dialog__message">{{ $t('message.saveSuccessNextStep') }}</div>
+        <div class="save-success-dialog__message">{{ successDialogMessage }}</div>
         <div v-if="saveSuccessOrderNo" class="save-success-dialog__order-no">
           {{ $t('message.saveSuccessOrderNo', { orderNo: saveSuccessOrderNo }) }}
         </div>
@@ -559,7 +593,129 @@
       <template #footer>
         <el-button @click="handleContinueCreate">{{ $t('action.continueCreate') }}</el-button>
         <el-button @click="handleStayOnCurrentOrder">{{ $t('action.stayCurrent') }}</el-button>
-        <el-button v-if="canApproveSavedOrder" type="primary" @click="handleApproveSavedOrder">{{ $t('action.approve') }}</el-button>
+        <el-button @click="handleBackToList">{{ $t('action.backToList') }}</el-button>
+        <el-button v-if="saveSuccessDialogMode === 'approve'" type="primary" @click="handlePrintSavedOrder">{{ $t('action.print') }}</el-button>
+        <el-button v-if="saveSuccessDialogMode === 'save' && canApproveSavedOrder" type="primary" @click="handleApproveSavedOrder">{{ $t('action.approve') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="assemblyQuickDialogVisible"
+      title="快捷组装"
+      width="980px"
+      append-to-body
+      class="assembly-quick-dialog"
+      :close-on-click-modal="!assemblyQuickSaving"
+      :close-on-press-escape="!assemblyQuickSaving"
+    >
+      <div v-loading="assemblyQuickLoading" class="assembly-quick">
+        <div class="assembly-quick__summary">
+          <div>
+            <span class="assembly-quick__label">成品商品</span>
+            <strong>{{ assemblyQuickForm.productName || '-' }}</strong>
+          </div>
+          <div>
+            <span class="assembly-quick__label">来源行数量</span>
+            <strong>{{ formatPlainNumber(assemblyQuickRow?.qty) }}</strong>
+          </div>
+        </div>
+
+        <el-form label-position="top" class="sale-form sale-form--compact">
+          <div class="assembly-quick__grid">
+            <el-form-item label="组装模板" required>
+              <el-select
+                v-model="assemblyQuickTemplateId"
+                filterable
+                style="width: 100%"
+                placeholder="请选择组装模板"
+                @change="handleAssemblyTemplateChange"
+              >
+                <el-option
+                  v-for="item in getAssemblyTemplatesForProduct(assemblyQuickForm.productId)"
+                  :key="item.id"
+                  :label="item.name"
+                  :value="item.id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="组装数量" required>
+              <DecimalInput v-model="assemblyQuickForm.finishedQty" :scale="4" @blur="handleAssemblyQtyChange" />
+            </el-form-item>
+            <el-form-item label="成品入库库位">
+              <ProductStockSelect
+                v-model="assemblyQuickForm.finishedStockKey"
+                :product-id="assemblyQuickForm.productId"
+                :warehouse-id="assemblyQuickForm.warehouseId"
+                :location-id="assemblyQuickForm.locationId"
+                :warehouse-options="warehouseOptions"
+                :location-options="locationOptions"
+                :placeholder="$t('placeholder.selectLocation')"
+                @selection-change="handleAssemblyFinishedStockChange"
+              />
+            </el-form-item>
+            <el-form-item label="人工成本">
+              <DecimalInput v-model="assemblyQuickForm.laborCost" :scale="4" />
+            </el-form-item>
+          </div>
+          <el-form-item label="备注">
+            <el-input
+              v-model="assemblyQuickForm.remark"
+              type="textarea"
+              maxlength="200"
+              show-word-limit
+              :autosize="{ minRows: 2, maxRows: 3 }"
+            />
+          </el-form-item>
+        </el-form>
+
+        <el-table
+          :data="assemblyQuickForm.items"
+          border
+          stripe
+          class="assembly-quick__items"
+          :empty-text="$t('table.empty')"
+        >
+          <el-table-column type="index" :label="$t('table.index')" width="64" align="center" />
+          <el-table-column label="物料商品" min-width="200">
+            <template #default="{ row }">{{ resolveAssemblyItemProductLabel(row) }}</template>
+          </el-table-column>
+          <el-table-column :label="$t('field.warehouseLocation')" min-width="240">
+            <template #default="{ row }">
+              <ProductStockSelect
+                v-model="row.stockKey"
+                :product-id="row.productId"
+                :warehouse-id="row.warehouseId"
+                :location-id="row.locationId"
+                :warehouse-options="warehouseOptions"
+                :location-options="locationOptions"
+                :placeholder="$t('placeholder.selectLocation')"
+                @selection-change="(payload) => handleAssemblyItemStockChange(row, payload)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('field.quantity')" width="150">
+            <template #default="{ row }">
+              <DecimalInput v-model="row.qty" :scale="4" />
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('field.remark')" min-width="160">
+            <template #default="{ row }">
+              <el-input v-model="row.remark" />
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button :disabled="assemblyQuickSaving" @click="assemblyQuickDialogVisible = false">{{ $t('action.cancel') }}</el-button>
+        <el-button :loading="assemblyQuickSaving" @click="saveAssemblyQuickOrder(false)">保存草稿</el-button>
+        <el-button
+          v-if="canQuickApproveAssembly"
+          type="primary"
+          :loading="assemblyQuickSaving"
+          @click="saveAssemblyQuickOrder(true)"
+        >
+          保存并审核
+        </el-button>
       </template>
     </el-dialog>
 
@@ -573,17 +729,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, onActivated, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
 import { ElMessageBox } from 'element-plus';
-import { Delete, InfoFilled, Plus, View } from '@element-plus/icons-vue';
+import { Delete, InfoFilled, Operation, Plus, View } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 
 interface OptionItem {
@@ -591,7 +748,8 @@ interface OptionItem {
   name: string;
   warehouseId?: number;
   categoryId?: number;
-  paymentTerms?: string;
+  defaultSettlementMethodCode?: string;
+  defaultReceiptMethodCode?: string;
   deliveryMethodCode?: string;
 }
 
@@ -664,6 +822,28 @@ interface SaleOrderItem {
   sortNo?: number;
 }
 
+interface AssemblyTemplateOption {
+  id: number;
+  name: string;
+  orderType?: string;
+  finishedProductId: number;
+  finishedQty?: number | string;
+  warehouseId?: number | null;
+  locationId?: number | null;
+  laborCost?: number | string | null;
+  remark?: string;
+}
+
+interface AssemblyQuickItem {
+  productId: number | null;
+  productName?: string;
+  warehouseId: number | null;
+  locationId: number | null;
+  stockKey: string;
+  qty: string;
+  remark?: string;
+}
+
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
@@ -684,6 +864,13 @@ const canCopy = computed(() => {
     && (formData.status === 'APPROVED' || formData.status === 'RED_FLUSHED')
     && hasPermission('erp-sale:add');
 });
+const shouldShowCopyButton = computed(() => {
+  if (canCopy.value) return true;
+  return isInitializing.value
+    && isEditing.value
+    && (route.query.mode === 'view' || route.query.from === 'approved')
+    && hasPermission('erp-sale:add');
+});
 
 const canPrint = computed(() => {
   return isEditing.value && hasPermission('erp-sale:view');
@@ -691,6 +878,13 @@ const canPrint = computed(() => {
 
 const canRedFlush = computed(() => {
   return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-sale:redflush');
+});
+const shouldShowRedFlushButton = computed(() => {
+  if (canRedFlush.value) return true;
+  return isInitializing.value
+    && isEditing.value
+    && (route.query.mode === 'view' || route.query.from === 'approved')
+    && hasPermission('erp-sale:redflush');
 });
 
 const pageTitle = computed(() => {
@@ -703,6 +897,7 @@ const productOptions = ref<ProductOption[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const settlementMethodOptions = ref<CodeOptionItem[]>([]);
+const receiptMethodOptions = ref<CodeOptionItem[]>([]);
 const deliveryMethodOptions = ref<CodeOptionItem[]>([]);
 const productStockMap = ref<Record<number, StockOption[]>>({});
 
@@ -712,6 +907,7 @@ const formData = reactive({
   status: '',
   customerId: null as number | null,
   settlementMethod: '',
+  receiptMethodCode: '',
   deliveryMethod: '',
   paidAmount: '',
   discountAmount: '',
@@ -731,11 +927,13 @@ const needsReload = ref(false);
 const showProfitColumn = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const pendingPrintDocId = ref<number | null>(null);
 const saveErrorDialogVisible = ref(false);
 const saveErrorMessage = ref('');
 const saveSuccessDialogVisible = ref(false);
 const saveSuccessOrderId = ref<number | null>(null);
 const saveSuccessOrderNo = ref('');
+const saveSuccessDialogMode = ref<'save' | 'approve'>('save');
 const historyDialogVisible = ref(false);
 const historyLoading = ref(false);
 const historyProduct = ref<ProductOption | null>(null);
@@ -765,6 +963,24 @@ const historyOrderDialogUrl = ref('');
 const activeRowIndex = ref<number | null>(null);
 const selectedItems = ref<SaleOrderItem[]>([]);
 const customerCategoryOptions = ref<OptionItem[]>([]);
+const assemblyTemplateMap = ref<Record<number, AssemblyTemplateOption[]>>({});
+const assemblyQuickDialogVisible = ref(false);
+const assemblyQuickLoading = ref(false);
+const assemblyQuickSaving = ref(false);
+const assemblyQuickRow = ref<SaleOrderItem | null>(null);
+const assemblyQuickTemplateId = ref<number | null>(null);
+const assemblyQuickTemplateDetail = ref<any | null>(null);
+const assemblyQuickForm = reactive({
+  productId: null as number | null,
+  productName: '',
+  finishedQty: '',
+  finishedStockKey: '',
+  warehouseId: null as number | null,
+  locationId: null as number | null,
+  laborCost: '',
+  remark: '',
+  items: [] as AssemblyQuickItem[]
+});
 
 const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
@@ -774,8 +990,25 @@ const canApprove = computed(() => {
   return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale:approve');
 });
 
+const shouldShowApproveButton = computed(() => {
+  if (canApprove.value) return true;
+  if (!isInitializing.value) return false;
+  if (route.query.mode === 'view') return false;
+  return hasPermission('erp-sale:approve');
+});
+
 const canApproveSavedOrder = computed(() => {
   return Boolean(saveSuccessOrderId.value) && hasPermission('erp-sale:approve');
+});
+const successDialogTitle = computed(() => {
+  return saveSuccessDialogMode.value === 'approve'
+    ? t('message.approveSuccess')
+    : t('message.saveSuccess');
+});
+const successDialogMessage = computed(() => {
+  return saveSuccessDialogMode.value === 'approve'
+    ? t('message.approveSuccessNextStep')
+    : t('message.saveSuccessNextStep');
 });
 
 const canViewProfit = computed(() => {
@@ -785,6 +1018,12 @@ const canViewProfit = computed(() => {
 
 const canShowProfit = computed(() => canViewProfit.value && showProfitColumn.value);
 const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale:discountAllocated'));
+const canUseQuickAssembly = computed(() => {
+  return !isReadOnly.value
+    && hasPermission('erp-assembly:view')
+    && hasPermission('erp-assembly:add');
+});
+const canQuickApproveAssembly = computed(() => hasPermission('erp-assembly:approve'));
 const showCustomerDebtTotal = computed(() => formData.status === 'APPROVED');
 const currentCustomerName = computed(() => {
   if (!formData.customerId) return '-';
@@ -797,6 +1036,10 @@ const currentDeliveryMethodName = computed(() => {
 const currentSettlementMethodName = computed(() => {
   if (!formData.settlementMethod) return '-';
   return settlementMethodOptions.value.find(item => item.code === formData.settlementMethod)?.name || formData.settlementMethod;
+});
+const currentReceiptMethodName = computed(() => {
+  if (!formData.receiptMethodCode) return '-';
+  return receiptMethodOptions.value.find(item => item.code === formData.receiptMethodCode)?.name || formData.receiptMethodCode;
 });
 const isCreditSettlement = computed(() => {
   if (!formData.settlementMethod) return false;
@@ -862,6 +1105,40 @@ const normalizeArray = <T>(value: any): T[] => {
   if (Array.isArray(value?.items)) return value.items as T[];
   if (Array.isArray(value?.list)) return value.list as T[];
   return [];
+};
+
+const getAssemblyTemplatesForProduct = (productId?: number | null) => {
+  if (!productId) return [];
+  return assemblyTemplateMap.value[productId] || [];
+};
+
+const getAssemblyTemplateCount = (row: SaleOrderItem) => {
+  return getAssemblyTemplatesForProduct(row.productId).length;
+};
+
+const fetchAssemblyTemplatesByProductId = async (productId?: number | null, force = false): Promise<AssemblyTemplateOption[]> => {
+  if (!productId || !canUseQuickAssembly.value) return [];
+  if (!force && Object.prototype.hasOwnProperty.call(assemblyTemplateMap.value, productId)) {
+    return assemblyTemplateMap.value[productId] || [];
+  }
+  try {
+    const res: any = await request.get('/erp/assembly-templates/by-finished-product', {
+      params: { orderType: 'ASSEMBLE', productId }
+    });
+    const templates = normalizeArray<AssemblyTemplateOption>(res?.data?.data);
+    assemblyTemplateMap.value = {
+      ...assemblyTemplateMap.value,
+      [productId]: templates
+    };
+    return templates;
+  } catch (error) {
+    assemblyTemplateMap.value = {
+      ...assemblyTemplateMap.value,
+      [productId]: []
+    };
+    notifyError(error);
+    return [];
+  }
 };
 
 const resolveHistoryRange = (range: string[]) => {
@@ -1097,12 +1374,21 @@ const getReturnPath = () => {
   if (route.query.from === 'draft') {
     return '/erp/sale-orders/draft';
   }
+  if (route.query.from === 'approved' || route.query.mode === 'view' || formData.status === 'APPROVED') {
+    return '/erp/sale-orders/approved';
+  }
   return '/erp/sale-orders';
 };
 
 const closePage = (redirectPath = getReturnPath()) => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('tags:close', { detail: { path: route.path, redirectPath } }));
+  }
+};
+
+const closeTagByPath = (path: string) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tags:close', { detail: { path } }));
   }
 };
 
@@ -1153,23 +1439,7 @@ const handleBack = async () => {
 const handleApprove = async () => {
   if (isSaving.value) return;
   if (isReadOnly.value) return;
-  try {
-    await ElMessageBox.confirm(
-      t('message.confirmSaveBeforeApprove'),
-      t('action.confirm'),
-      {
-        confirmButtonText: t('action.save'),
-        cancelButtonText: t('action.cancel'),
-        type: 'warning'
-      }
-    );
-  } catch {
-    return;
-  }
-
-  const savedId = await saveData({ closeOnSuccess: false, reloadAfterCreate: true });
-  if (!savedId) return;
-
+  const sourcePath = route.path;
   try {
     await ElMessageBox.confirm(
       t('message.confirmApprove'),
@@ -1180,11 +1450,27 @@ const handleApprove = async () => {
         type: 'warning'
       }
     );
+  } catch {
+    return;
+  }
+
+  const savedId = await saveData({ closeOnSuccess: false, reloadAfterCreate: true, silentSuccess: true });
+  if (!savedId) return;
+
+  try {
+    const savedOrderNo = formData.orderNo;
     await request.post(`/erp/sale-orders/${savedId}/approve`);
     formData.status = 'APPROVED';
-    notifySuccess();
-    closePage();
-    await router.push('/erp/sale-orders/draft');
+    await router.replace({
+      path: `/erp/sale-orders/${savedId}/edit`,
+      query: { mode: 'view', from: 'approved', returnTo: '/erp/sale-orders/approved' }
+    });
+    await nextTick();
+    if (sourcePath !== route.path) {
+      closeTagByPath(sourcePath);
+    }
+    await loadDetail();
+    openSaveSuccessDialog(savedId, savedOrderNo, 'approve');
   } catch (error) {
     if (error && error !== 'cancel' && error !== 'close') {
       notifyError(error);
@@ -1228,7 +1514,7 @@ const handleRedFlush = async () => {
 
 const handleSave = async () => {
   if (isSaving.value) return;
-  await saveData({ closeOnSuccess: false, showPostSaveDialog: !isEditing.value });
+  await saveData({ closeOnSuccess: false, showPostSaveDialog: true });
 };
 
   const handleSaveAndBack = async () => {
@@ -1255,9 +1541,10 @@ const showSaveErrorDialog = async (error: unknown) => {
   saveErrorDialogVisible.value = true;
 };
 
-const openSaveSuccessDialog = (savedId: number | null, savedOrderNo?: string) => {
+const openSaveSuccessDialog = (savedId: number | null, savedOrderNo?: string, mode: 'save' | 'approve' = 'save') => {
   saveSuccessOrderId.value = savedId;
   saveSuccessOrderNo.value = savedOrderNo || formData.orderNo || '';
+  saveSuccessDialogMode.value = mode;
   saveSuccessDialogVisible.value = true;
 };
 
@@ -1265,29 +1552,73 @@ const closeSaveSuccessDialog = () => {
   saveSuccessDialogVisible.value = false;
   saveSuccessOrderId.value = null;
   saveSuccessOrderNo.value = '';
+  saveSuccessDialogMode.value = 'save';
+};
+
+const handleSaveSuccessDialogClosed = async () => {
+  const docId = pendingPrintDocId.value;
+  pendingPrintDocId.value = null;
+  if (!docId) return;
+  printDocId.value = docId;
+  await nextTick();
+  printDialogVisible.value = true;
 };
 
 const handleContinueCreate = async () => {
   closeSaveSuccessDialog();
+  const createRoute = {
+    path: '/erp/sale-orders/create',
+    query: { from: 'draft', returnTo: '/erp/sale-orders/draft' }
+  };
+  if (isEditing.value) {
+    await router.replace(createRoute);
+    return;
+  }
+  if (route.query.mode === 'view' || route.query.from !== 'draft') {
+    await router.replace(createRoute);
+  }
   await loadDetail();
 };
 
 const handleStayOnCurrentOrder = async () => {
   const savedId = saveSuccessOrderId.value;
+  const dialogMode = saveSuccessDialogMode.value;
   closeSaveSuccessDialog();
   if (!savedId) return;
+  if (dialogMode === 'approve') return;
   await router.replace(`/erp/sale-orders/${savedId}/edit`);
+};
+
+const handleBackToList = async () => {
+  closeSaveSuccessDialog();
+  closePage(getReturnPath());
+};
+
+const handlePrintSavedOrder = () => {
+  const savedId = saveSuccessOrderId.value;
+  if (!savedId) return;
+  pendingPrintDocId.value = savedId;
+  closeSaveSuccessDialog();
 };
 
 const handleApproveSavedOrder = async () => {
   const savedId = saveSuccessOrderId.value;
   if (!savedId) return;
+  const sourcePath = route.path;
   try {
+    const savedOrderNo = saveSuccessOrderNo.value;
     await request.post(`/erp/sale-orders/${savedId}/approve`);
     closeSaveSuccessDialog();
-    notifySuccess();
-    await router.replace(`/erp/sale-orders/${savedId}/edit`);
+    await router.replace({
+      path: `/erp/sale-orders/${savedId}/edit`,
+      query: { mode: 'view', from: 'approved', returnTo: '/erp/sale-orders/approved' }
+    });
+    await nextTick();
+    if (sourcePath !== route.path) {
+      closeTagByPath(sourcePath);
+    }
     await loadDetail();
+    openSaveSuccessDialog(savedId, savedOrderNo, 'approve');
   } catch (error) {
     notifyError(error);
   }
@@ -1481,7 +1812,7 @@ const buildLocationOnlyOptions = (warehouseId: number): StockOption[] => {
 const getStockOptionsForRow = (row: SaleOrderItem) => {
   if (!row.productId) return [];
   const allOptions = productStockMap.value[row.productId] || [];
-  let options = [...allOptions];
+  const options = [...allOptions];
   if (!row.warehouseId && !row.locationId) return options;
   const key = buildStockKey(row.warehouseId ?? null, row.locationId ?? null);
   if (options.some(item => item.key === key)) {
@@ -1723,12 +2054,22 @@ const getDefaultDeliveryMethod = () => {
   return defaultItem?.code || '';
 };
 
+const getDefaultReceiptMethod = () => {
+  if (!receiptMethodOptions.value.length) return '';
+  const defaultItem = receiptMethodOptions.value.find(item => item.isDefault) ?? receiptMethodOptions.value[0];
+  return defaultItem?.code || '';
+};
+
 const applyMethodsForCustomer = () => {
   const customer = customerOptions.value.find(item => item.id === formData.customerId);
-  const settlement = customer?.paymentTerms || getDefaultSettlementMethod();
+  const settlement = customer?.defaultSettlementMethodCode || getDefaultSettlementMethod();
+  const receiptMethod = customer?.defaultReceiptMethodCode || getDefaultReceiptMethod();
   const delivery = customer?.deliveryMethodCode || getDefaultDeliveryMethod();
   if (settlement) {
     formData.settlementMethod = settlement;
+  }
+  if (receiptMethod) {
+    formData.receiptMethodCode = receiptMethod;
   }
   if (delivery) {
     formData.deliveryMethod = delivery;
@@ -1744,6 +2085,7 @@ const handleProductChange = async (row: SaleOrderItem) => {
   applyProductDefaults(row, true);
   await fetchStockOptions(row.productId, true);
   syncStockKey(row);
+  await fetchAssemblyTemplatesByProductId(row.productId);
   await applyPriceForRow(row, true);
 };
 
@@ -1870,6 +2212,7 @@ const fetchProducts = async () => {
       await fetchStockOptions(item.productId);
       applyProductDefaults(item, false);
       syncStockKey(item);
+      await fetchAssemblyTemplatesByProductId(item.productId);
     }
   } catch (error) {
     notifyError(error);
@@ -1979,6 +2322,7 @@ const loadDetail = async () => {
       formData.orderAt = normalizeDateTimeValue(data.order?.orderAt || data.orderAt) || formatDateTime(new Date());
       formData.remark = data.order?.remark || data.remark || '';
       formData.settlementMethod = data.order?.settlementMethod || data.settlementMethod || '';
+      formData.receiptMethodCode = data.order?.receiptMethodCode || data.receiptMethodCode || '';
       formData.deliveryMethod = data.order?.deliveryMethod || data.deliveryMethod || '';
       formData.paidAmount = String(data.order?.paidAmount ?? data.paidAmount ?? '');
       formData.discountAmount = String(data.order?.discountAmount ?? data.discountAmount ?? '');
@@ -2005,6 +2349,7 @@ const loadDetail = async () => {
         await fetchStockOptions(item.productId);
         syncStockKey(item);
       }
+      await Promise.all(formData.items.map(item => fetchAssemblyTemplatesByProductId(item.productId)));
       if (!formData.items.length) addItem();
       lastCustomerId.value = formData.customerId;
     }
@@ -2061,6 +2406,7 @@ const resetForm = () => {
   formData.status = '';
   formData.customerId = null;
   formData.settlementMethod = '';
+  formData.receiptMethodCode = '';
   formData.deliveryMethod = '';
   formData.paidAmount = '';
   formData.discountAmount = '';
@@ -2068,12 +2414,24 @@ const resetForm = () => {
   formData.remark = '';
   formData.items = [];
   selectedItems.value = [];
+  assemblyQuickDialogVisible.value = false;
+  resetAssemblyQuickForm();
 };
 
 const fetchSettlementMethods = async () => {
   try {
     const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
     settlementMethodOptions.value = res.data.data || [];
+    applyDefaultMethods();
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const fetchReceiptMethods = async () => {
+  try {
+    const res: any = await request.get('/erp/receipt-methods', { params: { enabled: true } });
+    receiptMethodOptions.value = res.data.data || [];
     applyDefaultMethods();
   } catch (error) {
     notifyError(error);
@@ -2098,6 +2456,12 @@ const applyDefaultMethods = () => {
       formData.settlementMethod = defaultItem.code;
     }
   }
+  if (!formData.receiptMethodCode && receiptMethodOptions.value.length) {
+    const defaultItem = receiptMethodOptions.value.find(item => item.isDefault) ?? receiptMethodOptions.value[0];
+    if (defaultItem) {
+      formData.receiptMethodCode = defaultItem.code;
+    }
+  }
   if (!formData.deliveryMethod && deliveryMethodOptions.value.length) {
     const defaultItem = deliveryMethodOptions.value.find(item => item.isDefault) ?? deliveryMethodOptions.value[0];
     if (defaultItem) {
@@ -2117,10 +2481,11 @@ const fetchNextOrderNo = async () => {
   }
 };
 
-  const saveData = async (options: { closeOnSuccess?: boolean; reloadAfterCreate?: boolean; showPostSaveDialog?: boolean } = {}) => {
+  const saveData = async (options: { closeOnSuccess?: boolean; reloadAfterCreate?: boolean; showPostSaveDialog?: boolean; silentSuccess?: boolean } = {}) => {
     if (isSaving.value) return null;
     const closeOnSuccess = options.closeOnSuccess !== false;
     const showPostSaveDialog = options.showPostSaveDialog === true;
+    const silentSuccess = options.silentSuccess === true;
     if (!formData.customerId) {
       notifyWarning(t('message.required'));
     return;
@@ -2159,6 +2524,7 @@ const fetchNextOrderNo = async () => {
       orderAt: formData.orderAt || undefined,
       customerId: formData.customerId,
       settlementMethod: formData.settlementMethod,
+      receiptMethodCode: formData.receiptMethodCode || undefined,
       deliveryMethod: formData.deliveryMethod || undefined,
       paidAmount,
       discountAmount,
@@ -2189,14 +2555,18 @@ const fetchNextOrderNo = async () => {
       const savedId = data.order?.id || data.id || Number(route.params.id || 0) || null;
       const savedOrderNo = data.order?.orderNo || data.orderNo || formData.orderNo || '';
       if (!isEditing.value && savedId && options.reloadAfterCreate) {
-        notifySuccess(t('message.saveSuccess'));
+        if (!silentSuccess) {
+          notifySuccess(t('message.saveSuccess'));
+        }
         await router.replace(`/erp/sale-orders/${savedId}/edit`);
       }
-      if (!isEditing.value && savedId && showPostSaveDialog) {
+      if (savedId && showPostSaveDialog) {
         openSaveSuccessDialog(savedId, savedOrderNo);
         return savedId;
       }
-      notifySuccess(t('message.saveSuccess'));
+      if (!silentSuccess) {
+        notifySuccess(t('message.saveSuccess'));
+      }
       if (closeOnSuccess) {
         closePage(getReturnPath());
       }
@@ -2223,6 +2593,250 @@ const parseDecimal = (value: string | number | undefined, scale: number) => {
 };
 
 const parseAmount = (value: string) => parseDecimal(value, 2);
+
+const formatQuickDecimal = (value: number, scale = 4) => {
+  if (!Number.isFinite(value)) return '';
+  return String(Number(value.toFixed(scale)));
+};
+
+const parsePositiveDecimal = (value: string | number | undefined, scale = 4) => {
+  const parsed = parseDecimal(value, scale);
+  return parsed != null && parsed > 0 ? parsed : null;
+};
+
+const getProductNameById = (productId?: number | null, fallback = '') => {
+  if (fallback) return fallback;
+  if (!productId) return '-';
+  return productOptions.value.find(item => item.id === productId)?.name || String(productId);
+};
+
+const resolveAssemblyItemProductLabel = (row: AssemblyQuickItem) => {
+  return getProductNameById(row.productId, row.productName || '');
+};
+
+const resetAssemblyQuickForm = () => {
+  assemblyQuickRow.value = null;
+  assemblyQuickTemplateId.value = null;
+  assemblyQuickTemplateDetail.value = null;
+  assemblyQuickForm.productId = null;
+  assemblyQuickForm.productName = '';
+  assemblyQuickForm.finishedQty = '';
+  assemblyQuickForm.finishedStockKey = '';
+  assemblyQuickForm.warehouseId = null;
+  assemblyQuickForm.locationId = null;
+  assemblyQuickForm.laborCost = '';
+  assemblyQuickForm.remark = '';
+  assemblyQuickForm.items = [];
+};
+
+const applyAssemblyFinishedDefaults = () => {
+  if (!assemblyQuickForm.productId) return;
+  const product = productOptions.value.find(item => item.id === assemblyQuickForm.productId);
+  if (!product) return;
+  if (!assemblyQuickForm.warehouseId && product.defaultWarehouseId) {
+    assemblyQuickForm.warehouseId = product.defaultWarehouseId;
+  }
+  if (!assemblyQuickForm.locationId && product.defaultLocationId) {
+    assemblyQuickForm.locationId = product.defaultLocationId;
+  }
+  if (assemblyQuickForm.locationId && assemblyQuickForm.warehouseId) {
+    const location = locationOptions.value.find(item => item.id === assemblyQuickForm.locationId);
+    if (location && location.warehouseId && location.warehouseId !== assemblyQuickForm.warehouseId) {
+      assemblyQuickForm.locationId = null;
+    }
+  }
+  assemblyQuickForm.finishedStockKey = assemblyQuickForm.warehouseId || assemblyQuickForm.locationId
+    ? buildStockKey(assemblyQuickForm.warehouseId, assemblyQuickForm.locationId)
+    : '';
+};
+
+const applyAssemblyItemDefaults = (row: AssemblyQuickItem) => {
+  if (!row.productId) return;
+  const product = productOptions.value.find(item => item.id === row.productId);
+  if (!row.warehouseId) {
+    row.warehouseId = product?.defaultWarehouseId || assemblyQuickForm.warehouseId || null;
+  }
+  if (!row.locationId) {
+    row.locationId = product?.defaultLocationId || assemblyQuickForm.locationId || null;
+  }
+  if (row.locationId && row.warehouseId) {
+    const location = locationOptions.value.find(item => item.id === row.locationId);
+    if (location && location.warehouseId && location.warehouseId !== row.warehouseId) {
+      row.locationId = null;
+    }
+  }
+  row.stockKey = row.warehouseId || row.locationId ? buildStockKey(row.warehouseId, row.locationId) : '';
+};
+
+const applyAssemblyTemplateDetail = async (detail: any, preserveFinishedQty = true) => {
+  const template = detail?.template;
+  if (!template) return;
+  assemblyQuickTemplateDetail.value = detail;
+  const templateFinishedQty = Number(template.finishedQty ?? 1) > 0 ? Number(template.finishedQty) : 1;
+  const currentQty = parsePositiveDecimal(assemblyQuickForm.finishedQty, 4);
+  const targetQty = preserveFinishedQty && currentQty ? currentQty : templateFinishedQty;
+  const ratio = templateFinishedQty > 0 ? targetQty / templateFinishedQty : 1;
+
+  assemblyQuickForm.productId = template.finishedProductId || assemblyQuickForm.productId;
+  await ensureProductOption(assemblyQuickForm.productId);
+  assemblyQuickForm.productName = getProductNameById(assemblyQuickForm.productId);
+  assemblyQuickForm.finishedQty = formatQuickDecimal(targetQty, 4);
+  assemblyQuickForm.warehouseId = template.warehouseId ?? null;
+  assemblyQuickForm.locationId = template.locationId ?? null;
+  await Promise.all([
+    ensureWarehouseOption(assemblyQuickForm.warehouseId),
+    ensureLocationOption(assemblyQuickForm.locationId)
+  ]);
+  applyAssemblyFinishedDefaults();
+  assemblyQuickForm.laborCost = formatQuickDecimal(Number(template.laborCost || 0) * ratio, 4);
+  assemblyQuickForm.remark = template.remark || '';
+
+  const rawItems = normalizeArray<any>(detail.items);
+  await Promise.all(rawItems.flatMap(item => [
+    ensureProductOption(item.productId),
+    ensureWarehouseOption(item.warehouseId ?? template.warehouseId ?? null),
+    ensureLocationOption(item.locationId ?? template.locationId ?? null)
+  ]));
+  assemblyQuickForm.items = rawItems.map((item: any) => {
+    const row: AssemblyQuickItem = {
+      productId: item.productId || null,
+      productName: item.productName || '',
+      warehouseId: item.warehouseId ?? template.warehouseId ?? null,
+      locationId: item.locationId ?? template.locationId ?? null,
+      stockKey: '',
+      qty: formatQuickDecimal(Number(item.qty || 0) * ratio, 4),
+      remark: item.remark || ''
+    };
+    applyAssemblyItemDefaults(row);
+    return row;
+  });
+};
+
+const openAssemblyForRow = async (row: SaleOrderItem) => {
+  activeRowIndex.value = formData.items.indexOf(row);
+  if (!row.productId) {
+    notifyWarning(t('message.selectProductFirst'));
+    return;
+  }
+  const templates = await fetchAssemblyTemplatesByProductId(row.productId, true);
+  if (!templates.length) {
+    notifyWarning('该商品未维护组装模板');
+    return;
+  }
+  const defaultTemplate = templates[0];
+  if (!defaultTemplate) return;
+  resetAssemblyQuickForm();
+  assemblyQuickRow.value = row;
+  assemblyQuickForm.productId = row.productId;
+  assemblyQuickForm.productName = resolveProductLabel(row);
+  const rowQty = parsePositiveDecimal(row.qty, 4);
+  assemblyQuickForm.finishedQty = formatQuickDecimal(rowQty || Number(defaultTemplate.finishedQty || 1) || 1, 4);
+  assemblyQuickDialogVisible.value = true;
+  assemblyQuickTemplateId.value = defaultTemplate.id;
+  await handleAssemblyTemplateChange(defaultTemplate.id);
+};
+
+const handleAssemblyTemplateChange = async (templateId: number | null) => {
+  if (!templateId) {
+    assemblyQuickTemplateDetail.value = null;
+    assemblyQuickForm.items = [];
+    return;
+  }
+  assemblyQuickLoading.value = true;
+  try {
+    const res: any = await request.get(`/erp/assembly-templates/${templateId}`);
+    await applyAssemblyTemplateDetail(res.data?.data, true);
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    assemblyQuickLoading.value = false;
+  }
+};
+
+const handleAssemblyQtyChange = async () => {
+  if (!assemblyQuickTemplateDetail.value) return;
+  await applyAssemblyTemplateDetail(assemblyQuickTemplateDetail.value, true);
+};
+
+const handleAssemblyFinishedStockChange = (payload: { stockKey: string; warehouseId: number | null; locationId: number | null }) => {
+  assemblyQuickForm.finishedStockKey = payload.stockKey;
+  assemblyQuickForm.warehouseId = payload.warehouseId;
+  assemblyQuickForm.locationId = payload.locationId;
+};
+
+const handleAssemblyItemStockChange = (row: AssemblyQuickItem, payload: { stockKey: string; warehouseId: number | null; locationId: number | null }) => {
+  row.stockKey = payload.stockKey;
+  row.warehouseId = payload.warehouseId;
+  row.locationId = payload.locationId;
+};
+
+const validateAssemblyQuickForm = () => {
+  if (!assemblyQuickForm.productId || !assemblyQuickTemplateId.value) {
+    notifyWarning(t('message.required'));
+    return false;
+  }
+  if (!parsePositiveDecimal(assemblyQuickForm.finishedQty, 4)) {
+    notifyWarning(t('message.mustBePositive'));
+    return false;
+  }
+  const items = assemblyQuickForm.items.filter(item => item.productId);
+  if (!items.length) {
+    notifyWarning(t('message.noItems'));
+    return false;
+  }
+  for (const item of items) {
+    if (!parsePositiveDecimal(item.qty, 4)) {
+      notifyWarning(t('message.mustBePositive'));
+      return false;
+    }
+  }
+  return true;
+};
+
+const buildAssemblyQuickPayload = () => ({
+  orderNo: null,
+  orderType: 'ASSEMBLE',
+  orderAt: formatDateTime(new Date()),
+  finishedProductId: assemblyQuickForm.productId,
+  finishedQty: parseDecimal(assemblyQuickForm.finishedQty, 4),
+  warehouseId: assemblyQuickForm.warehouseId,
+  locationId: assemblyQuickForm.locationId,
+  laborCost: parseDecimal(assemblyQuickForm.laborCost, 4),
+  items: assemblyQuickForm.items
+    .filter(item => item.productId)
+    .map(item => ({
+      productId: item.productId,
+      warehouseId: item.warehouseId,
+      locationId: item.locationId,
+      qty: parseDecimal(item.qty, 4),
+      remark: item.remark
+    })),
+  remark: assemblyQuickForm.remark || undefined
+});
+
+const saveAssemblyQuickOrder = async (approveAfterSave: boolean) => {
+  if (!validateAssemblyQuickForm()) return;
+  try {
+    assemblyQuickSaving.value = true;
+    const res: any = await request.post('/erp/assembly-orders', buildAssemblyQuickPayload());
+    const savedId = res.data?.data?.order?.id || null;
+    if (approveAfterSave && savedId) {
+      await request.post(`/erp/assembly-orders/${savedId}/approve`);
+    }
+    const row = assemblyQuickRow.value;
+    if (row?.productId) {
+      await fetchStockOptions(row.productId, true);
+      syncStockKey(row);
+    }
+    assemblyQuickDialogVisible.value = false;
+    resetAssemblyQuickForm();
+    notifySuccess(approveAfterSave ? '组装单已审核，库存已刷新' : '组装单已保存');
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    assemblyQuickSaving.value = false;
+  }
+};
 
 const formatDateTime = (date: Date) => {
   const pad = (num: number) => String(num).padStart(2, '0');
@@ -2273,6 +2887,7 @@ onMounted(() => {
   fetchWarehouses();
   fetchLocations();
   fetchSettlementMethods();
+  fetchReceiptMethods();
   fetchDeliveryMethods();
   loadDetail();
   if (typeof window !== 'undefined') {
@@ -2301,11 +2916,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 :global(.content-area:has(.sale-page-surface)) {
-  background: #f5f7fb;
+  background: #ffffff;
 }
 
 .sale-page-surface {
-  --sale-page-bg: #f5f7fb;
+  --sale-page-bg: #ffffff;
   --sale-card-bg: #ffffff;
   --sale-card-border: #e3eaf4;
   --sale-card-shadow: 0 16px 36px rgba(28, 45, 76, 0.08), 0 4px 12px rgba(28, 45, 76, 0.04);
@@ -2395,14 +3010,14 @@ onBeforeUnmount(() => {
 
 .sale-page-surface :deep(.el-table) {
   --el-table-border-color: #e1e9f4;
-  --el-table-header-bg-color: #f0f5fc;
-  --el-table-row-hover-bg-color: #f7fbff;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-row-hover-bg-color: #fbfdff;
   color: var(--sale-text);
 }
 
 .sale-page-surface :deep(.el-table th.el-table__cell) {
-  background: #f0f5fc;
-  color: #344256;
+  background: #f8fafc;
+  color: #26344f;
   font-weight: 700;
 }
 
@@ -2484,13 +3099,91 @@ onBeforeUnmount(() => {
   background: #ffffff;
   color: #26344f;
   font-size: 14px;
+  box-shadow: none;
 }
 
-.sale-page-surface .action-button.el-button--primary {
+.sale-page-surface .action-button:hover,
+.sale-page-surface .action-button:focus-visible {
+  border-color: #9eb2ce;
+  background: #f8fbff;
+  color: #17233d;
+}
+
+.sale-page-surface .action-button--secondary {
+  border-color: #b8d2ff;
+  background: #f3f8ff;
+  color: #155ec9;
+}
+
+.sale-page-surface .action-button--secondary:hover,
+.sale-page-surface .action-button--secondary:focus-visible {
+  border-color: #7faeff;
+  background: #eaf3ff;
+  color: #0f56bd;
+}
+
+.sale-page-surface .action-button--secondary.is-disabled,
+.sale-page-surface .action-button--secondary.is-disabled:hover {
+  border-color: #c9dcff;
+  background: #f3f8ff;
+  color: #6f95cf;
+  opacity: 0.72;
+}
+
+.sale-page-surface .action-button--save {
+  border-color: #b8d2ff;
+  background: #f3f8ff;
+  color: #155ec9;
+}
+
+.sale-page-surface .action-button--save:hover,
+.sale-page-surface .action-button--save:focus-visible {
+  border-color: #7faeff;
+  background: #eaf3ff;
+  color: #0f56bd;
+}
+
+.sale-page-surface .action-button--save.is-disabled,
+.sale-page-surface .action-button--save.is-disabled:hover {
+  border-color: #c9dcff;
+  background: #f3f8ff;
+  color: #6f95cf;
+  opacity: 0.72;
+}
+
+.sale-page-surface .action-button--primary.el-button--primary {
   background: #1677ff;
   border-color: #1677ff;
   color: #ffffff;
-  box-shadow: 0 8px 18px rgba(22, 119, 255, 0.18);
+  box-shadow: 0 8px 18px rgba(22, 119, 255, 0.16);
+}
+
+.sale-page-surface .action-button--primary.el-button--primary:hover,
+.sale-page-surface .action-button--primary.el-button--primary:focus-visible {
+  background: #0f68e8;
+  border-color: #0f68e8;
+  color: #ffffff;
+}
+
+.sale-page-surface .action-button--success.el-button--success.is-plain {
+  background: #eef8ee;
+  border-color: #b9dfb8;
+  color: #2f7d32;
+}
+
+.sale-page-surface .action-button--success.el-button--success.is-plain:hover,
+.sale-page-surface .action-button--success.el-button--success.is-plain:focus-visible {
+  background: #e1f2df;
+  border-color: #8ecf8c;
+  color: #256a28;
+}
+
+.sale-page-surface .action-button--success.el-button--success.is-plain.is-disabled,
+.sale-page-surface .action-button--success.el-button--success.is-plain.is-disabled:hover {
+  background: #eef8ee;
+  border-color: #c8e3c7;
+  color: #6a9a6c;
+  opacity: 0.72;
 }
 
 .sale-page-surface :deep(.el-input__wrapper),
@@ -2641,17 +3334,25 @@ onBeforeUnmount(() => {
   color: #3f7d21;
 }
 
-.action-button--danger {
-  background: #fef0f0;
-  border-color: #f3b3b3;
-  color: #c45656;
+.sale-page-surface .action-button--danger.el-button--danger.is-plain {
+  background: #fff2f2;
+  border-color: #f2b8b8;
+  color: #b4232a;
 }
 
-.action-button--danger:hover,
-.action-button--danger:focus-visible {
-  background: #fde2e2;
-  border-color: #f08a8a;
-  color: #b43c3c;
+.sale-page-surface .action-button--danger.el-button--danger.is-plain:hover,
+.sale-page-surface .action-button--danger.el-button--danger.is-plain:focus-visible {
+  background: #ffe4e4;
+  border-color: #ec8f8f;
+  color: #991b1f;
+}
+
+.sale-page-surface .action-button--danger.el-button--danger.is-plain.is-disabled,
+.sale-page-surface .action-button--danger.el-button--danger.is-plain.is-disabled:hover {
+  background: #fff2f2;
+  border-color: #f2c7c7;
+  color: #c56a6e;
+  opacity: 0.72;
 }
 
 .sale-form :deep(.el-form-item) {
@@ -2807,17 +3508,18 @@ onBeforeUnmount(() => {
 }
 
 .product-cell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
+  display: flex;
   align-items: center;
-  column-gap: 8px;
+  gap: 8px;
 }
 
 .product-cell__label {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
 .product-cell__select {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -2846,6 +3548,19 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+.assembly-inline-button {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  background: #f1fbf4;
+}
+
+.assembly-inline-button :deep(.el-icon) {
+  font-size: 16px;
+}
+
 .row-delete-button {
   font-size: 18px;
   padding: 0;
@@ -2854,6 +3569,40 @@ onBeforeUnmount(() => {
 .history-tag.el-tag--info {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+.assembly-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.assembly-quick__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 12px;
+  border: 1px solid #e1e9f4;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #17233c;
+}
+
+.assembly-quick__label {
+  margin-right: 8px;
+  color: #6d7b91;
+  font-size: 13px;
+}
+
+.assembly-quick__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.assembly-quick__items {
+  width: 100%;
 }
 
 .readonly-field {
@@ -3028,7 +3777,8 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1280px) {
   .sale-header-grid,
-  .payment-grid {
+  .payment-grid,
+  .assembly-quick__grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 
@@ -3075,7 +3825,8 @@ onBeforeUnmount(() => {
   }
 
   .sale-header-grid,
-  .payment-grid {
+  .payment-grid,
+  .assembly-quick__grid {
     grid-template-columns: 1fr;
   }
 }

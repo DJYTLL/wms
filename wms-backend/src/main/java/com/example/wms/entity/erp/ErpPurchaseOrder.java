@@ -37,6 +37,10 @@ public class ErpPurchaseOrder {
     @TableField("order_at")
     private Instant orderAt;
 
+    // 结算方式编码
+    @TableField("settlement_method")
+    private String settlementMethod;
+
     // 总金额
     @TableField("total_amount")
     private BigDecimal totalAmount;
@@ -170,6 +174,14 @@ public class ErpPurchaseOrder {
 
     public void setOrderAt(Instant orderAt) {
         this.orderAt = orderAt;
+    }
+
+    public String getSettlementMethod() {
+        return settlementMethod;
+    }
+
+    public void setSettlementMethod(String settlementMethod) {
+        this.settlementMethod = settlementMethod;
     }
 
     public BigDecimal getTotalAmount() {

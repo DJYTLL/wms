@@ -14,6 +14,7 @@ public record ErpReceiptCreateRequest(
     BigDecimal discountAmount,
     List<ErpReceiptAllocationRequest> allocations,
     String settlementMethod,
+    String receiptMethodCode,
     String receivedAt,
     String remark
 ) {

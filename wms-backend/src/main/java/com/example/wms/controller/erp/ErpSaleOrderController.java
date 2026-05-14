@@ -89,6 +89,16 @@ public class ErpSaleOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.recentItemsByProduct(customerId, productId, limit)));
     }
 
+    // 分页查询包含指定商品的销售单明细（商品退货选择来源单）
+    @GetMapping("/recent-items/page")
+    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    public ResponseEntity<ApiResponse<PageResponse<ErpSaleOrderRecentItem>>> recentItemsPage(@RequestParam Long customerId,
+                                                                                             @RequestParam Long productId,
+                                                                                             @RequestParam(defaultValue = "1") long page,
+                                                                                             @RequestParam(defaultValue = "10") long size) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.recentItemsByProduct(customerId, productId, page, size)));
+    }
+
     // 商品销售历史（用于商品历史弹窗）
     @GetMapping("/product-history")
     @PreAuthorize("hasAuthority('PERM_erp-sale:view')")

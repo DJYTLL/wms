@@ -13,24 +13,30 @@ import com.example.wms.dto.erp.ErpPurchaseOrderUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsPayable;
 import com.example.wms.entity.erp.ErpPayment;
+import com.example.wms.entity.erp.ErpPaymentMethod;
 import com.example.wms.entity.erp.ErpPaymentPayable;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpPurchaseOrder;
 import com.example.wms.entity.erp.ErpPurchaseOrderItem;
 import com.example.wms.entity.erp.ErpPurchaseReturn;
+import com.example.wms.entity.erp.ErpSettlementMethod;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockTxn;
+import com.example.wms.entity.erp.ErpSupplier;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpPaymentMapper;
+import com.example.wms.mapper.erp.ErpPaymentMethodMapper;
 import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderItemMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
+import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.service.erp.ErpPurchaseOrderService;
 import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
@@ -76,8 +82,11 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private final SystemConfigMapper systemConfigMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
     private final ErpPaymentMapper erpPaymentMapper;
+    private final ErpPaymentMethodMapper erpPaymentMethodMapper;
     private final ErpPaymentPayableMapper erpPaymentPayableMapper;
     private final ErpPurchaseReturnMapper erpPurchaseReturnMapper;
+    private final ErpSettlementMethodMapper erpSettlementMethodMapper;
+    private final ErpSupplierMapper erpSupplierMapper;
     private final ErpCostService erpCostService;
 
     public ErpPurchaseOrderServiceImpl(ErpPurchaseOrderMapper erpPurchaseOrderMapper,
@@ -87,11 +96,14 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                                        ErpStockTxnMapper erpStockTxnMapper,
                                       ErpOrderSequenceMapper erpOrderSequenceMapper,
                                       SystemConfigMapper systemConfigMapper,
-                                      ErpAccountsPayableMapper erpAccountsPayableMapper,
-                                      ErpPaymentMapper erpPaymentMapper,
-                                      ErpPaymentPayableMapper erpPaymentPayableMapper,
-                                      ErpPurchaseReturnMapper erpPurchaseReturnMapper,
-                                      ErpCostService erpCostService) {
+                                       ErpAccountsPayableMapper erpAccountsPayableMapper,
+                                       ErpPaymentMapper erpPaymentMapper,
+                                       ErpPaymentMethodMapper erpPaymentMethodMapper,
+                                       ErpPaymentPayableMapper erpPaymentPayableMapper,
+                                       ErpPurchaseReturnMapper erpPurchaseReturnMapper,
+                                       ErpSettlementMethodMapper erpSettlementMethodMapper,
+                                       ErpSupplierMapper erpSupplierMapper,
+                                       ErpCostService erpCostService) {
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
         this.erpPurchaseOrderItemMapper = erpPurchaseOrderItemMapper;
         this.erpProductMapper = erpProductMapper;
@@ -101,8 +113,11 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         this.systemConfigMapper = systemConfigMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
         this.erpPaymentMapper = erpPaymentMapper;
+        this.erpPaymentMethodMapper = erpPaymentMethodMapper;
         this.erpPaymentPayableMapper = erpPaymentPayableMapper;
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
+        this.erpSettlementMethodMapper = erpSettlementMethodMapper;
+        this.erpSupplierMapper = erpSupplierMapper;
         this.erpCostService = erpCostService;
     }
 
@@ -143,6 +158,28 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         Long tenantId = TenantContext.requireTenantId();
         int finalLimit = limit <= 0 ? 10 : Math.min(limit, 50);
         return erpPurchaseOrderItemMapper.findRecentItems(tenantId, supplierId, productId, finalLimit);
+    }
+
+    @Override
+    public PageResponse<ErpPurchaseOrderRecentItem> recentItemsByProduct(Long supplierId, Long productId, long page, long size) {
+        Long tenantId = TenantContext.requireTenantId();
+        long finalPage = page <= 0 ? 1 : page;
+        long finalSize = size <= 0 ? 10 : Math.min(size, 100);
+        if (supplierId == null || productId == null) {
+            return new PageResponse<>(0, finalPage, finalSize, List.of());
+        }
+        long total = erpPurchaseOrderItemMapper.countRecentItems(tenantId, supplierId, productId);
+        long offset = (finalPage - 1) * finalSize;
+        List<ErpPurchaseOrderRecentItem> items = total == 0
+            ? List.of()
+            : erpPurchaseOrderItemMapper.findRecentItemsPage(
+                tenantId,
+                supplierId,
+                productId,
+                (int) finalSize,
+                offset
+            );
+        return new PageResponse<>(total, finalPage, finalSize, items);
     }
 
     @Override
@@ -202,8 +239,10 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setStatus(STATUS_DRAFT);
         order.setSupplierId(request.supplierId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
+        order.setSettlementMethod(normalizeCode(request.settlementMethod()));
         order.setPaymentMethodCode(request.paymentMethodCode());
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        validateHeaderMasterData(tenantId, order.getSupplierId(), order.getSettlementMethod(), order.getPaymentMethodCode(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setTotalAmount(BigDecimal.ZERO);
         order.setTotalAmountExclTax(BigDecimal.ZERO);
@@ -243,8 +282,10 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setOrderNo(newOrderNo);
         order.setSupplierId(request.supplierId());
         order.setOrderAt(parseOrderAt(request.orderAt()));
+        order.setSettlementMethod(normalizeCode(request.settlementMethod()));
         order.setPaymentMethodCode(request.paymentMethodCode());
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        validateHeaderMasterData(tenantId, order.getSupplierId(), order.getSettlementMethod(), order.getPaymentMethodCode(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
@@ -515,6 +556,38 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         }
     }
 
+    private void validateHeaderMasterData(Long tenantId,
+                                          Long supplierId,
+                                          String settlementMethod,
+                                          String paymentMethodCode,
+                                          BigDecimal paidAmount) {
+        if (supplierId == null) {
+            throw new IllegalArgumentException("请选择供应商");
+        }
+        ErpSupplier supplier = erpSupplierMapper.selectOne(new QueryWrapper<ErpSupplier>()
+            .eq("tenant_id", tenantId)
+            .eq("id", supplierId));
+        if (supplier == null || Boolean.FALSE.equals(supplier.getEnabled()) || Boolean.TRUE.equals(supplier.getBlacklisted())) {
+            throw new IllegalArgumentException("供应商不存在、已停用或已拉黑");
+        }
+        if (settlementMethod == null || settlementMethod.isBlank()) {
+            throw new IllegalArgumentException("请选择结算方式");
+        }
+        ErpSettlementMethod settlementMethodEntity = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        if (settlementMethodEntity == null || Boolean.FALSE.equals(settlementMethodEntity.getEnabled())) {
+            throw new IllegalArgumentException("结算方式不存在或已停用");
+        }
+        if (paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            if (paymentMethodCode == null || paymentMethodCode.isBlank()) {
+                throw new IllegalArgumentException("请选择付款方式");
+            }
+            ErpPaymentMethod paymentMethod = erpPaymentMethodMapper.findByCode(tenantId, paymentMethodCode);
+            if (paymentMethod == null || Boolean.FALSE.equals(paymentMethod.getEnabled())) {
+                throw new IllegalArgumentException("付款方式不存在或已停用");
+            }
+        }
+    }
+
     private void ensurePayable(Long tenantId, ErpPurchaseOrder order) {
         ErpAccountsPayable existing = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, order.getId());
         if (existing == null) {
@@ -528,7 +601,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             payable.setPaidAmount(BigDecimal.ZERO);
             payable.setUnpaidAmount(totalAmount);
             payable.setStatus(STATUS_OPEN);
-            payable.setSettlementMethod(null);
+            payable.setSettlementMethod(order.getSettlementMethod());
             payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setCreatedAt(Instant.now());
             payable.setUpdatedAt(Instant.now());
@@ -582,7 +655,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             payable.setDiscountAmount(discount);
             payable.setUnpaidAmount(unpaid);
             payable.setStatus(totalApplied.compareTo(total) == 0 ? STATUS_SETTLED : STATUS_OPEN);
-            payable.setSettlementMethod(null);
+            payable.setSettlementMethod(order.getSettlementMethod());
             payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setCreatedAt(Instant.now());
             payable.setUpdatedAt(Instant.now());
@@ -613,7 +686,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 payment.setSupplierId(order.getSupplierId());
                 payment.setAmount(paidCash);
                 payment.setDiscountAmount(discount);
-                payment.setSettlementMethod(null);
+                payment.setSettlementMethod(order.getSettlementMethod());
                 payment.setPaymentMethodCode(order.getPaymentMethodCode());
                 payment.setStatus(STATUS_APPROVED);
                 payment.setPaidAt(Instant.now());
@@ -636,7 +709,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 paymentExisting.setSupplierId(order.getSupplierId());
                 paymentExisting.setAmount(paidCash);
                 paymentExisting.setDiscountAmount(discount);
-                paymentExisting.setSettlementMethod(null);
+                paymentExisting.setSettlementMethod(order.getSettlementMethod());
                 paymentExisting.setPaymentMethodCode(order.getPaymentMethodCode());
                 paymentExisting.setStatus(STATUS_APPROVED);
                 paymentExisting.setPaidAt(Instant.now());
@@ -900,6 +973,13 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         } catch (NumberFormatException ex) {
             return fallback;
         }
+    }
+
+    private String normalizeCode(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private Instant parseOrderAt(String value) {

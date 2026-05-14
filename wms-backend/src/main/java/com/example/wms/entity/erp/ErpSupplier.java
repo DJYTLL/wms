@@ -66,9 +66,13 @@ public class ErpSupplier {
     @TableField("bank_account")
     private String bankAccount;
 
-    // 结算方式
-    @TableField("payment_terms")
-    private String paymentTerms;
+    // 默认结算方式编码
+    @TableField("default_settlement_method_code")
+    private String defaultSettlementMethodCode;
+
+    // 默认付款方式编码
+    @TableField("default_payment_method_code")
+    private String defaultPaymentMethodCode;
 
     // 联系人列表(JSON)
     @TableField(value = "contacts", typeHandler = JsonbTypeHandler.class)
@@ -212,12 +216,20 @@ public class ErpSupplier {
         this.bankAccount = bankAccount;
     }
 
-    public String getPaymentTerms() {
-        return paymentTerms;
+    public String getDefaultSettlementMethodCode() {
+        return defaultSettlementMethodCode;
     }
 
-    public void setPaymentTerms(String paymentTerms) {
-        this.paymentTerms = paymentTerms;
+    public void setDefaultSettlementMethodCode(String defaultSettlementMethodCode) {
+        this.defaultSettlementMethodCode = defaultSettlementMethodCode;
+    }
+
+    public String getDefaultPaymentMethodCode() {
+        return defaultPaymentMethodCode;
+    }
+
+    public void setDefaultPaymentMethodCode(String defaultPaymentMethodCode) {
+        this.defaultPaymentMethodCode = defaultPaymentMethodCode;
     }
 
     public JsonNode getContacts() {

@@ -50,6 +50,13 @@
               </el-form-item>
             </div>
             <div class="form-group">
+              <el-form-item :label="$t('field.receiptMethod')">
+                <el-select v-model="formData.receiptMethodCode" filterable clearable style="width: 100%">
+                  <el-option v-for="item in receiptMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="form-group">
               <el-form-item :label="$t('field.receiptAmount')" required>
                 <DecimalInput v-model="formData.amount" input-mode="decimal" :scale="2" :allow-negative="allowNegativeAmount" />
               </el-form-item>
@@ -188,6 +195,8 @@ import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 interface OptionItem {
   id: number;
   name: string;
+  defaultSettlementMethodCode?: string;
+  defaultReceiptMethodCode?: string;
 }
 
 interface SettlementOption {
@@ -216,6 +225,7 @@ const formData = ref({
   customerId: null as number | null,
   receivableIds: [] as number[],
   settlementMethod: '',
+  receiptMethodCode: '',
   amount: '',
   discountAmount: '',
   receivedAt: '',
@@ -224,6 +234,7 @@ const formData = ref({
 
 const customerOptions = ref<OptionItem[]>([]);
 const settlementOptions = ref<SettlementOption[]>([]);
+const receiptMethodOptions = ref<SettlementOption[]>([]);
 const receivableOptions = ref<ReceivableOption[]>([]);
 const receivableCandidates = ref<ReceivableOption[]>([]);
 const receivableDialogVisible = ref(false);
@@ -543,6 +554,7 @@ const resetForm = () => {
   formData.value.customerId = null;
   formData.value.receivableIds = [];
   formData.value.settlementMethod = '';
+  formData.value.receiptMethodCode = '';
   formData.value.amount = '';
   formData.value.discountAmount = '';
   formData.value.receivedAt = formatDateTime(new Date());
@@ -568,6 +580,7 @@ const loadReceiptDetail = async () => {
       formData.value.receiptNo = receipt.receiptNo || '';
       formData.value.customerId = receipt.customerId ?? null;
       formData.value.settlementMethod = receipt.settlementMethod || '';
+      formData.value.receiptMethodCode = receipt.receiptMethodCode || '';
       formData.value.amount = receipt.amount != null ? String(receipt.amount) : '';
       formData.value.discountAmount = receipt.discountAmount != null ? String(receipt.discountAmount) : '';
       formData.value.receivedAt = normalizeReceivedAt(receipt.receivedAt);
@@ -658,6 +671,23 @@ const fetchSettlementMethods = async () => {
   }
 };
 
+const fetchReceiptMethods = async () => {
+  try {
+    const res: any = await request.get('/erp/receipt-methods');
+    if (res.data.code === 200) {
+      receiptMethodOptions.value = res.data.data || [];
+      if (!formData.value.receiptMethodCode && receiptMethodOptions.value.length > 0) {
+        const defaultMethod = receiptMethodOptions.value.find((item) => item.isDefault) ?? receiptMethodOptions.value[0];
+        if (defaultMethod) {
+          formData.value.receiptMethodCode = defaultMethod.code;
+        }
+      }
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const fetchReceivables = async (customerId: number | null) => {
   try {
     const res: any = await request.get('/erp/ar', {
@@ -682,6 +712,13 @@ const fetchReceivables = async (customerId: number | null) => {
 };
 
 const handleCustomerChange = () => {
+  const customer = customerOptions.value.find((item) => item.id === formData.value.customerId);
+  if (customer?.defaultSettlementMethodCode) {
+    formData.value.settlementMethod = customer.defaultSettlementMethodCode;
+  }
+  if (customer?.defaultReceiptMethodCode) {
+    formData.value.receiptMethodCode = customer.defaultReceiptMethodCode;
+  }
   formData.value.receivableIds = [];
   formData.value.amount = '';
   formData.value.discountAmount = '';
@@ -960,6 +997,7 @@ const openSaleOrderByNo = async (row?: ReceivableOption) => {
       amount: String(amount),
       discountAmount: String(discountAmount),
       settlementMethod: formData.value.settlementMethod,
+      receiptMethodCode: formData.value.receiptMethodCode || undefined,
       receivedAt: formData.value.receivedAt,
       remark: formData.value.remark
     };
@@ -1016,6 +1054,7 @@ onMounted(() => {
   resetForm();
   fetchCustomers();
   fetchSettlementMethods();
+  fetchReceiptMethods();
   if (isReceiptRoute.value && isEditing.value) {
     loadReceiptDetail();
   } else {
@@ -1040,6 +1079,7 @@ onActivated(() => {
   fetchReceiptNo();
   fetchCustomers();
   fetchSettlementMethods();
+  fetchReceiptMethods();
   receivableRange.value = buildDefaultRange();
 });
 

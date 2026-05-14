@@ -11,6 +11,7 @@ public record ErpSaleOrderUpdateRequest(
     String orderAt,
     Long customerId,
     String settlementMethod,
+    String receiptMethodCode,
     String deliveryMethod,
     BigDecimal paidAmount,
     BigDecimal discountAmount,

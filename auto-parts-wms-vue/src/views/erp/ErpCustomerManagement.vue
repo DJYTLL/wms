@@ -85,9 +85,14 @@
             <el-option v-for="item in categoryOptions" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('field.settlementMethod')">
-          <el-select v-model="formData.paymentTerms" clearable style="width: 100%">
+        <el-form-item :label="$t('field.defaultSettlementMethod')">
+          <el-select v-model="formData.defaultSettlementMethodCode" clearable style="width: 100%">
             <el-option v-for="item in settlementMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('field.defaultReceiptMethod')">
+          <el-select v-model="formData.defaultReceiptMethodCode" clearable style="width: 100%">
+            <el-option v-for="item in receiptMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
           </el-select>
         </el-form-item>
         <el-form-item :label="$t('field.deliveryMethod')">
@@ -181,7 +186,8 @@ interface ErpCustomer {
   code: string;
   name: string;
   categoryId?: number;
-  paymentTerms?: string;
+  defaultSettlementMethodCode?: string;
+  defaultReceiptMethodCode?: string;
   deliveryMethodCode?: string;
   contact?: string;
   phone?: string;
@@ -232,6 +238,7 @@ const formRef = ref<FormInstance>();
 
 const categoryOptions = ref<OptionItem[]>([]);
 const settlementMethodOptions = ref<CodeOptionItem[]>([]);
+const receiptMethodOptions = ref<CodeOptionItem[]>([]);
 const deliveryMethodOptions = ref<CodeOptionItem[]>([]);
 
 const defaultColumns = ['code', 'name', 'category', 'contact', 'phone', 'email', 'status'];
@@ -241,7 +248,8 @@ const formData = reactive({
   code: '',
   name: '',
   categoryId: null as number | null,
-  paymentTerms: '',
+  defaultSettlementMethodCode: '',
+  defaultReceiptMethodCode: '',
   deliveryMethodCode: '',
   contact: '',
   phone: '',
@@ -290,6 +298,18 @@ const fetchSettlementMethods = async () => {
   }
 };
 
+const fetchReceiptMethods = async () => {
+  try {
+    const res: any = await request.get('/erp/receipt-methods', { params: { enabled: true } });
+    receiptMethodOptions.value = res.data.data || [];
+    if (showModal.value && !isEditing.value) {
+      applyDefaultMethods();
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const fetchDeliveryMethods = async () => {
   try {
     const res: any = await request.get('/erp/delivery-methods', { params: { enabled: true } });
@@ -303,10 +323,16 @@ const fetchDeliveryMethods = async () => {
 };
 
 const applyDefaultMethods = () => {
-  if (!formData.paymentTerms && settlementMethodOptions.value.length) {
+  if (!formData.defaultSettlementMethodCode && settlementMethodOptions.value.length) {
     const defaultItem = settlementMethodOptions.value.find(item => item.isDefault) ?? settlementMethodOptions.value[0];
     if (defaultItem) {
-      formData.paymentTerms = defaultItem.code;
+      formData.defaultSettlementMethodCode = defaultItem.code;
+    }
+  }
+  if (!formData.defaultReceiptMethodCode && receiptMethodOptions.value.length) {
+    const defaultItem = receiptMethodOptions.value.find(item => item.isDefault) ?? receiptMethodOptions.value[0];
+    if (defaultItem) {
+      formData.defaultReceiptMethodCode = defaultItem.code;
     }
   }
   if (!formData.deliveryMethodCode && deliveryMethodOptions.value.length) {
@@ -375,7 +401,8 @@ const openEditModal = (row: ErpCustomer) => {
   formData.code = row.code;
   formData.name = row.name;
   formData.categoryId = row.categoryId || null;
-  formData.paymentTerms = row.paymentTerms || '';
+  formData.defaultSettlementMethodCode = row.defaultSettlementMethodCode || '';
+  formData.defaultReceiptMethodCode = row.defaultReceiptMethodCode || '';
   formData.deliveryMethodCode = row.deliveryMethodCode || '';
   formData.contact = row.contact || '';
   formData.phone = row.phone || '';
@@ -392,7 +419,8 @@ const resetForm = () => {
   formData.code = '';
   formData.name = '';
   formData.categoryId = null;
-  formData.paymentTerms = '';
+  formData.defaultSettlementMethodCode = '';
+  formData.defaultReceiptMethodCode = '';
   formData.deliveryMethodCode = '';
   formData.contact = '';
   formData.phone = '';
@@ -482,6 +510,7 @@ const handleDelete = async (row: ErpCustomer) => {
 onMounted(() => {
   fetchCategories();
   fetchSettlementMethods();
+  fetchReceiptMethods();
   fetchDeliveryMethods();
   fetchList();
   bindPageSizeSync(size, fetchList);
@@ -491,6 +520,7 @@ onMounted(() => {
 onActivated(() => {
   fetchCategories();
   fetchSettlementMethods();
+  fetchReceiptMethods();
   fetchDeliveryMethods();
   fetchList();
 });

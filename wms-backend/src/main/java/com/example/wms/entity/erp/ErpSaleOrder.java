@@ -41,6 +41,10 @@ public class ErpSaleOrder {
     @TableField("settlement_method")
     private String settlementMethod;
 
+    // 收款方式编码
+    @TableField("receipt_method_code")
+    private String receiptMethodCode;
+
     // 送货方式编码
     @TableField("delivery_method_code")
     private String deliveryMethod;
@@ -216,6 +220,14 @@ public class ErpSaleOrder {
 
     public void setSettlementMethod(String settlementMethod) {
         this.settlementMethod = settlementMethod;
+    }
+
+    public String getReceiptMethodCode() {
+        return receiptMethodCode;
+    }
+
+    public void setReceiptMethodCode(String receiptMethodCode) {
+        this.receiptMethodCode = receiptMethodCode;
     }
 
     public String getDeliveryMethod() {

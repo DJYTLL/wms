@@ -85,7 +85,7 @@
               {{ formatAmount(row.netGrossProfit) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="isApprovedPage && canShow('receivableStatus')" :label="$t('field.receivableStatus')" min-width="150">
+          <el-table-column v-if="canShow('receivableStatus')" :label="$t('field.receivableStatus')" min-width="150">
             <template #default="{ row }">
               <el-tag :type="financeStatusTagType(row.receivableStatus)" size="small">
                 {{ formatFinanceStatus(row.receivableStatus, row.receivableUnpaidAmount) }}
@@ -883,7 +883,9 @@ const openEditPage = (row: SaleOrder) => {
 };
 
 const openViewPage = (row: SaleOrder) => {
-  router.push({ path: `/erp/sale-orders/${row.id}/edit`, query: { mode: 'view' } });
+  const query: Record<string, string> = { mode: 'view', returnTo: route.path };
+  if (isApprovedPage.value) query.from = 'approved';
+  router.push({ path: `/erp/sale-orders/${row.id}/edit`, query });
 };
 
 const openPrintPage = (row: SaleOrder) => {
@@ -929,11 +931,22 @@ const handleReturnTagClick = async (row: SaleOrder, index: number) => {
 
 const handleApprove = async (row: SaleOrder) => {
   try {
+    await ElMessageBox.confirm(
+      t('message.confirmApproveDraftOrder', { orderNo: row.orderNo || '-' }),
+      t('action.confirm'),
+      {
+        confirmButtonText: t('action.approve'),
+        cancelButtonText: t('action.cancel'),
+        type: 'warning'
+      }
+    );
     await request.post(`/erp/sale-orders/${row.id}/approve`);
     notifySuccess();
     fetchList();
   } catch (error) {
-    notifyError(error);
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
   }
 };
 

@@ -1,59 +1,81 @@
 <template>
-  <div class="page-shell page-shell--system sale-theme" :class="{ 'sale-theme--paper': themeMode === 'paper' }">
-    <div class="page-header">
-      <div class="page-title">{{ pageTitle }}</div>
-      <div class="page-toolbar-card purchase-return-header-card">
-        <div class="purchase-return-toolbar">
-          <div class="purchase-return-toolbar__meta">
-            <div v-if="!isReadOnly" class="theme-switch">
-              <span class="theme-switch__label">{{ $t('field.theme') }}</span>
-              <el-select v-model="themeMode" class="theme-switch__select">
-                <el-option :label="$t('theme.default')" value="default" />
-                <el-option :label="$t('theme.paper')" value="paper" />
-              </el-select>
-            </div>
-          </div>
-          <div class="table-actions purchase-return-toolbar__actions">
-            <el-button @click="handleBack">{{ $t('action.back') }}</el-button>
+  <div class="page-shell page-shell--system sale-page-surface sale-theme" :class="{ 'sale-theme--paper': themeMode === 'paper' }">
+    <div class="page-header sale-page-header">
+      <div class="sale-title-group">
+        <div class="page-title">{{ pageTitle }}</div>
+        <div class="sale-breadcrumb">
+          <span>{{ $t('page.erpPurchaseReturnManagement') }}</span>
+          <span class="sale-breadcrumb__separator">/</span>
+          <span>{{ $t('print.purchaseReturnTitle') }}</span>
+          <span class="sale-breadcrumb__separator">/</span>
+          <span>{{ pageTitle }}</span>
+        </div>
+      </div>
+      <div class="table-actions sale-page-toolbar__actions purchase-return-toolbar__actions">
+        <div v-if="!isReadOnly" class="theme-switch">
+          <span class="theme-switch__label">{{ $t('field.theme') }}</span>
+          <el-select v-model="themeMode" class="theme-switch__select">
+            <el-option :label="$t('theme.default')" value="default" />
+            <el-option :label="$t('theme.paper')" value="paper" />
+          </el-select>
+        </div>
+            <el-button class="action-button" @click="handleBack">{{ $t('action.back') }}</el-button>
             <el-button
-              v-if="canCopy"
-              type="primary"
+              v-if="shouldShowCopyButton"
+              class="action-button action-button--secondary"
+              :disabled="isInitializing || !canCopy"
               @click="handleCopy"
             >
               {{ $t('action.copy') }}
             </el-button>
             <el-button
               v-if="canPrint"
+              class="action-button action-button--primary"
               type="primary"
               @click="handlePrint"
             >
               {{ $t('action.print') }}
             </el-button>
             <el-button
-              v-if="canApprove"
+              v-if="shouldShowApproveButton"
               type="success"
               plain
               class="action-button action-button--success"
+              :loading="isSaving"
+              :disabled="isSaving || isInitializing || !canApprove"
               @click="handleApprove"
             >
               {{ $t('action.approve') }}
             </el-button>
             <el-button
-              v-if="canRedFlush"
+              v-if="shouldShowRedFlushButton"
               type="danger"
               plain
               class="action-button action-button--danger"
+              :disabled="isInitializing || !canRedFlush"
               @click="handleRedFlush"
             >
-              {{ $t('action.cancel') }}
+              {{ $t('action.redFlush') }}
             </el-button>
-            <el-button v-if="!isReadOnly" @click="handleSave">{{ $t('action.save') }}</el-button>
-            <el-button v-if="!isReadOnly" type="primary" @click="handleSaveAndBack">{{ $t('action.saveAndBack') }}</el-button>
-          </div>
-        </div>
-        <div class="purchase-return-header-panel">
-          <el-form :model="formData" label-position="top" class="sale-form sale-form--compact">
-            <div class="form-grid">
+            <el-button
+              v-if="!isReadOnly"
+              class="action-button action-button--save"
+              :loading="isSaving"
+              :disabled="isSaving"
+              @click="handleSave"
+            >
+              {{ $t('action.save') }}
+            </el-button>
+      </div>
+    </div>
+
+    <div class="page-toolbar-card sale-header-card purchase-return-header-card">
+      <div class="card-section-header">
+        <h4>{{ $t('section.saleBasicInfo') }}</h4>
+      </div>
+      <div class="sale-header-body">
+        <el-form :model="formData" label-position="top" class="sale-form sale-form--compact">
+          <div class="form-grid sale-header-grid sale-return-header-grid">
               <div class="form-group">
                 <el-form-item :label="$t('field.orderNo')">
                   <el-input v-model="formData.orderNo" :placeholder="$t('placeholder.autoGenerated')" disabled />
@@ -87,21 +109,36 @@
               </div>
               <div class="form-group">
                 <el-form-item :label="$t('field.returnSource')" required>
-                  <el-select
-                    v-model="formData.returnSource"
-                    style="width: 100%"
-                    :disabled="isReadOnly || !formData.supplierId"
-                    @change="handleReturnSourceChange"
-                  >
-                    <el-option :label="$t('returnSource.byPurchaseOrder')" value="BY_PURCHASE_ORDER" />
-                  </el-select>
-                </el-form-item>
+                <el-select
+                  v-model="formData.returnSource"
+                  style="width: 100%"
+                  :disabled="isReadOnly || !formData.supplierId"
+                  @change="handleReturnSourceChange"
+                >
+                  <el-option :label="$t('returnSource.byProduct')" value="BY_PRODUCT" />
+                  <el-option :label="$t('returnSource.byPurchaseOrder')" value="BY_PURCHASE_ORDER" />
+                </el-select>
+              </el-form-item>
               </div>
-              <div v-if="formData.returnSource === 'BY_PURCHASE_ORDER'" class="form-group">
+              <div class="form-group">
                 <el-form-item :label="$t('field.purchaseOrderNo')">
-                  <el-select v-model="formData.purchaseOrderId" filterable clearable style="width: 100%" :disabled="isReadOnly" @change="handlePurchaseOrderChange">
+                  <el-select
+                    v-if="formData.returnSource === 'BY_PURCHASE_ORDER'"
+                    v-model="formData.purchaseOrderId"
+                    filterable
+                    clearable
+                    style="width: 100%"
+                    :disabled="isReadOnly"
+                    @change="handlePurchaseOrderChange"
+                  >
                     <el-option v-for="item in purchaseOrderOptions" :key="item.id" :label="item.orderNo" :value="item.id" />
                   </el-select>
+                  <el-input
+                    v-else
+                    :model-value="resolvedPurchaseOrderNo"
+                    :placeholder="$t('message.pickPurchaseOrderFromRecentPurchase')"
+                    disabled
+                  />
                 </el-form-item>
               </div>
               <div class="form-group">
@@ -120,102 +157,65 @@
             <div v-if="isReadOnly && formData.status === 'RED_FLUSHED' && formData.remark" class="red-flush-reason">
               {{ formData.remark }}
             </div>
-          </el-form>
-        </div>
+        </el-form>
       </div>
     </div>
 
     <div class="table-card sale-detail-card">
       <div class="table-body sale-detail-body">
         <div class="detail-section">
-          <div class="detail-header">
-            <h4>{{ $t('field.items') }}</h4>
+          <div class="card-section-header detail-header">
+            <h4>{{ $t('section.saleDetailInfo') }}</h4>
           </div>
           <div class="detail-table-wrapper">
             <el-table :data="formData.items" style="width: 100%" border stripe>
               <el-table-column :label="$t('field.product')" min-width="200">
                 <template #default="{ row }">
-                  <el-select
-                    v-model="row.productId"
-                    filterable
-                    clearable
-                    style="width: 100%"
-                    :placeholder="$t('placeholder.selectProduct')"
-                    :disabled="isReadOnly || !formData.supplierId"
-                    @change="handleProductChange(row)"
-                    @visible-change="(visible: boolean) => handleProductVisibleChange(row, visible)"
-                  >
-                    <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
-                  </el-select>
-                  <div
-                    v-if="false"
-                    class="recent-sale-hint"
-                  >
-                    <div class="recent-sale-hint__title">{{ $t('message.recentPurchaseHint') }}</div>
-                    <div v-if="getRecentPurchaseItems(row.productId).length" class="recent-sale-hint__list">
-                      <div
-                        v-for="item in getRecentPurchaseItems(row.productId)"
-                        :key="`${item.orderId}-${item.productId}`"
-                        class="recent-sale-hint__item"
-                      >
-                        <span class="recent-sale-hint__no">{{ item.orderNo }}</span>
-                        <span class="recent-sale-hint__meta">
-                          {{ $t('field.quantity') }}: {{ item.qty }}
-                        </span>
-                        <span class="recent-sale-hint__meta">
-                          {{ $t('field.price') }}: {{ item.price }}
-                        </span>
-                      </div>
-                    </div>
-                    <div v-else class="recent-sale-hint__empty">
-                      {{ $t('message.noRecentPurchase') }}
-                    </div>
+                  <div class="product-cell">
+                    <el-select
+                      v-model="row.productId"
+                      filterable
+                      clearable
+                      style="width: 100%"
+                      :placeholder="$t('placeholder.selectProduct')"
+                      :disabled="isReadOnly || !formData.supplierId"
+                      @change="handleProductChange(row)"
+                      @visible-change="(visible: boolean) => handleProductVisibleChange(row, visible)"
+                    >
+                      <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
+                    </el-select>
+                    <el-button
+                      v-if="!isReadOnly && formData.returnSource === 'BY_PRODUCT'"
+                      class="detail-source-button"
+                      size="small"
+                      plain
+                      :disabled="!formData.supplierId || !row.productId"
+                      @click="openRecentPurchaseDialog(row)"
+                    >
+                      {{ $t('action.selectSource') }}
+                    </el-button>
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('field.warehouse')" min-width="160">
-                <template #default="{ row }">
-                  <el-select
-                    v-model="row.warehouseId"
-                    filterable
-                    clearable
-                    style="width: 100%"
-                    :placeholder="$t('placeholder.selectWarehouse')"
-                    :disabled="isReadOnly || !row.productId"
-                    @change="handleWarehouseChange(row)"
-                  >
-                    <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
-                  </el-select>
+              <el-table-column :label="$t('field.warehouseLocation')" min-width="220">
+                <template #header>
+                  <span class="required-table-label">{{ $t('field.warehouseLocation') }}</span>
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.location')" min-width="160">
                 <template #default="{ row }">
-                  <el-select
+                  <span v-if="isReadOnly" class="readonly-cell">
+                    {{ resolveWarehouseLabel(row.warehouseId) }} / {{ resolveLocationLabel(row.locationId) }}
+                  </span>
+                  <ProductStockSelect
+                    v-else
                     v-model="row.stockKey"
-                    filterable
-                    clearable
-                    style="width: 100%"
+                    :product-id="row.productId"
+                    :warehouse-id="row.warehouseId"
+                    :location-id="row.locationId"
+                    :warehouse-options="warehouseOptions"
+                    :location-options="getLocationOptions(row.warehouseId)"
                     :placeholder="$t('placeholder.selectLocation')"
-                    :disabled="isReadOnly || !row.productId"
-                    @change="handleStockLocationChange(row)"
-                    @visible-change="(visible: boolean) => handleStockVisibleChange(row, visible)"
-                  >
-                    <el-option
-                      v-for="item in getStockOptionsForRow(row)"
-                      :key="item.key"
-                      :label="item.searchLabel"
-                      :value="item.key"
-                    >
-                      <div class="stock-option">
-                        <span class="stock-option__name">{{ item.label }}</span>
-                        <span class="stock-option__qty">
-                          {{ $t('field.qtyOnHand') }}: {{ item.qtyOnHand }}
-                          · {{ $t('field.qtyAvailable') }}: {{ item.qtyAvailable }}
-                          · {{ $t('field.qtyLocked') }}: {{ item.qtyLocked }}
-                        </span>
-                      </div>
-                    </el-option>
-                  </el-select>
+                    @selection-change="(payload) => handleStockSelectionChange(row, payload)"
+                  />
                 </template>
               </el-table-column>
             <el-table-column :label="$t('field.quantity')" width="140">
@@ -270,25 +270,43 @@
       </div>
     </div>
 
-    <div class="table-card compact-card compact-card--inline payment-card">
-      <div class="table-body compact-card-body payment-card-body">
-        <el-form :model="formData" label-position="left" label-width="70px" class="sale-form sale-form--compact sale-form--inline">
-          <div class="form-grid">
+    <div class="table-card payment-card">
+      <div class="card-section-header">
+        <h4>{{ $t('section.saleSettlementInfo') }}</h4>
+      </div>
+      <div class="table-body payment-card-body">
+        <el-form :model="formData" label-position="top" class="sale-form sale-form--compact payment-form">
+          <div class="payment-grid">
             <div class="form-group form-group--settlement">
               <el-form-item :label="$t('field.settlementMethod')" required>
-                <el-select v-model="formData.settlementMethod" style="width: 150px" :disabled="isReadOnly">
+                <el-select v-model="formData.settlementMethod" style="width: 100%" :disabled="isReadOnly">
                   <el-option v-for="item in settlementMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
                 </el-select>
               </el-form-item>
             </div>
-            <div v-if="formData.settlementMethod" class="form-group form-group--amount">
+            <div class="form-group form-group--settlement">
+              <el-form-item :label="$t('field.refundAction')" required>
+                <el-select v-model="formData.refundAction" style="width: 100%" :disabled="isReadOnly">
+                  <el-option :label="$t('field.directRefund')" value="REFUND" />
+                  <el-option :label="$t('field.offsetAccountsPayable')" value="OFFSET_AP" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="form-group form-group--settlement">
+              <el-form-item :label="$t('field.paymentMethod')">
+                <el-select v-model="formData.paymentMethodCode" clearable style="width: 100%" :disabled="isReadOnly">
+                  <el-option v-for="item in paymentMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div v-if="formData.settlementMethod && !isCreditSettlement" class="form-group form-group--amount">
               <el-form-item :label="$t('field.paidAmount')">
-                <DecimalInput v-model="formData.paidAmount" :scale="2" :disabled="isReadOnly" style="width: 150px" />
+                <DecimalInput v-model="formData.paidAmount" :scale="2" :disabled="isReadOnly" style="width: 100%" />
               </el-form-item>
             </div>
             <div v-if="formData.settlementMethod" class="form-group form-group--discount">
               <el-form-item :label="$t('field.discountAmount')">
-                <DecimalInput v-model="formData.discountAmount" :scale="2" :disabled="isReadOnly" style="width: 150px" />
+                <DecimalInput v-model="formData.discountAmount" :scale="2" :disabled="isReadOnly" style="width: 100%" />
               </el-form-item>
             </div>
           </div>
@@ -342,6 +360,67 @@
     </el-dialog>
 
     <el-dialog
+      v-model="showRecentPurchaseDialog"
+      :title="$t('message.selectSourcePurchaseOrder')"
+      width="960px"
+      :close-on-click-modal="false"
+    >
+      <el-table
+        v-loading="recentPurchaseDialogLoading"
+        :data="recentPurchaseDialogItems"
+        style="width: 100%"
+        max-height="420"
+        border
+        @row-dblclick="applyRecentPurchaseSelection"
+      >
+        <el-table-column :label="$t('field.purchaseOrderNo')" min-width="220">
+          <template #default="{ row }">{{ row.orderNo }}</template>
+        </el-table-column>
+        <el-table-column :label="$t('field.orderTime')" width="180">
+          <template #default="{ row }">{{ formatDisplayDateTime(row.orderAt) }}</template>
+        </el-table-column>
+        <el-table-column :label="$t('field.quantity')" width="120">
+          <template #default="{ row }">{{ row.qty }}</template>
+        </el-table-column>
+        <el-table-column :label="$t('field.remainingQty')" width="130">
+          <template #default="{ row }">{{ row.remainingQty }}</template>
+        </el-table-column>
+        <el-table-column :label="$t('field.price')" width="120">
+          <template #default="{ row }">{{ row.price }}</template>
+        </el-table-column>
+        <el-table-column :label="$t('table.actions')" width="110" align="center">
+          <template #default="{ row }">
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :disabled="Number(row.remainingQty || 0) <= 0"
+              @click="applyRecentPurchaseSelection(row)"
+            >
+              {{ $t('action.select') }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="recent-sale-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="recentPurchaseDialogTotal"
+          :current-page="recentPurchaseDialogPage"
+          :page-size="recentPurchaseDialogSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :disabled="recentPurchaseDialogLoading"
+          @current-change="handleRecentPurchasePageChange"
+          @size-change="handleRecentPurchaseSizeChange"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="showRecentPurchaseDialog = false">{{ $t('action.cancel') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="showSupplierChangeDialog"
       :title="$t('message.confirmSupplierChangeTitle')"
       width="420px"
@@ -356,6 +435,29 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="saveSuccessDialogVisible"
+      :title="successDialogTitle"
+      width="420px"
+      append-to-body
+      :close-on-click-modal="false"
+      @closed="handleSaveSuccessDialogClosed"
+    >
+      <div class="save-success-dialog__content">
+        <div>{{ successDialogMessage }}</div>
+        <div v-if="saveSuccessOrderNo" class="save-success-dialog__order-no">
+          {{ $t('message.saveSuccessOrderNo', { orderNo: saveSuccessOrderNo }) }}
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="handleContinueCreate">{{ $t('action.continueCreate') }}</el-button>
+        <el-button @click="handleStayOnCurrentOrder">{{ $t('action.stayCurrent') }}</el-button>
+        <el-button @click="handleBackToList">{{ $t('action.backToList') }}</el-button>
+        <el-button v-if="saveSuccessDialogMode === 'approve'" type="primary" @click="handlePrintSavedOrder">{{ $t('action.print') }}</el-button>
+        <el-button v-if="saveSuccessDialogMode === 'save' && canApproveSavedOrder" type="primary" @click="handleApproveSavedOrder">{{ $t('action.approve') }}</el-button>
+      </template>
+    </el-dialog>
+
     <PrintPreviewDialog
       v-model="printDialogVisible"
       doc-type="PURCHASE_RETURN"
@@ -366,13 +468,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, onActivated, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { ElMessageBox } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
@@ -383,7 +486,8 @@ interface OptionItem {
   name: string;
   warehouseId?: number;
   categoryId?: number;
-  paymentTerms?: string;
+  defaultSettlementMethodCode?: string;
+  defaultPaymentMethodCode?: string;
 }
 
 interface PurchaseOrderOption {
@@ -421,7 +525,15 @@ interface RecentPurchaseItem {
   orderAt?: string;
   productId: number;
   qty: number;
+  remainingQty?: number;
   price: number;
+}
+
+interface PageResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
 }
 
 interface StockOption {
@@ -487,11 +599,13 @@ const productOptions = ref<ProductOption[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const settlementMethodOptions = ref<CodeOptionItem[]>([]);
+const paymentMethodOptions = ref<CodeOptionItem[]>([]);
 const productStockMap = ref<Record<number, StockOption[]>>({});
 const productRecentPurchaseMap = ref<Record<number, RecentPurchaseItem[]>>({});
 const purchaseOrderDetailItems = ref<PurchaseOrderDetailItem[]>([]);
 const selectedPurchaseOrderItems = ref<PurchaseOrderDetailItem[]>([]);
 const showPurchaseOrderDialog = ref(false);
+const showRecentPurchaseDialog = ref(false);
 
 const formData = reactive({
   orderNo: '',
@@ -502,6 +616,8 @@ const formData = reactive({
   supplierId: null as number | null,
   purchaseOrderId: null as number | null,
   settlementMethod: '',
+  paymentMethodCode: '',
+  refundAction: 'OFFSET_AP',
   paidAmount: '',
   discountAmount: '',
   remark: '',
@@ -515,8 +631,20 @@ const pendingSupplierId = ref<number | null>(null);
 const lastSupplierId = ref<number | null>(null);
 const isInitializing = ref(false);
 const needsReload = ref(false);
+const isSaving = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const pendingPrintDocId = ref<number | null>(null);
+const saveSuccessDialogVisible = ref(false);
+const saveSuccessOrderId = ref<number | null>(null);
+const saveSuccessOrderNo = ref('');
+const saveSuccessDialogMode = ref<'save' | 'approve'>('save');
+const recentPurchaseDialogItems = ref<RecentPurchaseItem[]>([]);
+const recentPurchaseDialogRow = ref<PurchaseReturnItem | null>(null);
+const recentPurchaseDialogLoading = ref(false);
+const recentPurchaseDialogPage = ref(1);
+const recentPurchaseDialogSize = ref(10);
+const recentPurchaseDialogTotal = ref(0);
 const isPurchaseReturnRoute = computed(() => route.path.startsWith('/erp/purchase-returns'));
 
 const hasPermission = (code: string) => {
@@ -527,12 +655,63 @@ const canApprove = computed(() => {
   return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-purchase-return:approve');
 });
 
+const shouldShowApproveButton = computed(() => {
+  if (canApprove.value) return true;
+  if (!isInitializing.value) return false;
+  if (route.query.mode === 'view') return false;
+  return hasPermission('erp-purchase-return:approve');
+});
+
 const canRedFlush = computed(() => {
   return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-purchase-return:cancel');
 });
 
+const shouldShowCopyButton = computed(() => {
+  if (canCopy.value) return true;
+  return isInitializing.value
+    && isEditing.value
+    && (route.query.mode === 'view' || route.query.from === 'approved')
+    && hasPermission('erp-purchase-return:add');
+});
+
+const shouldShowRedFlushButton = computed(() => {
+  if (canRedFlush.value) return true;
+  return isInitializing.value
+    && isEditing.value
+    && (route.query.mode === 'view' || route.query.from === 'approved')
+    && hasPermission('erp-purchase-return:cancel');
+});
+
+const canApproveSavedOrder = computed(() => {
+  return Boolean(saveSuccessOrderId.value) && hasPermission('erp-purchase-return:approve');
+});
+
+const successDialogTitle = computed(() => {
+  return saveSuccessDialogMode.value === 'approve'
+    ? t('message.approveSuccess')
+    : t('message.saveSuccess');
+});
+
+const successDialogMessage = computed(() => {
+  return saveSuccessDialogMode.value === 'approve'
+    ? t('message.approveSuccessNextStep')
+    : t('message.saveSuccessNextStep');
+});
+
 const canShowProfit = computed(() => false);
 const canShowDiscountAllocated = computed(() => false);
+const resolvedPurchaseOrderNo = computed(() => {
+  if (!formData.purchaseOrderId) return '';
+  return purchaseOrderOptions.value.find(item => Number(item.id) === Number(formData.purchaseOrderId))?.orderNo || '';
+});
+const isCreditSettlement = computed(() => {
+  if (!formData.settlementMethod) return false;
+  const code = String(formData.settlementMethod).toUpperCase();
+  if (code === 'CREDIT' || code === 'ON_ACCOUNT' || code === 'AP') return true;
+  const selected = settlementMethodOptions.value.find(item => item.code === formData.settlementMethod);
+  if (!selected?.name) return false;
+  return String(selected.name).includes('挂账');
+});
 
 const isTypingTarget = (target: EventTarget | null) => {
   if (!target || !(target instanceof HTMLElement)) return false;
@@ -545,9 +724,29 @@ const handleKeydown = (event: KeyboardEvent) => {
   if (isTypingTarget(event.target)) return;
 };
 
-const closePage = () => {
+const getReturnPath = () => {
+  const returnTo = route.query.returnTo;
+  if (typeof returnTo === 'string' && returnTo.trim()) {
+    return returnTo.trim();
+  }
+  if (route.query.from === 'draft') {
+    return '/erp/purchase-returns/draft';
+  }
+  if (route.query.from === 'approved' || route.query.mode === 'view' || formData.status === 'APPROVED') {
+    return '/erp/purchase-returns/approved';
+  }
+  return '/erp/purchase-returns';
+};
+
+const closePage = (redirectPath = getReturnPath()) => {
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('tags:close', { detail: { path: route.path } }));
+    window.dispatchEvent(new CustomEvent('tags:close', { detail: { path: route.path, redirectPath } }));
+  }
+};
+
+const closeTagByPath = (path: string) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tags:close', { detail: { path } }));
   }
 };
 
@@ -596,24 +795,9 @@ const handleBack = async () => {
 };
 
 const handleApprove = async () => {
+  if (isSaving.value) return;
   if (isReadOnly.value) return;
-  try {
-    await ElMessageBox.confirm(
-      t('message.confirmSaveBeforeApprove'),
-      t('action.confirm'),
-      {
-        confirmButtonText: t('action.save'),
-        cancelButtonText: t('action.cancel'),
-        type: 'warning'
-      }
-    );
-  } catch {
-    return;
-  }
-
-  const savedId = await saveData({ closeOnSuccess: false, reloadAfterCreate: true });
-  if (!savedId) return;
-
+  const sourcePath = route.path;
   try {
     await ElMessageBox.confirm(
       t('message.confirmApprove'),
@@ -624,11 +808,27 @@ const handleApprove = async () => {
         type: 'warning'
       }
     );
+  } catch {
+    return;
+  }
+
+  const savedId = await saveData({ closeOnSuccess: false, reloadAfterCreate: true, silentSuccess: true });
+  if (!savedId) return;
+
+  try {
+    const savedOrderNo = formData.orderNo;
     await request.post(`/erp/purchase-returns/${savedId}/approve`);
     formData.status = 'APPROVED';
-    notifySuccess();
-    closePage();
-    await router.push('/erp/purchase-returns/draft');
+    await router.replace({
+      path: `/erp/purchase-returns/${savedId}/edit`,
+      query: { mode: 'view', from: 'approved', returnTo: '/erp/purchase-returns/approved' }
+    });
+    await nextTick();
+    if (sourcePath !== route.path) {
+      closeTagByPath(sourcePath);
+    }
+    await loadDetail();
+    openSaveSuccessDialog(savedId, savedOrderNo, 'approve');
   } catch (error) {
     if (error && error !== 'cancel' && error !== 'close') {
       notifyError(error);
@@ -637,12 +837,88 @@ const handleApprove = async () => {
 };
 
 const handleSave = async () => {
-  await saveData({ closeOnSuccess: false });
+  if (isSaving.value) return;
+  await saveData({ closeOnSuccess: false, showPostSaveDialog: true });
 };
 
-  const handleSaveAndBack = async () => {
-    await saveData({ closeOnSuccess: true });
-  };
+const openSaveSuccessDialog = (savedId: number | null, savedOrderNo?: string, mode: 'save' | 'approve' = 'save') => {
+  saveSuccessOrderId.value = savedId;
+  saveSuccessOrderNo.value = savedOrderNo || formData.orderNo || '';
+  saveSuccessDialogMode.value = mode;
+  saveSuccessDialogVisible.value = true;
+};
+
+const closeSaveSuccessDialog = () => {
+  saveSuccessDialogVisible.value = false;
+  saveSuccessOrderId.value = null;
+  saveSuccessOrderNo.value = '';
+  saveSuccessDialogMode.value = 'save';
+};
+
+const handleSaveSuccessDialogClosed = async () => {
+  const docId = pendingPrintDocId.value;
+  pendingPrintDocId.value = null;
+  if (!docId) return;
+  printDocId.value = docId;
+  await nextTick();
+  printDialogVisible.value = true;
+};
+
+const handleContinueCreate = async () => {
+  closeSaveSuccessDialog();
+  if (isEditing.value) {
+    await router.replace({ path: '/erp/purchase-returns/create', query: { from: 'draft', returnTo: '/erp/purchase-returns/draft' } });
+    return;
+  }
+  await loadDetail();
+};
+
+const handleStayOnCurrentOrder = async () => {
+  const savedId = saveSuccessOrderId.value;
+  const dialogMode = saveSuccessDialogMode.value;
+  closeSaveSuccessDialog();
+  if (!savedId) return;
+  if (dialogMode === 'approve') return;
+  await router.replace({
+    path: `/erp/purchase-returns/${savedId}/edit`,
+    query: { from: 'draft', returnTo: '/erp/purchase-returns/draft' }
+  });
+};
+
+const handleBackToList = async () => {
+  closeSaveSuccessDialog();
+  closePage(getReturnPath());
+};
+
+const handlePrintSavedOrder = () => {
+  const savedId = saveSuccessOrderId.value;
+  if (!savedId) return;
+  pendingPrintDocId.value = savedId;
+  closeSaveSuccessDialog();
+};
+
+const handleApproveSavedOrder = async () => {
+  const savedId = saveSuccessOrderId.value;
+  if (!savedId) return;
+  const sourcePath = route.path;
+  try {
+    const savedOrderNo = saveSuccessOrderNo.value;
+    await request.post(`/erp/purchase-returns/${savedId}/approve`);
+    closeSaveSuccessDialog();
+    await router.replace({
+      path: `/erp/purchase-returns/${savedId}/edit`,
+      query: { mode: 'view', from: 'approved', returnTo: '/erp/purchase-returns/approved' }
+    });
+    await nextTick();
+    if (sourcePath !== route.path) {
+      closeTagByPath(sourcePath);
+    }
+    await loadDetail();
+    openSaveSuccessDialog(savedId, savedOrderNo, 'approve');
+  } catch (error) {
+    notifyError(error);
+  }
+};
 
   const parseStockKey = (stockKey?: string) => {
     if (!stockKey) return { warehouseId: undefined, locationId: undefined };
@@ -1018,11 +1294,21 @@ const getDefaultSettlementMethod = () => {
   return defaultItem?.code || '';
 };
 
+const getDefaultPaymentMethod = () => {
+  if (!paymentMethodOptions.value.length) return '';
+  const defaultItem = paymentMethodOptions.value.find(item => item.isDefault) ?? paymentMethodOptions.value[0];
+  return defaultItem?.code || '';
+};
+
 const applyMethodsForSupplier = () => {
   const supplier = supplierOptions.value.find(item => item.id === formData.supplierId);
-  const settlement = supplier?.paymentTerms || getDefaultSettlementMethod();
+  const settlement = supplier?.defaultSettlementMethodCode || getDefaultSettlementMethod();
+  const paymentMethod = supplier?.defaultPaymentMethodCode || getDefaultPaymentMethod();
   if (settlement) {
     formData.settlementMethod = settlement;
+  }
+  if (paymentMethod) {
+    formData.paymentMethodCode = paymentMethod;
   }
 };
 
@@ -1046,6 +1332,9 @@ const handleProductChange = async (row: PurchaseReturnItem) => {
   await fetchRecentPurchaseItems(row.productId);
   syncStockKey(row);
   await applyPriceForRow(row, true);
+  if (formData.returnSource === 'BY_PRODUCT' && row.productId) {
+    await openRecentPurchaseDialog(row);
+  }
 };
 
 const handleProductVisibleChange = async (row: PurchaseReturnItem, visible: boolean) => {
@@ -1053,10 +1342,42 @@ const handleProductVisibleChange = async (row: PurchaseReturnItem, visible: bool
   await fetchRecentPurchaseItems(row.productId);
 };
 
-const fetchRecentPurchaseItems = async (productId?: number) => {
-  if (!productId || !formData.supplierId) return;
-  if (productRecentPurchaseMap.value[productId]) return;
+const mergeRecentPurchaseOrderOptions = (items: RecentPurchaseItem[]) => {
+  items.forEach((item: RecentPurchaseItem) => {
+    if (!item?.orderId || !item?.orderNo) return;
+    mergePurchaseOrderOption({
+      id: item.orderId,
+      orderNo: item.orderNo,
+      supplierId: formData.supplierId || undefined
+    });
+  });
+};
+
+const fetchRecentPurchaseItems = async (
+  productId?: number,
+  page?: number,
+  size?: number
+) => {
+  if (!productId || !formData.supplierId) return [];
   try {
+    if (page != null && size != null) {
+      const res: any = await request.get('/erp/purchase-orders/recent-items/page', {
+        params: {
+          supplierId: formData.supplierId,
+          productId,
+          page,
+          size
+        }
+      });
+      const pageData = res.data.data as PageResponse<RecentPurchaseItem> | RecentPurchaseItem[] | undefined;
+      const items = Array.isArray(pageData) ? pageData : (Array.isArray(pageData?.items) ? pageData.items : []);
+      recentPurchaseDialogTotal.value = Array.isArray(pageData) ? items.length : Number(pageData?.total || 0);
+      recentPurchaseDialogPage.value = Array.isArray(pageData) ? page : Number(pageData?.page || page);
+      recentPurchaseDialogSize.value = Array.isArray(pageData) ? size : Number(pageData?.size || size);
+      mergeRecentPurchaseOrderOptions(items);
+      return items;
+    }
+    if (productRecentPurchaseMap.value[productId]) return productRecentPurchaseMap.value[productId];
     const res: any = await request.get('/erp/purchase-orders/recent-items', {
       params: {
         supplierId: formData.supplierId,
@@ -1064,9 +1385,16 @@ const fetchRecentPurchaseItems = async (productId?: number) => {
         limit: 10
       }
     });
-    productRecentPurchaseMap.value[productId] = res.data.data || [];
+    const items = res.data.data || [];
+    productRecentPurchaseMap.value[productId] = items;
+    mergeRecentPurchaseOrderOptions(items);
+    return items;
   } catch (error) {
     notifyError(error);
+    if (page != null && size != null) {
+      recentPurchaseDialogTotal.value = 0;
+    }
+    return [];
   }
 };
 
@@ -1075,40 +1403,161 @@ const getRecentPurchaseItems = (productId?: number) => {
   return productRecentPurchaseMap.value[productId] || [];
 };
 
-const handleWarehouseChange = (row: PurchaseReturnItem) => {
-  if (row.stockKey) {
-    const keyWarehouse = row.stockKey.split(':')[0];
-    if (String(row.warehouseId ?? 0) !== keyWarehouse) {
-      row.locationId = undefined;
-      row.stockKey = '';
-    }
+const mergePurchaseOrderOption = (option: PurchaseOrderOption) => {
+  if (!option?.id) return;
+  const next = [...purchaseOrderOptions.value];
+  const index = next.findIndex(item => Number(item.id) === Number(option.id));
+  if (index >= 0) {
+    next[index] = {
+      ...next[index],
+      ...option
+    };
+  } else {
+    next.push(option);
   }
-  if (!row.locationId) return;
-  const location = locationOptions.value.find(item => item.id === row.locationId);
-  if (location && row.warehouseId && location.warehouseId !== row.warehouseId) {
-    row.locationId = undefined;
+  purchaseOrderOptions.value = next;
+};
+
+const loadRecentPurchaseDialogItems = async () => {
+  const productId = recentPurchaseDialogRow.value?.productId;
+  if (!productId) {
+    recentPurchaseDialogItems.value = [];
+    recentPurchaseDialogTotal.value = 0;
+    return;
+  }
+  recentPurchaseDialogLoading.value = true;
+  try {
+    recentPurchaseDialogItems.value = await fetchRecentPurchaseItems(
+      productId,
+      recentPurchaseDialogPage.value,
+      recentPurchaseDialogSize.value
+    );
+  } finally {
+    recentPurchaseDialogLoading.value = false;
   }
 };
 
-const handleStockLocationChange = (row: PurchaseReturnItem) => {
-  if (!row.productId || !row.stockKey) {
-    row.locationId = undefined;
-    return;
-  }
-  const options = productStockMap.value[row.productId] || [];
-  const selected = options.find(item => item.key === row.stockKey);
-  if (!selected) {
-    row.locationId = undefined;
-    return;
-  }
-  row.warehouseId = selected.warehouseId ?? undefined;
-  row.locationId = selected.locationId ?? undefined;
+const handleRecentPurchasePageChange = async (page: number) => {
+  recentPurchaseDialogPage.value = page;
+  await loadRecentPurchaseDialogItems();
 };
 
-const handleStockVisibleChange = async (row: PurchaseReturnItem, visible: boolean) => {
-  if (!visible || !row.productId) return;
-  await fetchStockOptions(row.productId, true);
-  syncStockKey(row);
+const handleRecentPurchaseSizeChange = async (size: number) => {
+  recentPurchaseDialogSize.value = size;
+  recentPurchaseDialogPage.value = 1;
+  await loadRecentPurchaseDialogItems();
+};
+
+const resetRecentPurchaseDialogState = (resetSize = false) => {
+  showRecentPurchaseDialog.value = false;
+  recentPurchaseDialogItems.value = [];
+  recentPurchaseDialogRow.value = null;
+  recentPurchaseDialogLoading.value = false;
+  recentPurchaseDialogPage.value = 1;
+  recentPurchaseDialogTotal.value = 0;
+  if (resetSize) {
+    recentPurchaseDialogSize.value = 10;
+  }
+};
+
+const createEmptyItem = (overrides: Partial<PurchaseReturnItem> = {}): PurchaseReturnItem => ({
+  productId: undefined,
+  warehouseId: undefined,
+  locationId: undefined,
+  stockKey: '',
+  qty: '',
+  price: '',
+  taxRate: 0,
+  remark: '',
+  ...overrides
+});
+
+const syncSourceOrderNoToRemark = (orderNo?: string) => {
+  const normalizedOrderNo = String(orderNo || '').trim();
+  if (!normalizedOrderNo) return;
+  const prefix = `${t('field.purchaseOrderNo')}: `;
+  const sourceOrderNoPattern = /^(来源采购单|采购单号|Purchase Order No\.)[:：]/;
+  const remarkLines = String(formData.remark || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line && !sourceOrderNoPattern.test(line));
+  formData.remark = [`${prefix}${normalizedOrderNo}`, ...remarkLines].join('\n').slice(0, 200);
+};
+
+const bindRecentPurchaseOrder = async (row: PurchaseReturnItem, purchase: RecentPurchaseItem) => {
+  formData.purchaseOrderId = purchase.orderId;
+  mergePurchaseOrderOption({
+    id: purchase.orderId,
+    orderNo: purchase.orderNo,
+    supplierId: formData.supplierId || undefined
+  });
+  syncSourceOrderNoToRemark(purchase.orderNo);
+  row.price = purchase.price == null ? row.price : String(purchase.price);
+  if (!row.qty && purchase.remainingQty != null) {
+    row.qty = String(purchase.remainingQty);
+  }
+  await applyPriceForRow(row, false);
+};
+
+const openRecentPurchaseDialog = async (row: PurchaseReturnItem) => {
+  if (isReadOnly.value || formData.returnSource !== 'BY_PRODUCT') return;
+  if (!row.productId) {
+    notifyWarning(t('message.selectProductFirst'));
+    return;
+  }
+  recentPurchaseDialogRow.value = row;
+  recentPurchaseDialogItems.value = [];
+  recentPurchaseDialogPage.value = 1;
+  recentPurchaseDialogTotal.value = 0;
+  showRecentPurchaseDialog.value = true;
+  await loadRecentPurchaseDialogItems();
+};
+
+const applyRecentPurchaseSelection = async (purchase: RecentPurchaseItem) => {
+  if (isReadOnly.value) return;
+  if (!purchase?.orderId) return;
+  if (Number(purchase.remainingQty || 0) <= 0) return;
+  const row = recentPurchaseDialogRow.value;
+  if (!row) return;
+  if (!formData.purchaseOrderId || Number(formData.purchaseOrderId) === Number(purchase.orderId)) {
+    await bindRecentPurchaseOrder(row, purchase);
+    showRecentPurchaseDialog.value = false;
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      t('message.confirmSwitchPurchaseOrder', { orderNo: purchase.orderNo }),
+      t('action.confirm'),
+      {
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel'),
+        type: 'warning'
+      }
+    );
+  } catch {
+    return;
+  }
+  const nextRow = createEmptyItem({
+    productId: row.productId,
+    qty: row.qty,
+    taxRate: row.taxRate,
+    remark: row.remark
+  });
+  formData.items = [nextRow];
+  applyProductDefaults(nextRow, true);
+  await bindRecentPurchaseOrder(nextRow, purchase);
+  await fetchStockOptions(nextRow.productId, true);
+  syncStockKey(nextRow);
+  showRecentPurchaseDialog.value = false;
+};
+
+const handleStockSelectionChange = (
+  row: PurchaseReturnItem,
+  payload: { stockKey: string; warehouseId: number | null; locationId: number | null }
+) => {
+  row.stockKey = payload.stockKey;
+  row.warehouseId = payload.warehouseId ?? undefined;
+  row.locationId = payload.locationId ?? undefined;
 };
 
 const handleSupplierChange = (value: number | null) => {
@@ -1118,6 +1567,7 @@ const handleSupplierChange = (value: number | null) => {
   }
   if (value === lastSupplierId.value) return;
   productRecentPurchaseMap.value = {};
+  resetRecentPurchaseDialogState();
   formData.purchaseOrderId = null;
   const hasItems = formData.items.some(item => item.productId);
   if (hasItems) {
@@ -1131,6 +1581,7 @@ const handleSupplierChange = (value: number | null) => {
 };
 
 const handleReturnSourceChange = () => {
+  resetRecentPurchaseDialogState();
   if (formData.returnSource === 'BY_PURCHASE_ORDER') {
     formData.items = [];
     addItem();
@@ -1139,7 +1590,8 @@ const handleReturnSourceChange = () => {
     }
     return;
   }
-  formData.returnSource = 'BY_PURCHASE_ORDER';
+  purchaseOrderDetailItems.value = [];
+  selectedPurchaseOrderItems.value = [];
 };
 
 const handlePurchaseOrderChange = (value: number | null) => {
@@ -1152,6 +1604,7 @@ const handlePurchaseOrderChange = (value: number | null) => {
     formData.supplierId = selected.supplierId;
     lastSupplierId.value = selected.supplierId;
     productRecentPurchaseMap.value = {};
+    resetRecentPurchaseDialogState();
     applyMethodsForSupplier();
   } else {
     applyMethodsForSupplier();
@@ -1257,6 +1710,7 @@ const applySupplierChange = async (action: 'price' | 'clear' | 'cancel') => {
   lastSupplierId.value = targetSupplierId;
   pendingSupplierId.value = null;
   if (action === 'clear') {
+    resetRecentPurchaseDialogState();
     formData.items = [];
     addItem();
     applyMethodsForSupplier();
@@ -1415,6 +1869,8 @@ const loadDetail = async () => {
       formData.orderAt = normalizeDateTimeValue(data.order?.orderAt || data.orderAt) || formatDateTime(new Date());
       formData.remark = data.order?.remark || data.remark || '';
       formData.settlementMethod = data.order?.settlementMethod || data.settlementMethod || '';
+      formData.paymentMethodCode = data.order?.paymentMethodCode || data.paymentMethodCode || '';
+      formData.refundAction = data.order?.refundAction || data.refundAction || 'OFFSET_AP';
       formData.paidAmount = String(data.order?.paidAmount ?? data.paidAmount ?? '');
       formData.discountAmount = String(data.order?.discountAmount ?? data.discountAmount ?? '');
       formData.items = (data.items || data.order?.items || []).map((item: any) => ({
@@ -1473,6 +1929,8 @@ const resetForm = () => {
   formData.supplierId = null;
   formData.purchaseOrderId = null;
   formData.settlementMethod = '';
+  formData.paymentMethodCode = '';
+  formData.refundAction = 'OFFSET_AP';
   formData.paidAmount = '';
   formData.discountAmount = '';
   formData.remark = '';
@@ -1481,6 +1939,7 @@ const resetForm = () => {
   productRecentPurchaseMap.value = {};
   purchaseOrderDetailItems.value = [];
   selectedPurchaseOrderItems.value = [];
+  resetRecentPurchaseDialogState(true);
 };
 
 const fetchSettlementMethods = async () => {
@@ -1493,12 +1952,28 @@ const fetchSettlementMethods = async () => {
   }
 };
 
+const fetchPaymentMethods = async () => {
+  try {
+    const res: any = await request.get('/erp/payment-methods', { params: { enabled: true } });
+    paymentMethodOptions.value = res.data.data || [];
+    applyDefaultMethods();
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const applyDefaultMethods = () => {
   if (isEditing.value) return;
   if (!formData.settlementMethod && settlementMethodOptions.value.length) {
     const defaultItem = settlementMethodOptions.value.find(item => item.isDefault) ?? settlementMethodOptions.value[0];
     if (defaultItem) {
       formData.settlementMethod = defaultItem.code;
+    }
+  }
+  if (!formData.paymentMethodCode && paymentMethodOptions.value.length) {
+    const defaultItem = paymentMethodOptions.value.find(item => item.isDefault) ?? paymentMethodOptions.value[0];
+    if (defaultItem) {
+      formData.paymentMethodCode = defaultItem.code;
     }
   }
   if (!formData.returnType) {
@@ -1518,7 +1993,14 @@ const fetchNextOrderNo = async () => {
   }
 };
 
-  const saveData = async (options: { closeOnSuccess?: boolean; reloadAfterCreate?: boolean } = {}) => {
+  const saveData = async (
+    options: {
+      closeOnSuccess?: boolean;
+      reloadAfterCreate?: boolean;
+      silentSuccess?: boolean;
+      showPostSaveDialog?: boolean;
+    } = {}
+  ) => {
     const closeOnSuccess = options.closeOnSuccess !== false;
     if (!formData.supplierId) {
       notifyWarning(t('message.required'));
@@ -1529,7 +2011,11 @@ const fetchNextOrderNo = async () => {
     return;
   }
   if (!formData.purchaseOrderId) {
-    notifyWarning(t('message.required'));
+    notifyWarning(
+      formData.returnSource === 'BY_PRODUCT'
+        ? t('message.pickPurchaseOrderFromRecentPurchase')
+        : t('message.required')
+    );
     return;
   }
   if (!formData.settlementMethod) {
@@ -1568,6 +2054,8 @@ const fetchNextOrderNo = async () => {
       supplierId: formData.supplierId,
       purchaseOrderId: formData.purchaseOrderId || undefined,
       settlementMethod: formData.settlementMethod,
+      paymentMethodCode: formData.paymentMethodCode || undefined,
+      refundAction: formData.refundAction,
       paidAmount,
       discountAmount,
       remark: formData.remark,
@@ -1586,6 +2074,7 @@ const fetchNextOrderNo = async () => {
       })
     };
 
+  isSaving.value = true;
   try {
     const res: any = isEditing.value
       ? await request.put(`/erp/purchase-returns/${route.params.id}`, payload)
@@ -1594,19 +2083,29 @@ const fetchNextOrderNo = async () => {
     if (res.data.code === 200) {
       const data = res.data.data || {};
       const savedId = data.order?.id || data.id || Number(route.params.id || 0) || null;
-      notifySuccess();
+      const savedOrderNo = data.order?.orderNo || data.orderNo || formData.orderNo || '';
+      if (!options.silentSuccess) {
+        notifySuccess(t('message.saveSuccess'));
+      }
       if (!isEditing.value && savedId && options.reloadAfterCreate) {
-        await router.replace(`/erp/purchase-returns/${savedId}/edit`);
+        await router.replace({
+          path: `/erp/purchase-returns/${savedId}/edit`,
+          query: { from: 'draft', returnTo: '/erp/purchase-returns/draft' }
+        });
         await loadDetail();
       }
+      if (options.showPostSaveDialog) {
+        openSaveSuccessDialog(savedId, savedOrderNo);
+      }
       if (closeOnSuccess) {
-        closePage();
-        await router.push('/erp/purchase-returns/draft');
+        closePage(getReturnPath());
       }
       return savedId;
     }
   } catch (error) {
     notifyError(error);
+  } finally {
+    isSaving.value = false;
   }
   return null;
 };
@@ -1628,6 +2127,11 @@ const parseAmount = (value: string) => parseDecimal(value, 2);
 const formatDateTime = (date: Date) => {
   const pad = (num: number) => String(num).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+
+const formatDisplayDateTime = (value?: string) => {
+  if (!value) return '-';
+  return normalizeDateTimeValue(value) || '-';
 };
 
 const normalizeDateTimeValue = (value: any) => {
@@ -1674,6 +2178,7 @@ onMounted(() => {
   fetchWarehouses();
   fetchLocations();
   fetchSettlementMethods();
+  fetchPaymentMethods();
   loadDetail();
   if (typeof window !== 'undefined') {
     window.addEventListener('tags:closing', handleTagClosing as EventListener);
@@ -1702,8 +2207,206 @@ onBeforeUnmount(() => {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@600;700&display=swap');
 
+:global(.content-area:has(.sale-theme)) {
+  background: #ffffff;
+}
+
+:global(.content-area:has(.sale-page-surface)) {
+  background: #ffffff;
+}
+
 .sale-theme {
+  --sale-page-bg: #ffffff;
   background: transparent;
+}
+
+.sale-page-surface {
+  --sale-primary: #1677ff;
+  --sale-danger: #d84a4a;
+  --sale-text: #213047;
+  --sale-muted: #7c889d;
+  --sale-card-bg: #ffffff;
+  --sale-card-border: #e3ebf5;
+  --sale-card-shadow: 0 8px 24px rgba(31, 50, 81, 0.06);
+  --sale-card-radius: 14px;
+  --sale-control-border: #d7e0ec;
+  min-height: 100%;
+  height: auto;
+  padding: 16px 20px;
+  box-sizing: border-box;
+  background: transparent;
+  color: var(--sale-text);
+}
+
+.sale-page-header {
+  align-items: center !important;
+  margin-bottom: 16px !important;
+  gap: 14px;
+}
+
+.sale-title-group {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.sale-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #7d889b;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sale-breadcrumb__separator {
+  color: #a8b2c1;
+}
+
+.sale-page-surface .page-title {
+  color: var(--sale-text);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 32px;
+  letter-spacing: 0;
+}
+
+.sale-page-surface .sale-header-card,
+.sale-page-surface .sale-detail-card,
+.sale-page-surface .payment-card {
+  flex: 0 0 auto;
+  overflow: visible;
+  border: 1px solid var(--sale-card-border);
+  border-radius: var(--sale-card-radius);
+  background: var(--sale-card-bg);
+  box-shadow: var(--sale-card-shadow);
+}
+
+.sale-page-surface .sale-header-card {
+  padding: 20px 22px;
+}
+
+.sale-page-surface .sale-header-card + .sale-detail-card {
+  margin-top: 18px;
+}
+
+.sale-page-surface .sale-header-body,
+.sale-page-surface .sale-detail-body,
+.sale-page-surface .payment-card-body {
+  padding: 0 !important;
+  overflow: visible;
+  background: transparent;
+}
+
+.card-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.sale-page-surface .card-section-header h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--sale-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.sale-page-surface .card-section-header h4::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--sale-primary);
+}
+
+.sale-page-surface .sale-page-toolbar__actions {
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.sale-page-surface .sale-header-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(190px, 1fr));
+  gap: 18px 32px;
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.sale-page-surface .sale-return-header-grid {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.sale-page-surface .sale-header-grid .form-group,
+.sale-page-surface .payment-card .form-group {
+  min-width: 0;
+}
+
+.sale-page-surface .payment-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 430px) minmax(220px, 320px) minmax(220px, 320px);
+  gap: 16px 32px;
+  align-items: start;
+}
+
+.sale-page-surface .sale-detail-card,
+.sale-page-surface .payment-card {
+  margin-top: 18px;
+  padding: 18px 22px;
+}
+
+.sale-page-surface .detail-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 16px;
+}
+
+.sale-page-surface .detail-header {
+  margin-bottom: 8px;
+}
+
+.sale-page-surface .detail-table-wrapper {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #e1e9f4;
+  border-radius: 10px;
+  background: #fbfdff;
+}
+
+.sale-page-surface .detail-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 26px;
+  justify-content: flex-end;
+  margin-left: auto;
+  font-size: 14px;
+  color: #26344f;
+}
+
+.sale-page-surface .summary-item:last-child,
+.sale-page-surface .detail-summary .summary-item:first-child {
+  color: var(--sale-primary);
+  font-weight: 700;
+}
+
+.sale-theme:not(.sale-theme--paper) :deep(.el-table) {
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-row-hover-bg-color: #fbfdff;
+}
+
+.sale-theme:not(.sale-theme--paper) :deep(.el-table th.el-table__cell) {
+  background: #f8fafc;
+  color: #26344f;
+  font-weight: 700;
 }
 
 .theme-switch {
@@ -1744,21 +2447,138 @@ onBeforeUnmount(() => {
 }
 
 .action-button {
-  min-width: 72px;
+  min-width: 78px;
+  height: 36px;
+  border-radius: 8px;
+  border-color: #d9e2ef;
+  background: #ffffff;
+  color: #26344f;
+  font-size: 14px;
   font-weight: 600;
+  box-shadow: none;
+}
+
+.action-button:hover,
+.action-button:focus-visible {
+  border-color: #9eb2ce;
+  background: #f8fbff;
+  color: #17233d;
+}
+
+.action-button--save,
+.action-button--secondary {
+  border-color: #b8d2ff;
+  background: #f3f8ff;
+  color: #155ec9;
+}
+
+.action-button--save:hover,
+.action-button--save:focus-visible,
+.action-button--secondary:hover,
+.action-button--secondary:focus-visible {
+  border-color: #7faeff;
+  background: #eaf3ff;
+  color: #0f56bd;
+}
+
+.action-button--primary.el-button--primary {
+  background: #1677ff;
+  border-color: #1677ff;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(22, 119, 255, 0.16);
+}
+
+.action-button--primary.el-button--primary:hover,
+.action-button--primary.el-button--primary:focus-visible {
+  background: #0f68e8;
+  border-color: #0f68e8;
+  color: #ffffff;
 }
 
 .action-button--success {
-  background: #f0f9eb;
-  border-color: #b7e1a1;
-  color: #4e8f2b;
+  background: #eef8ee;
+  border-color: #b9dfb8;
+  color: #2f7d32;
 }
 
 .action-button--success:hover,
 .action-button--success:focus-visible {
-  background: #e3f4d8;
-  border-color: #95d475;
-  color: #3f7d21;
+  background: #e1f2df;
+  border-color: #8ecf8c;
+  color: #256a28;
+}
+
+.action-button--danger {
+  background: #fff2f2;
+  border-color: #f2b8b8;
+  color: #b4232a;
+}
+
+.action-button--danger:hover,
+.action-button--danger:focus-visible {
+  background: #ffe4e4;
+  border-color: #ec8f8f;
+  color: #991b1f;
+}
+
+.action-button:disabled,
+.action-button.is-disabled {
+  opacity: 1;
+}
+
+.action-button--secondary.is-disabled,
+.action-button--secondary.is-disabled:hover,
+.action-button--save.is-disabled,
+.action-button--save.is-disabled:hover {
+  border-color: #c9dcff;
+  background: #f3f8ff;
+  color: #6f95cf;
+  opacity: 0.72;
+}
+
+.action-button--success.el-button--success.is-plain.is-disabled,
+.action-button--success.el-button--success.is-plain.is-disabled:hover {
+  background: #eef8ee;
+  border-color: #c8e3c7;
+  color: #6a9a6c;
+  opacity: 0.72;
+}
+
+.action-button--danger.el-button--danger.is-plain.is-disabled,
+.action-button--danger.el-button--danger.is-plain.is-disabled:hover {
+  background: #fff2f2;
+  border-color: #f2c7c7;
+  color: #c56a6e;
+  opacity: 0.72;
+}
+
+.save-success-dialog__content {
+  line-height: 1.8;
+  color: #303133;
+}
+
+.save-success-dialog__order-no {
+  margin-top: 8px;
+  color: #606266;
+}
+
+.recent-sale-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.product-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-source-button {
+  flex: 0 0 auto;
+  height: 32px;
+  border-radius: 6px;
+  font-weight: 600;
 }
 
 .sale-theme--paper {
@@ -2044,51 +2864,7 @@ onBeforeUnmount(() => {
 }
 
 .payment-card-body {
-  padding: 12px 16px !important;
-}
-
-.payment-card .form-grid {
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 8px;
-}
-
-.payment-card .form-group {
-  min-width: 0;
-  flex: 0 0 auto;
-}
-
-.payment-card .form-group--settlement {
-  min-width: 180px;
-}
-
-.payment-card .form-group--amount,
-.payment-card .form-group--discount {
-  width: auto;
-}
-
-.payment-card :deep(.el-form-item) {
-  display: flex;
-  align-items: center;
-}
-
-.payment-card :deep(.el-form-item__label) {
-  padding-bottom: 0;
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  line-height: 32px;
-  margin-right: 4px;
-  width: auto !important;
-  padding-right: 2px;
-  flex: 0 0 auto;
-}
-
-.payment-card :deep(.el-form-item__content) {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  min-height: 32px;
+  padding: 0 !important;
 }
 
 .table-card + .table-card {
@@ -2151,22 +2927,25 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1280px) {
-  .purchase-return-toolbar {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .purchase-return-toolbar__meta,
-  .purchase-return-toolbar__actions {
-    width: 100%;
-  }
-
   .purchase-return-toolbar__actions {
     justify-content: flex-end;
     margin-left: 0;
   }
+
+  .sale-page-surface .sale-header-grid,
+  .sale-page-surface .sale-return-header-grid,
+  .sale-page-surface .payment-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
+  .sale-page-header,
+  .sale-title-group,
+  .sale-breadcrumb {
+    flex-wrap: wrap;
+  }
+
   .purchase-return-toolbar__actions {
     width: 100%;
     flex-wrap: wrap;
@@ -2181,6 +2960,12 @@ onBeforeUnmount(() => {
   .theme-switch__select {
     width: 100%;
     max-width: 180px;
+  }
+
+  .sale-page-surface .sale-header-grid,
+  .sale-page-surface .sale-return-header-grid,
+  .sale-page-surface .payment-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -13,6 +13,8 @@ public record ErpSaleReturnCreateRequest(
     Long customerId,
     Long saleOrderId,
     String settlementMethod,
+    String receiptMethodCode,
+    String refundAction,
     BigDecimal paidAmount,
     BigDecimal discountAmount,
     @NotEmpty List<ErpSaleReturnItemRequest> items,

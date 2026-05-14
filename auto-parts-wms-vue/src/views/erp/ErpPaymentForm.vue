@@ -59,6 +59,13 @@
               </el-form-item>
             </div>
             <div class="form-group">
+              <el-form-item :label="$t('field.paymentMethod')">
+                <el-select v-model="formData.paymentMethodCode" filterable clearable style="width: 100%">
+                  <el-option v-for="item in paymentMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="form-group">
               <el-form-item :label="$t('field.paymentAmount')" required>
                 <DecimalInput v-model="formData.amount" input-mode="decimal" :scale="2" :allow-negative="allowNegativeAmount" />
               </el-form-item>
@@ -123,6 +130,8 @@ import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 interface OptionItem {
   id: number;
   name: string;
+  defaultSettlementMethodCode?: string;
+  defaultPaymentMethodCode?: string;
 }
 
 interface SettlementOption {
@@ -151,6 +160,7 @@ const formData = ref({
   supplierId: null as number | null,
   payableIds: [] as number[],
   settlementMethod: '',
+  paymentMethodCode: '',
   amount: '',
   discountAmount: '',
   paidAt: '',
@@ -159,6 +169,7 @@ const formData = ref({
 
 const supplierOptions = ref<OptionItem[]>([]);
 const settlementOptions = ref<SettlementOption[]>([]);
+const paymentMethodOptions = ref<SettlementOption[]>([]);
 const payableOptions = ref<PayableOption[]>([]);
 const saving = ref(false);
 const pagePath = ref(route.path);
@@ -401,6 +412,7 @@ const resetForm = () => {
   formData.value.supplierId = null;
   formData.value.payableIds = [];
   formData.value.settlementMethod = '';
+  formData.value.paymentMethodCode = '';
   formData.value.amount = '';
   formData.value.discountAmount = '';
   formData.value.paidAt = formatDateTime(new Date());
@@ -426,6 +438,7 @@ const loadPaymentDetail = async () => {
       formData.value.paymentNo = payment.paymentNo || '';
       formData.value.supplierId = payment.supplierId ?? null;
       formData.value.settlementMethod = payment.settlementMethod || '';
+      formData.value.paymentMethodCode = payment.paymentMethodCode || '';
       formData.value.amount = payment.amount != null ? String(payment.amount) : '';
       formData.value.discountAmount = payment.discountAmount != null ? String(payment.discountAmount) : '';
       formData.value.paidAt = normalizePaidAt(payment.paidAt);
@@ -509,6 +522,23 @@ const fetchSettlementMethods = async () => {
   }
 };
 
+const fetchPaymentMethods = async () => {
+  try {
+    const res: any = await request.get('/erp/payment-methods');
+    if (res.data.code === 200) {
+      paymentMethodOptions.value = res.data.data || [];
+      if (!formData.value.paymentMethodCode && paymentMethodOptions.value.length > 0) {
+        const defaultMethod = paymentMethodOptions.value.find((item) => item.isDefault) ?? paymentMethodOptions.value[0];
+        if (defaultMethod) {
+          formData.value.paymentMethodCode = defaultMethod.code;
+        }
+      }
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const fetchPayables = async (supplierId: number | null) => {
   try {
     const res: any = await request.get('/erp/ap', {
@@ -533,6 +563,13 @@ const fetchPayables = async (supplierId: number | null) => {
 };
 
 const handleSupplierChange = (value: number | null) => {
+  const supplier = supplierOptions.value.find((item) => item.id === value);
+  if (supplier?.defaultSettlementMethodCode) {
+    formData.value.settlementMethod = supplier.defaultSettlementMethodCode;
+  }
+  if (supplier?.defaultPaymentMethodCode) {
+    formData.value.paymentMethodCode = supplier.defaultPaymentMethodCode;
+  }
   formData.value.payableIds = [];
   formData.value.amount = '';
   formData.value.discountAmount = '';
@@ -644,6 +681,7 @@ const savePayment = async (closeOnSuccess = false) => {
       amount: String(amount),
       discountAmount: String(discountAmount),
       settlementMethod: formData.value.settlementMethod,
+      paymentMethodCode: formData.value.paymentMethodCode || undefined,
       paidAt: formData.value.paidAt,
       remark: formData.value.remark
     };
@@ -700,6 +738,7 @@ onMounted(() => {
   resetForm();
   fetchSuppliers();
   fetchSettlementMethods();
+  fetchPaymentMethods();
   if (isPaymentRoute.value && isEditing.value) {
     loadPaymentDetail();
   } else {
@@ -724,6 +763,7 @@ onActivated(() => {
   fetchPaymentNo();
   fetchSuppliers();
   fetchSettlementMethods();
+  fetchPaymentMethods();
   fetchPayables(formData.value.supplierId);
 });
 

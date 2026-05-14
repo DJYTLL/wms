@@ -638,7 +638,18 @@
           <el-table-column :label="$t('field.orderTime')" width="180">
             <template #default="{ row }">{{ formatHistoryDate(row.orderAt) }}</template>
           </el-table-column>
-          <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="180" />
+          <el-table-column :label="$t('field.orderNo')" min-width="180">
+            <template #default="{ row }">
+              <el-button
+                link
+                type="primary"
+                class="history-order-link"
+                @click="openPurchaseOrderDetail(row)"
+              >
+                {{ row.orderNo || '-' }}
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
         <el-pagination
           class="history-pagination"
@@ -651,6 +662,94 @@
           @current-change="handlePurchaseHistoryPageChange"
           @size-change="handlePurchaseHistorySizeChange"
         />
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      v-model="purchaseOrderDetailDialogVisible"
+      :title="purchaseOrderDetailTitle"
+      width="1080px"
+      class="purchase-order-detail-dialog"
+      append-to-body
+      destroy-on-close
+    >
+      <div v-loading="purchaseOrderDetailLoading">
+        <template v-if="purchaseOrderDetail">
+          <div class="purchase-detail-summary">
+            <div class="purchase-detail-summary__item">
+              <span>{{ $t('field.orderNo') }}：</span>
+              <strong>{{ purchaseOrderDetail.order.orderNo || '-' }}</strong>
+            </div>
+            <div class="purchase-detail-summary__item">
+              <span>{{ $t('field.orderTime') }}：</span>
+              <strong>{{ formatHistoryDate(purchaseOrderDetail.order.orderAt || purchaseOrderDetail.order.createdAt) }}</strong>
+            </div>
+            <div class="purchase-detail-summary__item">
+              <span>{{ $t('field.supplier') }}：</span>
+              <strong>{{ purchaseOrderDetailSupplierName }}</strong>
+            </div>
+            <div class="purchase-detail-summary__item">
+              <span>{{ $t('field.status') }}：</span>
+              <el-tag size="small" :type="purchaseOrderDetailStatusType">
+                {{ formatPurchaseOrderStatus(purchaseOrderDetail.order.status) }}
+              </el-tag>
+            </div>
+            <div class="purchase-detail-summary__item">
+              <span>{{ $t('field.totalAmount') }}：</span>
+              <strong>{{ formatMoney(purchaseOrderDetail.order.totalAmount) }}</strong>
+            </div>
+          </div>
+
+          <div class="purchase-detail-remark">
+            <span>{{ $t('field.remark') }}：</span>
+            <span>{{ purchaseOrderDetail.order.remark || '-' }}</span>
+          </div>
+
+          <el-table
+            :data="purchaseOrderDetail.items"
+            stripe
+            border
+            :empty-text="$t('table.empty')"
+            max-height="420"
+          >
+            <el-table-column type="index" :label="$t('table.index')" width="70" />
+            <el-table-column :label="$t('field.product')" min-width="220">
+              <template #default="{ row }">
+                {{ getPurchaseOrderDetailProductName(row.productId) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.warehouse')" min-width="160">
+              <template #default="{ row }">
+                {{ getWarehouseName(row.warehouseId) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.location')" min-width="160">
+              <template #default="{ row }">
+                {{ getLocationName(row.locationId) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.quantity')" width="120">
+              <template #default="{ row }">
+                {{ formatPurchaseOrderDetailNumber(row.qty) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.price')" width="140">
+              <template #default="{ row }">
+                {{ formatMoney(row.price) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.lineTotal')" width="140">
+              <template #default="{ row }">
+                {{ formatMoney(calcPurchaseOrderDetailLineTotal(row)) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="$t('field.remark')" min-width="180">
+              <template #default="{ row }">
+                {{ row.remark || '-' }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
       </div>
     </el-dialog>
   </div>
@@ -729,6 +828,30 @@ interface PurchaseHistoryItem {
   supplierName: string;
 }
 
+interface PurchaseOrderDetailItem {
+  id?: number;
+  productId?: number;
+  warehouseId?: number;
+  locationId?: number;
+  qty?: number | string;
+  price?: number;
+  remark?: string;
+}
+
+interface PurchaseOrderDetailData {
+  order: {
+    id: number;
+    orderNo?: string;
+    orderAt?: string;
+    createdAt?: string;
+    supplierId?: number;
+    status?: string;
+    totalAmount?: number;
+    remark?: string;
+  };
+  items: PurchaseOrderDetailItem[];
+}
+
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
@@ -755,6 +878,11 @@ const purchaseHistoryPage = ref(1);
 const purchaseHistorySize = ref(10);
 const purchaseHistoryTotal = ref(0);
 const historyProduct = ref<ErpProduct | null>(null);
+const purchaseOrderDetailDialogVisible = ref(false);
+const purchaseOrderDetailLoading = ref(false);
+const purchaseOrderDetail = ref<PurchaseOrderDetailData | null>(null);
+const purchaseOrderDetailSupplierName = ref('-');
+const purchaseOrderProductNameMap = ref<Record<number, string>>({});
 
 const categoryOptions = ref<OptionItem[]>([]);
 const customerCategoryOptions = ref<OptionItem[]>([]);
@@ -802,6 +930,16 @@ const canViewCostPrice = computed(() => hasPermission('erp-product:cost:view') |
 const canEditCostPrice = computed(() => hasPermission('erp-product:cost:edit'));
 const canViewPurchaseHistory = computed(() => hasPermission('erp-purchase:view'));
 const historyProductName = computed(() => historyProduct.value?.name || '-');
+const purchaseOrderDetailTitle = computed(() => {
+  const orderNo = purchaseOrderDetail.value?.order?.orderNo;
+  return orderNo ? `${t('page.erpPurchaseOrder')} - ${orderNo}` : t('page.erpPurchaseOrder');
+});
+const purchaseOrderDetailStatusType = computed(() => {
+  const status = purchaseOrderDetail.value?.order?.status;
+  if (status === 'APPROVED') return 'success';
+  if (status === 'CANCELLED') return 'danger';
+  return 'info';
+});
 
 const getCategoryName = (id?: number) => categoryOptions.value.find(item => item.id === id)?.name || '-';
 const getUnitName = (id?: number) => unitOptions.value.find(item => item.id === id)?.name || '-';
@@ -827,6 +965,31 @@ const normalizeDateTimeValue = (value: any) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 };
 const formatHistoryDate = (value: any) => normalizeDateTimeValue(value);
+const formatPurchaseOrderDetailNumber = (value?: number | string) => {
+  if (value == null || value === '') return '-';
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return String(value);
+  return Number.isInteger(parsed) ? String(parsed) : parsed.toString();
+};
+const formatPurchaseOrderStatus = (status?: string) => {
+  const mapping: Record<string, string> = {
+    DRAFT: t('status.draft'),
+    APPROVED: t('status.approved'),
+    CANCELLED: t('status.cancelled')
+  };
+  if (!status) return '-';
+  return mapping[status] || status;
+};
+const getPurchaseOrderDetailProductName = (productId?: number) => {
+  if (!productId) return '-';
+  return purchaseOrderProductNameMap.value[productId] || `#${productId}`;
+};
+const calcPurchaseOrderDetailLineTotal = (row: PurchaseOrderDetailItem) => {
+  const qty = Number(row.qty ?? 0);
+  const price = Number(row.price ?? 0);
+  if (Number.isNaN(qty) || Number.isNaN(price)) return 0;
+  return qty * price;
+};
 
 const normalizeArray = <T>(value: any): T[] => {
   if (Array.isArray(value)) return value as T[];
@@ -1018,6 +1181,29 @@ const ensureLocationOption = async (locationId?: number | null) => {
   }
 };
 
+const ensurePurchaseOrderDetailProducts = async (items: PurchaseOrderDetailItem[]) => {
+  const missingIds = Array.from(new Set(
+    items
+      .map(item => item.productId)
+      .filter((id): id is number => typeof id === 'number' && Number.isFinite(id) && !purchaseOrderProductNameMap.value[id])
+  ));
+  if (!missingIds.length) return;
+  const loaded = await Promise.all(missingIds.map(async (productId) => {
+    try {
+      const product = await fetchProductDetail(productId);
+      return { id: productId, name: product.name || `#${productId}` };
+    } catch (error) {
+      notifyError(error);
+      return { id: productId, name: `#${productId}` };
+    }
+  }));
+  const nextMap = { ...purchaseOrderProductNameMap.value };
+  loaded.forEach(item => {
+    nextMap[item.id] = item.name;
+  });
+  purchaseOrderProductNameMap.value = nextMap;
+};
+
 const fetchNextCode = async () => {
   try {
     const res: any = await request.get('/erp/products/next-code');
@@ -1131,6 +1317,34 @@ const handlePurchaseHistorySizeChange = (newSize: number) => {
   purchaseHistorySize.value = newSize;
   purchaseHistoryPage.value = 1;
   fetchPurchaseHistory(1);
+};
+
+const openPurchaseOrderDetail = async (row: PurchaseHistoryItem) => {
+  if (!row?.orderId) return;
+  purchaseOrderDetailDialogVisible.value = true;
+  purchaseOrderDetailLoading.value = true;
+  purchaseOrderDetail.value = null;
+  purchaseOrderDetailSupplierName.value = row.supplierName || '-';
+  try {
+    const res: any = await request.get(`/erp/purchase-orders/${row.orderId}`);
+    const data = res?.data?.data;
+    const order = data?.order || data;
+    const items = normalizeArray<PurchaseOrderDetailItem>(data);
+    purchaseOrderDetail.value = {
+      order,
+      items
+    };
+    await Promise.all(items.flatMap(item => [
+      ensureWarehouseOption(item.warehouseId),
+      ensureLocationOption(item.locationId)
+    ]));
+    await ensurePurchaseOrderDetailProducts(items);
+  } catch (error) {
+    purchaseOrderDetailDialogVisible.value = false;
+    notifyError(error);
+  } finally {
+    purchaseOrderDetailLoading.value = false;
+  }
 };
 
 const openAddModal = () => {
@@ -1316,6 +1530,11 @@ onActivated(() => {
   padding-top: 10px;
 }
 
+.history-order-link {
+  padding: 0;
+  min-height: auto;
+}
+
 .history-header {
   display: flex;
   flex-wrap: wrap;
@@ -1338,6 +1557,30 @@ onActivated(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.purchase-order-detail-dialog :deep(.el-dialog__body) {
+  padding-top: 10px;
+}
+
+.purchase-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.purchase-detail-summary__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #2c3e50;
+}
+
+.purchase-detail-remark {
+  margin-bottom: 14px;
+  color: #4b5563;
+  line-height: 1.6;
 }
 
 .history-search {

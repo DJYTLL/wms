@@ -50,6 +50,9 @@ public interface ErpSaleOrderService {
     // 最近包含商品的销售单明细（退货参考）
     List<ErpSaleOrderRecentItem> recentItemsByProduct(Long customerId, Long productId, int limit);
 
+    // 分页查询包含商品的销售单明细（商品退货选择来源单）
+    PageResponse<ErpSaleOrderRecentItem> recentItemsByProduct(Long customerId, Long productId, long page, long size);
+
     PageResponse<ErpSaleOrderHistoryItem> productHistory(Long customerId,
                                                          Long productId,
                                                          String keyword,

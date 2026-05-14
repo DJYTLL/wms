@@ -75,9 +75,13 @@ public class ErpCustomer {
     @TableField("invoice_title")
     private String invoiceTitle;
 
-    // 结算方式
-    @TableField("payment_terms")
-    private String paymentTerms;
+    // 默认结算方式编码
+    @TableField("default_settlement_method_code")
+    private String defaultSettlementMethodCode;
+
+    // 默认收款方式编码
+    @TableField("default_receipt_method_code")
+    private String defaultReceiptMethodCode;
 
     // 送货方式编码
     @TableField("delivery_method_code")
@@ -238,12 +242,20 @@ public class ErpCustomer {
         this.invoiceTitle = invoiceTitle;
     }
 
-    public String getPaymentTerms() {
-        return paymentTerms;
+    public String getDefaultSettlementMethodCode() {
+        return defaultSettlementMethodCode;
     }
 
-    public void setPaymentTerms(String paymentTerms) {
-        this.paymentTerms = paymentTerms;
+    public void setDefaultSettlementMethodCode(String defaultSettlementMethodCode) {
+        this.defaultSettlementMethodCode = defaultSettlementMethodCode;
+    }
+
+    public String getDefaultReceiptMethodCode() {
+        return defaultReceiptMethodCode;
+    }
+
+    public void setDefaultReceiptMethodCode(String defaultReceiptMethodCode) {
+        this.defaultReceiptMethodCode = defaultReceiptMethodCode;
     }
 
     public String getDeliveryMethodCode() {

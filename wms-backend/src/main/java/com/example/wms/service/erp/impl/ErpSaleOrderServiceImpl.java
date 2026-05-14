@@ -22,6 +22,7 @@ import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
+import com.example.wms.mapper.erp.ErpReceiptMethodMapper;
 import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
@@ -77,6 +78,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpLocationMapper erpLocationMapper;
     private final ErpSettlementMethodMapper erpSettlementMethodMapper;
+    private final ErpReceiptMethodMapper erpReceiptMethodMapper;
     private final ErpStockBalanceMapper erpStockBalanceMapper;
     private final ErpStockTxnMapper erpStockTxnMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
@@ -94,6 +96,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                                    ErpWarehouseMapper erpWarehouseMapper,
                                    ErpLocationMapper erpLocationMapper,
                                    ErpSettlementMethodMapper erpSettlementMethodMapper,
+                                   ErpReceiptMethodMapper erpReceiptMethodMapper,
                                    ErpStockBalanceMapper erpStockBalanceMapper,
                                    ErpStockTxnMapper erpStockTxnMapper,
                                    ErpOrderSequenceMapper erpOrderSequenceMapper,
@@ -110,6 +113,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         this.erpWarehouseMapper = erpWarehouseMapper;
         this.erpLocationMapper = erpLocationMapper;
         this.erpSettlementMethodMapper = erpSettlementMethodMapper;
+        this.erpReceiptMethodMapper = erpReceiptMethodMapper;
         this.erpStockBalanceMapper = erpStockBalanceMapper;
         this.erpStockTxnMapper = erpStockTxnMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
@@ -233,9 +237,10 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         Instant orderAt = parseOrderAt(request.orderAt());
         order.setOrderAt(orderAt == null ? Instant.now() : orderAt);
         order.setSettlementMethod(normalizeSettlementMethod(request.settlementMethod(), DEFAULT_SETTLEMENT_METHOD));
+        order.setReceiptMethodCode(normalizeCode(request.receiptMethodCode()));
         order.setDeliveryMethod(normalizeCode(request.deliveryMethod()));
-        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod());
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod(), order.getReceiptMethodCode(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setTotalAmount(BigDecimal.ZERO);
         order.setTotalAmountExclTax(BigDecimal.ZERO);
@@ -282,9 +287,10 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setOrderAt(orderAt == null ? order.getOrderAt() : orderAt);
         order.setSettlementMethod(normalizeSettlementMethod(request.settlementMethod(),
             order.getSettlementMethod() == null ? DEFAULT_SETTLEMENT_METHOD : order.getSettlementMethod()));
+        order.setReceiptMethodCode(normalizeCode(request.receiptMethodCode()));
         order.setDeliveryMethod(normalizeCode(request.deliveryMethod()));
-        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod());
         order.setPaidAmount(normalizeAmount(request.paidAmount()));
+        validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod(), order.getReceiptMethodCode(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
@@ -446,6 +452,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             if (receivable != null) {
                 order.setReceivableStatus(receivable.getStatus());
                 order.setReceivableUnpaidAmount(receivable.getUnpaidAmount());
+            } else if (STATUS_DRAFT.equals(order.getStatus())) {
+                applyDraftReceivablePreview(order);
             }
             Long approvedReturnCount = erpSaleReturnMapper.countApprovedBySaleOrderId(tenantId, order.getId());
             order.setApprovedReturnCount(approvedReturnCount);
@@ -463,6 +471,29 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             order.setNetGrossProfit(netSaleAmount.subtract(netCost));
             order.setRedFlushTrace(resolveRedFlushTrace(order, approvedReturnCount));
         }
+    }
+
+    private void applyDraftReceivablePreview(ErpSaleOrder order) {
+        BigDecimal total = zeroIfNull(order.getTotalAmountInclTax());
+        BigDecimal discount = zeroIfNull(order.getDiscountAmount());
+        if (discount.compareTo(total) > 0) {
+            discount = total;
+        }
+        BigDecimal paidCash = zeroIfNull(order.getPaidAmount());
+        BigDecimal maxPaid = total.subtract(discount);
+        if (maxPaid.compareTo(BigDecimal.ZERO) < 0) {
+            maxPaid = BigDecimal.ZERO;
+        }
+        if (paidCash.compareTo(maxPaid) > 0) {
+            paidCash = maxPaid;
+        }
+        BigDecimal totalApplied = paidCash.add(discount);
+        if (totalApplied.compareTo(total) > 0) {
+            totalApplied = total;
+        }
+        BigDecimal unpaid = total.subtract(totalApplied);
+        order.setReceivableStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
+        order.setReceivableUnpaidAmount(unpaid);
     }
 
     private BigDecimal zeroIfNull(BigDecimal value) {
@@ -548,6 +579,28 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     }
 
     @Override
+    public PageResponse<ErpSaleOrderRecentItem> recentItemsByProduct(Long customerId, Long productId, long page, long size) {
+        Long tenantId = TenantContext.requireTenantId();
+        long finalPage = page <= 0 ? 1 : page;
+        long finalSize = size <= 0 ? 10 : Math.min(size, 100);
+        if (customerId == null || productId == null) {
+            return new PageResponse<>(0, finalPage, finalSize, List.of());
+        }
+        long total = erpSaleOrderItemMapper.countRecentItems(tenantId, customerId, productId);
+        long offset = (finalPage - 1) * finalSize;
+        List<ErpSaleOrderRecentItem> items = total == 0
+            ? List.of()
+            : erpSaleOrderItemMapper.findRecentItemsPage(
+                tenantId,
+                customerId,
+                productId,
+                (int) finalSize,
+                offset
+            );
+        return new PageResponse<>(total, finalPage, finalSize, items);
+    }
+
+    @Override
     public PageResponse<ErpSaleOrderHistoryItem> productHistory(Long customerId,
                                                                 Long productId,
                                                                 String keyword,
@@ -618,7 +671,11 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         return wrapper;
     }
 
-    private void validateHeaderMasterData(Long tenantId, Long customerId, String settlementMethod) {
+    private void validateHeaderMasterData(Long tenantId,
+                                          Long customerId,
+                                          String settlementMethod,
+                                          String receiptMethodCode,
+                                          BigDecimal paidAmount) {
         if (customerId == null) {
             throw new IllegalArgumentException("请选择客户");
         }
@@ -634,6 +691,15 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
         if (method == null || Boolean.FALSE.equals(method.getEnabled())) {
             throw new IllegalArgumentException("结算方式不存在或已停用");
+        }
+        if (paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            if (receiptMethodCode == null || receiptMethodCode.isBlank()) {
+                throw new IllegalArgumentException("请选择收款方式");
+            }
+            ErpReceiptMethod receiptMethod = erpReceiptMethodMapper.findByCode(tenantId, receiptMethodCode);
+            if (receiptMethod == null || Boolean.FALSE.equals(receiptMethod.getEnabled())) {
+                throw new IllegalArgumentException("收款方式不存在或已停用");
+            }
         }
     }
 
@@ -1089,6 +1155,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 receipt.setAmount(paidCash);
                 receipt.setDiscountAmount(discount);
                 receipt.setSettlementMethod(order.getSettlementMethod());
+                receipt.setReceiptMethodCode(order.getReceiptMethodCode());
                 receipt.setStatus(STATUS_APPROVED);
                 receipt.setReceivedAt(Instant.now());
                 receipt.setRemark(AUTO_RECEIPT_REMARK);
@@ -1111,6 +1178,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 receiptExisting.setAmount(paidCash);
                 receiptExisting.setDiscountAmount(discount);
                 receiptExisting.setSettlementMethod(order.getSettlementMethod());
+                receiptExisting.setReceiptMethodCode(order.getReceiptMethodCode());
                 receiptExisting.setStatus(STATUS_APPROVED);
                 receiptExisting.setReceivedAt(Instant.now());
                 receiptExisting.setRemark(AUTO_RECEIPT_REMARK);

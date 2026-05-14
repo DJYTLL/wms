@@ -46,6 +46,9 @@ public interface ErpPurchaseOrderService {
     // 最近包含商品的采购单明细（退货参考）
     List<ErpPurchaseOrderRecentItem> recentItemsByProduct(Long supplierId, Long productId, int limit);
 
+    // 分页查询包含商品的采购单明细（商品退货选择来源单）
+    PageResponse<ErpPurchaseOrderRecentItem> recentItemsByProduct(Long supplierId, Long productId, long page, long size);
+
     PageResponse<ErpPurchaseOrderHistoryItem> productHistory(Long supplierId,
                                                              Long productId,
                                                              String keyword,
