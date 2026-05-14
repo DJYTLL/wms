@@ -30,8 +30,9 @@ public final class MenuSeedProvider {
             new MenuSeed("erp-unit", "erp-basic", "单位管理", "erp-unit", "/erp/units", null, "erp-unit:view", 70),
             new MenuSeed("erp-settlement-method", "erp-basic", "结算方式", "erp-settlement-method", "/erp/settlement-methods", null, "erp-settlement-method:view", 80),
             new MenuSeed("erp-payment-method", "erp-basic", "付款方式", "erp-payment-method", "/erp/payment-methods", null, "erp-payment-method:view", 85),
-            new MenuSeed("erp-delivery-method", "erp-basic", "送货方式", "erp-delivery-method", "/erp/delivery-methods", null, "erp-delivery-method:view", 90),
-            new MenuSeed("erp-print-template", "erp-basic", "打印模板", "erp-print-template", "/erp/print-templates", null, "erp-print-template:view", 95),
+            new MenuSeed("erp-receipt-method", "erp-basic", "收款方式", "erp-receipt-method", "/erp/receipt-methods", null, "erp-receipt-method:view", 90),
+            new MenuSeed("erp-delivery-method", "erp-basic", "送货方式", "erp-delivery-method", "/erp/delivery-methods", null, "erp-delivery-method:view", 95),
+            new MenuSeed("erp-print-template", "erp-basic", "打印模板", "erp-print-template", "/erp/print-templates", null, "erp-print-template:view", 100),
 
             new MenuSeed("erp-purchase", "erp", "采购管理", "erp-purchase", null, null, null, 20),
             new MenuSeed("erp-purchase-draft", "erp-purchase", "采购单（草稿）", "erp-purchase-draft", "/erp/purchase-orders/draft", null, "erp-purchase:view", 10),

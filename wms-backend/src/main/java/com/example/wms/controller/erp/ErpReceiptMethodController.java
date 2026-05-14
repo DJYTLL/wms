@@ -26,14 +26,14 @@ public class ErpReceiptMethodController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('PERM_erp-payment-method:view')")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt-method:view')")
     public ResponseEntity<ApiResponse<List<ErpReceiptMethod>>> list(@RequestParam(required = false) String keyword,
                                                                     @RequestParam(required = false) Boolean enabled) {
         return ResponseEntity.ok(ApiResponse.ok(erpReceiptMethodService.listAll(keyword, enabled)));
     }
 
     @GetMapping("/page")
-    @PreAuthorize("hasAuthority('PERM_erp-payment-method:view')")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt-method:view')")
     public ResponseEntity<ApiResponse<PageResponse<ErpReceiptMethod>>> page(@RequestParam(defaultValue = "1") long page,
                                                                             @RequestParam(defaultValue = "20") long size,
                                                                             @RequestParam(required = false) String keyword,
@@ -42,32 +42,32 @@ public class ErpReceiptMethodController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_erp-payment-method:view')")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt-method:view')")
     public ResponseEntity<ApiResponse<ErpReceiptMethod>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpReceiptMethodService.getById(id)));
     }
 
     @GetMapping("/next-code")
-    @PreAuthorize("hasAuthority('PERM_erp-payment-method:add')")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt-method:add')")
     public ResponseEntity<ApiResponse<String>> nextCode() {
         return ResponseEntity.ok(ApiResponse.ok(erpReceiptMethodService.nextCode()));
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('PERM_erp-payment-method:add')")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt-method:add')")
     public ResponseEntity<ApiResponse<ErpReceiptMethod>> create(@Valid @RequestBody ErpPaymentMethodCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpReceiptMethodService.create(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_erp-payment-method:edit')")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt-method:edit')")
     public ResponseEntity<ApiResponse<ErpReceiptMethod>> update(@PathVariable Long id,
                                                                 @Valid @RequestBody ErpPaymentMethodUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpReceiptMethodService.update(id, request)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_erp-payment-method:delete')")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt-method:delete')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
                                                     @Valid @RequestBody DeleteRequest request) {
         try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {

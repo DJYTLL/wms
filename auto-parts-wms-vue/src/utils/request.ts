@@ -118,6 +118,7 @@ const DELETE_PROMPT_ROUTES: Array<{ pattern: RegExp; entityName: string }> = [
   { pattern: /^\/erp\/delivery-methods(\/|$)/, entityName: '送货方式' },
   { pattern: /^\/erp\/locations(\/|$)/, entityName: '库位' },
   { pattern: /^\/erp\/payment-methods(\/|$)/, entityName: '付款方式' },
+  { pattern: /^\/erp\/receipt-methods(\/|$)/, entityName: '收款方式' },
   { pattern: /^\/erp\/print-templates(\/|$)/, entityName: '打印模板' },
   { pattern: /^\/erp\/product-fitments(\/|$)/, entityName: '商品适配车型' },
   { pattern: /^\/erp\/products(\/|$)/, entityName: '商品' },

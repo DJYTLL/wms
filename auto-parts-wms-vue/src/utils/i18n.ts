@@ -32,6 +32,7 @@ const legacyMenuKeyMap: Record<string, string> = {
   'erp-category': 'nav.erpCategory',
   'erp-unit': 'nav.erpUnit',
   'erp-settlement-method': 'nav.erpSettlementMethod',
+  'erp-receipt-method': 'nav.erpReceiptMethod',
   'erp-delivery-method': 'nav.erpDeliveryMethod',
   'erp-print-template': 'nav.erpPrintTemplate',
   'erp-purchase': 'nav.erpPurchase',

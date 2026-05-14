@@ -181,6 +181,11 @@ public final class PermissionSeedProvider {
             new PermissionSeed("erp-payment-method:edit", "编辑付款方式(ERP)", "编辑ERP付款方式"),
             new PermissionSeed("erp-payment-method:delete", "删除付款方式(ERP)", "删除ERP付款方式"),
 
+            new PermissionSeed("erp-receipt-method:view", "查看收款方式(ERP)", "查看ERP收款方式"),
+            new PermissionSeed("erp-receipt-method:add", "新增收款方式(ERP)", "新增ERP收款方式"),
+            new PermissionSeed("erp-receipt-method:edit", "编辑收款方式(ERP)", "编辑ERP收款方式"),
+            new PermissionSeed("erp-receipt-method:delete", "删除收款方式(ERP)", "删除ERP收款方式"),
+
             new PermissionSeed("erp-delivery-method:view", "查看送货方式(ERP)", "查看ERP送货方式"),
             new PermissionSeed("erp-delivery-method:add", "新增送货方式(ERP)", "新增ERP送货方式"),
             new PermissionSeed("erp-delivery-method:edit", "编辑送货方式(ERP)", "编辑ERP送货方式"),
@@ -339,6 +344,11 @@ public final class PermissionSeedProvider {
             new PermissionSeed("column:erp-payment-method:name", "ERP付款方式-名称列", "ERP付款方式名称列显示"),
             new PermissionSeed("column:erp-payment-method:sort", "ERP付款方式-排序列", "ERP付款方式排序列显示"),
             new PermissionSeed("column:erp-payment-method:status", "ERP付款方式-状态列", "ERP付款方式状态列显示"),
+
+            new PermissionSeed("column:erp-receipt-method:code", "ERP收款方式-编码列", "ERP收款方式编码列显示"),
+            new PermissionSeed("column:erp-receipt-method:name", "ERP收款方式-名称列", "ERP收款方式名称列显示"),
+            new PermissionSeed("column:erp-receipt-method:sort", "ERP收款方式-排序列", "ERP收款方式排序列显示"),
+            new PermissionSeed("column:erp-receipt-method:status", "ERP收款方式-状态列", "ERP收款方式状态列显示"),
 
             new PermissionSeed("column:erp-delivery-method:code", "ERP送货方式-编码列", "ERP送货方式编码列显示"),
             new PermissionSeed("column:erp-delivery-method:name", "ERP送货方式-名称列", "ERP送货方式名称列显示"),

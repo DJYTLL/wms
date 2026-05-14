@@ -131,6 +131,9 @@ public class DataInitializer {
             ensureSystemConfig(systemConfigMapper, "erp.payment-method.code.prefix", "PM", "string", "ERP付款方式编码前缀", false);
             ensureSystemConfig(systemConfigMapper, "erp.payment-method.code.date-format", "yyyyMMdd", "string", "ERP付款方式编码日期格式", false);
             ensureSystemConfig(systemConfigMapper, "erp.payment-method.code.seq-length", "4", "int", "ERP付款方式编码序列长度", false);
+            ensureSystemConfig(systemConfigMapper, "erp.receipt-method.code.prefix", "RM", "string", "ERP收款方式编码前缀", false);
+            ensureSystemConfig(systemConfigMapper, "erp.receipt-method.code.date-format", "yyyyMMdd", "string", "ERP收款方式编码日期格式", false);
+            ensureSystemConfig(systemConfigMapper, "erp.receipt-method.code.seq-length", "4", "int", "ERP收款方式编码序列长度", false);
             ensureSystemConfig(systemConfigMapper, "erp.delivery-method.code.prefix", "DM", "string", "ERP送货方式编码前缀", false);
             ensureSystemConfig(systemConfigMapper, "erp.delivery-method.code.date-format", "yyyyMMdd", "string", "ERP送货方式编码日期格式", false);
             ensureSystemConfig(systemConfigMapper, "erp.delivery-method.code.seq-length", "4", "int", "ERP送货方式编码序列长度", false);

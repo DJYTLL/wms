@@ -46,6 +46,7 @@ const en = {
         erpUnit: 'ERP Units',
         erpSettlementMethod: 'ERP Settlement Methods',
         erpPaymentMethod: 'ERP Payment Methods',
+        erpReceiptMethod: 'ERP Receipt Methods',
         erpDeliveryMethod: 'ERP Delivery Methods',
         erpPrintTemplate: 'ERP Print Templates',
         erpPurchase: 'ERP Purchase',
@@ -96,6 +97,7 @@ const en = {
         erpUnitManagement: 'ERP Unit Management',
         erpSettlementMethodManagement: 'ERP Settlement Method Management',
         erpPaymentMethodManagement: 'ERP Payment Method Management',
+        erpReceiptMethodManagement: 'ERP Receipt Method Management',
         erpDeliveryMethodManagement: 'ERP Delivery Method Management',
           erpPurchaseOrderManagement: 'ERP Purchase Orders',
           erpPurchaseOrder: 'Purchase Order',
@@ -795,6 +797,7 @@ const en = {
       'erp-purchase-return-draft': 'Purchase Returns (Draft)',
       'erp-purchase-return-approved': 'Purchase Returns (Approved)',
       'erp-payment-method': 'Payment Methods',
+      'erp-receipt-method': 'Receipt Methods',
       'erp-finance-customer-debt': 'Customer Debts',
       'erp-finance-supplier-debt': 'Supplier Debts',
 };

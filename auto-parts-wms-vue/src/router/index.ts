@@ -235,6 +235,12 @@ const routes: Array<RouteRecordRaw> = [
           component: () => import('../views/erp/ErpPaymentMethodManagement.vue'),
           meta: { title: 'ERP付款方式管理', permission: 'erp-payment-method:view' }
         },
+        {
+          path: 'erp/receipt-methods',
+          name: 'erp-receipt-methods',
+          component: () => import('../views/erp/ErpReceiptMethodManagement.vue'),
+          meta: { title: 'ERP收款方式管理', permission: 'erp-receipt-method:view' }
+        },
       {
         path: 'erp/delivery-methods',
         name: 'erp-delivery-methods',

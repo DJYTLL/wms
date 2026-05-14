@@ -45,6 +45,7 @@ const zh = {
         erpUnit: '单位管理',
         erpSettlementMethod: '结算方式',
         erpPaymentMethod: '付款方式',
+        erpReceiptMethod: '收款方式',
         erpDeliveryMethod: '送货方式',
         erpPrintTemplate: '打印模板',
         erpPurchase: '采购管理',
@@ -95,6 +96,7 @@ const zh = {
         erpUnitManagement: '单位管理',
         erpSettlementMethodManagement: '结算方式管理',
         erpPaymentMethodManagement: '付款方式管理',
+        erpReceiptMethodManagement: '收款方式管理',
         erpDeliveryMethodManagement: '送货方式管理',
           erpPurchaseOrderManagement: '采购单管理',
           erpPurchaseOrder: '采购单',
@@ -795,6 +797,7 @@ const zh = {
       'erp-purchase-return-draft': '采购退货（草稿）',
       'erp-purchase-return-approved': '采购退货（已审核）',
       'erp-payment-method': '付款方式',
+      'erp-receipt-method': '收款方式',
       'erp-finance-customer-debt': '客户欠款',
       'erp-finance-supplier-debt': '供应商欠款',
 };
