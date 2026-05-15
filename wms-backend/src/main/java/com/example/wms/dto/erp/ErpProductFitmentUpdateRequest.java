@@ -1,7 +1,14 @@
 package com.example.wms.dto.erp;
 
-// 更新商品适配车型请求（ERP进销存）
+/**
+
+ * ERP 商品适配关系用于接收更新操作的请求参数。
+
+ */
 public record ErpProductFitmentUpdateRequest(
+    /**
+     * 表示备注说明。
+     */
     String remark
 ) {
 }

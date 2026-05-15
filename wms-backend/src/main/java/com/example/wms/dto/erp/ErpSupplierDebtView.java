@@ -2,10 +2,23 @@ package com.example.wms.dto.erp;
 
 import java.math.BigDecimal;
 
-// 供应商欠款汇总
+/**
+
+ * ERP 供应商欠款用于返回视图展示数据。
+
+ */
 public class ErpSupplierDebtView {
+    /**
+     * 表示供应商 ID。
+     */
     private Long supplierId;
+    /**
+     * 表示供应商名称。
+     */
     private String supplierName;
+    /**
+     * 表示欠款总金额。
+     */
     private BigDecimal totalDebt;
 
     public ErpSupplierDebtView() {

@@ -2,9 +2,19 @@ package com.example.wms.dto.erp;
 
 import java.math.BigDecimal;
 
-// 按业务单据聚合的金额键值对
+/**
+
+ * 用于传输ERP ID 与金额对应项相关数据。
+
+ */
 public class ErpIdAmountPair {
+    /**
+     * 表示数据的主键 ID。
+     */
     private Long id;
+    /**
+     * 表示金额。
+     */
     private BigDecimal amount;
 
     public Long getId() {

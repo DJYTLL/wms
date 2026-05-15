@@ -5,9 +5,19 @@ import com.example.wms.entity.erp.ErpStockCountItem;
 
 import java.util.List;
 
-// 库存盘点单详情响应（ERP进销存）
+/**
+
+ * ERP 库存盘点单用于返回详情数据。
+
+ */
 public record ErpStockCountDetail(
+    /**
+     * 表示盘点。
+     */
     ErpStockCount count,
+    /**
+     * 表示明细项列表。
+     */
     List<ErpStockCountItem> items
 ) {
 }

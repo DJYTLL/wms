@@ -2,14 +2,39 @@ package com.example.wms.dto.erp;
 
 import java.math.BigDecimal;
 
-// 商品库存下拉明细（ERP进销存）
+/**
+
+ * ERP 库存结余用于返回下拉选项数据。
+
+ */
 public class ErpStockBalanceOption {
+    /**
+     * 表示仓库 ID。
+     */
     private Long warehouseId;
+    /**
+     * 表示仓库名称。
+     */
     private String warehouseName;
+    /**
+     * 表示库位 ID。
+     */
     private Long locationId;
+    /**
+     * 表示库位名称。
+     */
     private String locationName;
+    /**
+     * 表示数量OnHand。
+     */
     private BigDecimal qtyOnHand;
+    /**
+     * 表示数量Available。
+     */
     private BigDecimal qtyAvailable;
+    /**
+     * 表示数量锁定。
+     */
     private BigDecimal qtyLocked;
 
     public Long getWarehouseId() {

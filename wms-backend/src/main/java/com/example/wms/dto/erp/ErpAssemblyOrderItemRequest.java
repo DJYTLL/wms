@@ -5,12 +5,31 @@ import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 
-// Assembly order item request
+/**
+
+ * ERP 组装单用于接收明细项的请求参数。
+
+ */
 public record ErpAssemblyOrderItemRequest(
+    /**
+     * 表示商品 ID。
+     */
     @NotNull Long productId,
+    /**
+     * 表示仓库 ID。
+     */
     Long warehouseId,
+    /**
+     * 表示库位 ID。
+     */
     Long locationId,
+    /**
+     * 表示数量。
+     */
     @NotNull @Positive BigDecimal qty,
+    /**
+     * 表示备注说明。
+     */
     String remark
 ) {
 }

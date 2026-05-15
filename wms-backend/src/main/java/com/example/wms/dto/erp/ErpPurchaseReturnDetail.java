@@ -5,9 +5,19 @@ import com.example.wms.entity.erp.ErpPurchaseReturnItem;
 
 import java.util.List;
 
-// 采购退货详情（ERP进销存）
+/**
+
+ * ERP 采购退货单用于返回详情数据。
+
+ */
 public record ErpPurchaseReturnDetail(
+    /**
+     * 表示主单信息。
+     */
     ErpPurchaseReturn order,
+    /**
+     * 表示明细项列表。
+     */
     List<ErpPurchaseReturnItem> items
 ) {
 }

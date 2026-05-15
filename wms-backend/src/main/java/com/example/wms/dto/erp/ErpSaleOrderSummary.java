@@ -2,11 +2,27 @@ package com.example.wms.dto.erp;
 
 import java.math.BigDecimal;
 
-// 销售单汇总
+/**
+
+ * ERP 销售单用于返回汇总统计数据。
+
+ */
 public class ErpSaleOrderSummary {
+    /**
+     * 表示销售金额合计。
+     */
     private BigDecimal saleAmountTotal;
+    /**
+     * 表示退货金额合计。
+     */
     private BigDecimal returnAmountTotal;
+    /**
+     * 表示净销售金额合计。
+     */
     private BigDecimal netSaleAmountTotal;
+    /**
+     * 表示净毛利润合计。
+     */
     private BigDecimal netGrossProfitTotal;
 
     public ErpSaleOrderSummary() {

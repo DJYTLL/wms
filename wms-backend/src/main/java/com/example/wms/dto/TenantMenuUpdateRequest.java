@@ -4,6 +4,15 @@ import jakarta.validation.constraints.NotNull;
 
 import java.util.List;
 
-// 租户菜单更新请求
-public record TenantMenuUpdateRequest(@NotNull List<Long> menuIds) {
+/**
+
+ * 租户菜单用于接收更新操作的请求参数。
+
+ */
+public record TenantMenuUpdateRequest(
+    /**
+     * 表示菜单 ID 列表。
+     */
+    @NotNull List<Long> menuIds
+) {
 }

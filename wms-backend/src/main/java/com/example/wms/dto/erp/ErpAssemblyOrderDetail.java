@@ -5,9 +5,19 @@ import com.example.wms.entity.erp.ErpAssemblyOrderItem;
 
 import java.util.List;
 
-// Assembly order detail response
+/**
+
+ * ERP 组装单用于返回详情数据。
+
+ */
 public class ErpAssemblyOrderDetail {
+    /**
+     * 表示主单信息。
+     */
     private final ErpAssemblyOrder order;
+    /**
+     * 表示明细项列表。
+     */
     private final List<ErpAssemblyOrderItem> items;
 
     public ErpAssemblyOrderDetail(ErpAssemblyOrder order, List<ErpAssemblyOrderItem> items) {

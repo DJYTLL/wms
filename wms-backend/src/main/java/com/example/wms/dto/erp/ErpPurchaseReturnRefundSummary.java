@@ -2,13 +2,35 @@ package com.example.wms.dto.erp;
 
 import java.math.BigDecimal;
 
-// 原采购单退款资金摘要
+/**
+
+ * ERP 采购退货单用于返回汇总统计数据。
+
+ */
 public class ErpPurchaseReturnRefundSummary {
+    /**
+     * 表示purchaseOrder ID。
+     */
     private Long purchaseOrderId;
+    /**
+     * 表示purchaseOrder编号。
+     */
     private String purchaseOrderNo;
+    /**
+     * 表示优惠金额。
+     */
     private BigDecimal discountAmount;
+    /**
+     * 表示paidCash。
+     */
     private BigDecimal paidCash;
+    /**
+     * 表示refundedCash。
+     */
     private BigDecimal refundedCash;
+    /**
+     * 表示refundableCash。
+     */
     private BigDecimal refundableCash;
 
     public Long getPurchaseOrderId() {

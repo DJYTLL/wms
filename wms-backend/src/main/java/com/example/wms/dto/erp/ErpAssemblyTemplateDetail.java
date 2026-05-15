@@ -5,9 +5,19 @@ import com.example.wms.entity.erp.ErpAssemblyTemplateItem;
 
 import java.util.List;
 
-// Assembly template detail response
+/**
+
+ * ERP 组装模板用于返回详情数据。
+
+ */
 public class ErpAssemblyTemplateDetail {
+    /**
+     * 表示模板。
+     */
     private final ErpAssemblyTemplate template;
+    /**
+     * 表示明细项列表。
+     */
     private final List<ErpAssemblyTemplateItem> items;
 
     public ErpAssemblyTemplateDetail(ErpAssemblyTemplate template, List<ErpAssemblyTemplateItem> items) {
