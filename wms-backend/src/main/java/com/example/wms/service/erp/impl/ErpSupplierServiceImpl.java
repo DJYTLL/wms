@@ -72,9 +72,9 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
     }
 
     @Override
-    public List<ErpSupplier> listAll(String keyword, String status) {
+    public List<ErpSupplier> listAll(String keyword, String contact, String phone, String status) {
         Long tenantId = TenantContext.requireTenantId();
-        QueryWrapper<ErpSupplier> wrapper = baseWrapper(tenantId, keyword, status);
+        QueryWrapper<ErpSupplier> wrapper = baseWrapper(tenantId, keyword, contact, phone, status);
         wrapper.orderByAsc("id");
         List<ErpSupplier> suppliers = erpSupplierMapper.selectList(wrapper);
         enrichRecentTransactionAt(tenantId, suppliers);
@@ -82,10 +82,10 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
     }
 
     @Override
-    public PageResponse<ErpSupplier> page(long page, long size, String keyword, String status) {
+    public PageResponse<ErpSupplier> page(long page, long size, String keyword, String contact, String phone, String status) {
         Long tenantId = TenantContext.requireTenantId();
         Page<ErpSupplier> pageReq = Page.of(page, size);
-        QueryWrapper<ErpSupplier> wrapper = baseWrapper(tenantId, keyword, status);
+        QueryWrapper<ErpSupplier> wrapper = baseWrapper(tenantId, keyword, contact, phone, status);
         wrapper.orderByAsc("id");
         Page<ErpSupplier> result = erpSupplierMapper.selectPage(pageReq, wrapper);
         enrichRecentTransactionAt(tenantId, result.getRecords());
@@ -189,7 +189,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         }
     }
 
-    private QueryWrapper<ErpSupplier> baseWrapper(Long tenantId, String keyword, String status) {
+    private QueryWrapper<ErpSupplier> baseWrapper(Long tenantId, String keyword, String contact, String phone, String status) {
         QueryWrapper<ErpSupplier> wrapper = new QueryWrapper<ErpSupplier>()
             .eq("tenant_id", tenantId);
         if (keyword != null && !keyword.isBlank()) {
@@ -211,7 +211,21 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
                 .or()
                 .like("bank_account", keyword)
                 .or()
-                .like("address", keyword));
+                .like("address", keyword)
+                .or()
+                .apply("CAST(contacts AS TEXT) LIKE {0}", wrapLike(keyword)));
+        }
+        if (contact != null && !contact.isBlank()) {
+            wrapper.and(q -> q.like("contact", contact)
+                .or()
+                .apply("CAST(contacts AS TEXT) LIKE {0}", wrapLike(contact)));
+        }
+        if (phone != null && !phone.isBlank()) {
+            wrapper.and(q -> q.like("phone", phone)
+                .or()
+                .like("mobile", phone)
+                .or()
+                .apply("CAST(contacts AS TEXT) LIKE {0}", wrapLike(phone)));
         }
         if ("enabled".equalsIgnoreCase(status)) {
             wrapper.eq("is_enabled", true).eq("is_blacklisted", false);
@@ -221,6 +235,10 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
             wrapper.eq("is_blacklisted", true);
         }
         return wrapper;
+    }
+
+    private String wrapLike(String value) {
+        return "%" + value.trim() + "%";
     }
 
     private void applyStatus(ErpSupplier supplier, Boolean enabled, Boolean blacklisted) {

@@ -25,7 +25,58 @@
         </span>
       </div>
     </el-option>
+    <el-option
+      v-if="allowManualLocationSelect"
+      :key="MANUAL_ENTRY_KEY"
+      :label="t('action.otherLocation')"
+      :value="MANUAL_ENTRY_KEY"
+    >
+      <div class="stock-option stock-option--manual-entry">
+        <span class="stock-option__name">
+          {{ t('action.otherLocation') }}
+          <span class="stock-option__tag">{{ t('action.otherLocation') }}</span>
+        </span>
+        <span class="stock-option__qty">{{ t('message.selectOtherStockLocation') }}</span>
+      </div>
+    </el-option>
   </el-select>
+  <el-dialog
+    v-model="manualLocationDialogVisible"
+    :title="t('message.selectOtherStockLocation')"
+    width="520px"
+    append-to-body
+  >
+    <div class="product-stock-select__dialog">
+      <el-form label-position="top">
+        <el-form-item :label="t('field.warehouse')" required>
+          <el-select v-model="manualWarehouseId" filterable clearable style="width: 100%">
+            <el-option
+              v-for="item in warehouseOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('field.location')">
+          <el-select v-model="manualLocationId" filterable clearable style="width: 100%">
+            <el-option
+              v-for="item in manualLocationOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+    </div>
+    <template #footer>
+      <el-button @click="manualLocationDialogVisible = false">{{ t('action.cancel') }}</el-button>
+      <el-button type="primary" :disabled="!manualWarehouseId" @click="confirmManualLocationSelection">
+        {{ t('action.confirm') }}
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -62,6 +113,7 @@ const props = withDefaults(defineProps<{
   disabled?: boolean;
   placeholder?: string;
   selectStyle?: string;
+  allowManualLocationSelect?: boolean;
 }>(), {
   modelValue: '',
   productId: null,
@@ -71,7 +123,8 @@ const props = withDefaults(defineProps<{
   locationOptions: () => [],
   disabled: false,
   placeholder: '',
-  selectStyle: 'width: 100%'
+  selectStyle: 'width: 100%',
+  allowManualLocationSelect: false
 });
 
 const emit = defineEmits<{
@@ -82,7 +135,13 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const stockOptionsMap = ref<Record<number, StockOption[]>>({});
+const manualLocationDialogVisible = ref(false);
+const manualWarehouseId = ref<number | null>(null);
+const manualLocationId = ref<number | null>(null);
 const innerValue = computed(() => props.modelValue || '');
+const warehouseOptions = computed(() => props.warehouseOptions || []);
+const locationOptions = computed(() => props.locationOptions || []);
+const MANUAL_ENTRY_KEY = '__manual_location__';
 
 const buildStockKey = (warehouseId: number | null | undefined, locationId: number | null | undefined) => {
   const w = warehouseId == null ? 0 : warehouseId;
@@ -158,15 +217,20 @@ const fetchStockOptions = async (force = false) => {
 const stockOptions = computed(() => {
   if (!props.productId) return [];
   const options = stockOptionsMap.value[props.productId] || [];
-  if (!props.warehouseId && !props.locationId) {
-    return options;
-  }
+  const result = [...options];
   const key = buildStockKey(props.warehouseId ?? null, props.locationId ?? null);
-  if (options.some(item => item.key === key)) {
-    return options;
+  if (!result.some(item => item.key === key)) {
+    const fallback = buildFallbackStockOption();
+    if (fallback) {
+      result.unshift(fallback);
+    }
   }
-  const fallback = buildFallbackStockOption();
-  return fallback ? [fallback, ...options] : options;
+  return result;
+});
+
+const manualLocationOptions = computed(() => {
+  if (!manualWarehouseId.value) return [];
+  return locationOptions.value.filter(item => item.warehouseId === manualWarehouseId.value);
 });
 
 const emitSelection = (stockKey: string) => {
@@ -192,13 +256,32 @@ const emitSelection = (stockKey: string) => {
 };
 
 const handleUpdate = (value: string) => {
+  if (value === MANUAL_ENTRY_KEY) {
+    openManualLocationDialog();
+    return;
+  }
   emit('update:modelValue', value || '');
   emitSelection(value || '');
 };
 
 const handleVisibleChange = async (visible: boolean) => {
-  if (!visible || !props.productId) return;
+  if (!visible) return;
+  if (!props.productId) return;
   await fetchStockOptions(true);
+};
+
+const openManualLocationDialog = () => {
+  manualWarehouseId.value = props.warehouseId ?? null;
+  manualLocationId.value = props.locationId ?? null;
+  manualLocationDialogVisible.value = true;
+};
+
+const confirmManualLocationSelection = () => {
+  if (!manualWarehouseId.value) return;
+  const stockKey = buildStockKey(manualWarehouseId.value, manualLocationId.value ?? null);
+  emit('update:modelValue', stockKey);
+  emitSelection(stockKey);
+  manualLocationDialogVisible.value = false;
 };
 
 watch(() => props.productId, async (productId) => {
@@ -207,9 +290,23 @@ watch(() => props.productId, async (productId) => {
   }
   await fetchStockOptions();
 }, { immediate: true });
+
+watch(manualWarehouseId, (warehouseId) => {
+  if (!warehouseId) {
+    manualLocationId.value = null;
+    return;
+  }
+  if (!manualLocationOptions.value.some(item => item.id === manualLocationId.value)) {
+    manualLocationId.value = null;
+  }
+});
 </script>
 
 <style scoped>
+.product-stock-select__dialog {
+  padding-top: 4px;
+}
+
 .stock-option {
   display: flex;
   flex-direction: column;
@@ -221,9 +318,26 @@ watch(() => props.productId, async (productId) => {
   color: #1f2b3d;
 }
 
+.stock-option__tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .stock-option__qty {
   color: #6d7b91;
   font-size: 12px;
+}
+
+.stock-option--manual-entry .stock-option__name {
+  color: #2563eb;
+  font-weight: 600;
 }
 </style>
 

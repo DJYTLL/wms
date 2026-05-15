@@ -6,6 +6,7 @@ import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPurchaseReturnCreateRequest;
 import com.example.wms.dto.erp.ErpPurchaseReturnDetail;
+import com.example.wms.dto.erp.ErpPurchaseReturnRefundSummary;
 import com.example.wms.dto.erp.ErpPurchaseReturnUpdateRequest;
 import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.service.erp.ErpPurchaseReturnService;
@@ -57,6 +58,12 @@ public class ErpPurchaseReturnController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpPurchaseReturnDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getDetail(id)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return:view')")
+    @GetMapping("/purchase-order/{purchaseOrderId}/refund-summary")
+    public ResponseEntity<ApiResponse<ErpPurchaseReturnRefundSummary>> getPurchaseOrderRefundSummary(@PathVariable Long purchaseOrderId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getPurchaseOrderRefundSummary(purchaseOrderId)));
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-purchase-return:add')")

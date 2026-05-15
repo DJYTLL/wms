@@ -203,6 +203,7 @@ interface SettlementOption {
   code: string;
   name: string;
   isDefault?: boolean;
+  fundInputMode?: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED';
 }
 
 interface ReceivableOption {
@@ -658,7 +659,11 @@ const fetchSettlementMethods = async () => {
   try {
     const res: any = await request.get('/erp/settlement-methods');
     if (res.data.code === 200) {
-      settlementOptions.value = res.data.data || [];
+      const allOptions: SettlementOption[] = res.data.data || [];
+      settlementOptions.value = allOptions.filter((item) => item.fundInputMode !== 'HIDDEN');
+      if (!settlementOptions.value.some((item) => item.code === formData.value.settlementMethod)) {
+        formData.value.settlementMethod = '';
+      }
       if (!formData.value.settlementMethod && settlementOptions.value.length > 0) {
         const defaultMethod = settlementOptions.value.find((item) => item.isDefault) ?? settlementOptions.value[0];
         if (defaultMethod) {
@@ -713,8 +718,18 @@ const fetchReceivables = async (customerId: number | null) => {
 
 const handleCustomerChange = () => {
   const customer = customerOptions.value.find((item) => item.id === formData.value.customerId);
-  if (customer?.defaultSettlementMethodCode) {
+  if (
+    customer?.defaultSettlementMethodCode
+    && settlementOptions.value.some((item) => item.code === customer.defaultSettlementMethodCode)
+  ) {
     formData.value.settlementMethod = customer.defaultSettlementMethodCode;
+  } else if (
+    !formData.value.settlementMethod
+    || !settlementOptions.value.some((item) => item.code === formData.value.settlementMethod)
+  ) {
+    formData.value.settlementMethod = settlementOptions.value.find((item) => item.isDefault)?.code
+      ?? settlementOptions.value[0]?.code
+      ?? '';
   }
   if (customer?.defaultReceiptMethodCode) {
     formData.value.receiptMethodCode = customer.defaultReceiptMethodCode;
@@ -916,7 +931,8 @@ const openSaleOrderByNo = async (row?: ReceivableOption) => {
   }
 };
 
-  const saveReceipt = async (closeOnSuccess = false) => {
+  const saveReceipt = async (options: { closeOnSuccess?: boolean; silentSuccess?: boolean } = {}) => {
+    const { closeOnSuccess = false, silentSuccess = false } = options;
     if (!formData.value.customerId) {
       notifyWarning();
       return;
@@ -1006,7 +1022,9 @@ const openSaleOrderByNo = async (row?: ReceivableOption) => {
       : await request.post('/erp/receipts', payload);
     if (res.data.code === 200) {
       createdReceiptId.value = res.data.data?.receipt?.id ?? createdReceiptId.value ?? receiptId.value ?? null;
-      notifySuccess();
+      if (!silentSuccess) {
+        notifySuccess();
+      }
       if (closeOnSuccess) {
         goBack();
       }
@@ -1019,15 +1037,15 @@ const openSaleOrderByNo = async (row?: ReceivableOption) => {
 };
 
 const handleSave = async () => {
-  await saveReceipt(false);
+  await saveReceipt();
 };
 
 const handleSaveAndBack = async () => {
-  await saveReceipt(true);
+  await saveReceipt({ closeOnSuccess: true });
 };
 
 const handleApprove = async () => {
-  await saveReceipt(false);
+  await saveReceipt({ silentSuccess: true });
   if (!createdReceiptId.value) {
     return;
   }

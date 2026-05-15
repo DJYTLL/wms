@@ -4,25 +4,41 @@
       <div class="page-title">{{ $t('page.erpCustomerManagement') }}</div>
       <div class="page-toolbar-card">
         <div class="erp-basic-toolbar">
-          <div class="erp-basic-filters erp-basic-filters--3">
-          <el-input
-            v-model="searchQuery"
-            :placeholder="$t('action.search')"
-            class="table-search erp-basic-field--wide"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-          />
-          <el-select v-model="categoryFilter" :placeholder="$t('field.customerCategory')" class="table-search erp-basic-field--narrow" clearable @change="handleSearch">
-            <el-option v-for="item in categoryOptions" :key="item.id" :label="item.name" :value="item.id" />
-          </el-select>
-          <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search erp-basic-field--narrow" @change="handleSearch">
-            <el-option :label="$t('filter.all')" value="all" />
-            <el-option :label="$t('status.active')" value="enabled" />
-            <el-option :label="$t('status.inactive')" value="disabled" />
-          </el-select>
+          <div class="erp-basic-filters erp-basic-filters--5">
+            <el-input
+              v-model="searchQuery"
+              :placeholder="$t('placeholder.keyword')"
+              class="table-search erp-basic-field--wide"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <el-input
+              v-model="contactQuery"
+              :placeholder="$t('field.contactPerson')"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @keyup.enter="handleSearch"
+            />
+            <el-input
+              v-model="phoneQuery"
+              :placeholder="$t('field.phone')"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @keyup.enter="handleSearch"
+            />
+            <el-select v-model="categoryFilter" :placeholder="$t('field.customerCategory')" class="table-search erp-basic-field--narrow" clearable>
+              <el-option v-for="item in categoryOptions" :key="item.id" :label="item.name" :value="item.id" />
+            </el-select>
+            <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="table-search erp-basic-field--narrow">
+              <el-option :label="$t('filter.all')" value="all" />
+              <el-option :label="$t('status.active')" value="enabled" />
+              <el-option :label="$t('status.inactive')" value="disabled" />
+            </el-select>
           </div>
           <div class="erp-basic-actions">
+            <el-button type="primary" @click="handleSearch">{{ $t('action.search') }}</el-button>
+            <el-button @click="handleReset">{{ $t('action.resetDefault') }}</el-button>
             <el-button type="primary" v-permission="'erp-customer:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
           </div>
         </div>
@@ -99,18 +115,6 @@
           <el-select v-model="formData.deliveryMethodCode" clearable style="width: 100%">
             <el-option v-for="item in deliveryMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
           </el-select>
-        </el-form-item>
-        <el-form-item :label="$t('field.contactPerson')">
-          <el-input v-model="formData.contact" />
-        </el-form-item>
-        <el-form-item :label="$t('field.phone')">
-          <el-input v-model="formData.phone" />
-        </el-form-item>
-        <el-form-item :label="$t('field.mobile')">
-          <el-input v-model="formData.mobile" />
-        </el-form-item>
-        <el-form-item :label="$t('field.email')">
-          <el-input v-model="formData.email" />
         </el-form-item>
         <el-divider class="span-2">{{ $t('field.contacts') }}</el-divider>
         <el-form-item label="" label-width="0px" class="span-2 no-label">
@@ -224,6 +228,8 @@ const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 
 const searchQuery = ref('');
+const contactQuery = ref('');
+const phoneQuery = ref('');
 const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all');
 const categoryFilter = ref<number | null>(null);
 const loading = ref(false);
@@ -351,6 +357,8 @@ const fetchList = async () => {
       size: size.value
     };
     if (searchQuery.value) params.keyword = searchQuery.value.trim();
+    if (contactQuery.value) params.contact = contactQuery.value.trim();
+    if (phoneQuery.value) params.phone = phoneQuery.value.trim();
     if (statusFilter.value !== 'all') params.enabled = statusFilter.value === 'enabled';
     if (categoryFilter.value) params.categoryId = categoryFilter.value;
 
@@ -369,6 +377,15 @@ const fetchList = async () => {
 const handleSearch = () => {
   page.value = 1;
   fetchList();
+};
+
+const handleReset = () => {
+  searchQuery.value = '';
+  contactQuery.value = '';
+  phoneQuery.value = '';
+  statusFilter.value = 'all';
+  categoryFilter.value = null;
+  handleSearch();
 };
 
 const handlePageChange = (newPage: number) => {
@@ -409,7 +426,7 @@ const openEditModal = (row: ErpCustomer) => {
   formData.mobile = row.mobile || '';
   formData.email = row.email || '';
   formData.address = row.address || '';
-  formData.contacts = parseContacts(row.contacts);
+  formData.contacts = buildInitialContacts(row);
   formData.enabled = row.enabled;
   formData.remark = row.remark || '';
   showModal.value = true;
@@ -467,6 +484,42 @@ const buildContactsPayload = () => {
   return cleaned.length ? JSON.stringify(cleaned) : '';
 };
 
+const buildPrimaryContactFields = () => {
+  const primaryContact = formData.contacts
+    .map(item => ({
+      name: item.name?.trim() || '',
+      phone: item.phone?.trim() || '',
+      mobile: item.mobile?.trim() || '',
+      email: item.email?.trim() || ''
+    }))
+    .find(item => item.name || item.phone || item.mobile || item.email);
+
+  return {
+    contact: primaryContact?.name || '',
+    phone: primaryContact?.phone || '',
+    mobile: primaryContact?.mobile || '',
+    email: primaryContact?.email || ''
+  };
+};
+
+const buildInitialContacts = (row: ErpCustomer) => {
+  const parsedContacts = parseContacts(row.contacts);
+  if (parsedContacts.length > 0) {
+    return parsedContacts;
+  }
+
+  if (row.contact || row.phone || row.mobile || row.email) {
+    return [{
+      name: row.contact || '',
+      phone: row.phone || '',
+      mobile: row.mobile || '',
+      email: row.email || ''
+    }];
+  }
+
+  return [];
+};
+
 const fetchNextCustomerCode = async () => {
   try {
     const res: any = await request.get('/erp/customers/next-code');
@@ -482,7 +535,11 @@ const saveData = async () => {
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
   try {
-    const payload = { ...formData, contacts: buildContactsPayload() };
+    const payload = {
+      ...formData,
+      ...buildPrimaryContactFields(),
+      contacts: buildContactsPayload()
+    };
     const res: any = isEditing.value && currentId.value
       ? await request.put(`/erp/customers/${currentId.value}`, payload)
       : await request.post('/erp/customers', payload);

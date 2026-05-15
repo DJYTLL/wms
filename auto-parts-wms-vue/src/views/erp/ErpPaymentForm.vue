@@ -138,6 +138,7 @@ interface SettlementOption {
   code: string;
   name: string;
   isDefault?: boolean;
+  fundInputMode?: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED';
 }
 
 interface PayableOption {
@@ -509,7 +510,11 @@ const fetchSettlementMethods = async () => {
   try {
     const res: any = await request.get('/erp/settlement-methods');
     if (res.data.code === 200) {
-      settlementOptions.value = res.data.data || [];
+      const allOptions: SettlementOption[] = res.data.data || [];
+      settlementOptions.value = allOptions.filter((item) => item.fundInputMode !== 'HIDDEN');
+      if (!settlementOptions.value.some((item) => item.code === formData.value.settlementMethod)) {
+        formData.value.settlementMethod = '';
+      }
       if (!formData.value.settlementMethod && settlementOptions.value.length > 0) {
         const defaultMethod = settlementOptions.value.find((item) => item.isDefault) ?? settlementOptions.value[0];
         if (defaultMethod) {
@@ -564,8 +569,18 @@ const fetchPayables = async (supplierId: number | null) => {
 
 const handleSupplierChange = (value: number | null) => {
   const supplier = supplierOptions.value.find((item) => item.id === value);
-  if (supplier?.defaultSettlementMethodCode) {
+  if (
+    supplier?.defaultSettlementMethodCode
+    && settlementOptions.value.some((item) => item.code === supplier.defaultSettlementMethodCode)
+  ) {
     formData.value.settlementMethod = supplier.defaultSettlementMethodCode;
+  } else if (
+    !formData.value.settlementMethod
+    || !settlementOptions.value.some((item) => item.code === formData.value.settlementMethod)
+  ) {
+    formData.value.settlementMethod = settlementOptions.value.find((item) => item.isDefault)?.code
+      ?? settlementOptions.value[0]?.code
+      ?? '';
   }
   if (supplier?.defaultPaymentMethodCode) {
     formData.value.paymentMethodCode = supplier.defaultPaymentMethodCode;

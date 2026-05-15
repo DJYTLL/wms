@@ -80,16 +80,16 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
     }
 
     @Override
-    public List<ErpCustomer> listAll(String keyword, Boolean enabled, Long categoryId) {
-        QueryWrapper<ErpCustomer> wrapper = baseWrapper(keyword, enabled, categoryId);
+    public List<ErpCustomer> listAll(String keyword, String contact, String phone, Boolean enabled, Long categoryId) {
+        QueryWrapper<ErpCustomer> wrapper = baseWrapper(keyword, contact, phone, enabled, categoryId);
         wrapper.orderByAsc("id");
         return erpCustomerMapper.selectList(wrapper);
     }
 
     @Override
-    public PageResponse<ErpCustomer> page(long page, long size, String keyword, Boolean enabled, Long categoryId) {
+    public PageResponse<ErpCustomer> page(long page, long size, String keyword, String contact, String phone, Boolean enabled, Long categoryId) {
         Page<ErpCustomer> pageReq = Page.of(page, size);
-        QueryWrapper<ErpCustomer> wrapper = baseWrapper(keyword, enabled, categoryId);
+        QueryWrapper<ErpCustomer> wrapper = baseWrapper(keyword, contact, phone, enabled, categoryId);
         wrapper.orderByAsc("id");
         Page<ErpCustomer> result = erpCustomerMapper.selectPage(pageReq, wrapper);
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
@@ -203,7 +203,7 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
         }
     }
 
-    private QueryWrapper<ErpCustomer> baseWrapper(String keyword, Boolean enabled, Long categoryId) {
+    private QueryWrapper<ErpCustomer> baseWrapper(String keyword, String contact, String phone, Boolean enabled, Long categoryId) {
         QueryWrapper<ErpCustomer> wrapper = new QueryWrapper<ErpCustomer>()
             .eq("tenant_id", TenantContext.requireTenantId());
         if (keyword != null && !keyword.isBlank()) {
@@ -213,7 +213,25 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
                 .or()
                 .like("short_name", keyword)
                 .or()
-                .like("contact", keyword));
+                .like("contact", keyword)
+                .or()
+                .like("phone", keyword)
+                .or()
+                .like("mobile", keyword)
+                .or()
+                .apply("CAST(contacts AS TEXT) LIKE {0}", wrapLike(keyword)));
+        }
+        if (contact != null && !contact.isBlank()) {
+            wrapper.and(q -> q.like("contact", contact)
+                .or()
+                .apply("CAST(contacts AS TEXT) LIKE {0}", wrapLike(contact)));
+        }
+        if (phone != null && !phone.isBlank()) {
+            wrapper.and(q -> q.like("phone", phone)
+                .or()
+                .like("mobile", phone)
+                .or()
+                .apply("CAST(contacts AS TEXT) LIKE {0}", wrapLike(phone)));
         }
         if (enabled != null) {
             wrapper.eq("is_enabled", enabled);
@@ -222,6 +240,10 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
             wrapper.eq("category_id", categoryId);
         }
         return wrapper;
+    }
+
+    private String wrapLike(String value) {
+        return "%" + value.trim() + "%";
     }
 
     private void applyRequest(ErpCustomer customer, ErpCustomerCreateRequest request, Long categoryId) {

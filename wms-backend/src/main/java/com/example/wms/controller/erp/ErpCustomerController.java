@@ -29,9 +29,11 @@ public class ErpCustomerController {
     @GetMapping
     @PreAuthorize("hasAuthority('PERM_erp-customer:view')")
     public ResponseEntity<ApiResponse<List<ErpCustomer>>> list(@RequestParam(required = false) String keyword,
+                                                               @RequestParam(required = false) String contact,
+                                                               @RequestParam(required = false) String phone,
                                                                @RequestParam(required = false) Boolean enabled,
                                                                @RequestParam(required = false) Long categoryId) {
-        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.listAll(keyword, enabled, categoryId)));
+        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.listAll(keyword, contact, phone, enabled, categoryId)));
     }
 
     // 分页查询客户
@@ -40,9 +42,11 @@ public class ErpCustomerController {
     public ResponseEntity<ApiResponse<PageResponse<ErpCustomer>>> page(@RequestParam(defaultValue = "1") long page,
                                                                        @RequestParam(defaultValue = "20") long size,
                                                                        @RequestParam(required = false) String keyword,
+                                                                       @RequestParam(required = false) String contact,
+                                                                       @RequestParam(required = false) String phone,
                                                                        @RequestParam(required = false) Boolean enabled,
                                                                        @RequestParam(required = false) Long categoryId) {
-        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.page(page, size, keyword, enabled, categoryId)));
+        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.page(page, size, keyword, contact, phone, enabled, categoryId)));
     }
 
     // 查询客户详情

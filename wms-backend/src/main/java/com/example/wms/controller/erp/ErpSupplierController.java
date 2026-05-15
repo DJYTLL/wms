@@ -29,8 +29,10 @@ public class ErpSupplierController {
     @GetMapping
     @PreAuthorize("hasAuthority('PERM_erp-supplier:view')")
     public ResponseEntity<ApiResponse<List<ErpSupplier>>> list(@RequestParam(required = false) String keyword,
+                                                               @RequestParam(required = false) String contact,
+                                                               @RequestParam(required = false) String phone,
                                                                @RequestParam(required = false) String status) {
-        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.listAll(keyword, status)));
+        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.listAll(keyword, contact, phone, status)));
     }
 
     // 分页查询供应商
@@ -39,8 +41,10 @@ public class ErpSupplierController {
     public ResponseEntity<ApiResponse<PageResponse<ErpSupplier>>> page(@RequestParam(defaultValue = "1") long page,
                                                                        @RequestParam(defaultValue = "20") long size,
                                                                        @RequestParam(required = false) String keyword,
+                                                                       @RequestParam(required = false) String contact,
+                                                                       @RequestParam(required = false) String phone,
                                                                        @RequestParam(required = false) String status) {
-        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.page(page, size, keyword, status)));
+        return ResponseEntity.ok(ApiResponse.ok(erpSupplierService.page(page, size, keyword, contact, phone, status)));
     }
 
     // 查询供应商详情

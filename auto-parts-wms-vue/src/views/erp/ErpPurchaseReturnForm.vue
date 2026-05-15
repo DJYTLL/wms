@@ -257,7 +257,7 @@
           </el-table>
           </div>
           <div class="detail-actions">
-            <el-button class="paper-add-item-button" type="primary" plain size="small" :disabled="isReadOnly || mustSelectPurchaseOrderBeforeProduct" @click="addItem">
+            <el-button class="paper-add-item-button" type="primary" plain size="small" :disabled="isReadOnly || isPurchaseOrderBoundMode" @click="addItem">
               + {{ $t('action.addItem') }}
             </el-button>
           </div>
@@ -292,14 +292,14 @@
                 </el-select>
               </el-form-item>
             </div>
-            <div v-if="!isCreditSettlement" class="form-group form-group--settlement">
+            <div v-if="showRefundPaymentFields" class="form-group form-group--settlement">
               <el-form-item :label="$t('field.paymentMethod')">
                 <el-select v-model="formData.paymentMethodCode" clearable style="width: 100%" :disabled="isReadOnly">
                   <el-option v-for="item in paymentMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
                 </el-select>
               </el-form-item>
             </div>
-            <div v-if="formData.settlementMethod && !isCreditSettlement" class="form-group form-group--amount">
+            <div v-if="showRefundPaymentFields" class="form-group form-group--amount">
               <el-form-item :label="$t('field.paidAmount')">
                 <DecimalInput v-model="formData.paidAmount" :scale="2" :disabled="isReadOnly" style="width: 100%" />
               </el-form-item>
@@ -310,9 +310,52 @@
               </el-form-item>
             </div>
           </div>
+          <div
+            v-if="shouldShowPurchaseOrderRefundSummary"
+            v-loading="purchaseOrderRefundSummaryLoading"
+            class="sale-order-refund-summary"
+          >
+            <div class="sale-order-refund-summary__header">
+              <span class="sale-order-refund-summary__title">{{ $t('field.purchaseOrderNo') }}</span>
+              <el-button
+                link
+                type="primary"
+                class="sale-order-refund-summary__link"
+                @click="openSelectedPurchaseOrderPreview"
+              >
+                {{ purchaseOrderRefundSummary?.purchaseOrderNo || resolvedPurchaseOrderNo || '-' }}
+              </el-button>
+            </div>
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.originalPaidAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(purchaseOrderRefundSummary?.paidCash) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.discountAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(purchaseOrderRefundSummary?.discountAmount) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.refundedAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(purchaseOrderRefundSummary?.refundedCash) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item sale-order-refund-summary__item--highlight">
+              <span class="sale-order-refund-summary__label">{{ $t('field.refundablePaidAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(purchaseOrderRefundSummary?.refundableCash) }}</strong>
+            </div>
+          </div>
         </el-form>
       </div>
     </div>
+
+    <el-dialog
+      v-model="purchaseOrderPreviewDialogVisible"
+      :title="purchaseOrderPreviewDialogTitle"
+      width="92vw"
+      class="history-order-dialog"
+      append-to-body
+    >
+      <iframe v-if="purchaseOrderPreviewDialogUrl" :src="purchaseOrderPreviewDialogUrl" class="history-order-frame" />
+    </el-dialog>
 
     <el-dialog
       v-model="showPurchaseOrderDialog"
@@ -468,11 +511,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useValidationMessage } from '@/composables/useValidationMessage';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import ProductStockSelect from '@/components/ProductStockSelect.vue';
@@ -529,6 +573,15 @@ interface RecentPurchaseItem {
   price: number;
 }
 
+interface PurchaseOrderRefundSummary {
+  purchaseOrderId?: number;
+  purchaseOrderNo?: string;
+  discountAmount?: number | string;
+  paidCash?: number | string;
+  refundedCash?: number | string;
+  refundableCash?: number | string;
+}
+
 interface PageResponse<T> {
   items: T[];
   total: number;
@@ -574,6 +627,7 @@ const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
+const { requiredFieldMessage, positiveRowFieldMessage, invalidRowFieldMessage } = useValidationMessage();
 const authStore = useAuthStore();
 
 const isEditing = computed(() => Boolean(route.params.id));
@@ -605,6 +659,11 @@ const productStockMap = ref<Record<number, StockOption[]>>({});
 const productRecentPurchaseMap = ref<Record<number, RecentPurchaseItem[]>>({});
 const purchaseOrderDetailItems = ref<PurchaseOrderDetailItem[]>([]);
 const selectedPurchaseOrderItems = ref<PurchaseOrderDetailItem[]>([]);
+const purchaseOrderRefundSummary = ref<PurchaseOrderRefundSummary | null>(null);
+const purchaseOrderRefundSummaryLoading = ref(false);
+const purchaseOrderPreviewDialogVisible = ref(false);
+const purchaseOrderPreviewDialogTitle = ref('');
+const purchaseOrderPreviewDialogUrl = ref('');
 const showPurchaseOrderDialog = ref(false);
 const showRecentPurchaseDialog = ref(false);
 
@@ -632,6 +691,7 @@ const pendingSupplierId = ref<number | null>(null);
 const lastSupplierId = ref<number | null>(null);
 const isInitializing = ref(false);
 const needsReload = ref(false);
+const isPageActive = ref(false);
 const isSaving = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
@@ -708,8 +768,11 @@ const resolvedPurchaseOrderNo = computed(() => {
 const mustSelectPurchaseOrderBeforeProduct = computed(() => {
   return formData.returnSource === 'BY_PURCHASE_ORDER' && !formData.purchaseOrderId;
 });
+const isPurchaseOrderBoundMode = computed(() => {
+  return formData.returnSource === 'BY_PURCHASE_ORDER';
+});
 const isProductSelectDisabled = computed(() => {
-  return isReadOnly.value || !formData.supplierId || mustSelectPurchaseOrderBeforeProduct.value;
+  return isReadOnly.value || !formData.supplierId || mustSelectPurchaseOrderBeforeProduct.value || isPurchaseOrderBoundMode.value;
 });
 const isCreditSettlement = computed(() => {
   if (!formData.settlementMethod) return false;
@@ -719,6 +782,12 @@ const isCreditSettlement = computed(() => {
   if (selected?.fundInputMode === 'HIDDEN') return true;
   if (!selected?.name) return false;
   return String(selected.name).includes('挂账');
+});
+const showRefundPaymentFields = computed(() => {
+  return formData.refundAction === 'REFUND' && Boolean(formData.settlementMethod) && !isCreditSettlement.value;
+});
+const shouldShowPurchaseOrderRefundSummary = computed(() => {
+  return Boolean(formData.purchaseOrderId && purchaseOrderRefundSummary.value);
 });
 
 const isTypingTarget = (target: EventTarget | null) => {
@@ -874,8 +943,16 @@ const handleSaveSuccessDialogClosed = async () => {
 
 const handleContinueCreate = async () => {
   closeSaveSuccessDialog();
+  const createRoute = {
+    path: '/erp/purchase-returns/create',
+    query: { from: 'draft', returnTo: '/erp/purchase-returns/draft' }
+  };
+  const targetFullPath = router.resolve(createRoute).fullPath;
   if (isEditing.value) {
-    await router.replace({ path: '/erp/purchase-returns/create', query: { from: 'draft', returnTo: '/erp/purchase-returns/draft' } });
+    if (route.fullPath !== targetFullPath) {
+      await router.replace(createRoute);
+    }
+    await loadDetail();
     return;
   }
   await loadDetail();
@@ -1243,9 +1320,10 @@ const calcLineProfit = (row: PurchaseReturnItem) => {
   return amount - (cost * (parseDecimal(row.qty, 4) || 0));
 };
 
-const formatMoney = (value: number | null) => {
-  if (value == null || Number.isNaN(value)) return '-';
-  return value.toFixed(2);
+const formatMoney = (value: number | string | null | undefined) => {
+  const numeric = Number(value);
+  if (value == null || Number.isNaN(numeric)) return '-';
+  return numeric.toFixed(2);
 };
 
 const formatRate = (value: number | null) => {
@@ -1302,6 +1380,13 @@ const getDefaultSettlementMethod = () => {
   return defaultItem?.code || '';
 };
 
+const resolveSettlementMethodCode = (value?: string) => {
+  if (!value) return '';
+  const normalized = String(value).trim();
+  const matched = settlementMethodOptions.value.find(item => item.code === normalized || item.name === normalized);
+  return matched?.code || normalized;
+};
+
 const getDefaultPaymentMethod = () => {
   if (!paymentMethodOptions.value.length) return '';
   const defaultItem = paymentMethodOptions.value.find(item => item.isDefault) ?? paymentMethodOptions.value[0];
@@ -1310,7 +1395,7 @@ const getDefaultPaymentMethod = () => {
 
 const applyMethodsForSupplier = () => {
   const supplier = supplierOptions.value.find(item => item.id === formData.supplierId);
-  const settlement = supplier?.defaultSettlementMethodCode || getDefaultSettlementMethod();
+  const settlement = resolveSettlementMethodCode(supplier?.defaultSettlementMethodCode) || getDefaultSettlementMethod();
   const paymentMethod = supplier?.defaultPaymentMethodCode || getDefaultPaymentMethod();
   if (settlement) {
     formData.settlementMethod = settlement;
@@ -1508,6 +1593,7 @@ const bindRecentPurchaseOrder = async (row: PurchaseReturnItem, purchase: Recent
     orderNo: purchase.orderNo,
     supplierId: formData.supplierId || undefined
   });
+  await fetchPurchaseOrderRefundSummary(purchase.orderId);
   syncSourceOrderNoToRemark(purchase.orderNo);
   row.price = purchase.price == null ? row.price : String(purchase.price);
   if (!row.qty && purchase.remainingQty != null) {
@@ -1586,6 +1672,7 @@ const handleSupplierChange = (value: number | null) => {
   productRecentPurchaseMap.value = {};
   resetRecentPurchaseDialogState();
   formData.purchaseOrderId = null;
+  purchaseOrderRefundSummary.value = null;
   const hasItems = formData.items.some(item => item.productId);
   if (hasItems) {
     pendingSupplierId.value = value;
@@ -1602,18 +1689,23 @@ const handleReturnSourceChange = () => {
   if (formData.returnSource === 'BY_PURCHASE_ORDER') {
     formData.items = [];
     addItem();
+    purchaseOrderRefundSummary.value = null;
     if (formData.supplierId) {
       fetchPurchaseOrders();
     }
     return;
   }
+  purchaseOrderRefundSummary.value = null;
   purchaseOrderDetailItems.value = [];
   selectedPurchaseOrderItems.value = [];
 };
 
 const handlePurchaseOrderChange = (value: number | null) => {
   if (isReadOnly.value) return;
-  if (!value) return;
+  if (!value) {
+    purchaseOrderRefundSummary.value = null;
+    return;
+  }
   if (formData.returnSource !== 'BY_PURCHASE_ORDER') return;
   const selected = purchaseOrderOptions.value.find(item => item.id === value);
   if (!selected) return;
@@ -1632,8 +1724,13 @@ const handlePurchaseOrderChange = (value: number | null) => {
 const openPurchaseOrderDetail = async (orderId: number) => {
   if (!orderId) return;
   try {
-    const res: any = await request.get(`/erp/purchase-orders/${orderId}`);
+    purchaseOrderRefundSummaryLoading.value = true;
+    const [res, refundSummaryRes] = await Promise.all([
+      request.get(`/erp/purchase-orders/${orderId}`),
+      request.get(`/erp/purchase-returns/purchase-order/${orderId}/refund-summary`)
+    ]);
     const data = res.data.data || {};
+    purchaseOrderRefundSummary.value = refundSummaryRes.data.data || null;
     const returnedQtyMap = await fetchReturnedQtyMap(orderId);
     purchaseOrderDetailItems.value = (data.items || []).map((item: any) => {
       const originalQty = Number(item.qty || 0);
@@ -1660,7 +1757,39 @@ const openPurchaseOrderDetail = async (orderId: number) => {
     showPurchaseOrderDialog.value = true;
   } catch (error) {
     notifyError(error);
+  } finally {
+    purchaseOrderRefundSummaryLoading.value = false;
   }
+};
+
+const fetchPurchaseOrderRefundSummary = async (orderId?: number | null) => {
+  if (!orderId) {
+    purchaseOrderRefundSummary.value = null;
+    return;
+  }
+  try {
+    purchaseOrderRefundSummaryLoading.value = true;
+    const res: any = await request.get(`/erp/purchase-returns/purchase-order/${orderId}/refund-summary`);
+    purchaseOrderRefundSummary.value = res.data.data || null;
+  } catch (error) {
+    purchaseOrderRefundSummary.value = null;
+    notifyError(error);
+  } finally {
+    purchaseOrderRefundSummaryLoading.value = false;
+  }
+};
+
+const openSelectedPurchaseOrderPreview = () => {
+  const purchaseOrderId = purchaseOrderRefundSummary.value?.purchaseOrderId || formData.purchaseOrderId;
+  if (!purchaseOrderId) return;
+  const purchaseOrderNo = purchaseOrderRefundSummary.value?.purchaseOrderNo || resolvedPurchaseOrderNo.value || '';
+  const resolved = router.resolve({
+    path: `/erp/purchase-orders/${purchaseOrderId}/edit`,
+    query: { mode: 'view', embed: '1' }
+  });
+  purchaseOrderPreviewDialogTitle.value = `${t('page.erpPurchaseOrder')} · ${purchaseOrderNo || purchaseOrderId}`;
+  purchaseOrderPreviewDialogUrl.value = resolved.href;
+  purchaseOrderPreviewDialogVisible.value = true;
 };
 
 const fetchReturnedQtyMap = async (purchaseOrderId: number) => {
@@ -1726,8 +1855,10 @@ const applySupplierChange = async (action: 'price' | 'clear' | 'cancel') => {
   }
   lastSupplierId.value = targetSupplierId;
   pendingSupplierId.value = null;
+  purchaseOrderRefundSummary.value = null;
   if (action === 'clear') {
     resetRecentPurchaseDialogState();
+    formData.purchaseOrderId = null;
     formData.items = [];
     addItem();
     applyMethodsForSupplier();
@@ -1822,8 +1953,22 @@ const ensureProductOption = async (productId?: number | null) => {
   }
 };
 
-const getSelectableProductOptions = (currentProductId?: number | null) =>
-  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+const getSelectableProductOptions = (currentProductId?: number | null) => {
+  const baseOptions = productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  if (!isPurchaseOrderBoundMode.value) {
+    return baseOptions;
+  }
+  const allowedProductIds = new Set<number>();
+  purchaseOrderDetailItems.value.forEach(item => {
+    if (item.productId != null) {
+      allowedProductIds.add(Number(item.productId));
+    }
+  });
+  if (currentProductId != null) {
+    allowedProductIds.add(Number(currentProductId));
+  }
+  return baseOptions.filter(item => allowedProductIds.has(Number(item.id)));
+};
 
 const ensureWarehouseOption = async (warehouseId?: number | null) => {
   if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
@@ -1911,6 +2056,7 @@ const loadDetail = async () => {
         syncStockKey(item);
       }
       if (!formData.items.length) addItem();
+      await fetchPurchaseOrderRefundSummary(formData.purchaseOrderId);
       lastSupplierId.value = formData.supplierId;
     }
   } catch (error) {
@@ -1952,6 +2098,8 @@ const resetForm = () => {
   formData.discountAmount = '';
   formData.remark = '';
   formData.items = [];
+  purchaseOrderRefundSummary.value = null;
+  purchaseOrderRefundSummaryLoading.value = false;
   themeMode.value = 'default';
   productRecentPurchaseMap.value = {};
   purchaseOrderDetailItems.value = [];
@@ -2020,49 +2168,50 @@ const fetchNextOrderNo = async () => {
   ) => {
     const closeOnSuccess = options.closeOnSuccess !== false;
     if (!formData.supplierId) {
-      notifyWarning(t('message.required'));
-    return;
-  }
-  if (!formData.returnType) {
-    notifyWarning(t('message.required'));
-    return;
-  }
-  if (!formData.purchaseOrderId) {
-    notifyWarning(
-      formData.returnSource === 'BY_PRODUCT'
-        ? t('message.pickPurchaseOrderFromRecentPurchase')
-        : t('message.required')
-    );
-    return;
-  }
-  if (!formData.settlementMethod) {
-    notifyWarning(t('message.required'));
-    return;
-  }
-  const validItems = formData.items.filter(item => item.productId);
-  if (!validItems.length) {
-    notifyWarning(t('message.noItems'));
-    return;
-  }
-  for (const item of validItems) {
-    const qtyValue = parseDecimal(item.qty, 4);
-    if (qtyValue == null || qtyValue <= 0) {
-      notifyWarning(t('message.mustBePositive'));
+      notifyWarning(requiredFieldMessage(t('field.supplier')));
       return;
     }
-    const priceValue = parseDecimal(item.price, 4);
-    if (priceValue == null) {
+    if (!formData.returnType) {
+      notifyWarning(requiredFieldMessage(t('field.returnType')));
+      return;
+    }
+    if (!formData.purchaseOrderId) {
+      notifyWarning(
+        formData.returnSource === 'BY_PRODUCT'
+          ? t('message.pickPurchaseOrderFromRecentPurchase')
+          : requiredFieldMessage(t('field.sourcePurchaseOrder'))
+      );
+      return;
+    }
+    if (!formData.settlementMethod) {
+      notifyWarning(requiredFieldMessage(t('field.settlementMethod')));
+      return;
+    }
+    const validItems = formData.items.filter(item => item.productId);
+    if (!validItems.length) {
+      notifyWarning(t('message.noItems'));
+      return;
+    }
+    for (const [index, item] of validItems.entries()) {
+      const rowNumber = index + 1;
+      const qtyValue = parseDecimal(item.qty, 4);
+      if (qtyValue == null || qtyValue <= 0) {
+        notifyWarning(positiveRowFieldMessage(rowNumber, t('field.quantity')));
+        return;
+      }
+      const priceValue = parseDecimal(item.price, 4);
+      if (priceValue == null) {
+        notifyWarning(invalidRowFieldMessage(rowNumber, t('field.price')));
+        return;
+      }
+    }
+
+    const paidAmount = showRefundPaymentFields.value ? parseAmount(formData.paidAmount) : 0;
+    const discountAmount = parseAmount(formData.discountAmount);
+    if (paidAmount == null || discountAmount == null) {
       notifyWarning(t('message.invalidNumber'));
       return;
     }
-  }
-
-  const paidAmount = isCreditSettlement.value ? 0 : parseAmount(formData.paidAmount);
-  const discountAmount = parseAmount(formData.discountAmount);
-  if (paidAmount == null || discountAmount == null) {
-    notifyWarning(t('message.invalidNumber'));
-    return;
-  }
 
     const payload = {
       orderNo: formData.orderNo || undefined,
@@ -2071,7 +2220,7 @@ const fetchNextOrderNo = async () => {
       supplierId: formData.supplierId,
       purchaseOrderId: formData.purchaseOrderId || undefined,
       settlementMethod: formData.settlementMethod,
-      paymentMethodCode: isCreditSettlement.value ? undefined : (formData.paymentMethodCode || undefined),
+      paymentMethodCode: showRefundPaymentFields.value ? (formData.paymentMethodCode || undefined) : undefined,
       refundAction: formData.refundAction,
       paidAmount,
       discountAmount,
@@ -2180,6 +2329,7 @@ watch(
   () => route.fullPath,
   (newPath) => {
     if (newPath === lastRouteKey.value) return;
+    if (!isPageActive.value) return;
     lastRouteKey.value = newPath;
     pagePath.value = route.path;
     if (!isPurchaseReturnRoute.value) return;
@@ -2187,7 +2337,17 @@ watch(
   }
 );
 
+watch(
+  () => formData.refundAction,
+  () => {
+    if (formData.refundAction === 'REFUND') return;
+    formData.paymentMethodCode = '';
+    formData.paidAmount = '';
+  }
+);
+
 onMounted(() => {
+  isPageActive.value = true;
   pagePath.value = route.path;
   fetchSuppliers();
   fetchPurchaseOrders();
@@ -2205,13 +2365,19 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  isPageActive.value = true;
   if (!needsReload.value) return;
   needsReload.value = false;
   if (!isPurchaseReturnRoute.value) return;
   loadDetail();
 });
 
+onDeactivated(() => {
+  isPageActive.value = false;
+});
+
 onBeforeUnmount(() => {
+  isPageActive.value = false;
   if (typeof window !== 'undefined') {
     window.removeEventListener('tags:closing', handleTagClosing as EventListener);
     window.removeEventListener('tags:close', handleTagClosing as EventListener);
@@ -2371,6 +2537,68 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(5, minmax(160px, 1fr));
   gap: 16px 24px;
   align-items: start;
+}
+
+.sale-order-refund-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px 16px;
+  margin-top: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.9) 0%, rgba(248, 250, 252, 0.96) 100%);
+}
+
+.sale-order-refund-summary__header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sale-order-refund-summary__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.sale-order-refund-summary__link {
+  padding: 0;
+  font-weight: 700;
+}
+
+.sale-order-refund-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sale-order-refund-summary__item--highlight .sale-order-refund-summary__value {
+  color: #2563eb;
+}
+
+.sale-order-refund-summary__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.sale-order-refund-summary__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.history-order-frame {
+  width: 100%;
+  min-height: 78vh;
+  border: none;
+  border-radius: 12px;
+  background: #fff;
 }
 
 .sale-page-surface .sale-detail-card,
@@ -2953,11 +3181,19 @@ onBeforeUnmount(() => {
   .sale-page-surface .sale-return-header-grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
+
+  .sale-order-refund-summary {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
 }
 
 @media (max-width: 1024px) {
   .sale-page-surface .payment-grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
+  .sale-order-refund-summary {
+    grid-template-columns: 1fr;
   }
 }
 

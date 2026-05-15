@@ -575,7 +575,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         if (settlementMethod == null || settlementMethod.isBlank()) {
             throw new IllegalArgumentException("请选择结算方式");
         }
-        ErpSettlementMethod settlementMethodEntity = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        ErpSettlementMethod settlementMethodEntity = resolveSettlementMethod(tenantId, settlementMethod);
         if (settlementMethodEntity == null || Boolean.FALSE.equals(settlementMethodEntity.getEnabled())) {
             throw new IllegalArgumentException("结算方式不存在或已停用");
         }
@@ -606,7 +606,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         if ("CREDIT".equals(code) || "ON_ACCOUNT".equals(code) || "AP".equals(code)) {
             return true;
         }
-        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        ErpSettlementMethod method = resolveSettlementMethod(tenantId, settlementMethod);
         if (method == null) {
             return false;
         }
@@ -614,6 +614,18 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             return true;
         }
         return method.getName() != null && method.getName().contains("挂账");
+    }
+
+    private ErpSettlementMethod resolveSettlementMethod(Long tenantId, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, normalized);
+        if (method != null) {
+            return method;
+        }
+        return erpSettlementMethodMapper.findByName(tenantId, normalized);
     }
 
     private void ensurePayable(Long tenantId, ErpPurchaseOrder order) {

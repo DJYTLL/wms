@@ -14,6 +14,7 @@ import com.example.wms.entity.erp.ErpCustomer;
 import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpReceiptReceivable;
 import com.example.wms.entity.erp.ErpSaleOrder;
+import com.example.wms.entity.erp.ErpSettlementMethod;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
 import com.example.wms.mapper.erp.ErpCustomerMapper;
@@ -21,6 +22,7 @@ import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
 import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.service.erp.ErpReceiptService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -60,6 +62,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
     private final ErpCustomerMapper erpCustomerMapper;
     private final ErpAccountsReceivableMapper erpAccountsReceivableMapper;
     private final ErpSaleOrderMapper erpSaleOrderMapper;
+    private final ErpSettlementMethodMapper erpSettlementMethodMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final SystemConfigMapper systemConfigMapper;
 
@@ -68,6 +71,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
                                  ErpCustomerMapper erpCustomerMapper,
                                  ErpAccountsReceivableMapper erpAccountsReceivableMapper,
                                  ErpSaleOrderMapper erpSaleOrderMapper,
+                                 ErpSettlementMethodMapper erpSettlementMethodMapper,
                                  ErpOrderSequenceMapper erpOrderSequenceMapper,
                                  SystemConfigMapper systemConfigMapper) {
         this.erpReceiptMapper = erpReceiptMapper;
@@ -75,6 +79,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         this.erpCustomerMapper = erpCustomerMapper;
         this.erpAccountsReceivableMapper = erpAccountsReceivableMapper;
         this.erpSaleOrderMapper = erpSaleOrderMapper;
+        this.erpSettlementMethodMapper = erpSettlementMethodMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.systemConfigMapper = systemConfigMapper;
     }
@@ -201,6 +206,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         if (customerId == null) {
             throw new IllegalArgumentException("请选择客户");
         }
+        validateCashSettlementMethod(tenantId, request.settlementMethod());
 
         List<ErpReceiptReceivable> allocations = null;
         if (request.allocations() != null && !request.allocations().isEmpty()) {
@@ -356,6 +362,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         if (customerId == null) {
             throw new IllegalArgumentException("请选择客户");
         }
+        validateCashSettlementMethod(tenantId, request.settlementMethod());
 
         List<ErpReceiptReceivable> allocations = null;
         if (request.allocations() != null && !request.allocations().isEmpty()) {
@@ -751,6 +758,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
     }
 
     private void validateReceiptApproval(Long tenantId, ErpReceipt receipt) {
+        validateCashSettlementMethod(tenantId, receipt.getSettlementMethod());
         List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceiptId(tenantId, receipt.getId());
         if (allocations != null && !allocations.isEmpty()) {
             for (ErpReceiptReceivable allocation : allocations) {
@@ -763,6 +771,19 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
             receipt.getReceivableId(),
             resolveReceiptTotal(receipt.getAmount(), receipt.getDiscountAmount())
         );
+    }
+
+    private void validateCashSettlementMethod(Long tenantId, String settlementMethodCode) {
+        if (settlementMethodCode == null || settlementMethodCode.isBlank()) {
+            throw new IllegalArgumentException("请选择结算方式");
+        }
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethodCode.trim());
+        if (method == null || Boolean.FALSE.equals(method.getEnabled())) {
+            throw new IllegalArgumentException("结算方式不存在或已停用");
+        }
+        if ("HIDDEN".equalsIgnoreCase(method.getFundInputMode())) {
+            throw new IllegalArgumentException("收款单不允许使用挂账类结算方式");
+        }
     }
 
     private void ensureReceivableCapacity(Long tenantId, Long receivableId, BigDecimal delta) {

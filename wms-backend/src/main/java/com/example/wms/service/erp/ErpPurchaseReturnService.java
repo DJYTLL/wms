@@ -3,6 +3,7 @@ package com.example.wms.service.erp;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPurchaseReturnCreateRequest;
 import com.example.wms.dto.erp.ErpPurchaseReturnDetail;
+import com.example.wms.dto.erp.ErpPurchaseReturnRefundSummary;
 import com.example.wms.dto.erp.ErpPurchaseReturnUpdateRequest;
 import com.example.wms.entity.erp.ErpPurchaseReturn;
 
@@ -16,6 +17,8 @@ public interface ErpPurchaseReturnService {
     PageResponse<ErpPurchaseReturn> page(long page, long size, String keyword, String status, Long supplierId, Instant startAt, Instant endAt);
 
     ErpPurchaseReturnDetail getDetail(Long id);
+
+    ErpPurchaseReturnRefundSummary getPurchaseOrderRefundSummary(Long purchaseOrderId);
 
     String nextOrderNo();
 

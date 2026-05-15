@@ -257,12 +257,23 @@ const receiptRowClass = ({ row }: { row: any }) => {
 
 const approveRow = async (row: any) => {
   try {
+    await ElMessageBox.confirm(
+      t('message.confirmApprove'),
+      t('action.approve'),
+      {
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel'),
+        type: 'warning'
+      }
+    );
     const res: any = await request.post(`/erp/receipts/${row.id}/approve`);
     if (res.data.code === 200) {
       fetchList();
     }
   } catch (error) {
-    notifyError(error);
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
   }
 };
 

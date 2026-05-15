@@ -151,9 +151,9 @@ const resolveDeletePromptContext = (config: DeletePromptConfig & { url?: string 
     title: config.deletePromptTitle || `填写删除${entityName}原因`,
     message:
       config.deletePromptMessage
-      || `请输入删除${entityName}的原因。该操作为逻辑删除，删除后前端不可恢复。`,
+      || `请输入删除${entityName}的原因。删除后将无法恢复。`,
     placeholder: `请输入删除${entityName}的原因`,
-    confirmButtonText: `确认逻辑删除${entityName}`,
+    confirmButtonText: `确认删除${entityName}`,
   } satisfies DeletePromptContext
 }
 

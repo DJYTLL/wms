@@ -324,7 +324,7 @@ const formatFinanceStatus = (status?: string, unpaidAmount?: number) => {
   if (status === 'RED_FLUSHED') return t('status.redFlushed');
   if (status === 'OPEN') {
     const unpaid = Math.abs(Number(unpaidAmount || 0));
-    return unpaid > 0 ? `${t('status.open')} ${formatAmount(unpaid)}` : t('status.open');
+    return unpaid > 0 ? `待付 ${formatAmount(unpaid)}` : '待付';
   }
   return status;
 };

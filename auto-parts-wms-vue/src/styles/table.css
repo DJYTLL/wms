@@ -226,6 +226,14 @@
   grid-template-columns: 220px 140px 140px;
 }
 
+.erp-basic-filters--4 {
+  grid-template-columns: 220px 140px 140px 140px;
+}
+
+.erp-basic-filters--5 {
+  grid-template-columns: 220px 140px 140px 140px 140px;
+}
+
 .erp-basic-actions {
   display: flex;
   align-items: center;
@@ -326,6 +334,14 @@
     grid-template-columns: 200px 140px 140px;
   }
 
+  .erp-basic-filters--4 {
+    grid-template-columns: 200px 140px 140px 140px;
+  }
+
+  .erp-basic-filters--5 {
+    grid-template-columns: 200px 140px 140px 140px 140px;
+  }
+
   .erp-basic-actions {
     justify-content: flex-start;
   }
@@ -424,7 +440,9 @@
 
 @media (max-width: 768px) {
   .erp-basic-filters--2,
-  .erp-basic-filters--3 {
+  .erp-basic-filters--3,
+  .erp-basic-filters--4,
+  .erp-basic-filters--5 {
     grid-template-columns: 1fr;
   }
 

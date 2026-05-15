@@ -6,6 +6,7 @@ import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSaleReturnCreateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnDetail;
+import com.example.wms.dto.erp.ErpSaleReturnRefundSummary;
 import com.example.wms.dto.erp.ErpSaleReturnUpdateRequest;
 import com.example.wms.entity.erp.ErpSaleReturn;
 import com.example.wms.service.erp.ErpSaleReturnService;
@@ -55,8 +56,15 @@ public class ErpSaleReturnController {
 
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:view')")
     @GetMapping("/sale-order/{saleOrderId}")
-    public ResponseEntity<ApiResponse<List<ErpSaleReturn>>> listApprovedBySaleOrderId(@PathVariable Long saleOrderId) {
-        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.listApprovedBySaleOrderId(saleOrderId)));
+    public ResponseEntity<ApiResponse<List<ErpSaleReturn>>> listBySaleOrderId(@PathVariable Long saleOrderId,
+                                                                               @RequestParam(defaultValue = "false") boolean includeDraft) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.listBySaleOrderId(saleOrderId, includeDraft)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return:view')")
+    @GetMapping("/sale-order/{saleOrderId}/refund-summary")
+    public ResponseEntity<ApiResponse<ErpSaleReturnRefundSummary>> getSaleOrderRefundSummary(@PathVariable Long saleOrderId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getSaleOrderRefundSummary(saleOrderId)));
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:view')")

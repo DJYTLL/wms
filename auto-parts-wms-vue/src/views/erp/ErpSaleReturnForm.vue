@@ -358,16 +358,16 @@
                 </el-select>
               </el-form-item>
             </div>
-            <div v-if="!isCreditSettlement" class="form-group form-group--settlement">
-              <el-form-item :label="$t('field.receiptMethod')">
+            <div v-if="showRefundPaymentFields" class="form-group form-group--settlement">
+              <el-form-item :label="$t('field.paymentMethod')">
                 <div v-if="isReadOnly" class="readonly-inline">{{ currentReceiptMethodName }}</div>
                 <el-select v-else v-model="formData.receiptMethodCode" clearable style="width: 100%">
                   <el-option v-for="item in receiptMethodOptions" :key="item.code" :label="item.name" :value="item.code" />
                 </el-select>
               </el-form-item>
             </div>
-            <div v-if="formData.settlementMethod && !isCreditSettlement" class="form-group form-group--amount">
-              <el-form-item :label="$t('field.paidAmount')">
+            <div v-if="showRefundPaymentFields" class="form-group form-group--amount">
+              <el-form-item :label="$t('field.refundAmount')">
                 <div v-if="isReadOnly" class="readonly-inline">{{ formatMoney(formData.paidAmount) }}</div>
                 <DecimalInput v-else v-model="formData.paidAmount" :scale="2" style="width: 100%" />
               </el-form-item>
@@ -379,9 +379,52 @@
               </el-form-item>
             </div>
           </div>
+          <div
+            v-if="shouldShowSaleOrderRefundSummary"
+            v-loading="saleOrderRefundSummaryLoading"
+            class="sale-order-refund-summary"
+          >
+            <div class="sale-order-refund-summary__header">
+              <span class="sale-order-refund-summary__title">{{ $t('field.saleOrderNo') }}</span>
+              <el-button
+                link
+                type="primary"
+                class="sale-order-refund-summary__link"
+                @click="openSelectedSaleOrderPreview"
+              >
+                {{ saleOrderRefundSummary?.saleOrderNo || resolvedSaleOrderNo || '-' }}
+              </el-button>
+            </div>
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.originalCollectedAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderRefundSummary?.collectedCash) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.discountAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderRefundSummary?.discountAmount) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.refundedAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderRefundSummary?.refundedCash) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item sale-order-refund-summary__item--highlight">
+              <span class="sale-order-refund-summary__label">{{ $t('field.refundableCashAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderRefundSummary?.refundableCash) }}</strong>
+            </div>
+          </div>
         </el-form>
       </div>
     </div>
+
+    <el-dialog
+      v-model="saleOrderPreviewDialogVisible"
+      :title="saleOrderPreviewDialogTitle"
+      width="92vw"
+      class="history-order-dialog"
+      append-to-body
+    >
+      <iframe v-if="saleOrderPreviewDialogUrl" :src="saleOrderPreviewDialogUrl" class="history-order-frame" />
+    </el-dialog>
 
     <el-dialog
       v-model="showSaleOrderDialog"
@@ -431,13 +474,13 @@
 
     <el-dialog
       v-model="showSaleOrderReturnedDialog"
-      :title="$t('message.saleOrderAlreadyReturnedTitle')"
+      :title="saleOrderReturnedDialogTitle"
       width="520px"
       :close-on-click-modal="false"
     >
       <div class="returned-order-dialog">
         <p class="returned-order-dialog__summary">
-          {{ $t('message.saleOrderAlreadyReturned', { orderNo: returnedSaleOrderNo || '-' }) }}
+          {{ saleOrderReturnedDialogSummary }}
         </p>
         <div class="returned-order-dialog__label">{{ $t('message.relatedSaleReturnOrders') }}</div>
         <div class="returned-order-list">
@@ -449,7 +492,7 @@
             class="returned-order-link"
             @click="openReturnedSaleReturn(item)"
           >
-            {{ item.orderNo || '-' }}
+            {{ item.orderNo || '-' }} · {{ resolveSaleReturnStatusLabel(item.status) }}
           </el-button>
         </div>
       </div>
@@ -567,11 +610,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useValidationMessage } from '@/composables/useValidationMessage';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
@@ -631,11 +675,21 @@ interface RecentSaleItem {
 interface SaleReturnSummary {
   id: number;
   orderNo: string;
+  status?: string;
 }
 
 interface SaleReturnUsage {
   returnedQtyByProduct: Map<number, number>;
   returns: SaleReturnSummary[];
+}
+
+interface SaleOrderRefundSummary {
+  saleOrderId?: number;
+  saleOrderNo?: string;
+  discountAmount?: number | string;
+  collectedCash?: number | string;
+  refundedCash?: number | string;
+  refundableCash?: number | string;
 }
 
 interface PageResponse<T> {
@@ -684,6 +738,7 @@ const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
+const { requiredFieldMessage, positiveRowFieldMessage, invalidRowFieldMessage } = useValidationMessage();
 const authStore = useAuthStore();
 const isSaving = ref(false);
 
@@ -709,6 +764,11 @@ const receiptMethodOptions = ref<CodeOptionItem[]>([]);
 const productStockMap = ref<Record<number, StockOption[]>>({});
 const saleOrderDetailItems = ref<SaleOrderDetailItem[]>([]);
 const selectedSaleOrderItems = ref<SaleOrderDetailItem[]>([]);
+const saleOrderRefundSummary = ref<SaleOrderRefundSummary | null>(null);
+const saleOrderRefundSummaryLoading = ref(false);
+const saleOrderPreviewDialogVisible = ref(false);
+const saleOrderPreviewDialogTitle = ref('');
+const saleOrderPreviewDialogUrl = ref('');
 const selectedItems = ref<SaleReturnItem[]>([]);
 const showSaleOrderDialog = ref(false);
 const showSaleOrderReturnedDialog = ref(false);
@@ -746,6 +806,7 @@ const pendingCustomerId = ref<number | null>(null);
 const lastCustomerId = ref<number | null>(null);
 const isInitializing = ref(false);
 const needsReload = ref(false);
+const isPageActive = ref(false);
 const showProfitColumn = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
@@ -762,6 +823,22 @@ const hasPermission = (code: string) => {
 
 const canApprove = computed(() => {
   return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale-return:approve');
+});
+
+const hasDraftSaleReturnOccupancy = computed(() =>
+  returnedSaleReturnOrders.value.some(item => item.status === 'DRAFT')
+);
+
+const saleOrderReturnedDialogTitle = computed(() => {
+  return hasDraftSaleReturnOccupancy.value
+    ? t('message.saleOrderOccupiedTitle')
+    : t('message.saleOrderAlreadyReturnedTitle');
+});
+
+const saleOrderReturnedDialogSummary = computed(() => {
+  return hasDraftSaleReturnOccupancy.value
+    ? t('message.saleOrderOccupied', { orderNo: returnedSaleOrderNo.value || '-' })
+    : t('message.saleOrderAlreadyReturned', { orderNo: returnedSaleOrderNo.value || '-' });
 });
 
 const shouldShowApproveButton = computed(() => {
@@ -828,7 +905,7 @@ const canShowProfit = computed(() => canViewProfit.value && showProfitColumn.val
 const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale:discountAllocated'));
 const canSelectProduct = computed(() => {
   if (!formData.customerId) return false;
-  if (formData.returnSource === 'BY_SALE_ORDER' && !formData.saleOrderId) return false;
+  if (formData.returnSource === 'BY_SALE_ORDER') return false;
   return true;
 });
 const productSelectPlaceholder = computed(() => {
@@ -856,6 +933,12 @@ const currentReceiptMethodName = computed(() => {
 });
 const currentRefundActionName = computed(() => {
   return formData.refundAction === 'REFUND' ? t('field.directRefund') : t('field.offsetAccountsReceivable');
+});
+const showRefundPaymentFields = computed(() => {
+  return formData.refundAction === 'REFUND' && Boolean(formData.settlementMethod) && !isCreditSettlement.value;
+});
+const shouldShowSaleOrderRefundSummary = computed(() => {
+  return Boolean(formData.saleOrderId && saleOrderRefundSummary.value);
 });
 const currentReturnSourceName = computed(() => {
   if (formData.returnSource === 'BY_SALE_ORDER') return t('returnSource.bySaleOrder');
@@ -1060,8 +1143,16 @@ const handleSaveSuccessDialogClosed = async () => {
 
 const handleContinueCreate = async () => {
   closeSaveSuccessDialog();
+  const createRoute = {
+    path: '/erp/sale-returns/create',
+    query: { from: 'draft', returnTo: '/erp/sale-returns/draft' }
+  };
+  const targetFullPath = router.resolve(createRoute).fullPath;
   if (isEditing.value) {
-    await router.replace({ path: '/erp/sale-returns/create', query: { from: 'draft', returnTo: '/erp/sale-returns/draft' } });
+    if (route.fullPath !== targetFullPath) {
+      await router.replace(createRoute);
+    }
+    await loadDetail();
     return;
   }
   await loadDetail();
@@ -1480,6 +1571,13 @@ const getDefaultSettlementMethod = () => {
   return defaultItem?.code || '';
 };
 
+const resolveSettlementMethodCode = (value?: string) => {
+  if (!value) return '';
+  const normalized = String(value).trim();
+  const matched = settlementMethodOptions.value.find(item => item.code === normalized || item.name === normalized);
+  return matched?.code || normalized;
+};
+
 const getDefaultReceiptMethod = () => {
   if (!receiptMethodOptions.value.length) return '';
   const defaultItem = receiptMethodOptions.value.find(item => item.isDefault) ?? receiptMethodOptions.value[0];
@@ -1488,7 +1586,7 @@ const getDefaultReceiptMethod = () => {
 
 const applyMethodsForCustomer = () => {
   const customer = customerOptions.value.find(item => item.id === formData.customerId);
-  const settlement = customer?.defaultSettlementMethodCode || getDefaultSettlementMethod();
+  const settlement = resolveSettlementMethodCode(customer?.defaultSettlementMethodCode) || getDefaultSettlementMethod();
   const receiptMethod = customer?.defaultReceiptMethodCode || getDefaultReceiptMethod();
   if (settlement) {
     formData.settlementMethod = settlement;
@@ -1651,6 +1749,7 @@ const bindRecentSaleOrder = async (row: SaleReturnItem, sale: RecentSaleItem) =>
     orderNo: sale.orderNo,
     customerId: formData.customerId || undefined
   });
+  await fetchSaleOrderRefundSummary(sale.orderId);
   syncSourceOrderNoToRemark(sale.orderNo);
   row.price = sale.price == null ? row.price : String(sale.price);
   if (!row.qty && sale.remainingQty != null) {
@@ -1746,8 +1845,10 @@ const handleCustomerChange = (value: number | null) => {
   }
   resetRecentSaleDialogState();
   formData.saleOrderId = null;
+  saleOrderRefundSummary.value = null;
   lastCustomerId.value = value;
   applyMethodsForCustomer();
+  fetchSaleOrders();
 };
 
 const handleReturnSourceChange = () => {
@@ -1757,13 +1858,17 @@ const handleReturnSourceChange = () => {
     selectedSaleOrderItems.value = [];
     return;
   }
+  saleOrderRefundSummary.value = null;
   saleOrderDetailItems.value = [];
   selectedSaleOrderItems.value = [];
 };
 
 const handleSaleOrderChange = (value: number | null) => {
   if (isReadOnly.value) return;
-  if (!value) return;
+  if (!value) {
+    saleOrderRefundSummary.value = null;
+    return;
+  }
   const selected = saleOrderOptions.value.find(item => item.id === value);
   if (!selected) return;
   if (selected.customerId && selected.customerId !== formData.customerId) {
@@ -1778,9 +1883,14 @@ const handleSaleOrderChange = (value: number | null) => {
 const openSaleOrderDetail = async (orderId: number) => {
   if (!orderId) return;
   try {
-    const res: any = await request.get(`/erp/sale-orders/${orderId}`);
+    saleOrderRefundSummaryLoading.value = true;
+    const [res, returnUsage, refundSummaryRes] = await Promise.all([
+      request.get(`/erp/sale-orders/${orderId}`),
+      fetchSaleReturnUsage(orderId),
+      request.get(`/erp/sale-returns/sale-order/${orderId}/refund-summary`)
+    ]);
     const data = res.data.data || {};
-    const returnUsage = await fetchSaleReturnUsage(orderId);
+    saleOrderRefundSummary.value = refundSummaryRes.data.data || null;
     const remainingReturnedQtyByProduct = new Map(returnUsage.returnedQtyByProduct);
     const selectedOrderNo = saleOrderOptions.value.find(item => Number(item.id) === Number(orderId))?.orderNo;
     const saleOrderNo = selectedOrderNo || data.order?.orderNo || data.orderNo || '';
@@ -1818,7 +1928,39 @@ const openSaleOrderDetail = async (orderId: number) => {
     showSaleOrderDialog.value = true;
   } catch (error) {
     notifyError(error);
+  } finally {
+    saleOrderRefundSummaryLoading.value = false;
   }
+};
+
+const fetchSaleOrderRefundSummary = async (orderId?: number | null) => {
+  if (!orderId) {
+    saleOrderRefundSummary.value = null;
+    return;
+  }
+  try {
+    saleOrderRefundSummaryLoading.value = true;
+    const res: any = await request.get(`/erp/sale-returns/sale-order/${orderId}/refund-summary`);
+    saleOrderRefundSummary.value = res.data.data || null;
+  } catch (error) {
+    saleOrderRefundSummary.value = null;
+    notifyError(error);
+  } finally {
+    saleOrderRefundSummaryLoading.value = false;
+  }
+};
+
+const openSelectedSaleOrderPreview = () => {
+  const saleOrderId = saleOrderRefundSummary.value?.saleOrderId || formData.saleOrderId;
+  if (!saleOrderId) return;
+  const saleOrderNo = saleOrderRefundSummary.value?.saleOrderNo || resolvedSaleOrderNo.value || '';
+  const resolved = router.resolve({
+    path: `/erp/sale-orders/${saleOrderId}/edit`,
+    query: { mode: 'view', embed: '1' }
+  });
+  saleOrderPreviewDialogTitle.value = `${t('page.erpSaleOrder')} · ${saleOrderNo || saleOrderId}`;
+  saleOrderPreviewDialogUrl.value = resolved.href;
+  saleOrderPreviewDialogVisible.value = true;
 };
 
 const fetchSaleReturnUsage = async (saleOrderId: number): Promise<SaleReturnUsage> => {
@@ -1826,12 +1968,15 @@ const fetchSaleReturnUsage = async (saleOrderId: number): Promise<SaleReturnUsag
   if (!saleOrderId) {
     return { returnedQtyByProduct: qtyMap, returns: [] };
   }
-  const res: any = await request.get(`/erp/sale-returns/sale-order/${saleOrderId}`);
+  const res: any = await request.get(`/erp/sale-returns/sale-order/${saleOrderId}`, {
+    params: { includeDraft: true }
+  });
   const returns = (Array.isArray(res.data.data) ? res.data.data : [])
     .filter((item: any) => item?.id)
     .map((item: any) => ({
       id: Number(item.id),
-      orderNo: item.orderNo || ''
+      orderNo: item.orderNo || '',
+      status: item.status || ''
     }));
   await Promise.all(returns.map(async (item: SaleReturnSummary) => {
     const detailRes: any = await request.get(`/erp/sale-returns/${item.id}`);
@@ -1854,12 +1999,22 @@ const openSaleOrderReturnedDialog = (saleOrderNo: string, returns: SaleReturnSum
   showSaleOrderReturnedDialog.value = true;
 };
 
+const resolveSaleReturnStatusLabel = (status?: string) => {
+  if (status === 'DRAFT') return t('status.draft');
+  if (status === 'APPROVED') return t('status.approved');
+  if (status === 'RED_FLUSHED') return t('status.redFlushed');
+  return status || '-';
+};
+
 const openReturnedSaleReturn = async (item: SaleReturnSummary) => {
   if (!item.id) return;
   showSaleOrderReturnedDialog.value = false;
+  const isDraft = item.status === 'DRAFT';
   await router.push({
     path: `/erp/sale-returns/${item.id}/edit`,
-    query: { mode: 'view', from: 'approved', returnTo: '/erp/sale-returns/approved' }
+    query: isDraft
+      ? { from: 'draft', returnTo: '/erp/sale-returns/draft' }
+      : { mode: 'view', from: 'approved', returnTo: '/erp/sale-returns/approved' }
   });
 };
 
@@ -1903,16 +2058,19 @@ const applyCustomerChange = async (action: 'price' | 'clear' | 'cancel') => {
   pendingCustomerId.value = null;
   resetRecentSaleDialogState();
   formData.saleOrderId = null;
+  saleOrderRefundSummary.value = null;
   if (action === 'clear') {
     formData.items = [];
     addItem();
     applyMethodsForCustomer();
+    fetchSaleOrders();
     return;
   }
   for (const item of formData.items) {
     await applyPriceForRow(item, true);
   }
   applyMethodsForCustomer();
+  fetchSaleOrders();
 };
 
 const fetchCustomers = async () => {
@@ -1924,9 +2082,15 @@ const fetchCustomers = async () => {
   }
 };
 
-const fetchSaleOrders = async () => {
+const fetchSaleOrders = async (customerId?: number | null) => {
   try {
-    const res: any = await request.get('/erp/sale-orders', { params: { status: 'APPROVED' } });
+    const targetCustomerId = customerId ?? formData.customerId;
+    if (!targetCustomerId) {
+      saleOrderOptions.value = [];
+      return;
+    }
+    const params: Record<string, any> = { status: 'APPROVED', customerId: targetCustomerId };
+    const res: any = await request.get('/erp/sale-orders', { params });
     const items = res.data.data || [];
     saleOrderOptions.value = items.map((item: any) => ({
       id: item.id,
@@ -2000,8 +2164,22 @@ const ensureProductOption = async (productId?: number | null) => {
   }
 };
 
-const getSelectableProductOptions = (currentProductId?: number | null) =>
-  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+const getSelectableProductOptions = (currentProductId?: number | null) => {
+  const baseOptions = productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  if (formData.returnSource !== 'BY_SALE_ORDER') {
+    return baseOptions;
+  }
+  const allowedProductIds = new Set<number>();
+  saleOrderDetailItems.value.forEach(item => {
+    if (item.productId != null) {
+      allowedProductIds.add(Number(item.productId));
+    }
+  });
+  if (currentProductId != null) {
+    allowedProductIds.add(Number(currentProductId));
+  }
+  return baseOptions.filter(item => allowedProductIds.has(Number(item.id)));
+};
 
 const ensureWarehouseOption = async (warehouseId?: number | null) => {
   if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
@@ -2089,6 +2267,8 @@ const loadDetail = async () => {
         await fetchStockOptions(item.productId);
         syncStockKey(item);
       }
+      await fetchSaleOrders(formData.customerId);
+      await fetchSaleOrderRefundSummary(formData.saleOrderId);
       if (!formData.items.length) addItem();
       lastCustomerId.value = formData.customerId;
     }
@@ -2139,6 +2319,8 @@ const resetForm = () => {
   formData.discountAmount = '';
   formData.remark = '';
   formData.items = [];
+  saleOrderRefundSummary.value = null;
+  saleOrderRefundSummaryLoading.value = false;
   selectedItems.value = [];
   saleOrderDetailItems.value = [];
   selectedSaleOrderItems.value = [];
@@ -2211,49 +2393,50 @@ const fetchNextOrderNo = async () => {
   ) => {
     const closeOnSuccess = options.closeOnSuccess !== false;
     if (!formData.customerId) {
-      notifyWarning(t('message.required'));
-    return;
-  }
-  if (!formData.returnType) {
-    notifyWarning(t('message.required'));
-    return;
-  }
-  if (!formData.saleOrderId) {
-    notifyWarning(
-      formData.returnSource === 'BY_PRODUCT'
-        ? t('message.pickSaleOrderFromRecentSale')
-        : t('message.required')
-    );
-    return;
-  }
-  if (!formData.settlementMethod) {
-    notifyWarning(t('message.required'));
-    return;
-  }
-  const validItems = formData.items.filter(item => item.productId);
-  if (!validItems.length) {
-    notifyWarning(t('message.noItems'));
-    return;
-  }
-  for (const item of validItems) {
-    const qtyValue = parseDecimal(item.qty, 4);
-    if (qtyValue == null || qtyValue <= 0) {
-      notifyWarning(t('message.mustBePositive'));
+      notifyWarning(requiredFieldMessage(t('field.customer')));
       return;
     }
-    const priceValue = parseDecimal(item.price, 4);
-    if (priceValue == null) {
+    if (!formData.returnType) {
+      notifyWarning(requiredFieldMessage(t('field.returnType')));
+      return;
+    }
+    if (!formData.saleOrderId) {
+      notifyWarning(
+        formData.returnSource === 'BY_PRODUCT'
+          ? t('message.pickSaleOrderFromRecentSale')
+          : requiredFieldMessage(t('field.sourceSaleOrder'))
+      );
+      return;
+    }
+    if (!formData.settlementMethod) {
+      notifyWarning(requiredFieldMessage(t('field.settlementMethod')));
+      return;
+    }
+    const validItems = formData.items.filter(item => item.productId);
+    if (!validItems.length) {
+      notifyWarning(t('message.noItems'));
+      return;
+    }
+    for (const [index, item] of validItems.entries()) {
+      const rowNumber = index + 1;
+      const qtyValue = parseDecimal(item.qty, 4);
+      if (qtyValue == null || qtyValue <= 0) {
+        notifyWarning(positiveRowFieldMessage(rowNumber, t('field.quantity')));
+        return;
+      }
+      const priceValue = parseDecimal(item.price, 4);
+      if (priceValue == null) {
+        notifyWarning(invalidRowFieldMessage(rowNumber, t('field.price')));
+        return;
+      }
+    }
+
+    const paidAmount = showRefundPaymentFields.value ? parseAmount(formData.paidAmount) : 0;
+    const discountAmount = parseAmount(formData.discountAmount);
+    if (paidAmount == null || discountAmount == null) {
       notifyWarning(t('message.invalidNumber'));
       return;
     }
-  }
-
-  const paidAmount = isCreditSettlement.value ? 0 : parseAmount(formData.paidAmount);
-  const discountAmount = parseAmount(formData.discountAmount);
-  if (paidAmount == null || discountAmount == null) {
-    notifyWarning(t('message.invalidNumber'));
-    return;
-  }
 
     const payload = {
       orderNo: formData.orderNo || undefined,
@@ -2262,7 +2445,7 @@ const fetchNextOrderNo = async () => {
       customerId: formData.customerId,
       saleOrderId: formData.saleOrderId || undefined,
       settlementMethod: formData.settlementMethod,
-      receiptMethodCode: isCreditSettlement.value ? undefined : (formData.receiptMethodCode || undefined),
+      receiptMethodCode: showRefundPaymentFields.value ? (formData.receiptMethodCode || undefined) : undefined,
       refundAction: formData.refundAction,
       paidAmount,
       discountAmount,
@@ -2368,6 +2551,7 @@ watch(
   () => route.fullPath,
   (newPath) => {
     if (newPath === lastRouteKey.value) return;
+    if (!isPageActive.value) return;
     lastRouteKey.value = newPath;
     pagePath.value = route.path;
     if (!isSaleReturnRoute.value) return;
@@ -2375,7 +2559,17 @@ watch(
   }
 );
 
+watch(
+  () => formData.refundAction,
+  () => {
+    if (formData.refundAction === 'REFUND') return;
+    formData.receiptMethodCode = '';
+    formData.paidAmount = '';
+  }
+);
+
 onMounted(() => {
+  isPageActive.value = true;
   pagePath.value = route.path;
   fetchCustomers();
   fetchSaleOrders();
@@ -2393,13 +2587,19 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  isPageActive.value = true;
   if (!needsReload.value) return;
   needsReload.value = false;
   if (!isSaleReturnRoute.value) return;
   loadDetail();
 });
 
+onDeactivated(() => {
+  isPageActive.value = false;
+});
+
 onBeforeUnmount(() => {
+  isPageActive.value = false;
   if (typeof window !== 'undefined') {
     window.removeEventListener('tags:closing', handleTagClosing as EventListener);
     window.removeEventListener('tags:close', handleTagClosing as EventListener);
@@ -2777,51 +2977,8 @@ onBeforeUnmount(() => {
 }
 
 .payment-card-body {
-  padding: 12px 16px !important;
-}
-
-.payment-card .form-grid {
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 8px;
-}
-
-.payment-card .form-group {
-  min-width: 0;
-  flex: 0 0 auto;
-}
-
-.payment-card .form-group--settlement {
-  min-width: 180px;
-}
-
-.payment-card .form-group--amount,
-.payment-card .form-group--discount {
-  width: auto;
-}
-
-.payment-card :deep(.el-form-item) {
-  display: flex;
-  align-items: center;
-}
-
-.payment-card :deep(.el-form-item__label) {
-  padding-bottom: 0;
-  display: inline-flex;
-  align-items: center;
-  height: 32px;
-  line-height: 32px;
-  margin-right: 4px;
-  width: auto !important;
-  padding-right: 2px;
-  flex: 0 0 auto;
-}
-
-.payment-card :deep(.el-form-item__content) {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  min-height: 32px;
+  padding: 0 !important;
+  overflow: visible;
 }
 
 .table-card + .table-card {
@@ -3391,9 +3548,71 @@ onBeforeUnmount(() => {
 
 .sale-page-surface .payment-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
   gap: 16px 24px;
   align-items: start;
+}
+
+.sale-order-refund-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px 16px;
+  margin-top: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.9) 0%, rgba(248, 250, 252, 0.96) 100%);
+}
+
+.sale-order-refund-summary__header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sale-order-refund-summary__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.sale-order-refund-summary__link {
+  padding: 0;
+  font-weight: 700;
+}
+
+.sale-order-refund-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sale-order-refund-summary__item--highlight .sale-order-refund-summary__value {
+  color: #2563eb;
+}
+
+.sale-order-refund-summary__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.sale-order-refund-summary__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.history-order-frame {
+  width: 100%;
+  min-height: 78vh;
+  border: none;
+  border-radius: 12px;
+  background: #fff;
 }
 
 .sale-page-surface .payment-card .form-group {
@@ -3467,6 +3686,10 @@ onBeforeUnmount(() => {
 @media (max-width: 1024px) {
   .sale-page-surface .payment-grid {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
+  .sale-order-refund-summary {
+    grid-template-columns: 1fr;
   }
 }
 

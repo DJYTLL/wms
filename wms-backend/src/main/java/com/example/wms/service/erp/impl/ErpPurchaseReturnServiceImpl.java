@@ -7,6 +7,7 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPurchaseReturnCreateRequest;
 import com.example.wms.dto.erp.ErpPurchaseReturnDetail;
 import com.example.wms.dto.erp.ErpPurchaseReturnItemRequest;
+import com.example.wms.dto.erp.ErpPurchaseReturnRefundSummary;
 import com.example.wms.dto.erp.ErpPurchaseReturnUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsPayable;
@@ -156,6 +157,13 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         }
         List<ErpPurchaseReturnItem> items = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
         return new ErpPurchaseReturnDetail(order, items);
+    }
+
+    @Override
+    public ErpPurchaseReturnRefundSummary getPurchaseOrderRefundSummary(Long purchaseOrderId) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPurchaseOrder purchaseOrder = loadApprovedPurchaseOrder(tenantId, purchaseOrderId);
+        return buildPurchaseOrderRefundSummary(tenantId, purchaseOrder, null);
     }
 
     @Override
@@ -755,7 +763,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             throw new IllegalArgumentException("退款金额与优惠金额之和不能大于退货总金额");
         }
         if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal refundableCash = calculateRefundableCash(tenantId, order.getPurchaseOrderId(), currentReturnId);
+            BigDecimal refundableCash = buildPurchaseOrderRefundSummary(tenantId, order.getPurchaseOrderId(), currentReturnId)
+                .getRefundableCash();
             if (paidAmount.compareTo(refundableCash) > 0) {
                 throw new IllegalArgumentException("退款金额不能超过原采购可退实付金额");
             }
@@ -789,7 +798,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         if ("CREDIT".equals(code) || "ON_ACCOUNT".equals(code) || "AP".equals(code)) {
             return true;
         }
-        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        ErpSettlementMethod method = resolveSettlementMethod(tenantId, settlementMethod);
         if (method == null) {
             return false;
         }
@@ -817,7 +826,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         if (settlementMethod == null || settlementMethod.isBlank()) {
             throw new IllegalArgumentException("请选择结算方式");
         }
-        ErpSettlementMethod settlementMethodEntity = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        ErpSettlementMethod settlementMethodEntity = resolveSettlementMethod(tenantId, settlementMethod);
         if (settlementMethodEntity == null || Boolean.FALSE.equals(settlementMethodEntity.getEnabled())) {
             throw new IllegalArgumentException("结算方式不存在或已停用");
         }
@@ -832,10 +841,39 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         }
     }
 
-    private BigDecimal calculateRefundableCash(Long tenantId, Long purchaseOrderId, Long currentReturnId) {
-        if (purchaseOrderId == null) {
-            return BigDecimal.ZERO;
+    private ErpSettlementMethod resolveSettlementMethod(Long tenantId, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
         }
+        String normalized = value.trim();
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, normalized);
+        if (method != null) {
+            return method;
+        }
+        return erpSettlementMethodMapper.findByName(tenantId, normalized);
+    }
+
+    private ErpPurchaseReturnRefundSummary buildPurchaseOrderRefundSummary(Long tenantId,
+                                                                           Long purchaseOrderId,
+                                                                           Long currentReturnId) {
+        ErpPurchaseOrder purchaseOrder = purchaseOrderId == null ? null : loadApprovedPurchaseOrder(tenantId, purchaseOrderId);
+        return buildPurchaseOrderRefundSummary(tenantId, purchaseOrder, currentReturnId);
+    }
+
+    private ErpPurchaseReturnRefundSummary buildPurchaseOrderRefundSummary(Long tenantId,
+                                                                           ErpPurchaseOrder purchaseOrder,
+                                                                           Long currentReturnId) {
+        ErpPurchaseReturnRefundSummary summary = new ErpPurchaseReturnRefundSummary();
+        if (purchaseOrder == null || purchaseOrder.getId() == null) {
+            summary.setPaidCash(BigDecimal.ZERO);
+            summary.setRefundedCash(BigDecimal.ZERO);
+            summary.setRefundableCash(BigDecimal.ZERO);
+            return summary;
+        }
+        Long purchaseOrderId = purchaseOrder.getId();
+        summary.setPurchaseOrderId(purchaseOrderId);
+        summary.setPurchaseOrderNo(purchaseOrder.getOrderNo());
+        summary.setDiscountAmount(purchaseOrder.getDiscountAmount() == null ? BigDecimal.ZERO : purchaseOrder.getDiscountAmount());
         ErpAccountsPayable purchasePayable = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, purchaseOrderId);
         BigDecimal paidCash = BigDecimal.ZERO;
         if (purchasePayable != null && purchasePayable.getId() != null) {
@@ -847,16 +885,26 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         }
         List<ErpPurchaseReturn> approvedReturns = erpPurchaseReturnMapper.findApprovedByPurchaseOrderId(tenantId, purchaseOrderId);
         if (approvedReturns == null || approvedReturns.isEmpty()) {
-            return paidCash.max(BigDecimal.ZERO);
+            BigDecimal positivePaidCash = paidCash.max(BigDecimal.ZERO);
+            summary.setPaidCash(positivePaidCash);
+            summary.setRefundedCash(BigDecimal.ZERO);
+            summary.setRefundableCash(positivePaidCash);
+            return summary;
         }
+        BigDecimal refundedCash = BigDecimal.ZERO;
         for (ErpPurchaseReturn approvedReturn : approvedReturns) {
             if (currentReturnId != null && currentReturnId.equals(approvedReturn.getId())) {
                 continue;
             }
             BigDecimal refundAmount = approvedReturn.getPaidAmount() == null ? BigDecimal.ZERO : approvedReturn.getPaidAmount();
+            refundedCash = refundedCash.add(refundAmount);
             paidCash = paidCash.subtract(refundAmount);
         }
-        return paidCash.max(BigDecimal.ZERO);
+        BigDecimal refundableCash = paidCash.max(BigDecimal.ZERO);
+        summary.setPaidCash(refundedCash.add(refundableCash));
+        summary.setRefundedCash(refundedCash);
+        summary.setRefundableCash(refundableCash);
+        return summary;
     }
 
     private BigDecimal normalizeAmount(BigDecimal amount) {

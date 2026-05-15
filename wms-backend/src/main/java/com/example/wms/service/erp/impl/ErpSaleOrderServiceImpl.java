@@ -247,23 +247,21 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         normalizeCreditSettlementFields(tenantId, order);
         validateHeaderMasterData(tenantId, order.getCustomerId(), order.getSettlementMethod(), order.getReceiptMethodCode(), order.getPaidAmount());
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
-        order.setTotalAmount(BigDecimal.ZERO);
-        order.setTotalAmountExclTax(BigDecimal.ZERO);
-        order.setTotalTaxAmount(BigDecimal.ZERO);
-        order.setTotalAmountInclTax(BigDecimal.ZERO);
         order.setVersion(0L);
         order.setInventoryReserved(false);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
         order.setUpdatedAt(Instant.now());
-        erpSaleOrderMapper.insert(order);
 
-        List<ErpSaleOrderItem> items = buildItems(tenantId, order.getId(), order.getCustomerId(), request.items(), Set.of());
-        for (ErpSaleOrderItem item : items) {
-            erpSaleOrderItemMapper.insert(item);
-        }
+        List<ErpSaleOrderItem> items = buildItems(tenantId, null, order.getCustomerId(), request.items(), Set.of());
         applyTotals(order, items);
         validateSettlementAmounts(order);
+
+        erpSaleOrderMapper.insert(order);
+        for (ErpSaleOrderItem item : items) {
+            item.setOrderId(order.getId());
+            erpSaleOrderItemMapper.insert(item);
+        }
         reserveDraftStock(tenantId, items);
         order.setInventoryReserved(true);
         order.setUpdatedAt(Instant.now());
@@ -458,7 +456,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             if (receivable != null) {
                 order.setReceivableStatus(receivable.getStatus());
                 order.setReceivableUnpaidAmount(receivable.getUnpaidAmount());
-            } else if (STATUS_DRAFT.equals(order.getStatus())) {
+            } else if (!STATUS_RED_FLUSHED.equals(order.getStatus())) {
                 applyDraftReceivablePreview(order);
             }
             Long approvedReturnCount = erpSaleReturnMapper.countApprovedBySaleOrderId(tenantId, order.getId());
@@ -689,7 +687,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (settlementMethod == null || settlementMethod.isBlank()) {
             throw new IllegalArgumentException("请选择结算方式");
         }
-        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        ErpSettlementMethod method = resolveSettlementMethod(tenantId, settlementMethod);
         if (method == null || Boolean.FALSE.equals(method.getEnabled())) {
             throw new IllegalArgumentException("结算方式不存在或已停用");
         }
@@ -941,7 +939,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if ("CREDIT".equals(code) || "ON_ACCOUNT".equals(code) || "AR".equals(code)) {
             return true;
         }
-        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        ErpSettlementMethod method = resolveSettlementMethod(tenantId, settlementMethod);
         if (method == null) {
             return false;
         }
@@ -1311,7 +1309,21 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (value == null || value.isBlank()) {
             return fallback;
         }
-        return value.trim();
+        Long tenantId = TenantContext.requireTenantId();
+        ErpSettlementMethod method = resolveSettlementMethod(tenantId, value.trim());
+        return method == null ? value.trim() : method.getCode();
+    }
+
+    private ErpSettlementMethod resolveSettlementMethod(Long tenantId, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, normalized);
+        if (method != null) {
+            return method;
+        }
+        return erpSettlementMethodMapper.findByName(tenantId, normalized);
     }
 
     private int readIntConfig(String key, int fallback) {

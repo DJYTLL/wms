@@ -7,6 +7,7 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSaleReturnCreateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnDetail;
 import com.example.wms.dto.erp.ErpSaleReturnItemRequest;
+import com.example.wms.dto.erp.ErpSaleReturnRefundSummary;
 import com.example.wms.dto.erp.ErpSaleReturnUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsReceivable;
@@ -61,8 +62,10 @@ import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 // 销售退货服务实现（ERP进销存）
 @Service
@@ -160,18 +163,23 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     }
 
     @Override
-    public List<ErpSaleReturn> listApprovedBySaleOrderId(Long saleOrderId) {
+    public List<ErpSaleReturn> listBySaleOrderId(Long saleOrderId, boolean includeDraft) {
         Long tenantId = TenantContext.requireTenantId();
         if (saleOrderId == null) {
             return List.of();
         }
-        List<ErpSaleReturn> returns = erpSaleReturnMapper.selectList(new QueryWrapper<ErpSaleReturn>()
+        QueryWrapper<ErpSaleReturn> wrapper = new QueryWrapper<ErpSaleReturn>()
             .eq("tenant_id", tenantId)
             .eq("sale_order_id", saleOrderId)
-            .eq("status", STATUS_APPROVED)
             .orderByAsc("approved_at")
             .orderByAsc("created_at")
-            .orderByAsc("id"));
+            .orderByAsc("id");
+        if (includeDraft) {
+            wrapper.and(qw -> qw.eq("status", STATUS_APPROVED).or().eq("status", STATUS_DRAFT));
+        } else {
+            wrapper.eq("status", STATUS_APPROVED);
+        }
+        List<ErpSaleReturn> returns = erpSaleReturnMapper.selectList(wrapper);
         enrichFlowStatus(tenantId, returns);
         return returns;
     }
@@ -187,6 +195,13 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         }
         List<ErpSaleReturnItem> items = erpSaleReturnItemMapper.findByReturnId(tenantId, id);
         return new ErpSaleReturnDetail(order, items);
+    }
+
+    @Override
+    public ErpSaleReturnRefundSummary getSaleOrderRefundSummary(Long saleOrderId) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpSaleOrder saleOrder = loadApprovedSaleOrder(tenantId, saleOrderId);
+        return buildSaleOrderRefundSummary(tenantId, saleOrder, null);
     }
 
     @Override
@@ -311,6 +326,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             throw new IllegalArgumentException("仅草稿可审核");
         }
         List<ErpSaleReturnItem> items = erpSaleReturnItemMapper.findByReturnId(tenantId, id);
+        validateNoOtherDraftOccupancy(tenantId, order.getSaleOrderId(), items, id);
         validateSaleReturnSourceFromItems(tenantId, order.getSaleOrderId(), order.getCustomerId(), items, id);
         validateSettlementAmounts(tenantId, order, id);
         ErpSaleReturn approved = erpSaleReturnMapper.approveDraft(tenantId, id, resolveCurrentUsername());
@@ -432,7 +448,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (settlementMethod == null || settlementMethod.isBlank()) {
             throw new IllegalArgumentException("请选择结算方式");
         }
-        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        ErpSettlementMethod method = resolveSettlementMethod(tenantId, settlementMethod);
         if (method == null || Boolean.FALSE.equals(method.getEnabled())) {
             throw new IllegalArgumentException("结算方式不存在或已停用");
         }
@@ -462,18 +478,23 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (settlementMethod == null || settlementMethod.isBlank()) {
             return false;
         }
-        String code = settlementMethod.trim().toUpperCase();
-        if ("CREDIT".equals(code) || "ON_ACCOUNT".equals(code) || "AR".equals(code)) {
-            return true;
-        }
-        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethod);
+        ErpSettlementMethod method = resolveSettlementMethod(tenantId, settlementMethod);
         if (method == null) {
             return false;
         }
-        if ("HIDDEN".equalsIgnoreCase(method.getFundInputMode())) {
-            return true;
+        return "HIDDEN".equalsIgnoreCase(method.getFundInputMode());
+    }
+
+    private ErpSettlementMethod resolveSettlementMethod(Long tenantId, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
         }
-        return method.getName() != null && method.getName().contains("挂账");
+        String normalized = value.trim();
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, normalized);
+        if (method != null) {
+            return method;
+        }
+        return erpSettlementMethodMapper.findByName(tenantId, normalized);
     }
 
     private void validateStockBinding(Long tenantId, Long warehouseId, Long locationId) {
@@ -815,6 +836,51 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         return amountByProduct;
     }
 
+    private void validateNoOtherDraftOccupancy(Long tenantId,
+                                               Long saleOrderId,
+                                               List<ErpSaleReturnItem> currentItems,
+                                               Long currentReturnId) {
+        if (saleOrderId == null || currentItems == null || currentItems.isEmpty()) {
+            return;
+        }
+        Set<Long> currentProductIds = currentItems.stream()
+            .map(ErpSaleReturnItem::getProductId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        if (currentProductIds.isEmpty()) {
+            return;
+        }
+
+        List<ErpSaleReturn> draftReturns = erpSaleReturnMapper.selectList(new QueryWrapper<ErpSaleReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("sale_order_id", saleOrderId)
+            .eq("status", STATUS_DRAFT)
+            .ne(currentReturnId != null, "id", currentReturnId)
+            .orderByAsc("created_at")
+            .orderByAsc("id"));
+        if (draftReturns.isEmpty()) {
+            return;
+        }
+
+        List<String> conflictOrderNos = new ArrayList<>();
+        for (ErpSaleReturn draftReturn : draftReturns) {
+            if (draftReturn.getId() == null) {
+                continue;
+            }
+            List<ErpSaleReturnItem> draftItems = erpSaleReturnItemMapper.findByReturnId(tenantId, draftReturn.getId());
+            boolean hasConflict = draftItems.stream()
+                .map(ErpSaleReturnItem::getProductId)
+                .filter(Objects::nonNull)
+                .anyMatch(currentProductIds::contains);
+            if (hasConflict) {
+                conflictOrderNos.add(draftReturn.getOrderNo() == null ? String.valueOf(draftReturn.getId()) : draftReturn.getOrderNo());
+            }
+        }
+        if (!conflictOrderNos.isEmpty()) {
+            throw new IllegalArgumentException("存在其他草稿退货单占用相同销售商品，请先处理后再审核：" + String.join("、", conflictOrderNos));
+        }
+    }
+
     private void enrichFlowStatus(Long tenantId, List<ErpSaleReturn> returns) {
         if (returns == null || returns.isEmpty()) {
             return;
@@ -827,8 +893,37 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             if (receivable != null) {
                 order.setRefundStatus(receivable.getStatus());
                 order.setRefundUnpaidAmount(receivable.getUnpaidAmount());
+            } else if (!STATUS_RED_FLUSHED.equals(order.getStatus())) {
+                applyDraftRefundPreview(order);
             }
         }
+    }
+
+    private void applyDraftRefundPreview(ErpSaleReturn order) {
+        BigDecimal total = resolveReturnTotal(order);
+        BigDecimal discount = zeroIfNull(order.getDiscountAmount());
+        if (discount.compareTo(total) > 0) {
+            discount = total;
+        }
+        BigDecimal refundedCash = zeroIfNull(order.getPaidAmount());
+        BigDecimal maxRefundedCash = total.subtract(discount);
+        if (maxRefundedCash.compareTo(BigDecimal.ZERO) < 0) {
+            maxRefundedCash = BigDecimal.ZERO;
+        }
+        if (refundedCash.compareTo(maxRefundedCash) > 0) {
+            refundedCash = maxRefundedCash;
+        }
+        BigDecimal applied = refundedCash.add(discount);
+        if (applied.compareTo(total) > 0) {
+            applied = total;
+        }
+        BigDecimal unpaid = total.subtract(applied).negate();
+        order.setRefundStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
+        order.setRefundUnpaidAmount(unpaid);
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private void applyTotals(ErpSaleReturn order, List<ErpSaleReturnItem> items) {
@@ -862,28 +957,80 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             throw new IllegalArgumentException("退款金额与优惠金额之和不能大于退货总金额");
         }
         if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal refundableCash = calculateRefundableCash(tenantId, order.getSaleOrderId(), currentReturnId);
+            BigDecimal refundableCash = buildSaleOrderRefundSummary(tenantId, order.getSaleOrderId(), currentReturnId)
+                .getRefundableCash();
             if (paidAmount.compareTo(refundableCash) > 0) {
                 throw new IllegalArgumentException("退款金额不能超过原销售可退实收金额");
             }
         }
     }
 
-    private BigDecimal calculateRefundableCash(Long tenantId, Long saleOrderId, Long currentReturnId) {
-        if (saleOrderId == null) {
-            return BigDecimal.ZERO;
+    private ErpSaleReturnRefundSummary buildSaleOrderRefundSummary(Long tenantId, Long saleOrderId, Long currentReturnId) {
+        ErpSaleOrder saleOrder = saleOrderId == null ? null : loadApprovedSaleOrder(tenantId, saleOrderId);
+        return buildSaleOrderRefundSummary(tenantId, saleOrder, currentReturnId);
+    }
+
+    private ErpSaleReturnRefundSummary buildSaleOrderRefundSummary(Long tenantId,
+                                                                   ErpSaleOrder saleOrder,
+                                                                   Long currentReturnId) {
+        ErpSaleReturnRefundSummary summary = new ErpSaleReturnRefundSummary();
+        if (saleOrder == null || saleOrder.getId() == null) {
+            summary.setCollectedCash(BigDecimal.ZERO);
+            summary.setRefundedCash(BigDecimal.ZERO);
+            summary.setRefundableCash(BigDecimal.ZERO);
+            return summary;
         }
+        Long saleOrderId = saleOrder.getId();
+        summary.setSaleOrderId(saleOrderId);
+        summary.setSaleOrderNo(saleOrder.getOrderNo());
+        summary.setDiscountAmount(saleOrder.getDiscountAmount() == null ? BigDecimal.ZERO : saleOrder.getDiscountAmount());
         ErpAccountsReceivable saleReceivable = erpAccountsReceivableMapper.findBySource(
             tenantId, SOURCE_SALE_ORDER, saleOrderId);
         if (saleReceivable == null) {
             saleReceivable = erpAccountsReceivableMapper.findBySaleOrderId(tenantId, saleOrderId);
         }
         BigDecimal collectedCash = BigDecimal.ZERO;
+        Set<Long> countedReceiptIds = new HashSet<>();
         if (saleReceivable != null && saleReceivable.getId() != null) {
-            BigDecimal approvedReceipts = erpReceiptReceivableMapper.sumApprovedAllocatedAmountByReceivableId(
+            List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceivableId(
                 tenantId, saleReceivable.getId());
-            if (approvedReceipts != null && approvedReceipts.compareTo(BigDecimal.ZERO) > 0) {
-                collectedCash = approvedReceipts;
+            if (allocations != null && !allocations.isEmpty()) {
+                List<Long> receiptIds = allocations.stream()
+                    .map(ErpReceiptReceivable::getReceiptId)
+                    .filter(java.util.Objects::nonNull)
+                    .distinct()
+                    .toList();
+                if (!receiptIds.isEmpty()) {
+                    Map<Long, ErpReceipt> receiptMap = erpReceiptMapper.selectBatchIds(receiptIds).stream()
+                        .filter(receipt -> receipt != null && tenantId.equals(receipt.getTenantId()))
+                        .collect(java.util.stream.Collectors.toMap(ErpReceipt::getId, receipt -> receipt, (left, right) -> left));
+                    for (ErpReceiptReceivable allocation : allocations) {
+                        ErpReceipt receipt = receiptMap.get(allocation.getReceiptId());
+                        if (receipt == null || !STATUS_APPROVED.equals(receipt.getStatus())) {
+                            continue;
+                        }
+                        BigDecimal allocatedTotal = allocation.getAllocatedTotal() == null
+                            ? BigDecimal.ZERO
+                            : allocation.getAllocatedTotal();
+                        if (allocatedTotal.compareTo(BigDecimal.ZERO) > 0) {
+                            collectedCash = collectedCash.add(allocatedTotal);
+                            countedReceiptIds.add(receipt.getId());
+                        }
+                    }
+                }
+            }
+        }
+        List<ErpReceipt> saleOrderReceipts = erpReceiptMapper.selectList(new QueryWrapper<ErpReceipt>()
+            .eq("tenant_id", tenantId)
+            .eq("sale_order_id", saleOrderId)
+            .eq("status", STATUS_APPROVED));
+        for (ErpReceipt receipt : saleOrderReceipts) {
+            if (receipt == null || receipt.getId() == null || countedReceiptIds.contains(receipt.getId())) {
+                continue;
+            }
+            BigDecimal receiptTotal = receiptImpactTotal(receipt);
+            if (receiptTotal.compareTo(BigDecimal.ZERO) > 0) {
+                collectedCash = collectedCash.add(receiptTotal);
             }
         }
         BigDecimal refundedCash = BigDecimal.ZERO;
@@ -901,7 +1048,22 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             }
         }
         BigDecimal refundable = collectedCash.subtract(refundedCash);
-        return refundable.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : refundable;
+        if (refundable.compareTo(BigDecimal.ZERO) < 0) {
+            refundable = BigDecimal.ZERO;
+        }
+        summary.setCollectedCash(collectedCash);
+        summary.setRefundedCash(refundedCash);
+        summary.setRefundableCash(refundable);
+        return summary;
+    }
+
+    private BigDecimal receiptImpactTotal(ErpReceipt receipt) {
+        if (receipt == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal amount = receipt.getAmount() == null ? BigDecimal.ZERO : receipt.getAmount();
+        BigDecimal discount = receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount();
+        return amount.add(discount);
     }
 
     private ErpSaleReturn loadForUpdate(Long tenantId, Long id) {

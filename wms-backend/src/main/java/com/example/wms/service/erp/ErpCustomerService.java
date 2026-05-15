@@ -10,10 +10,10 @@ import java.util.List;
 // 客户服务接口（ERP进销存）
 public interface ErpCustomerService {
     // 查询客户列表
-    List<ErpCustomer> listAll(String keyword, Boolean enabled, Long categoryId);
+    List<ErpCustomer> listAll(String keyword, String contact, String phone, Boolean enabled, Long categoryId);
 
     // 分页查询客户列表
-    PageResponse<ErpCustomer> page(long page, long size, String keyword, Boolean enabled, Long categoryId);
+    PageResponse<ErpCustomer> page(long page, long size, String keyword, String contact, String phone, Boolean enabled, Long categoryId);
 
     // 查询客户详情
     ErpCustomer getById(Long id);

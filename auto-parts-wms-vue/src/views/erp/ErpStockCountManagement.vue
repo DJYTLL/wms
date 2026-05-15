@@ -232,17 +232,18 @@
             </el-table-column>
             <el-table-column :label="$t('field.location')" min-width="150">
               <template #default="{ row }">
-                <el-select
-                  v-model="row.locationId"
-                  filterable
-                  :placeholder="$t('placeholder.selectLocation')"
-                  style="width: 100%"
+                <ProductStockSelect
+                  v-model="row.stockKey"
+                  :product-id="row.productId"
+                  :warehouse-id="row.warehouseId ?? null"
+                  :location-id="normalizeLocationId(row.locationId ?? null)"
+                  :warehouse-options="warehouseOptions"
+                  :location-options="getLocationOptions(row.warehouseId)"
                   :disabled="viewMode"
-                  @change="handleRowChange(row)"
-                >
-                  <el-option :label="$t('field.unassigned')" :value="-1" />
-                  <el-option v-for="l in getLocationOptions(row.warehouseId)" :key="l.id" :label="l.name" :value="l.id" />
-                </el-select>
+                  :placeholder="$t('placeholder.selectLocation')"
+                  :allow-manual-location-select="true"
+                  @selection-change="(payload) => handleStockSelectionChange(row, payload)"
+                />
               </template>
             </el-table-column>
             <el-table-column :label="$t('field.systemQty')" min-width="120">
@@ -303,6 +304,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import DecimalInput from '@/components/DecimalInput.vue';
+import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
 import { exportToCsv } from '@/utils/csv';
@@ -319,6 +321,7 @@ interface StockCountItem {
   productId?: number;
   warehouseId?: number;
   locationId?: number | null;
+  stockKey?: string;
   systemQty?: string;
   countedQty?: string;
   initUnitCost?: string;
@@ -566,6 +569,19 @@ const removeItem = (index: number) => {
 const normalizeLocationId = (value?: number | null) => {
   if (value === -1) return null;
   return value == null ? null : value;
+};
+
+const buildStockKey = (warehouseId?: number | null, locationId?: number | null) => {
+  const normalizedWarehouseId = warehouseId == null ? null : warehouseId;
+  const normalizedLocationId = normalizeLocationId(locationId ?? null);
+  if (normalizedWarehouseId == null && normalizedLocationId == null) {
+    return '';
+  }
+  return `${normalizedWarehouseId ?? 0}:${normalizedLocationId ?? 0}`;
+};
+
+const syncRowStockKey = (row: StockCountItem) => {
+  row.stockKey = buildStockKey(row.warehouseId, row.locationId ?? null);
 };
 
 const fetchBalanceForRow = async (row: StockCountItem) => {

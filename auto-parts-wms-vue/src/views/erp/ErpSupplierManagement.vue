@@ -4,7 +4,7 @@
       <div class="page-title">{{ $t('page.erpSupplierManagement') }}</div>
       <div class="page-toolbar-card">
         <div class="erp-basic-toolbar">
-          <div class="erp-basic-filters erp-basic-filters--3">
+          <div class="erp-basic-filters erp-basic-filters--4">
             <el-input
               v-model="searchQuery"
               :placeholder="$t('placeholder.keyword')"
@@ -13,20 +13,34 @@
               @clear="handleSearch"
               @keyup.enter="handleSearch"
             />
+            <el-input
+              v-model="contactQuery"
+              :placeholder="$t('field.contactPerson')"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @keyup.enter="handleSearch"
+            />
+            <el-input
+              v-model="phoneQuery"
+              :placeholder="$t('field.phone')"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @keyup.enter="handleSearch"
+            />
             <el-select
               v-model="statusFilter"
               :placeholder="$t('field.status')"
               class="table-search erp-basic-field--narrow"
-              @change="handleSearch"
             >
               <el-option :label="$t('filter.all')" value="all" />
               <el-option :label="$t('status.active')" value="enabled" />
               <el-option :label="$t('status.inactive')" value="disabled" />
               <el-option :label="$t('status.blacklisted')" value="blacklisted" />
             </el-select>
-            <el-button @click="handleReset">{{ $t('action.resetDefault') }}</el-button>
           </div>
           <div class="erp-basic-actions">
+            <el-button type="primary" @click="handleSearch">{{ $t('action.search') }}</el-button>
+            <el-button @click="handleReset">{{ $t('action.resetDefault') }}</el-button>
             <el-button type="primary" v-permission="'erp-supplier:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
           </div>
         </div>
@@ -210,6 +224,8 @@ const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 
 const searchQuery = ref('');
+const contactQuery = ref('');
+const phoneQuery = ref('');
 const statusFilter = ref<'all' | SupplierStatus>('all');
 const loading = ref(false);
 const page = ref(1);
@@ -377,6 +393,8 @@ const fetchList = async () => {
       size: size.value
     };
     if (searchQuery.value) params.keyword = searchQuery.value.trim();
+    if (contactQuery.value) params.contact = contactQuery.value.trim();
+    if (phoneQuery.value) params.phone = phoneQuery.value.trim();
     if (statusFilter.value !== 'all') params.status = statusFilter.value;
 
     const res: any = await request.get('/erp/suppliers/page', { params });
@@ -398,6 +416,8 @@ const handleSearch = () => {
 
 const handleReset = () => {
   searchQuery.value = '';
+  contactQuery.value = '';
+  phoneQuery.value = '';
   statusFilter.value = 'all';
   handleSearch();
 };

@@ -159,11 +159,13 @@
                     <span v-if="isReadOnly" class="product-cell__label">{{ resolveProductLabel(row.productId) }}</span>
                     <el-select
                       v-else
+                      :key="formData.supplierId ?? 'no-supplier'"
                       v-model="row.productId"
                       filterable
                       clearable
                       class="product-cell__select"
                       :placeholder="$t('placeholder.selectProduct')"
+                      :disabled="!formData.supplierId"
                       @change="handleProductChange(row)"
                     >
                       <el-option
@@ -199,8 +201,9 @@
                     :product-id="row.productId"
                     :warehouse-id="row.warehouseId"
                     :location-id="row.locationId"
+                    :allow-manual-location-select="true"
                     :warehouse-options="warehouseOptions"
-                    :location-options="getLocationOptions(row.warehouseId)"
+                    :location-options="locationOptions"
                     :placeholder="$t('placeholder.selectLocation')"
                     @selection-change="(payload) => handleStockSelectionChange(row, payload)"
                   />
@@ -315,73 +318,23 @@
       :title="$t('page.erpPurchaseOrderPrint')"
     />
 
-    <el-dialog
-      v-model="historyDialogVisible"
+    <ProductHistoryDialog
+      v-model:visible="historyDialogVisible"
+      v-model:active-tab="historyTab"
       :title="$t('action.productHistory')"
-      width="980px"
-      class="history-dialog"
-    >
-      <div class="history-header">
-        <div class="history-header__item">
-          <span>{{ $t('field.product') }}：</span>
-          <strong>{{ historyProductName }}</strong>
-        </div>
-        <div v-if="currentSupplierName !== '-'" class="history-header__item">
-          <span>{{ $t('field.supplier') }}：</span>
-          <strong>{{ currentSupplierName }}</strong>
-        </div>
-      </div>
-      <div v-loading="historyLoading" class="history-grid">
-        <div class="history-toolbar">
-          <el-input v-model="purchaseHistoryKeyword" :placeholder="$t('placeholder.keyword')" clearable class="history-search" />
-          <el-date-picker
-            v-model="purchaseHistoryRange"
-            type="daterange"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            :range-separator="$t('separator.to')"
-            :start-placeholder="$t('field.startTime')"
-            :end-placeholder="$t('field.endTime')"
-            class="history-date"
-            clearable
-          />
-        </div>
-        <el-table
-          :data="purchaseHistoryItems"
-          stripe
-          :empty-text="$t('table.empty')"
-          height="320"
-        >
-          <el-table-column prop="supplierName" :label="$t('field.supplierName')" min-width="180" />
-          <el-table-column prop="qty" :label="$t('field.quantity')" width="100" />
-          <el-table-column :label="$t('field.price')" width="120">
-            <template #default="{ row }">{{ formatMoney(Number(row.price || 0)) }}</template>
-          </el-table-column>
-          <el-table-column :label="$t('field.priceInclTax')" width="140">
-            <template #default="{ row }">{{ formatMoney(Number(row.priceInclTax || 0)) }}</template>
-          </el-table-column>
-          <el-table-column :label="$t('field.orderTime')" width="170">
-            <template #default="{ row }">{{ formatHistoryDate(row.orderAt) }}</template>
-          </el-table-column>
-          <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="160">
-            <template #default="{ row }">
-              <el-button link type="primary" @click="openPurchaseOrderHistory(row)">{{ row.orderNo }}</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination
-          class="history-pagination"
-          background
-          layout="total, sizes, prev, pager, next"
-          :total="purchaseHistoryTotal"
-          :current-page="purchaseHistoryPage"
-          :page-size="purchaseHistorySize"
-          :page-sizes="[5, 10, 20, 50]"
-          @current-change="handlePurchaseHistoryPageChange"
-          @size-change="handlePurchaseHistorySizeChange"
-        />
-      </div>
-    </el-dialog>
+      :loading="historyLoading"
+      :header-items="purchaseHistoryHeaderItems"
+      :tabs="purchaseHistoryTabs"
+      :empty-text="$t('table.empty')"
+      :keyword-placeholder="$t('placeholder.keyword')"
+      :range-separator="$t('separator.to')"
+      :start-placeholder="$t('field.startTime')"
+      :end-placeholder="$t('field.endTime')"
+      @tab-change="handleHistoryTabChange"
+      @filter-change="handleHistoryDialogFilterChange"
+      @page-change="handleHistoryDialogPageChange"
+      @size-change="handleHistoryDialogSizeChange"
+    />
 
     <el-dialog
       v-model="saveSuccessDialogVisible"
@@ -428,16 +381,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from 'vue';
 import { Delete, Plus, View } from '@element-plus/icons-vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useValidationMessage } from '@/composables/useValidationMessage';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import ProductHistoryDialog from '@/components/ProductHistoryDialog.vue';
 import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
@@ -498,14 +453,47 @@ interface PurchaseHistoryItem {
   supplierName: string;
 }
 
+interface SaleHistoryItem {
+  orderId: number;
+  orderNo: string;
+  orderAt: string;
+  productId: number;
+  qty: number;
+  price: number;
+  priceInclTax: number;
+  customerId: number;
+  customerName: string;
+}
+
+interface PriceHistoryItem {
+  customerCategoryName: string;
+  salePrice: number;
+  updatedAt: string;
+}
+
+interface HistoryDialogTabState {
+  keyword: string;
+  range: string[];
+  page: number;
+  size: number;
+  total: number;
+}
+
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
+const {
+  requiredFieldMessage,
+  requiredRowFieldMessage,
+  positiveRowFieldMessage,
+  invalidRowFieldMessage,
+} = useValidationMessage();
 const authStore = useAuthStore();
 
 const supplierOptions = ref<OptionItem[]>([]);
 const productOptions = ref<ProductOption[]>([]);
+const customerCategoryOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const settlementMethodOptions = ref<MethodOption[]>([]);
@@ -515,17 +503,27 @@ const selectedItems = ref<PurchaseOrderItem[]>([]);
 const isInitializing = ref(true);
 const isSaving = ref(false);
 const needsReload = ref(false);
+const isPageActive = ref(false);
 const pagePath = ref(route.path);
 const lastRouteKey = ref(route.fullPath);
+const detailLoadSeq = ref(0);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
 const pendingPrintDocId = ref<number | null>(null);
 const historyDialogVisible = ref(false);
 const historyLoading = ref(false);
 const historyProduct = ref<ProductOption | null>(null);
+const historyTab = ref<'price' | 'purchase' | 'sale-all'>('purchase');
+const priceHistoryItems = ref<PriceHistoryItem[]>([]);
+const saleHistoryItems = ref<SaleHistoryItem[]>([]);
 const purchaseHistoryItems = ref<PurchaseHistoryItem[]>([]);
+const saleHistoryKeyword = ref('');
 const purchaseHistoryKeyword = ref('');
+const saleHistoryRange = ref<string[]>([]);
 const purchaseHistoryRange = ref<string[]>([]);
+const saleHistoryPage = ref(1);
+const saleHistorySize = ref(10);
+const saleHistoryTotal = ref(0);
 const purchaseHistoryPage = ref(1);
 const purchaseHistorySize = ref(10);
 const purchaseHistoryTotal = ref(0);
@@ -564,6 +562,83 @@ const currentSupplierName = computed(() => supplierOptions.value.find(item => it
 const currentSettlementMethodName = computed(() => settlementMethodOptions.value.find(item => item.code === formData.settlementMethod)?.name || '-');
 const currentPaymentMethodName = computed(() => paymentMethodOptions.value.find(item => item.code === formData.paymentMethodCode)?.name || '-');
 const historyProductName = computed(() => historyProduct.value?.name || '-');
+const purchaseHistoryHeaderItems = computed(() => [
+  { label: t('field.product'), value: historyProductName.value },
+  { label: t('field.supplier'), value: currentSupplierName.value, show: currentSupplierName.value !== '-' }
+]);
+const customerCategoryNameMap = computed(() => {
+  const map = new Map<number, string>();
+  for (const item of customerCategoryOptions.value) {
+    if (item.id != null) {
+      map.set(item.id, item.name);
+    }
+  }
+  return map;
+});
+const priceHistoryTabState = computed<HistoryDialogTabState>(() => ({
+  keyword: '',
+  range: [],
+  page: 1,
+  size: 10,
+  total: priceHistoryItems.value.length
+}));
+const purchaseHistoryTabState = computed<HistoryDialogTabState>(() => ({
+  keyword: purchaseHistoryKeyword.value,
+  range: purchaseHistoryRange.value,
+  page: purchaseHistoryPage.value,
+  size: purchaseHistorySize.value,
+  total: purchaseHistoryTotal.value
+}));
+const saleHistoryTabState = computed<HistoryDialogTabState>(() => ({
+  keyword: saleHistoryKeyword.value,
+  range: saleHistoryRange.value,
+  page: saleHistoryPage.value,
+  size: saleHistorySize.value,
+  total: saleHistoryTotal.value
+}));
+const purchaseHistoryTabs = computed(() => [
+  {
+    name: 'price',
+    label: t('field.customerCategoryPrice'),
+    data: priceHistoryItems.value,
+    columns: [
+      { prop: 'customerCategoryName', label: t('field.customerCategory'), minWidth: 160 },
+      { label: t('field.price'), width: 120, formatter: (row: PriceHistoryItem) => formatMoney(row.salePrice) },
+      { label: t('field.updatedTime'), width: 150, formatter: (row: PriceHistoryItem) => formatHistoryDate(row.updatedAt) }
+    ],
+    height: 320
+  },
+  {
+    name: 'purchase',
+    label: t('field.purchaseHistory'),
+    data: purchaseHistoryItems.value,
+    state: purchaseHistoryTabState.value,
+    columns: [
+      { prop: 'supplierName', label: t('field.supplierName'), minWidth: 180 },
+      { prop: 'qty', label: t('field.quantity'), width: 100 },
+      { label: t('field.price'), width: 120, formatter: (row: PurchaseHistoryItem) => formatMoney(Number(row.price || 0)) },
+      { label: t('field.priceInclTax'), width: 140, formatter: (row: PurchaseHistoryItem) => formatMoney(Number(row.priceInclTax || 0)) },
+      { label: t('field.orderTime'), width: 170, formatter: (row: PurchaseHistoryItem) => formatHistoryDate(row.orderAt) },
+      { prop: 'orderNo', label: t('field.orderNo'), minWidth: 160, type: 'link', onClick: openPurchaseOrderHistory }
+    ],
+    height: 320
+  },
+  {
+    name: 'sale-all',
+    label: t('field.saleHistory'),
+    data: saleHistoryItems.value,
+    state: saleHistoryTabState.value,
+    columns: [
+      { prop: 'customerName', label: t('field.customerName'), minWidth: 160 },
+      { prop: 'qty', label: t('field.quantity'), width: 100 },
+      { label: t('field.price'), width: 120, formatter: (row: SaleHistoryItem) => formatMoney(Number(row.price || 0)) },
+      { label: t('field.priceInclTax'), width: 140, formatter: (row: SaleHistoryItem) => formatMoney(Number(row.priceInclTax || 0)) },
+      { label: t('field.orderTime'), width: 170, formatter: (row: SaleHistoryItem) => formatHistoryDate(row.orderAt) },
+      { prop: 'orderNo', label: t('field.orderNo'), minWidth: 160, type: 'link', onClick: openSaleOrderHistory }
+    ],
+    height: 320
+  }
+]);
 const isCreditSettlement = computed(() => {
   if (!formData.settlementMethod) return false;
   const code = String(formData.settlementMethod).toUpperCase();
@@ -618,6 +693,12 @@ const totalAmount = computed(() => Math.max(0, totalAmountBeforeDiscount.value -
 const closePage = (redirectPath?: string) => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('tags:close', { detail: { path: route.path, redirectPath } }));
+  }
+};
+
+const closeTagByPath = (path: string) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tags:close', { detail: { path } }));
   }
 };
 
@@ -704,6 +785,13 @@ const normalizeDateTimeValue = (value: any) => {
 
 const formatHistoryDate = (value: any) => normalizeDateTimeValue(value);
 
+const normalizeArray = <T>(value: any): T[] => {
+  if (Array.isArray(value)) return value as T[];
+  if (Array.isArray(value?.items)) return value.items as T[];
+  if (Array.isArray(value?.list)) return value.list as T[];
+  return [];
+};
+
 const resolveProductLabel = (productId?: number) => productOptions.value.find(item => item.id === productId)?.name || '-';
 const resolveWarehouseLabel = (warehouseId?: number) => warehouseOptions.value.find(item => item.id === warehouseId)?.name || '-';
 const resolveLocationLabel = (locationId?: number) => locationOptions.value.find(item => item.id === locationId)?.name || '-';
@@ -788,6 +876,14 @@ const applyProductDefaults = async (row: PurchaseOrderItem) => {
 };
 
 const handleProductChange = async (row: PurchaseOrderItem) => {
+  if (!formData.supplierId) {
+    row.productId = undefined;
+    row.warehouseId = undefined;
+    row.locationId = undefined;
+    row.stockKey = '';
+    row.price = '';
+    return;
+  }
   if (!row.productId) {
     row.warehouseId = undefined;
     row.locationId = undefined;
@@ -862,6 +958,13 @@ const getDefaultSettlementMethod = () => {
   return defaultItem?.code || '';
 };
 
+const resolveSettlementMethodCode = (value?: string) => {
+  if (!value) return '';
+  const normalized = String(value).trim();
+  const matched = settlementMethodOptions.value.find(item => item.code === normalized || item.name === normalized);
+  return matched?.code || normalized;
+};
+
 const getDefaultPaymentMethod = () => {
   if (!paymentMethodOptions.value.length) return '';
   const defaultItem = paymentMethodOptions.value.find(item => item.isDefault) ?? paymentMethodOptions.value[0];
@@ -870,7 +973,7 @@ const getDefaultPaymentMethod = () => {
 
 const applyMethodsForSupplier = () => {
   const supplier = supplierOptions.value.find(item => item.id === formData.supplierId);
-  const settlement = supplier?.defaultSettlementMethodCode || getDefaultSettlementMethod();
+  const settlement = resolveSettlementMethodCode(supplier?.defaultSettlementMethodCode) || getDefaultSettlementMethod();
   const paymentMethod = supplier?.defaultPaymentMethodCode || getDefaultPaymentMethod();
 
   if (settlement) {
@@ -929,6 +1032,15 @@ const fetchProducts = async () => {
       costPrice: product.costPrice,
       enabled: product.enabled
     }));
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const fetchCustomerCategories = async () => {
+  try {
+    const res: any = await request.get('/erp/customer-categories');
+    customerCategoryOptions.value = res.data.data || [];
   } catch (error) {
     notifyError(error);
   }
@@ -1046,12 +1158,14 @@ const fetchNextOrderNo = async () => {
 
 const loadDetail = async () => {
   if (!route.path.startsWith('/erp/purchase-orders')) return;
+  const currentSeq = ++detailLoadSeq.value;
   isInitializing.value = true;
   resetForm();
   productRecentPurchaseMap.value = {};
   try {
     if (!isEditing.value) {
       await fetchNextOrderNo();
+      if (!isLatestDetailLoad(currentSeq)) return;
       formData.orderAt = formatDateTime(new Date());
       formData.status = 'DRAFT';
       applyDefaultMethods();
@@ -1060,6 +1174,7 @@ const loadDetail = async () => {
     }
 
     const res: any = await request.get(`/erp/purchase-orders/${route.params.id}`);
+    if (!isLatestDetailLoad(currentSeq)) return;
     if (res.data.code === 200) {
       const data = res.data.data || {};
       const order = data.order || data;
@@ -1088,15 +1203,20 @@ const loadDetail = async () => {
         ensureWarehouseOption(item.warehouseId),
         ensureLocationOption(item.locationId)
       ]));
+      if (!isLatestDetailLoad(currentSeq)) return;
       if (!formData.items.length) {
         addItem();
       }
       applyDefaultMethods();
     }
   } catch (error) {
-    notifyError(error);
+    if (isLatestDetailLoad(currentSeq)) {
+      notifyError(error);
+    }
   } finally {
-    isInitializing.value = false;
+    if (isLatestDetailLoad(currentSeq)) {
+      isInitializing.value = false;
+    }
   }
 };
 
@@ -1113,18 +1233,18 @@ const resolveHistoryRange = (range: string[]) => {
   };
 };
 
-const buildHistoryParams = (page: number, size: number) => {
+const buildHistoryParams = (range: string[], keyword: string, page: number, size: number, includeSupplier = false) => {
   const productId = historyProduct.value?.id;
   if (!productId) return null;
   const params: Record<string, any> = { productId, page, size };
-  if (formData.supplierId) {
+  if (includeSupplier && formData.supplierId) {
     params.supplierId = formData.supplierId;
   }
-  const keyword = purchaseHistoryKeyword.value.trim();
-  if (keyword) {
-    params.keyword = keyword;
+  const normalized = keyword.trim();
+  if (normalized) {
+    params.keyword = normalized;
   }
-  const resolved = resolveHistoryRange(purchaseHistoryRange.value);
+  const resolved = resolveHistoryRange(range);
   if (resolved) {
     params.startAt = resolved.startAt;
     params.endAt = resolved.endAt;
@@ -1132,27 +1252,111 @@ const buildHistoryParams = (page: number, size: number) => {
   return params;
 };
 
+let historyLoadingCount = 0;
+const withHistoryLoading = async (task: () => Promise<void>) => {
+  historyLoadingCount += 1;
+  historyLoading.value = true;
+  try {
+    await task();
+  } finally {
+    historyLoadingCount -= 1;
+    if (historyLoadingCount <= 0) {
+      historyLoadingCount = 0;
+      historyLoading.value = false;
+    }
+  }
+};
+
 const fetchPurchaseHistory = async (page = purchaseHistoryPage.value) => {
-  const params = buildHistoryParams(page, purchaseHistorySize.value);
+  const params = buildHistoryParams(
+    purchaseHistoryRange.value,
+    purchaseHistoryKeyword.value,
+    page,
+    purchaseHistorySize.value,
+    true
+  );
   if (!params) {
     purchaseHistoryItems.value = [];
     purchaseHistoryTotal.value = 0;
     return;
   }
-  historyLoading.value = true;
-  try {
-    const res: any = await request.get('/erp/purchase-orders/product-history', { params });
-    const data = res?.data?.data || {};
-    purchaseHistoryItems.value = Array.isArray(data.items) ? data.items : [];
-    purchaseHistoryTotal.value = data.total || 0;
-    purchaseHistoryPage.value = data.page || page;
-    purchaseHistorySize.value = data.size || purchaseHistorySize.value;
-  } catch (error) {
-    purchaseHistoryItems.value = [];
-    purchaseHistoryTotal.value = 0;
-    notifyError(error);
-  } finally {
-    historyLoading.value = false;
+  await withHistoryLoading(async () => {
+    try {
+      const res: any = await request.get('/erp/purchase-orders/product-history', { params });
+      const data = res?.data?.data || {};
+      purchaseHistoryItems.value = normalizeArray<PurchaseHistoryItem>(data);
+      purchaseHistoryTotal.value = data.total || 0;
+      purchaseHistoryPage.value = data.page || page;
+      purchaseHistorySize.value = data.size || purchaseHistorySize.value;
+    } catch (error) {
+      purchaseHistoryItems.value = [];
+      purchaseHistoryTotal.value = 0;
+      notifyError(error);
+    }
+  });
+};
+
+const fetchSaleHistory = async (page = saleHistoryPage.value) => {
+  const params = buildHistoryParams(
+    saleHistoryRange.value,
+    saleHistoryKeyword.value,
+    page,
+    saleHistorySize.value
+  );
+  if (!params) {
+    saleHistoryItems.value = [];
+    saleHistoryTotal.value = 0;
+    return;
+  }
+  await withHistoryLoading(async () => {
+    try {
+      const res: any = await request.get('/erp/sale-orders/product-history', { params });
+      const data = res?.data?.data || {};
+      saleHistoryItems.value = normalizeArray<SaleHistoryItem>(data);
+      saleHistoryTotal.value = data.total || 0;
+      saleHistoryPage.value = data.page || page;
+      saleHistorySize.value = data.size || saleHistorySize.value;
+    } catch (error) {
+      saleHistoryItems.value = [];
+      saleHistoryTotal.value = 0;
+      notifyError(error);
+    }
+  });
+};
+
+const fetchProductPrices = async () => {
+  const productId = historyProduct.value?.id;
+  if (!productId) {
+    priceHistoryItems.value = [];
+    return;
+  }
+  await withHistoryLoading(async () => {
+    try {
+      const res: any = await request.get('/erp/product-prices', { params: { productId } });
+      const items = normalizeArray<any>(res?.data?.data);
+      priceHistoryItems.value = items.map((item: any) => ({
+        ...item,
+        customerCategoryName: customerCategoryNameMap.value.get(item.customerCategoryId) || '-'
+      }));
+    } catch (error) {
+      priceHistoryItems.value = [];
+      notifyError(error);
+    }
+  });
+};
+
+const handleHistoryTabChange = (tabName: string | number) => {
+  historyTab.value = String(tabName) as typeof historyTab.value;
+  if (historyTab.value === 'price') {
+    fetchProductPrices();
+    return;
+  }
+  if (historyTab.value === 'purchase') {
+    fetchPurchaseHistory(purchaseHistoryPage.value);
+    return;
+  }
+  if (historyTab.value === 'sale-all') {
+    fetchSaleHistory(saleHistoryPage.value);
   }
 };
 
@@ -1167,10 +1371,62 @@ const handlePurchaseHistorySizeChange = (size: number) => {
   fetchPurchaseHistory(1);
 };
 
+const handleSaleHistoryPageChange = (page: number) => {
+  saleHistoryPage.value = page;
+  fetchSaleHistory(page);
+};
+
+const handleSaleHistorySizeChange = (size: number) => {
+  saleHistorySize.value = size;
+  saleHistoryPage.value = 1;
+  fetchSaleHistory(1);
+};
+
+const handleHistoryDialogFilterChange = (payload: { tabName: string; keyword?: string; range?: string[] }) => {
+  if (payload.tabName === 'purchase') {
+    if (payload.keyword !== undefined) purchaseHistoryKeyword.value = payload.keyword;
+    if (payload.range !== undefined) purchaseHistoryRange.value = payload.range;
+    return;
+  }
+  if (payload.tabName === 'sale-all') {
+    if (payload.keyword !== undefined) saleHistoryKeyword.value = payload.keyword;
+    if (payload.range !== undefined) saleHistoryRange.value = payload.range;
+  }
+};
+
+const handleHistoryDialogPageChange = (payload: { tabName: string; page: number }) => {
+  if (payload.tabName === 'purchase') {
+    handlePurchaseHistoryPageChange(payload.page);
+    return;
+  }
+  if (payload.tabName === 'sale-all') {
+    handleSaleHistoryPageChange(payload.page);
+  }
+};
+
+const handleHistoryDialogSizeChange = (payload: { tabName: string; size: number }) => {
+  if (payload.tabName === 'purchase') {
+    handlePurchaseHistorySizeChange(payload.size);
+    return;
+  }
+  if (payload.tabName === 'sale-all') {
+    handleSaleHistorySizeChange(payload.size);
+  }
+};
+
 const openPurchaseOrderHistory = (row: PurchaseHistoryItem) => {
   if (!row?.orderId) return;
   router.push({
     path: `/erp/purchase-orders/${row.orderId}/edit`,
+    query: { mode: 'view', from: 'approved' }
+  });
+  historyDialogVisible.value = false;
+};
+
+const openSaleOrderHistory = (row: SaleHistoryItem) => {
+  if (!row?.orderId) return;
+  router.push({
+    path: `/erp/sale-orders/${row.orderId}/edit`,
     query: { mode: 'view', from: 'approved' }
   });
   historyDialogVisible.value = false;
@@ -1184,12 +1440,23 @@ const openHistoryForRow = async (row: PurchaseOrderItem) => {
   historyProduct.value = productOptions.value.find(item => item.id === row.productId)
     || { id: row.productId, name: String(row.productId) };
   historyDialogVisible.value = true;
+  historyTab.value = 'purchase';
+  priceHistoryItems.value = [];
+  saleHistoryItems.value = [];
   purchaseHistoryItems.value = [];
+  saleHistoryKeyword.value = '';
   purchaseHistoryKeyword.value = '';
+  saleHistoryRange.value = [];
   purchaseHistoryRange.value = [];
+  saleHistoryPage.value = 1;
+  saleHistoryTotal.value = 0;
   purchaseHistoryPage.value = 1;
   purchaseHistoryTotal.value = 0;
-  await fetchPurchaseHistory(1);
+  await Promise.all([
+    fetchProductPrices(),
+    fetchPurchaseHistory(1),
+    fetchSaleHistory(1)
+  ]);
 };
 
 const openSaveSuccessDialog = (savedId: number | null, savedOrderNo?: string, mode: 'save' | 'approve' = 'save') => {
@@ -1203,6 +1470,8 @@ const openSaveSuccessDialog = (savedId: number | null, savedOrderNo?: string, mo
 const closeSaveSuccessDialog = () => {
   saveSuccessDialogVisible.value = false;
 };
+
+const isLatestDetailLoad = (seq: number) => detailLoadSeq.value === seq;
 
 const navigateToApprovedView = async (savedId: number) => {
   await router.replace({
@@ -1228,7 +1497,7 @@ const saveData = async (
   const closeOnSuccess = options.closeOnSuccess === true;
 
   if (!formData.supplierId) {
-    notifyWarning(t('message.required'));
+    notifyWarning(requiredFieldMessage(t('field.supplier')));
     return null;
   }
 
@@ -1238,7 +1507,8 @@ const saveData = async (
     return null;
   }
 
-  for (const item of validItems) {
+  for (const [index, item] of validItems.entries()) {
+    const rowNumber = index + 1;
     if (item.stockKey && (!item.warehouseId || !item.locationId)) {
       const [warehouseRaw, locationRaw] = item.stockKey.split(':');
       const warehouseId = Number(warehouseRaw);
@@ -1247,17 +1517,21 @@ const saveData = async (
       item.locationId = Number.isNaN(locationId) || locationId === 0 ? undefined : locationId;
     }
     if (!item.warehouseId || !item.locationId) {
-      notifyWarning(t('message.required'));
+      notifyWarning(
+        !item.warehouseId
+          ? requiredRowFieldMessage(rowNumber, t('field.warehouse'))
+          : requiredRowFieldMessage(rowNumber, t('field.location'))
+      );
       return null;
     }
     const qtyValue = parseDecimal(item.qty, 4);
     if (qtyValue == null || qtyValue <= 0) {
-      notifyWarning(t('message.mustBePositive'));
+      notifyWarning(positiveRowFieldMessage(rowNumber, t('field.quantity')));
       return null;
     }
     const priceValue = parseDecimal(item.price, 4);
     if (priceValue == null) {
-      notifyWarning(t('message.invalidNumber'));
+      notifyWarning(invalidRowFieldMessage(rowNumber, t('field.price')));
       return null;
     }
   }
@@ -1320,12 +1594,17 @@ const saveData = async (
 };
 
 const approveSavedOrder = async (savedId: number, savedOrderNo?: string) => {
+  const sourcePath = route.path;
   try {
     isSaving.value = true;
     await request.post(`/erp/purchase-orders/${savedId}/approve`);
     formData.status = 'APPROVED';
     notifySuccess(t('message.approveSuccess'));
     await navigateToApprovedView(savedId);
+    await nextTick();
+    if (sourcePath !== route.path) {
+      closeTagByPath(sourcePath);
+    }
     await loadDetail();
     openSaveSuccessDialog(savedId, savedOrderNo, 'approve');
   } catch (error) {
@@ -1508,21 +1787,30 @@ const handleApproveFromSaveDialog = async () => {
 
 const handleSaveSuccessDialogClosed = async () => {
   const action = saveSuccessAction.value;
+  const dialogMode = saveSuccessDialogMode.value;
   saveSuccessAction.value = null;
+  saveSuccessDocId.value = null;
+  saveSuccessOrderNo.value = '';
+  saveSuccessDialogMode.value = 'save';
 
   if (action === 'continue') {
-    await router.push({
+    const createRoute = {
       path: '/erp/purchase-orders/create',
       query: {
         from: 'draft',
         returnTo: '/erp/purchase-orders/draft'
       }
-    });
+    };
+    const targetFullPath = router.resolve(createRoute).fullPath;
+    if (route.fullPath !== targetFullPath) {
+      await router.replace(createRoute);
+    }
+    await loadDetail();
     return;
   }
 
   if (action === 'list') {
-    const target = saveSuccessDialogMode.value === 'approve' ? getApprovedReturnPath() : getReturnPath();
+    const target = dialogMode === 'approve' ? getApprovedReturnPath() : getReturnPath();
     closePage(target);
     return;
   }
@@ -1549,6 +1837,7 @@ watch(
   () => route.fullPath,
   (newPath) => {
     if (newPath === lastRouteKey.value) return;
+    if (!isPageActive.value) return;
     if (!route.path.startsWith('/erp/purchase-orders')) return;
     lastRouteKey.value = newPath;
     pagePath.value = route.path;
@@ -1572,13 +1861,25 @@ watch(
 watch([purchaseHistoryKeyword, purchaseHistoryRange], () => {
   if (!historyDialogVisible.value) return;
   purchaseHistoryPage.value = 1;
-  fetchPurchaseHistory(1);
-});
+  if (historyTab.value === 'purchase') {
+    fetchPurchaseHistory(1);
+  }
+}, { deep: true });
+
+watch([saleHistoryKeyword, saleHistoryRange], () => {
+  if (!historyDialogVisible.value) return;
+  saleHistoryPage.value = 1;
+  if (historyTab.value === 'sale-all') {
+    fetchSaleHistory(1);
+  }
+}, { deep: true });
 
 onMounted(() => {
+  isPageActive.value = true;
   pagePath.value = route.path;
   fetchSuppliers();
   fetchProducts();
+  fetchCustomerCategories();
   fetchWarehouses();
   fetchLocations();
   fetchSettlementMethods();
@@ -1591,13 +1892,19 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  isPageActive.value = true;
   if (!route.path.startsWith('/erp/purchase-orders')) return;
   if (!needsReload.value) return;
   needsReload.value = false;
   loadDetail();
 });
 
+onDeactivated(() => {
+  isPageActive.value = false;
+});
+
 onBeforeUnmount(() => {
+  isPageActive.value = false;
   if (typeof window !== 'undefined') {
     window.removeEventListener('tags:closing', handleTagClosing as EventListener);
     window.removeEventListener('tags:close', handleTagClosing as EventListener);

@@ -160,6 +160,7 @@
                     <span v-if="isReadOnly" class="product-cell__label">{{ resolveProductLabel(row) }}</span>
                     <el-select
                       v-else
+                      :key="formData.customerId ?? 'no-customer'"
                       v-model="row.productId"
                       filterable
                       clearable
@@ -352,190 +353,24 @@
       </div>
     </div>
 
-      <el-dialog
-        v-model="historyDialogVisible"
+      <ProductHistoryDialog
+        v-model:visible="historyDialogVisible"
+        v-model:active-tab="historyTab"
         :title="$t('action.productHistory')"
-        width="980px"
-        class="history-dialog"
-      >
-      <div class="history-header">
-        <div class="history-header__item">
-          <span>{{ $t('field.product') }}：</span>
-          <strong>{{ historyProductName }}</strong>
-        </div>
-        <div class="history-header__hint">{{ $t('message.historyShortcutHint') }}</div>
-      </div>
-        <div v-loading="historyLoading" class="history-grid history-grid--tabs">
-          <el-tabs v-model="historyTab" type="card" class="history-tabs" @tab-change="handleHistoryTabChange">
-            <el-tab-pane :label="$t('field.customerCategoryPrice')" name="price">
-              <el-table
-                :data="priceHistoryItems"
-                stripe
-                :empty-text="$t('table.empty')"
-                height="260"
-              >
-                <el-table-column prop="customerCategoryName" :label="$t('field.customerCategory')" min-width="160" />
-                <el-table-column :label="$t('field.price')" width="120">
-                  <template #default="{ row }">{{ formatMoney(row.salePrice) }}</template>
-                </el-table-column>
-                <el-table-column :label="$t('field.updatedTime')" width="150">
-                  <template #default="{ row }">{{ formatHistoryDate(row.updatedAt) }}</template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
-            <el-tab-pane :label="$t('field.purchaseHistory')" name="purchase">
-              <div class="history-toolbar">
-                <el-input v-model="purchaseHistoryKeyword" :placeholder="$t('placeholder.keyword')" clearable class="history-search" />
-                <el-date-picker
-                v-model="purchaseHistoryRange"
-                type="daterange"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                :range-separator="$t('separator.to')"
-                :start-placeholder="$t('field.startTime')"
-                :end-placeholder="$t('field.endTime')"
-                class="history-date"
-                clearable
-              />
-            </div>
-              <el-table
-                :data="purchaseHistoryItems"
-                stripe
-                :empty-text="$t('table.empty')"
-                height="260"
-              >
-              <el-table-column prop="supplierName" :label="$t('field.supplierName')" min-width="160" />
-              <el-table-column prop="qty" :label="$t('field.quantity')" width="90" />
-              <el-table-column :label="$t('field.price')" width="110">
-                <template #default="{ row }">{{ formatMoney(row.price) }}</template>
-              </el-table-column>
-              <el-table-column :label="$t('field.priceInclTax')" width="130">
-                <template #default="{ row }">{{ formatMoney(row.priceInclTax) }}</template>
-              </el-table-column>
-                <el-table-column :label="$t('field.orderTime')" width="150">
-                  <template #default="{ row }">{{ formatHistoryDate(row.orderAt) }}</template>
-                </el-table-column>
-                <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="160">
-                  <template #default="{ row }">
-                    <el-button link type="primary" @click="openPurchaseOrderHistory(row)">{{ row.orderNo }}</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-              <el-pagination
-                class="history-pagination"
-                background
-                layout="total, sizes, prev, pager, next"
-                :total="purchaseHistoryTotal"
-                :current-page="purchaseHistoryPage"
-                :page-size="purchaseHistorySize"
-                :page-sizes="[5, 10, 20, 50]"
-                @current-change="handlePurchaseHistoryPageChange"
-                @size-change="handlePurchaseHistorySizeChange"
-              />
-            </el-tab-pane>
-            <el-tab-pane :label="$t('field.saleHistory')" name="sale-all">
-              <div class="history-toolbar">
-                <el-input v-model="saleHistoryKeyword" :placeholder="$t('placeholder.keyword')" clearable class="history-search" />
-                <el-date-picker
-                v-model="saleHistoryRange"
-                type="daterange"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                :range-separator="$t('separator.to')"
-                :start-placeholder="$t('field.startTime')"
-                :end-placeholder="$t('field.endTime')"
-                class="history-date"
-                clearable
-              />
-            </div>
-              <el-table
-                :data="saleHistoryItems"
-                stripe
-                :empty-text="$t('table.empty')"
-                height="260"
-              >
-              <el-table-column prop="customerName" :label="$t('field.customerName')" min-width="160" />
-              <el-table-column prop="qty" :label="$t('field.quantity')" width="90" />
-              <el-table-column :label="$t('field.price')" width="110">
-                <template #default="{ row }">{{ formatMoney(row.price) }}</template>
-              </el-table-column>
-              <el-table-column :label="$t('field.priceInclTax')" width="130">
-                <template #default="{ row }">{{ formatMoney(row.priceInclTax) }}</template>
-              </el-table-column>
-                <el-table-column :label="$t('field.orderTime')" width="150">
-                  <template #default="{ row }">{{ formatHistoryDate(row.orderAt) }}</template>
-                </el-table-column>
-                <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="160">
-                  <template #default="{ row }">
-                    <el-button link type="primary" @click="openSaleOrderHistory(row)">{{ row.orderNo }}</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-              <el-pagination
-                class="history-pagination"
-                background
-                layout="total, sizes, prev, pager, next"
-                :total="saleHistoryTotal"
-                :current-page="saleHistoryPage"
-                :page-size="saleHistorySize"
-                :page-sizes="[5, 10, 20, 50]"
-                @current-change="handleSaleHistoryPageChange"
-                @size-change="handleSaleHistorySizeChange"
-              />
-            </el-tab-pane>
-            <el-tab-pane :label="$t('field.customerSaleHistory')" name="sale-customer">
-              <div class="history-toolbar">
-                <el-input v-model="customerSaleHistoryKeyword" :placeholder="$t('placeholder.keyword')" clearable class="history-search" />
-                <el-date-picker
-                v-model="customerSaleHistoryRange"
-                type="daterange"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                :range-separator="$t('separator.to')"
-                :start-placeholder="$t('field.startTime')"
-                :end-placeholder="$t('field.endTime')"
-                class="history-date"
-                clearable
-              />
-            </div>
-              <el-table
-                :data="customerSaleHistoryItems"
-                stripe
-                :empty-text="$t('table.empty')"
-                height="260"
-              >
-              <el-table-column prop="customerName" :label="$t('field.customerName')" min-width="160" />
-              <el-table-column prop="qty" :label="$t('field.quantity')" width="90" />
-              <el-table-column :label="$t('field.price')" width="110">
-                <template #default="{ row }">{{ formatMoney(row.price) }}</template>
-              </el-table-column>
-              <el-table-column :label="$t('field.priceInclTax')" width="130">
-                <template #default="{ row }">{{ formatMoney(row.priceInclTax) }}</template>
-              </el-table-column>
-                <el-table-column :label="$t('field.orderTime')" width="150">
-                  <template #default="{ row }">{{ formatHistoryDate(row.orderAt) }}</template>
-                </el-table-column>
-                <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="160">
-                  <template #default="{ row }">
-                    <el-button link type="primary" @click="openSaleOrderHistory(row)">{{ row.orderNo }}</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-              <el-pagination
-                class="history-pagination"
-                background
-                layout="total, sizes, prev, pager, next"
-                :total="customerSaleHistoryTotal"
-                :current-page="customerSaleHistoryPage"
-                :page-size="customerSaleHistorySize"
-                :page-sizes="[5, 10, 20, 50]"
-                @current-change="handleCustomerSaleHistoryPageChange"
-                @size-change="handleCustomerSaleHistorySizeChange"
-              />
-            </el-tab-pane>
-          </el-tabs>
-        </div>
-      </el-dialog>
+        :loading="historyLoading"
+        :header-items="saleHistoryHeaderItems"
+        :hint="$t('message.historyShortcutHint')"
+        :tabs="saleHistoryTabs"
+        :empty-text="$t('table.empty')"
+        :keyword-placeholder="$t('placeholder.keyword')"
+        :range-separator="$t('separator.to')"
+        :start-placeholder="$t('field.startTime')"
+        :end-placeholder="$t('field.endTime')"
+        @tab-change="handleHistoryTabChange"
+        @filter-change="handleHistoryDialogFilterChange"
+        @page-change="handleHistoryDialogPageChange"
+        @size-change="handleHistoryDialogSizeChange"
+      />
 
       <el-dialog
         v-model="historyOrderDialogVisible"
@@ -729,13 +564,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useValidationMessage } from '@/composables/useValidationMessage';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import ProductHistoryDialog from '@/components/ProductHistoryDialog.vue';
 import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
@@ -808,6 +645,20 @@ interface PurchaseHistoryItem {
   supplierName: string;
 }
 
+interface PriceHistoryItem {
+  customerCategoryName: string;
+  salePrice: number;
+  updatedAt: string;
+}
+
+interface HistoryDialogTabState {
+  keyword: string;
+  range: string[];
+  page: number;
+  size: number;
+  total: number;
+}
+
 interface SaleOrderItem {
   id?: number;
   productId?: number;
@@ -851,6 +702,7 @@ const router = useRouter();
 const route = useRoute();
 const isSaleOrderRoute = () => route.path.startsWith('/erp/sale-orders');
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
+const { requiredFieldMessage, positiveRowFieldMessage, invalidRowFieldMessage } = useValidationMessage();
 const authStore = useAuthStore();
 const isSaving = ref(false);
 
@@ -926,6 +778,7 @@ const pendingCustomerId = ref<number | null>(null);
 const lastCustomerId = ref<number | null>(null);
 const isInitializing = ref(false);
 const needsReload = ref(false);
+const isPageActive = ref(false);
 const showProfitColumn = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
@@ -1082,10 +935,92 @@ const historyProductName = computed(() => {
   return '-';
 });
 
-const historyCustomerName = computed(() => {
-  if (!formData.customerId) return '';
-  return customerOptions.value.find(item => item.id === formData.customerId)?.name || '';
-});
+const saleHistoryHeaderItems = computed(() => [
+  { label: t('field.product'), value: historyProductName.value }
+]);
+
+const purchaseHistoryTabState = computed<HistoryDialogTabState>(() => ({
+  keyword: purchaseHistoryKeyword.value,
+  range: purchaseHistoryRange.value,
+  page: purchaseHistoryPage.value,
+  size: purchaseHistorySize.value,
+  total: purchaseHistoryTotal.value
+}));
+
+const saleHistoryTabState = computed<HistoryDialogTabState>(() => ({
+  keyword: saleHistoryKeyword.value,
+  range: saleHistoryRange.value,
+  page: saleHistoryPage.value,
+  size: saleHistorySize.value,
+  total: saleHistoryTotal.value
+}));
+
+const customerSaleHistoryTabState = computed<HistoryDialogTabState>(() => ({
+  keyword: customerSaleHistoryKeyword.value,
+  range: customerSaleHistoryRange.value,
+  page: customerSaleHistoryPage.value,
+  size: customerSaleHistorySize.value,
+  total: customerSaleHistoryTotal.value
+}));
+
+const saleHistoryTabs = computed(() => [
+  {
+    name: 'price',
+    label: t('field.customerCategoryPrice'),
+    data: priceHistoryItems.value as PriceHistoryItem[],
+    columns: [
+      { prop: 'customerCategoryName', label: t('field.customerCategory'), minWidth: 160 },
+      { label: t('field.price'), width: 120, formatter: (row: PriceHistoryItem) => formatMoney(row.salePrice) },
+      { label: t('field.updatedTime'), width: 150, formatter: (row: PriceHistoryItem) => formatHistoryDate(row.updatedAt) }
+    ],
+    height: 260
+  },
+  {
+    name: 'purchase',
+    label: t('field.purchaseHistory'),
+    data: purchaseHistoryItems.value,
+    state: purchaseHistoryTabState.value,
+    columns: [
+      { prop: 'supplierName', label: t('field.supplierName'), minWidth: 160 },
+      { prop: 'qty', label: t('field.quantity'), width: 90 },
+      { label: t('field.price'), width: 110, formatter: (row: PurchaseHistoryItem) => formatMoney(row.price) },
+      { label: t('field.priceInclTax'), width: 130, formatter: (row: PurchaseHistoryItem) => formatMoney(row.priceInclTax) },
+      { label: t('field.orderTime'), width: 150, formatter: (row: PurchaseHistoryItem) => formatHistoryDate(row.orderAt) },
+      { prop: 'orderNo', label: t('field.orderNo'), minWidth: 160, type: 'link', onClick: openPurchaseOrderHistory }
+    ],
+    height: 260
+  },
+  {
+    name: 'sale-all',
+    label: t('field.saleHistory'),
+    data: saleHistoryItems.value,
+    state: saleHistoryTabState.value,
+    columns: [
+      { prop: 'customerName', label: t('field.customerName'), minWidth: 160 },
+      { prop: 'qty', label: t('field.quantity'), width: 90 },
+      { label: t('field.price'), width: 110, formatter: (row: SaleHistoryItem) => formatMoney(row.price) },
+      { label: t('field.priceInclTax'), width: 130, formatter: (row: SaleHistoryItem) => formatMoney(row.priceInclTax) },
+      { label: t('field.orderTime'), width: 150, formatter: (row: SaleHistoryItem) => formatHistoryDate(row.orderAt) },
+      { prop: 'orderNo', label: t('field.orderNo'), minWidth: 160, type: 'link', onClick: openSaleOrderHistory }
+    ],
+    height: 260
+  },
+  {
+    name: 'sale-customer',
+    label: t('field.customerSaleHistory'),
+    data: customerSaleHistoryItems.value,
+    state: customerSaleHistoryTabState.value,
+    columns: [
+      { prop: 'customerName', label: t('field.customerName'), minWidth: 160 },
+      { prop: 'qty', label: t('field.quantity'), width: 90 },
+      { label: t('field.price'), width: 110, formatter: (row: SaleHistoryItem) => formatMoney(row.price) },
+      { label: t('field.priceInclTax'), width: 130, formatter: (row: SaleHistoryItem) => formatMoney(row.priceInclTax) },
+      { label: t('field.orderTime'), width: 150, formatter: (row: SaleHistoryItem) => formatHistoryDate(row.orderAt) },
+      { prop: 'orderNo', label: t('field.orderNo'), minWidth: 160, type: 'link', onClick: openSaleOrderHistory }
+    ],
+    height: 260
+  }
+]);
 
 const customerCategoryNameMap = computed(() => {
   const map = new Map<number, string>();
@@ -1323,6 +1258,51 @@ const handleCustomerSaleHistorySizeChange = (size: number) => {
   customerSaleHistorySize.value = size;
   customerSaleHistoryPage.value = 1;
   fetchCustomerSaleHistory(1);
+};
+
+const handleHistoryDialogFilterChange = (payload: { tabName: string; keyword?: string; range?: string[] }) => {
+  if (payload.tabName === 'purchase') {
+    if (payload.keyword !== undefined) purchaseHistoryKeyword.value = payload.keyword;
+    if (payload.range !== undefined) purchaseHistoryRange.value = payload.range;
+    return;
+  }
+  if (payload.tabName === 'sale-all') {
+    if (payload.keyword !== undefined) saleHistoryKeyword.value = payload.keyword;
+    if (payload.range !== undefined) saleHistoryRange.value = payload.range;
+    return;
+  }
+  if (payload.tabName === 'sale-customer') {
+    if (payload.keyword !== undefined) customerSaleHistoryKeyword.value = payload.keyword;
+    if (payload.range !== undefined) customerSaleHistoryRange.value = payload.range;
+  }
+};
+
+const handleHistoryDialogPageChange = (payload: { tabName: string; page: number }) => {
+  if (payload.tabName === 'purchase') {
+    handlePurchaseHistoryPageChange(payload.page);
+    return;
+  }
+  if (payload.tabName === 'sale-all') {
+    handleSaleHistoryPageChange(payload.page);
+    return;
+  }
+  if (payload.tabName === 'sale-customer') {
+    handleCustomerSaleHistoryPageChange(payload.page);
+  }
+};
+
+const handleHistoryDialogSizeChange = (payload: { tabName: string; size: number }) => {
+  if (payload.tabName === 'purchase') {
+    handlePurchaseHistorySizeChange(payload.size);
+    return;
+  }
+  if (payload.tabName === 'sale-all') {
+    handleSaleHistorySizeChange(payload.size);
+    return;
+  }
+  if (payload.tabName === 'sale-customer') {
+    handleCustomerSaleHistorySizeChange(payload.size);
+  }
 };
 
 const openSaleOrderHistory = (row: SaleHistoryItem) => {
@@ -1573,12 +1553,18 @@ const handleContinueCreate = async () => {
     path: '/erp/sale-orders/create',
     query: { from: 'draft', returnTo: '/erp/sale-orders/draft' }
   };
+  const targetFullPath = router.resolve(createRoute).fullPath;
   if (isEditing.value) {
-    await router.replace(createRoute);
+    if (route.fullPath !== targetFullPath) {
+      await router.replace(createRoute);
+    }
+    await loadDetail();
     return;
   }
   if (route.query.mode === 'view' || route.query.from !== 'draft') {
-    await router.replace(createRoute);
+    if (route.fullPath !== targetFullPath) {
+      await router.replace(createRoute);
+    }
   }
   await loadDetail();
 };
@@ -2074,6 +2060,13 @@ const getDefaultSettlementMethod = () => {
   return defaultItem?.code || '';
 };
 
+const resolveSettlementMethodCode = (value?: string) => {
+  if (!value) return '';
+  const normalized = String(value).trim();
+  const matched = settlementMethodOptions.value.find(item => item.code === normalized || item.name === normalized);
+  return matched?.code || normalized;
+};
+
 const getDefaultDeliveryMethod = () => {
   if (!deliveryMethodOptions.value.length) return '';
   const defaultItem = deliveryMethodOptions.value.find(item => item.isDefault) ?? deliveryMethodOptions.value[0];
@@ -2088,7 +2081,7 @@ const getDefaultReceiptMethod = () => {
 
 const applyMethodsForCustomer = () => {
   const customer = customerOptions.value.find(item => item.id === formData.customerId);
-  const settlement = customer?.defaultSettlementMethodCode || getDefaultSettlementMethod();
+  const settlement = resolveSettlementMethodCode(customer?.defaultSettlementMethodCode) || getDefaultSettlementMethod();
   const receiptMethod = customer?.defaultReceiptMethodCode || getDefaultReceiptMethod();
   const delivery = customer?.deliveryMethodCode || getDefaultDeliveryMethod();
   if (settlement) {
@@ -2106,6 +2099,15 @@ const applyMethodsForCustomer = () => {
 };
 
 const handleProductChange = async (row: SaleOrderItem) => {
+  if (!formData.customerId) {
+    row.productId = undefined;
+    row.warehouseId = undefined;
+    row.locationId = undefined;
+    row.stockKey = '';
+    row.price = '';
+    row._priceRequestSeq = (row._priceRequestSeq || 0) + 1;
+    return;
+  }
   activeRowIndex.value = formData.items.indexOf(row);
   row.warehouseId = undefined;
   row.locationId = undefined;
@@ -2517,37 +2519,38 @@ const fetchNextOrderNo = async () => {
     const showPostSaveDialog = options.showPostSaveDialog === true;
     const silentSuccess = options.silentSuccess === true;
     if (!formData.customerId) {
-      notifyWarning(t('message.required'));
-    return;
-  }
-  if (!formData.settlementMethod) {
-    notifyWarning(t('message.required'));
-    return;
-  }
-  const validItems = formData.items.filter(item => item.productId);
-  if (!validItems.length) {
-    notifyWarning(t('message.noItems'));
-    return;
-  }
-  for (const item of validItems) {
-    const qtyValue = parseDecimal(item.qty, 4);
-    if (qtyValue == null || qtyValue <= 0) {
-      notifyWarning(t('message.mustBePositive'));
+      notifyWarning(requiredFieldMessage(t('field.customer')));
       return;
     }
-    const priceValue = parseDecimal(item.price, 4);
-    if (priceValue == null) {
+    if (!formData.settlementMethod) {
+      notifyWarning(requiredFieldMessage(t('field.settlementMethod')));
+      return;
+    }
+    const validItems = formData.items.filter(item => item.productId);
+    if (!validItems.length) {
+      notifyWarning(t('message.noItems'));
+      return;
+    }
+    for (const [index, item] of validItems.entries()) {
+      const rowNumber = index + 1;
+      const qtyValue = parseDecimal(item.qty, 4);
+      if (qtyValue == null || qtyValue <= 0) {
+        notifyWarning(positiveRowFieldMessage(rowNumber, t('field.quantity')));
+        return;
+      }
+      const priceValue = parseDecimal(item.price, 4);
+      if (priceValue == null) {
+        notifyWarning(invalidRowFieldMessage(rowNumber, t('field.price')));
+        return;
+      }
+    }
+
+    const paidAmount = isCreditSettlement.value ? 0 : parseAmount(formData.paidAmount);
+    const discountAmount = parseAmount(formData.discountAmount);
+    if (paidAmount == null || discountAmount == null) {
       notifyWarning(t('message.invalidNumber'));
       return;
     }
-  }
-
-  const paidAmount = isCreditSettlement.value ? 0 : parseAmount(formData.paidAmount);
-  const discountAmount = parseAmount(formData.discountAmount);
-  if (paidAmount == null || discountAmount == null) {
-    notifyWarning(t('message.invalidNumber'));
-    return;
-  }
 
     const payload = {
       orderNo: formData.orderNo || undefined,
@@ -2902,6 +2905,7 @@ watch(
   () => route.fullPath,
   (newPath) => {
     if (newPath === lastRouteKey.value) return;
+    if (!isPageActive.value) return;
     if (!isSaleOrderRoute()) return;
     lastRouteKey.value = newPath;
     pagePath.value = route.path;
@@ -2922,6 +2926,7 @@ watch(
 );
 
 onMounted(() => {
+  isPageActive.value = true;
   pagePath.value = route.path;
   fetchCustomers();
   fetchCustomerCategories();
@@ -2940,13 +2945,19 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  isPageActive.value = true;
   if (!isSaleOrderRoute()) return;
   if (!needsReload.value) return;
   needsReload.value = false;
   loadDetail();
 });
 
+onDeactivated(() => {
+  isPageActive.value = false;
+});
+
 onBeforeUnmount(() => {
+  isPageActive.value = false;
   if (typeof window !== 'undefined') {
     window.removeEventListener('tags:closing', handleTagClosing as EventListener);
     window.removeEventListener('tags:close', handleTagClosing as EventListener);

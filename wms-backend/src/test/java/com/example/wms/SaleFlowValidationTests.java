@@ -54,6 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -166,6 +167,41 @@ class SaleFlowValidationTests {
 
         assertThat(detail.items()).hasSize(1);
         assertThat(detail.items().get(0).getPrice()).isEqualByComparingTo("128");
+    }
+
+    @Test
+    void saleCreateAllowsCashSettlementWhenPaidAmountMatchesComputedTotal() {
+        ErpSaleOrderServiceImpl service = saleOrderService();
+        stubValidMasterData();
+        when(productMapper.selectOne(any())).thenReturn(product(100L));
+        doAnswer(invocation -> {
+            ErpSaleOrder order = invocation.getArgument(0);
+            order.setId(76L);
+            return 1;
+        }).when(saleOrderMapper).insert(any(ErpSaleOrder.class));
+        when(stockBalanceMapper.addReservedQtyIfEnough(1L, 100L, 1L, 1L, BigDecimal.ONE, "system"))
+            .thenReturn(stockBalance("10", "1"));
+        when(saleOrderMapper.update(any(), any())).thenReturn(1);
+
+        ErpSaleOrderCreateRequest request = new ErpSaleOrderCreateRequest(
+            "SO-001A-CASH",
+            "2026-05-15 00:39:46",
+            10L,
+            "CASH",
+            "CASH",
+            null,
+            new BigDecimal("20"),
+            BigDecimal.ZERO,
+            List.of(saleOrderItemRequest(100L, "20")),
+            null
+        );
+
+        var detail = service.create(request);
+
+        assertThat(detail.order().getTotalAmountInclTax()).isEqualByComparingTo("20");
+        assertThat(detail.order().getPaidAmount()).isEqualByComparingTo("20");
+        assertThat(detail.items()).hasSize(1);
+        assertThat(detail.items().get(0).getOrderId()).isEqualTo(76L);
     }
 
     @Test
@@ -471,6 +507,60 @@ class SaleFlowValidationTests {
         assertThatThrownBy(() -> service.approve(66L))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("退款金额不能超过原销售可退实收金额");
+    }
+
+    @Test
+    void saleReturnApproveAllowsRefundAgainstAutoCashReceipt() {
+        ErpSaleReturnServiceImpl service = saleReturnService();
+        ErpSaleReturn saleReturn = draftSaleReturn(67L, 99L, 10L);
+        saleReturn.setPaidAmount(new BigDecimal("10"));
+        saleReturn.setDiscountAmount(BigDecimal.ZERO);
+        saleReturn.setTotalAmountInclTax(new BigDecimal("100"));
+        ErpAccountsReceivable saleReceivable = new ErpAccountsReceivable();
+        saleReceivable.setId(701L);
+        ErpReceipt autoReceipt = new ErpReceipt();
+        autoReceipt.setId(801L);
+        autoReceipt.setTenantId(1L);
+        autoReceipt.setSaleOrderId(99L);
+        autoReceipt.setStatus("APPROVED");
+        autoReceipt.setAmount(new BigDecimal("82"));
+        autoReceipt.setDiscountAmount(BigDecimal.ZERO);
+
+        when(saleReturnMapper.selectOne(any())).thenReturn(saleReturn);
+        when(saleReturnItemMapper.findByReturnId(1L, 67L)).thenReturn(List.of(returnItem(100L, "1", "100")));
+        when(saleOrderMapper.selectOne(any())).thenReturn(approvedSaleOrder(99L, 10L));
+        when(saleOrderItemMapper.findByOrderId(1L, 99L)).thenReturn(List.of(soldItem(100L, "2")));
+        when(saleReturnMapper.selectList(any())).thenReturn(List.of());
+        when(accountsReceivableMapper.findBySource(1L, "SALE_ORDER", 99L)).thenReturn(saleReceivable);
+        when(receiptReceivableMapper.findByReceivableId(1L, 701L)).thenReturn(List.of());
+        when(receiptMapper.selectList(any())).thenReturn(List.of(autoReceipt));
+        when(stockBalanceMapper.upsertAddQty(1L, 100L, 1L, 1L, BigDecimal.ONE, "system"))
+            .thenReturn(stockBalance("10", "1"));
+        when(saleReturnMapper.approveDraft(eq(1L), eq(67L), any())).thenReturn(saleReturn);
+        when(saleReturnMapper.update(any(), any())).thenReturn(1);
+        when(stockTxnMapper.findSaleIssueUnitCost(1L, 99L, 100L)).thenReturn(new BigDecimal("50"));
+
+        service.approve(67L);
+
+        assertThat(saleReturn.getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void saleReturnApproveRejectsWhenOtherDraftOccupiesSameSaleProduct() {
+        ErpSaleReturnServiceImpl service = saleReturnService();
+        ErpSaleReturn currentDraft = draftSaleReturn(68L, 99L, 10L);
+        currentDraft.setOrderNo("SR-068");
+        ErpSaleReturn conflictingDraft = draftSaleReturn(69L, 99L, 10L);
+        conflictingDraft.setOrderNo("SR-069");
+
+        when(saleReturnMapper.selectOne(any())).thenReturn(currentDraft);
+        when(saleReturnItemMapper.findByReturnId(1L, 68L)).thenReturn(List.of(returnItem(100L, "1", "100")));
+        when(saleReturnMapper.selectList(any())).thenReturn(List.of(conflictingDraft));
+        when(saleReturnItemMapper.findByReturnId(1L, 69L)).thenReturn(List.of(returnItem(100L, "1", "100")));
+
+        assertThatThrownBy(() -> service.approve(68L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("存在其他草稿退货单占用相同销售商品，请先处理后再审核：SR-069");
     }
 
     @Test

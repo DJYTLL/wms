@@ -10,6 +10,7 @@ import com.example.wms.dto.erp.ErpPaymentPayableView;
 import com.example.wms.dto.erp.ErpPaymentView;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsPayable;
+import com.example.wms.entity.erp.ErpSettlementMethod;
 import com.example.wms.entity.erp.ErpSupplier;
 import com.example.wms.entity.erp.ErpPayment;
 import com.example.wms.entity.erp.ErpPaymentPayable;
@@ -21,6 +22,7 @@ import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpPaymentMapper;
 import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.service.erp.ErpPaymentService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -61,6 +63,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
     private final ErpSupplierMapper erpSupplierMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
     private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
+    private final ErpSettlementMethodMapper erpSettlementMethodMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final SystemConfigMapper systemConfigMapper;
 
@@ -69,6 +72,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
                                  ErpSupplierMapper erpSupplierMapper,
                                  ErpAccountsPayableMapper erpAccountsPayableMapper,
                                  ErpPurchaseOrderMapper erpPurchaseOrderMapper,
+                                 ErpSettlementMethodMapper erpSettlementMethodMapper,
                                  ErpOrderSequenceMapper erpOrderSequenceMapper,
                                  SystemConfigMapper systemConfigMapper) {
         this.erpPaymentMapper = erpPaymentMapper;
@@ -76,6 +80,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         this.erpSupplierMapper = erpSupplierMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
+        this.erpSettlementMethodMapper = erpSettlementMethodMapper;
         this.erpOrderSequenceMapper = erpOrderSequenceMapper;
         this.systemConfigMapper = systemConfigMapper;
     }
@@ -188,6 +193,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         if (supplierId == null) {
             throw new IllegalArgumentException("请选择供应商");
         }
+        validateCashSettlementMethod(tenantId, request.settlementMethod());
 
         List<ErpPaymentPayable> allocations = null;
         boolean hasAllocations = request.allocations() != null && !request.allocations().isEmpty();
@@ -328,6 +334,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         if (supplierId == null) {
             throw new IllegalArgumentException("请选择供应商");
         }
+        validateCashSettlementMethod(tenantId, request.settlementMethod());
 
         List<ErpPaymentPayable> allocations = null;
         boolean hasAllocations = request.allocations() != null && !request.allocations().isEmpty();
@@ -767,6 +774,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
     }
 
     private void validatePaymentApproval(Long tenantId, ErpPayment payment) {
+        validateCashSettlementMethod(tenantId, payment.getSettlementMethod());
         List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, payment.getId());
         if (allocations != null && !allocations.isEmpty()) {
             for (ErpPaymentPayable allocation : allocations) {
@@ -779,6 +787,19 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             payment.getPayableId(),
             resolvePaymentTotal(payment.getAmount(), payment.getDiscountAmount())
         );
+    }
+
+    private void validateCashSettlementMethod(Long tenantId, String settlementMethodCode) {
+        if (settlementMethodCode == null || settlementMethodCode.isBlank()) {
+            throw new IllegalArgumentException("请选择结算方式");
+        }
+        ErpSettlementMethod method = erpSettlementMethodMapper.findByCode(tenantId, settlementMethodCode.trim());
+        if (method == null || Boolean.FALSE.equals(method.getEnabled())) {
+            throw new IllegalArgumentException("结算方式不存在或已停用");
+        }
+        if ("HIDDEN".equalsIgnoreCase(method.getFundInputMode())) {
+            throw new IllegalArgumentException("付款单不允许使用挂账类结算方式");
+        }
     }
 
     private void ensurePayableCapacity(Long tenantId, Long payableId, BigDecimal delta) {
