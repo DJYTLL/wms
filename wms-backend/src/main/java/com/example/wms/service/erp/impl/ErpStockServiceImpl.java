@@ -13,6 +13,7 @@ import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.entity.erp.ErpSaleReturn;
 import com.example.wms.entity.erp.ErpStockCount;
+import com.example.wms.entity.erp.ErpStockTransfer;
 import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderMapper;
@@ -22,6 +23,7 @@ import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockCountMapper;
+import com.example.wms.mapper.erp.ErpStockTransferMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.ErpStockService;
@@ -49,6 +51,7 @@ public class ErpStockServiceImpl implements ErpStockService {
     private final ErpPurchaseReturnMapper erpPurchaseReturnMapper;
     private final ErpSaleReturnMapper erpSaleReturnMapper;
     private final ErpStockCountMapper erpStockCountMapper;
+    private final ErpStockTransferMapper erpStockTransferMapper;
     private final ErpAssemblyOrderMapper erpAssemblyOrderMapper;
 
     public ErpStockServiceImpl(ErpStockBalanceMapper erpStockBalanceMapper,
@@ -60,6 +63,7 @@ public class ErpStockServiceImpl implements ErpStockService {
                                ErpPurchaseReturnMapper erpPurchaseReturnMapper,
                                ErpSaleReturnMapper erpSaleReturnMapper,
                                ErpStockCountMapper erpStockCountMapper,
+                               ErpStockTransferMapper erpStockTransferMapper,
                                ErpAssemblyOrderMapper erpAssemblyOrderMapper) {
         this.erpStockBalanceMapper = erpStockBalanceMapper;
         this.erpStockTxnMapper = erpStockTxnMapper;
@@ -70,6 +74,7 @@ public class ErpStockServiceImpl implements ErpStockService {
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
         this.erpSaleReturnMapper = erpSaleReturnMapper;
         this.erpStockCountMapper = erpStockCountMapper;
+        this.erpStockTransferMapper = erpStockTransferMapper;
         this.erpAssemblyOrderMapper = erpAssemblyOrderMapper;
     }
 
@@ -132,6 +137,7 @@ public class ErpStockServiceImpl implements ErpStockService {
         Map<Long, String> purchaseReturnNos = orderNoMap(txns, tenantId, Set.of("PURCHASE_RETURN", "PURCHASE_RETURN_SCRAP", "PURCHASE_RETURN_RED_FLUSH"), erpPurchaseReturnMapper, ErpPurchaseReturn::getOrderNo);
         Map<Long, String> saleReturnNos = orderNoMap(txns, tenantId, Set.of("SALE_RETURN_RESTOCK", "SALE_RETURN_SCRAP", "SALE_RETURN_RED_FLUSH"), erpSaleReturnMapper, ErpSaleReturn::getOrderNo);
         Map<Long, ErpStockCount> stockCountDocs = stockCountDocMap(txns, tenantId);
+        Map<Long, String> transferNos = orderNoMap(txns, tenantId, Set.of("STOCK_TRANSFER_OUT", "STOCK_TRANSFER_IN"), erpStockTransferMapper, ErpStockTransfer::getTransferNo);
         Map<Long, String> assemblyNos = orderNoMap(txns, tenantId, Set.of("ASSEMBLE_OUT", "ASSEMBLE_IN", "DISASSEMBLE_OUT", "DISASSEMBLE_IN"), erpAssemblyOrderMapper, ErpAssemblyOrder::getOrderNo);
 
         for (ErpStockTxn txn : txns) {
@@ -147,6 +153,8 @@ public class ErpStockServiceImpl implements ErpStockService {
                 txn.setDocNo(saleReturnNos.getOrDefault(bizId, txn.getTxnNo()));
             } else if (bizType.startsWith("SALE")) {
                 txn.setDocNo(saleNos.getOrDefault(bizId, txn.getTxnNo()));
+            } else if (bizType.startsWith("STOCK_TRANSFER")) {
+                txn.setDocNo(transferNos.getOrDefault(bizId, txn.getTxnNo()));
             } else if (bizType.startsWith("STOCK_")) {
                 ErpStockCount doc = stockCountDocs.get(bizId);
                 txn.setDocNo(doc == null ? txn.getTxnNo() : doc.getCountNo());
@@ -190,6 +198,8 @@ public class ErpStockServiceImpl implements ErpStockService {
                 result.put(saleReturn.getId(), noGetter.apply(doc));
             } else if (doc instanceof ErpAssemblyOrder assemblyOrder) {
                 result.put(assemblyOrder.getId(), noGetter.apply(doc));
+            } else if (doc instanceof ErpStockTransfer transfer) {
+                result.put(transfer.getId(), noGetter.apply(doc));
             }
         }
         return result;

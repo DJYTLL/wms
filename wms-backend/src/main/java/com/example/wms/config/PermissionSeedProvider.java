@@ -258,6 +258,8 @@ public final class PermissionSeedProvider {
             new PermissionSeed("erp-stock-count:edit", "编辑库存调整(ERP)", "编辑ERP库存调整"),
             new PermissionSeed("erp-stock-count:approve", "审核库存调整(ERP)", "审核ERP库存调整"),
             new PermissionSeed("erp-stock-count:cancel", "作废库存调整(ERP)", "作废ERP库存调整"),
+            new PermissionSeed("erp-stock-transfer:view", "查看库存移库(ERP)", "查看ERP库存移库"),
+            new PermissionSeed("erp-stock-transfer:add", "新增库存移库(ERP)", "新增ERP库存移库"),
             new PermissionSeed("erp-stock-init:view", "查看初始库存(ERP)", "查看ERP初始库存"),
             new PermissionSeed("erp-stock-init:add", "新增初始库存(ERP)", "新增ERP初始库存"),
             new PermissionSeed("erp-stock-init:edit", "编辑初始库存(ERP)", "编辑ERP初始库存"),

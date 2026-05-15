@@ -82,6 +82,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { title: '库存调整打印', permission: 'erp-stock-count:view' }
   },
   {
+    path: '/erp/stock-transfers/:id/print',
+    name: 'erp-stock-transfer-print',
+    component: () => import('../views/erp/ErpStockTransferPrint.vue'),
+    meta: { title: '库存移库打印', permission: 'erp-stock-count:view' }
+  },
+  {
     path: '/erp/stock-inits/:id/print',
     name: 'erp-stock-init-print',
     component: () => import('../views/erp/ErpStockInitPrint.vue'),
@@ -390,6 +396,12 @@ const routes: Array<RouteRecordRaw> = [
         name: 'erp-stock-counts',
         component: () => import('../views/erp/ErpStockCountManagement.vue'),
         meta: { title: '库存调整', permission: 'erp-stock-count:view', titleKey: 'page.erpStockCountManagement', countType: 'COUNT' }
+      },
+      {
+        path: 'erp/stock-transfers',
+        name: 'erp-stock-transfers',
+        component: () => import('../views/erp/ErpStockTransferManagement.vue'),
+        meta: { title: '库存移库', permission: 'erp-stock-count:view', titleKey: 'page.erpStockTransferManagement' }
       },
       {
         path: 'erp/stock-inits',

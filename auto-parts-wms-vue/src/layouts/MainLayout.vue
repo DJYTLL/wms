@@ -215,6 +215,24 @@ interface MenuItem {
 
 const menuData = ref<MenuItem[]>([]);
 
+const menuRouteFallbackMap: Record<string, string> = {
+  'erp-stock-transfer': '/erp/stock-transfers',
+};
+
+const resolveMenuPath = (item: MenuItem): string | undefined => {
+  const candidate = item.path?.trim();
+  if (candidate) {
+    const resolved = router.resolve(candidate);
+    if (resolved.matched.length > 0) {
+      return resolved.path;
+    }
+  }
+  if (item.key && menuRouteFallbackMap[item.key]) {
+    return menuRouteFallbackMap[item.key];
+  }
+  return candidate || undefined;
+};
+
 const decorateMenus = (items: MenuItem[]): MenuItem[] => {
   return items.map((item) => ({
     ...item,
@@ -258,9 +276,9 @@ const findAndExpand = (items: MenuItem[]) => {
     if (hasChildren(item)) {
       const children = item.children || [];
       const hasActiveChild = children.some(child => {
-          if (child.path === currentPath) return true;
+          if (resolveMenuPath(child) === currentPath) return true;
           if (hasChildren(child)) {
-            return (child.children || []).some(grandChild => grandChild.path === currentPath);
+            return (child.children || []).some(grandChild => resolveMenuPath(grandChild) === currentPath);
           }
           return false;
       });
@@ -373,21 +391,28 @@ const findAndToggle = (items: MenuItem[], id: number): boolean => {
 const toggleMenu = (item: MenuItem) => {
   if (hasChildren(item)) {
     findAndToggle(menuData.value, item.id);
-  } else if (item.path) {
-    router.push(item.path);
+  } else {
+    const targetPath = resolveMenuPath(item);
+    if (targetPath) {
+      router.push(targetPath);
+    }
   }
 };
 
 const handleMenuClick = (item: MenuItem) => {
   if (hasChildren(item)) {
     findAndToggle(menuData.value, item.id);
-  } else if (item.path) {
-    router.push(item.path);
+  } else {
+    const targetPath = resolveMenuPath(item);
+    if (targetPath) {
+      router.push(targetPath);
+    }
   }
 };
 
 const isMenuItemActive = (item: MenuItem): boolean => {
-  if (item.path && route.path === item.path) {
+  const resolvedPath = resolveMenuPath(item);
+  if (resolvedPath && route.path === resolvedPath) {
     return true;
   }
   if (!hasChildren(item)) {
@@ -409,7 +434,7 @@ watch(() => route.path, () => {
   // 简单遍历查找标题 (仅演示用)
   const findTitle = (items: MenuItem[]): string | null => {
     for (const item of items) {
-      if (item.path === route.path) return item.key || item.title || null;
+      if (resolveMenuPath(item) === route.path) return item.key || item.title || null;
       if (hasChildren(item)) {
         const found: string | null = findTitle(item.children || []);
         if (found) return found;
@@ -488,8 +513,9 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => {
 
   const findPath = (items: MenuItem[], targetPath: string, parentChain: { key: string, path?: string, title?: string }[] = []): boolean => {
     for (const item of items) {
-      const currentChain = [...parentChain, { key: item.key || '', title: item.title, path: item.path }];
-      if (item.path === targetPath) {
+      const currentPath = resolveMenuPath(item);
+      const currentChain = [...parentChain, { key: item.key || '', title: item.title, path: currentPath }];
+      if (currentPath === targetPath) {
         matched.push(...currentChain);
         return true;
       }
@@ -554,7 +580,7 @@ const menuLabel = (item: MenuItem) => {
 
 const findKeyByPath = (items: MenuItem[], targetPath: string): string | null => {
   for (const item of items) {
-    if (item.path === targetPath) return item.key || item.title || null;
+    if (resolveMenuPath(item) === targetPath) return item.key || item.title || null;
     if (hasChildren(item)) {
       const found = findKeyByPath(item.children || [], targetPath);
       if (found) return found;

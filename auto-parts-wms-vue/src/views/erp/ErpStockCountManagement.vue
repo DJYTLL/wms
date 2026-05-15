@@ -210,27 +210,13 @@
                   :placeholder="$t('placeholder.selectProduct')"
                   style="width: 100%"
                   :disabled="viewMode"
-                  @change="handleRowChange(row)"
+                  @change="handleProductChange(row)"
                 >
                   <el-option v-for="p in getSelectableProductOptions(row.productId)" :key="p.id" :label="p.name" :value="p.id" />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('field.warehouse')" min-width="150">
-              <template #default="{ row }">
-                <el-select
-                  v-model="row.warehouseId"
-                  filterable
-                  :placeholder="$t('placeholder.selectWarehouse')"
-                  style="width: 100%"
-                  :disabled="viewMode"
-                  @change="handleRowChange(row)"
-                >
-                  <el-option v-for="w in warehouseOptions" :key="w.id" :label="w.name" :value="w.id" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.location')" min-width="150">
+            <el-table-column :label="$t('field.warehouseLocation')" min-width="220">
               <template #default="{ row }">
                 <ProductStockSelect
                   v-model="row.stockKey"
@@ -238,7 +224,7 @@
                   :warehouse-id="row.warehouseId ?? null"
                   :location-id="normalizeLocationId(row.locationId ?? null)"
                   :warehouse-options="warehouseOptions"
-                  :location-options="getLocationOptions(row.warehouseId)"
+                  :location-options="locationOptions"
                   :disabled="viewMode"
                   :placeholder="$t('placeholder.selectLocation')"
                   :allow-manual-location-select="true"
@@ -427,11 +413,6 @@ const formatDateTime = (value?: string) => {
   return date.toLocaleString('zh-CN', { hour12: false });
 };
 
-const getLocationOptions = (warehouseId?: number | null) => {
-  if (!warehouseId) return locationOptions.value;
-  return locationOptions.value.filter(item => item.warehouseId === warehouseId);
-};
-
 const fetchOptions = async () => {
   try {
     const [productsRes, warehousesRes, locationsRes] = await Promise.all([
@@ -555,6 +536,7 @@ const addItem = () => {
     productId: undefined,
     warehouseId: undefined,
     locationId: countType.value === 'COUNT' ? -1 : null,
+    stockKey: '',
     systemQty: '0',
     countedQty: '',
     initUnitCost: '',
@@ -620,7 +602,27 @@ const handleRowChange = (row: StockCountItem) => {
   if (countType.value === 'COUNT' && row.locationId == null) {
     row.locationId = -1;
   }
+  syncRowStockKey(row);
   fetchBalanceForRow(row);
+};
+
+const handleProductChange = (row: StockCountItem) => {
+  row.warehouseId = undefined;
+  row.locationId = countType.value === 'COUNT' ? -1 : null;
+  row.stockKey = '';
+  fetchBalanceForRow(row);
+};
+
+const handleStockSelectionChange = (
+  row: StockCountItem,
+  payload: { stockKey: string; warehouseId: number | null; locationId: number | null }
+) => {
+  row.stockKey = payload.stockKey;
+  row.warehouseId = payload.warehouseId ?? undefined;
+  row.locationId = countType.value === 'COUNT'
+    ? (payload.locationId ?? -1)
+    : payload.locationId;
+  handleRowChange(row);
 };
 
 const calcDiff = (row: StockCountItem) => {
@@ -659,6 +661,7 @@ const loadDetail = async (id: number) => {
       productId: item.productId,
       warehouseId: item.warehouseId,
       locationId: countType.value === 'COUNT' ? (item.locationId ?? -1) : item.locationId,
+      stockKey: buildStockKey(item.warehouseId, countType.value === 'COUNT' ? (item.locationId ?? -1) : item.locationId),
       systemQty: String(item.systemQty ?? 0),
       countedQty: String(item.countedQty ?? ''),
       initUnitCost: item.initUnitCost != null ? String(item.initUnitCost) : '',
@@ -993,6 +996,7 @@ const handleImportFile = async (event: Event) => {
         productId,
         warehouseId,
         locationId,
+        stockKey: buildStockKey(warehouseId, locationId),
         systemQty: '0',
         countedQty,
         remark: row['备注'] || ''

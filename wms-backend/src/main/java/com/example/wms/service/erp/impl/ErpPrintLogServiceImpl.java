@@ -13,6 +13,7 @@ import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.entity.erp.ErpSaleReturn;
 import com.example.wms.entity.erp.ErpStockCount;
+import com.example.wms.entity.erp.ErpStockTransfer;
 import com.example.wms.mapper.erp.ErpPrintLogMapper;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
@@ -23,6 +24,7 @@ import com.example.wms.mapper.erp.ErpReceiptMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnMapper;
 import com.example.wms.mapper.erp.ErpStockCountMapper;
+import com.example.wms.mapper.erp.ErpStockTransferMapper;
 import com.example.wms.service.erp.ErpPrintLogService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
@@ -45,6 +47,7 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
     private final ErpAccountsReceivableMapper erpAccountsReceivableMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
     private final ErpStockCountMapper erpStockCountMapper;
+    private final ErpStockTransferMapper erpStockTransferMapper;
 
     public ErpPrintLogServiceImpl(ErpPrintLogMapper erpPrintLogMapper,
                                   ErpSaleOrderMapper erpSaleOrderMapper,
@@ -55,7 +58,8 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
                                   ErpPaymentMapper erpPaymentMapper,
                                   ErpAccountsReceivableMapper erpAccountsReceivableMapper,
                                   ErpAccountsPayableMapper erpAccountsPayableMapper,
-                                  ErpStockCountMapper erpStockCountMapper) {
+                                  ErpStockCountMapper erpStockCountMapper,
+                                  ErpStockTransferMapper erpStockTransferMapper) {
         this.erpPrintLogMapper = erpPrintLogMapper;
         this.erpSaleOrderMapper = erpSaleOrderMapper;
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
@@ -66,6 +70,7 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
         this.erpAccountsReceivableMapper = erpAccountsReceivableMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
         this.erpStockCountMapper = erpStockCountMapper;
+        this.erpStockTransferMapper = erpStockTransferMapper;
     }
 
     @Override
@@ -192,6 +197,16 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
             bumpPrintCount(tenantId, "erp_stock_count", docId);
             return count.getCountNo();
         }
+        if ("STOCK_TRANSFER".equals(docType)) {
+            ErpStockTransfer transfer = erpStockTransferMapper.selectOne(new QueryWrapper<ErpStockTransfer>()
+                .eq("tenant_id", tenantId)
+                .eq("id", docId));
+            if (transfer == null) {
+                throw new IllegalArgumentException("库存移库单不存在");
+            }
+            bumpPrintCount(tenantId, "erp_stock_transfer", docId);
+            return transfer.getTransferNo();
+        }
         throw new IllegalArgumentException("不支持的单据类型");
     }
 
@@ -266,6 +281,14 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
                 .eq("id", docId)
                 .setSql("print_count = COALESCE(print_count, 0) + 1")
                 .set("last_printed_at", Instant.now()));
+            return;
+        }
+        if ("erp_stock_transfer".equals(table)) {
+            erpStockTransferMapper.update(null, new UpdateWrapper<ErpStockTransfer>()
+                .eq("tenant_id", tenantId)
+                .eq("id", docId)
+                .setSql("print_count = COALESCE(print_count, 0) + 1")
+                .set("last_printed_at", Instant.now()));
         }
     }
 
@@ -292,6 +315,7 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
                 "ACCOUNTS_RECEIVABLE",
                 "ACCOUNTS_PAYABLE",
                 "STOCK_COUNT",
+                "STOCK_TRANSFER",
                 "STOCK_INIT" -> normalized;
             default -> throw new IllegalArgumentException("不支持的单据类型");
         };

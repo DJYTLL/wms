@@ -34,6 +34,7 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
         "ACCOUNTS_RECEIVABLE",
         "ACCOUNTS_PAYABLE",
         "STOCK_COUNT",
+        "STOCK_TRANSFER",
         "STOCK_INIT"
     );
 

@@ -45,6 +45,7 @@ interface Props {
     | 'ACCOUNTS_RECEIVABLE'
     | 'ACCOUNTS_PAYABLE'
     | 'STOCK_COUNT'
+    | 'STOCK_TRANSFER'
     | 'STOCK_INIT';
   docId?: number | null;
   templateId?: number | null;
@@ -79,6 +80,7 @@ const previewUrl = computed(() => {
     ACCOUNTS_RECEIVABLE: 'ar',
     ACCOUNTS_PAYABLE: 'ap',
     STOCK_COUNT: 'stock-counts',
+    STOCK_TRANSFER: 'stock-transfers',
     STOCK_INIT: 'stock-inits'
   };
   const prefix = prefixMap[props.docType] || 'sale-orders';

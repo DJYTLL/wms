@@ -53,6 +53,7 @@ public final class MenuSeedProvider {
             new MenuSeed("erp-assemble-order", "erp-warehouse-module", "组装单", "erp-assemble-order", "/erp/assemble-orders", null, "erp-assembly:view", 25),
             new MenuSeed("erp-disassemble-order", "erp-warehouse-module", "拆分单", "erp-disassemble-order", "/erp/disassemble-orders", null, "erp-assembly:view", 26),
             new MenuSeed("erp-stock-count", "erp-warehouse-module", "库存调整", "erp-stock-count", "/erp/stock-counts", null, "erp-stock-count:view", 30),
+            new MenuSeed("erp-stock-transfer", "erp-warehouse-module", "库存移库", "erp-stock-transfer", "/erp/stock-transfers", null, "erp-stock-transfer:view", 35),
             new MenuSeed("erp-stock-init", "erp-warehouse-module", "初始库存", "erp-stock-init", "/erp/stock-inits", null, "erp-stock-init:view", 40),
 
             new MenuSeed("erp-finance", "erp", "财务管理", "erp-finance", null, null, null, 50),

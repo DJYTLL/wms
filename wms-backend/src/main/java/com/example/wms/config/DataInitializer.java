@@ -110,6 +110,7 @@ public class DataInitializer {
             ensureSystemConfig(systemConfigMapper, "erp.order.no.seq-length", "4", "int", "ERP单号序列长度", false);
             ensureSystemConfig(systemConfigMapper, "erp.order.no.stock-count.prefix", "SC", "string", "ERP库存调整单号前缀", false);
             ensureSystemConfig(systemConfigMapper, "erp.order.no.stock-init.prefix", "SI", "string", "ERP初始库存单号前缀", false);
+            ensureSystemConfig(systemConfigMapper, "erp.order.no.stock-transfer.prefix", "ST", "string", "ERP库存移库单号前缀", false);
             ensureSystemConfig(systemConfigMapper, "erp.customer.code.prefix", "CU", "string", "ERP客户编码前缀", false);
             ensureSystemConfig(systemConfigMapper, "erp.customer.code.date-format", "yyyyMMdd", "string", "ERP客户编码日期格式", false);
             ensureSystemConfig(systemConfigMapper, "erp.customer.code.seq-length", "4", "int", "ERP客户编码序列长度", false);

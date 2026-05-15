@@ -158,10 +158,10 @@ interface StockTxn {
   adjustmentReason?: string;
 }
 
-type PrintDocType = 'SALE_ORDER' | 'PURCHASE_ORDER' | 'SALE_RETURN' | 'PURCHASE_RETURN' | 'STOCK_COUNT' | 'STOCK_INIT';
+type PrintDocType = 'SALE_ORDER' | 'PURCHASE_ORDER' | 'SALE_RETURN' | 'PURCHASE_RETURN' | 'STOCK_COUNT' | 'STOCK_TRANSFER' | 'STOCK_INIT';
 type DocRouteInfo = {
   endpoint: string;
-  noPath: Array<'order' | 'count' | 'orderNo' | 'countNo'>;
+  noPath: Array<'order' | 'count' | 'transfer' | 'orderNo' | 'countNo' | 'transferNo'>;
 };
 
 const { t } = useI18n();
@@ -251,6 +251,8 @@ const previewDocTypeMap: Record<string, PrintDocType> = {
   SALE_RETURN_SCRAP: 'SALE_RETURN',
   SALE_RETURN_RED_FLUSH: 'SALE_RETURN',
   STOCK_COUNT: 'STOCK_COUNT',
+  STOCK_TRANSFER_OUT: 'STOCK_TRANSFER',
+  STOCK_TRANSFER_IN: 'STOCK_TRANSFER',
   STOCK_INIT: 'STOCK_INIT',
   STOCK_INIT_RED_FLUSH: 'STOCK_INIT'
 };
@@ -275,6 +277,8 @@ const docRouteMap: Record<string, DocRouteInfo> = {
   SALE_RETURN_SCRAP: { endpoint: 'sale-returns', noPath: ['order', 'orderNo'] },
   SALE_RETURN_RED_FLUSH: { endpoint: 'sale-returns', noPath: ['order', 'orderNo'] },
   STOCK_COUNT: { endpoint: 'stock-counts', noPath: ['count', 'countNo'] },
+  STOCK_TRANSFER_OUT: { endpoint: 'stock-transfers', noPath: ['transfer', 'transferNo'] },
+  STOCK_TRANSFER_IN: { endpoint: 'stock-transfers', noPath: ['transfer', 'transferNo'] },
   STOCK_INIT: { endpoint: 'stock-inits', noPath: ['count', 'countNo'] },
   STOCK_INIT_RED_FLUSH: { endpoint: 'stock-inits', noPath: ['count', 'countNo'] },
   ASSEMBLE_OUT: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] },

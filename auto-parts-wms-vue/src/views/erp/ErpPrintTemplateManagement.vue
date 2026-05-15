@@ -323,6 +323,7 @@ type PrintDocType =
   | 'ACCOUNTS_RECEIVABLE'
   | 'ACCOUNTS_PAYABLE'
   | 'STOCK_COUNT'
+  | 'STOCK_TRANSFER'
   | 'STOCK_INIT';
 
 interface FieldOption {
@@ -368,6 +369,7 @@ const docTypeOptions = computed<{ value: PrintDocType; label: string }[]>(() => 
   { value: 'ACCOUNTS_RECEIVABLE', label: t('print.docTypeAccountsReceivable') },
   { value: 'ACCOUNTS_PAYABLE', label: t('print.docTypeAccountsPayable') },
   { value: 'STOCK_COUNT', label: t('print.docTypeStockCount') },
+  { value: 'STOCK_TRANSFER', label: t('print.docTypeStockTransfer') },
   { value: 'STOCK_INIT', label: t('print.docTypeStockInit') }
 ]);
 
@@ -398,6 +400,7 @@ const previewSourceMap: Record<PrintDocType, { endpoint: string; preferredStatus
   ACCOUNTS_RECEIVABLE: { endpoint: '/erp/ar/page' },
   ACCOUNTS_PAYABLE: { endpoint: '/erp/ap/page' },
   STOCK_COUNT: { endpoint: '/erp/stock-counts/page', preferredStatus: 'APPROVED' },
+  STOCK_TRANSFER: { endpoint: '/erp/stock-transfers/page', preferredStatus: 'APPROVED' },
   STOCK_INIT: { endpoint: '/erp/stock-inits/page', preferredStatus: 'APPROVED' }
 };
 
@@ -411,6 +414,7 @@ const printPathMap: Record<PrintDocType, string> = {
   ACCOUNTS_RECEIVABLE: 'ar',
   ACCOUNTS_PAYABLE: 'ap',
   STOCK_COUNT: 'stock-counts',
+  STOCK_TRANSFER: 'stock-transfers',
   STOCK_INIT: 'stock-inits'
 };
 
@@ -553,6 +557,15 @@ const buildFieldOptions = (docType: string, isHeader: boolean): FieldOption[] =>
           { key: 'lastPrintedAt', label: t('field.lastPrintedAt') },
           { key: 'remark', label: t('field.remark') }
         ];
+      case 'STOCK_TRANSFER':
+        return [
+          { key: 'transferNo', label: t('field.transferNo') },
+          { key: 'transferAt', label: t('field.transferAt') },
+          { key: 'status', label: t('field.status') },
+          { key: 'printCount', label: t('field.printCount') },
+          { key: 'lastPrintedAt', label: t('field.lastPrintedAt') },
+          { key: 'remark', label: t('field.remark') }
+        ];
       case 'STOCK_INIT':
         return [
           { key: 'stockInitNo', label: t('field.stockInitNo') },
@@ -623,6 +636,17 @@ const buildFieldOptions = (docType: string, isHeader: boolean): FieldOption[] =>
         { key: 'diffQty', label: t('field.diffQty') },
         { key: 'remark', label: t('field.remark') }
       ];
+    case 'STOCK_TRANSFER':
+      return [
+        { key: 'productCode', label: t('field.code') },
+        { key: 'productName', label: t('field.product') },
+        { key: 'fromWarehouse', label: t('field.fromWarehouse') },
+        { key: 'fromLocation', label: t('field.fromLocation') },
+        { key: 'toWarehouse', label: t('field.toWarehouse') },
+        { key: 'toLocation', label: t('field.toLocation') },
+        { key: 'qty', label: t('field.quantity') },
+        { key: 'remark', label: t('field.remark') }
+      ];
     default:
       return [
         { key: 'productCode', label: t('field.code') },
@@ -655,6 +679,7 @@ const buildPreviewLabel = (docType: PrintDocType, row: Record<string, any>) => {
     ACCOUNTS_RECEIVABLE: 'receivableNo',
     ACCOUNTS_PAYABLE: 'payableNo',
     STOCK_COUNT: 'countNo',
+    STOCK_TRANSFER: 'transferNo',
     STOCK_INIT: 'countNo'
   };
   const code = row[codeFieldMap[docType]] || `#${row.id}`;
@@ -751,6 +776,8 @@ const buildDefaultColumnWidths = (docType: string): Record<string, number> => {
       return { paymentNo: 12, status: 8, amount: 8, discountAmount: 8, redFlushReason: 12, createdAt: 14 };
     case 'STOCK_COUNT':
       return { productCode: 8, productName: 14, warehouse: 10, location: 10, systemQty: 6, countedQty: 6, diffQty: 6, remark: 12 };
+    case 'STOCK_TRANSFER':
+      return { productCode: 8, productName: 14, fromWarehouse: 10, fromLocation: 10, toWarehouse: 10, toLocation: 10, qty: 6, remark: 12 };
     case 'STOCK_INIT':
       return { productCode: 8, productName: 14, warehouse: 10, location: 10, systemQty: 6, countedQty: 6, initUnitCost: 8, initTotalAmount: 10, diffQty: 6, remark: 12 };
     default:
@@ -814,6 +841,13 @@ const getDocTypeDefaults = (docType: string): PrintFieldConfig => {
       return {
         headerFields: ['countNo', 'countAt', 'adjustmentReason', 'status', 'printCount', 'lastPrintedAt', 'remark'],
         detailColumns: ['productCode', 'productName', 'warehouse', 'location', 'systemQty', 'countedQty', 'diffQty', 'remark'],
+        showTotals: false,
+        columnWidths
+      };
+    case 'STOCK_TRANSFER':
+      return {
+        headerFields: ['transferNo', 'transferAt', 'status', 'printCount', 'lastPrintedAt', 'remark'],
+        detailColumns: ['productCode', 'productName', 'fromWarehouse', 'fromLocation', 'toWarehouse', 'toLocation', 'qty', 'remark'],
         showTotals: false,
         columnWidths
       };
