@@ -261,7 +261,20 @@ const canCreate = computed(() => {
 });
 
 const defaultColumns = ['orderNo', 'supplier', 'status', 'totalAmount', 'createdAt'];
-const { isVisible, fetchTenantKeys } = useColumnSettings('erp-purchase-return', defaultColumns);
+const draftColumnSettings = useColumnSettings('erp-purchase-return-draft', defaultColumns);
+const approvedColumnSettings = useColumnSettings('erp-purchase-return-approved', defaultColumns);
+
+const isVisible = (key: string) => (
+  isApprovedPage.value
+    ? approvedColumnSettings.isVisible(key)
+    : draftColumnSettings.isVisible(key)
+);
+
+const fetchCurrentTenantKeys = () => (
+  isApprovedPage.value
+    ? approvedColumnSettings.fetchTenantKeys()
+    : draftColumnSettings.fetchTenantKeys()
+);
 
 const canShow = (key: string) => isVisible(key);
 
@@ -507,7 +520,7 @@ onMounted(() => {
   fetchSuppliers();
   fetchList();
   bindPageSizeSync(size, fetchList);
-  fetchTenantKeys();
+  fetchCurrentTenantKeys();
 });
 
 onActivated(() => {
@@ -516,12 +529,14 @@ onActivated(() => {
   total.value = 0;
   fetchSuppliers();
   fetchList();
+  fetchCurrentTenantKeys();
 });
 
 watch(
   () => route.fullPath,
   () => {
     applyRouteStatus();
+    fetchCurrentTenantKeys();
     handleSearch();
   },
   { flush: 'sync' }

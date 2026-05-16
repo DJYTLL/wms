@@ -3,6 +3,7 @@ package com.example.wms.controller;
 import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.DeleteRequest;
+import com.example.wms.dto.RoleColumnSettingResponse;
 import com.example.wms.dto.RoleColumnPermissionUpdateRequest;
 import com.example.wms.dto.RoleCreateRequest;
 import com.example.wms.dto.RolePermissionUpdateRequest;
@@ -114,6 +115,14 @@ public class RoleController {
     @PreAuthorize("hasAuthority('PERM_column:role:manage')")
     public ResponseEntity<ApiResponse<List<Permission>>> listColumnPermissions(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(rolePermissionService.listColumnPermissions(id)));
+    }
+
+    // 查询角色页面列模板（列权限配置）
+    @GetMapping("/{id}/column-settings/{pageKey}")
+    @PreAuthorize("hasAuthority('PERM_column:role:manage')")
+    public ResponseEntity<ApiResponse<RoleColumnSettingResponse>> getRoleColumnSetting(@PathVariable Long id,
+                                                                                       @PathVariable String pageKey) {
+        return ResponseEntity.ok(ApiResponse.ok(rolePermissionService.getRoleColumnSetting(id, pageKey)));
     }
 
     // 批量设置角色权限

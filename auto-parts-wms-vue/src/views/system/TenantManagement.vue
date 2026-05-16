@@ -457,7 +457,7 @@ const handleSwitch = async (row: Tenant) => {
     if (res.data.code === 200) {
       const newToken = res.data?.data?.token;
       if (typeof newToken === 'string' && newToken) {
-        setTokens(newToken);
+        setTokens(newToken, res.data?.data?.authPayload);
       }
       notifySuccess();
       router.push('/');

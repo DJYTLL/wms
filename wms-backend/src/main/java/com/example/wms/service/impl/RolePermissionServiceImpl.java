@@ -1,8 +1,11 @@
 package com.example.wms.service.impl;
 
+import com.example.wms.dto.RoleColumnSettingResponse;
 import com.example.wms.entity.Permission;
 import com.example.wms.entity.Role;
+import com.example.wms.entity.RoleColumnSetting;
 import com.example.wms.mapper.PermissionMapper;
+import com.example.wms.mapper.RoleColumnSettingMapper;
 import com.example.wms.mapper.RoleMapper;
 import com.example.wms.mapper.RolePermissionMapper;
 import com.example.wms.mapper.TenantColumnSettingMapper;
@@ -28,6 +31,7 @@ import java.util.Set;
 public class RolePermissionServiceImpl implements RolePermissionService {
     private final RoleMapper roleMapper;
     private final PermissionMapper permissionMapper;
+    private final RoleColumnSettingMapper roleColumnSettingMapper;
     private final RolePermissionMapper rolePermissionMapper;
     private final TenantColumnSettingMapper tenantColumnSettingMapper;
     private final UserRoleMapper userRoleMapper;
@@ -35,12 +39,14 @@ public class RolePermissionServiceImpl implements RolePermissionService {
 
     public RolePermissionServiceImpl(RoleMapper roleMapper,
                                      PermissionMapper permissionMapper,
+                                     RoleColumnSettingMapper roleColumnSettingMapper,
                                      RolePermissionMapper rolePermissionMapper,
                                      TenantColumnSettingMapper tenantColumnSettingMapper,
                                      UserRoleMapper userRoleMapper,
                                      UserAccountMapper userAccountMapper) {
         this.roleMapper = roleMapper;
         this.permissionMapper = permissionMapper;
+        this.roleColumnSettingMapper = roleColumnSettingMapper;
         this.rolePermissionMapper = rolePermissionMapper;
         this.tenantColumnSettingMapper = tenantColumnSettingMapper;
         this.userRoleMapper = userRoleMapper;
@@ -62,6 +68,21 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         return permissions.stream()
             .filter(permission -> permission.getCode() != null && permission.getCode().startsWith("column:"))
             .toList();
+    }
+
+    @Override
+    public RoleColumnSettingResponse getRoleColumnSetting(Long roleId, String pageKey) {
+        loadRole(roleId);
+        String normalizedPageKey = pageKey == null ? "" : pageKey.trim();
+        if (normalizedPageKey.isBlank()) {
+            throw new IllegalArgumentException("页面标识不能为空");
+        }
+        Long tenantId = TenantContext.requireTenantId();
+        RoleColumnSetting setting = roleColumnSettingMapper.findOne(tenantId, roleId, normalizedPageKey);
+        if (setting == null) {
+            return new RoleColumnSettingResponse(roleId, normalizedPageKey, List.of(), null, null);
+        }
+        return toRoleColumnSettingResponse(setting);
     }
 
     @Override
@@ -130,6 +151,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         for (Long permissionId : sanitizedPermissionIds) {
             rolePermissionMapper.insertIgnore(tenantId, roleId, permissionId);
         }
+        upsertRoleColumnSetting(tenantId, roleId, normalizedPageKey, selectedColumnPermissions);
         bumpUsersByRole(roleId);
     }
 
@@ -292,6 +314,54 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 throw new IllegalArgumentException("列权限超出租户可见列范围");
             }
         }
+    }
+
+    private void upsertRoleColumnSetting(Long tenantId,
+                                         Long roleId,
+                                         String pageKey,
+                                         List<Permission> selectedColumnPermissions) {
+        List<String> visibleColumns = selectedColumnPermissions.stream()
+            .map(Permission::getCode)
+            .filter(code -> code != null)
+            .map(code -> code.split(":", 3))
+            .filter(parts -> parts.length >= 3)
+            .map(parts -> parts[2])
+            .distinct()
+            .toList();
+        RoleColumnSetting existing = roleColumnSettingMapper.findOne(tenantId, roleId, pageKey);
+        RoleColumnSetting setting = existing == null ? new RoleColumnSetting() : existing;
+        setting.setTenantId(tenantId);
+        setting.setRoleId(roleId);
+        setting.setPageKey(pageKey);
+        setting.setVisibleColumns(String.join(",", visibleColumns));
+        setting.setUpdatedBy(resolveUsername());
+        setting.setUpdatedAt(java.time.Instant.now());
+        if (existing == null) {
+            roleColumnSettingMapper.insert(setting);
+        } else {
+            roleColumnSettingMapper.update(setting);
+        }
+    }
+
+    private RoleColumnSettingResponse toRoleColumnSettingResponse(RoleColumnSetting setting) {
+        List<String> columns = setting.getVisibleColumns() == null || setting.getVisibleColumns().isBlank()
+            ? List.of()
+            : java.util.Arrays.asList(setting.getVisibleColumns().split(","));
+        return new RoleColumnSettingResponse(
+            setting.getRoleId(),
+            setting.getPageKey(),
+            columns,
+            setting.getUpdatedBy(),
+            setting.getUpdatedAt()
+        );
+    }
+
+    private String resolveUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            return null;
+        }
+        return authentication.getName();
     }
 
     // 角色权限变更时递增用户权限版本

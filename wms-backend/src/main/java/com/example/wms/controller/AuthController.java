@@ -155,7 +155,7 @@ public class AuthController {
     }
 
     private TokenPairResponse toClientTokenPair(TokenPairResponse tokens) {
-        return new TokenPairResponse(tokens.token(), null);
+        return new TokenPairResponse(tokens.token(), null, tokens.authPayload());
     }
 
 }

@@ -292,7 +292,20 @@ const canCreate = computed(() => {
 });
 
 const defaultColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'refundStatus', 'createdAt'];
-const { isVisible, fetchTenantKeys } = useColumnSettings('erp-sale-return', defaultColumns);
+const draftColumnSettings = useColumnSettings('erp-sale-return-draft', defaultColumns);
+const approvedColumnSettings = useColumnSettings('erp-sale-return-approved', defaultColumns);
+
+const isVisible = (key: string) => (
+  isApprovedPage.value
+    ? approvedColumnSettings.isVisible(key)
+    : draftColumnSettings.isVisible(key)
+);
+
+const fetchCurrentTenantKeys = () => (
+  isApprovedPage.value
+    ? approvedColumnSettings.fetchTenantKeys()
+    : draftColumnSettings.fetchTenantKeys()
+);
 
 const canShow = (key: string) => isVisible(key);
 
@@ -617,7 +630,7 @@ onMounted(() => {
   fetchLocations();
   fetchList();
   bindPageSizeSync(size, fetchList);
-  fetchTenantKeys();
+  fetchCurrentTenantKeys();
 });
 
 onActivated(() => {
@@ -629,12 +642,14 @@ onActivated(() => {
   fetchWarehouses();
   fetchLocations();
   fetchList();
+  fetchCurrentTenantKeys();
 });
 
 watch(
   () => route.fullPath,
   () => {
     applyRouteStatus();
+    fetchCurrentTenantKeys();
     handleSearch();
   },
   { flush: 'sync' }

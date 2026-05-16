@@ -11,6 +11,16 @@ import request, { clearTokens, getToken, setTokens } from '@/utils/request';
  * 此实现模拟了基于 JWT 的认证流程。
  */
 let listenersRegistered = false;
+const AUTH_CONTEXT_STORAGE_KEY = 'auth-context';
+
+type StoredAuthContext = {
+  user?: any;
+  permissions?: string[];
+  tenantId?: number | null;
+  tenantCode?: string | null;
+  userTenantId?: number | null;
+  userTenantCode?: string | null;
+};
 
 export const useAuthStore = defineStore('auth', () => {
   const router = useRouter();
@@ -28,13 +38,65 @@ export const useAuthStore = defineStore('auth', () => {
   const initialized = ref(false);
   let restorePromise: Promise<boolean> | null = null;
 
-  const applyToken = (newToken: string | null) => {
+  const readStoredAuthContext = (): StoredAuthContext | null => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    const raw = window.localStorage.getItem(AUTH_CONTEXT_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw) as StoredAuthContext;
+    } catch {
+      window.localStorage.removeItem(AUTH_CONTEXT_STORAGE_KEY);
+      return null;
+    }
+  };
+
+  const persistAuthContext = (context: StoredAuthContext | null) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (!context) {
+      window.localStorage.removeItem(AUTH_CONTEXT_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(AUTH_CONTEXT_STORAGE_KEY, JSON.stringify(context));
+  };
+
+  const applyAuthContext = (authPayload?: any) => {
+    if (!authPayload) {
+      permissions.value = [];
+      return false;
+    }
+    user.value = authPayload.user || null;
+    permissions.value = Array.isArray(authPayload.permissions) ? authPayload.permissions : [];
+    tenantId.value = typeof authPayload.tenantId === 'number' ? authPayload.tenantId : null;
+    tenantCode.value = typeof authPayload.tenantCode === 'string' ? authPayload.tenantCode : null;
+    persistAuthContext({
+      user: user.value,
+      permissions: permissions.value,
+      tenantId: tenantId.value,
+      tenantCode: tenantCode.value,
+      userTenantId: typeof authPayload.userTenantId === 'number' ? authPayload.userTenantId : null,
+      userTenantCode: typeof authPayload.userTenantCode === 'string' ? authPayload.userTenantCode : null,
+    });
+    return true;
+  };
+
+  const applyToken = (newToken: string | null, authPayload?: any) => {
     token.value = newToken;
     if (!newToken) {
       user.value = null;
       permissions.value = [];
       tenantId.value = null;
       tenantCode.value = null;
+      persistAuthContext(null);
+      return;
+    }
+
+    if (applyAuthContext(authPayload)) {
       return;
     }
 
@@ -48,9 +110,16 @@ export const useAuthStore = defineStore('auth', () => {
         const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
         const payload = JSON.parse(atob(base64));
         user.value = payload.user;
-        permissions.value = payload.permissions || [];
+        permissions.value = [];
         tenantId.value = typeof payload.tid === 'number' ? payload.tid : null;
         tenantCode.value = typeof payload.tcode === 'string' ? payload.tcode : null;
+        const storedContext = readStoredAuthContext();
+        if (storedContext && storedContext.user?.username === payload.user?.username) {
+          user.value = storedContext.user || user.value;
+          permissions.value = Array.isArray(storedContext.permissions) ? storedContext.permissions : [];
+          tenantId.value = typeof storedContext.tenantId === 'number' ? storedContext.tenantId : tenantId.value;
+          tenantCode.value = typeof storedContext.tenantCode === 'string' ? storedContext.tenantCode : tenantCode.value;
+        }
       } else {
         throw new Error('Token format invalid');
       }
@@ -67,8 +136,8 @@ export const useAuthStore = defineStore('auth', () => {
   if (!listenersRegistered && typeof window !== 'undefined') {
     listenersRegistered = true;
     window.addEventListener('auth:tokens-updated', (event: Event) => {
-      const detail = (event as CustomEvent).detail as { token?: string } | undefined;
-      applyToken(detail?.token || null);
+      const detail = (event as CustomEvent).detail as { token?: string; authPayload?: any } | undefined;
+      applyToken(detail?.token || null, detail?.authPayload);
     });
     window.addEventListener('auth:tokens-cleared', () => {
       applyToken(null);
@@ -92,9 +161,9 @@ export const useAuthStore = defineStore('auth', () => {
         username,
         password
       });
-      const { token: newToken } = res.data.data;
-      setTokens(newToken);
-      applyToken(newToken);
+      const { token: newToken, authPayload } = res.data.data;
+      setTokens(newToken, authPayload);
+      applyToken(newToken, authPayload);
       return true;
     } catch (error: any) {
       console.error('Login error:', error);
@@ -118,8 +187,8 @@ export const useAuthStore = defineStore('auth', () => {
           clearTokens();
           return false;
         }
-        setTokens(refreshData.data.token);
-        applyToken(refreshData.data.token);
+        setTokens(refreshData.data.token, refreshData.data.authPayload);
+        applyToken(refreshData.data.token, refreshData.data.authPayload);
         return true;
       } catch (_error) {
         clearTokens();

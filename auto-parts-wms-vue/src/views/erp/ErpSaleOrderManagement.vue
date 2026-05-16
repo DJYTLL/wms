@@ -537,7 +537,8 @@ const canCreate = computed(() => {
 const canViewSaleReturn = computed(() => hasPermission('erp-sale-return:view'));
 
 const canViewProfit = computed(() => {
-  return (hasPermission('column:erp-sale:profit') || hasPermission('column:erp-sale:netGrossProfit'))
+  const columnPermission = `column:${currentColumnPageKey.value}:netGrossProfit`;
+  return hasPermission(columnPermission)
     && (hasPermission('erp-product:cost:view') || hasPermission('erp-product:cost:edit'));
 });
 
@@ -546,8 +547,23 @@ const canShowProfit = computed(() => {
   return showProfitColumn.value && isVisible('netGrossProfit');
 });
 
-const defaultColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'netSaleAmount', 'netGrossProfit', 'receivableStatus', 'returnStatus', 'redFlushTrace', 'createdAt'];
-const { isVisible, fetchTenantKeys } = useColumnSettings('erp-sale', defaultColumns);
+const draftColumns = ['orderNo', 'customer', 'totalAmount', 'netSaleAmount', 'netGrossProfit', 'receivableStatus', 'createdAt'];
+const approvedColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'netSaleAmount', 'netGrossProfit', 'receivableStatus', 'returnStatus', 'redFlushTrace', 'createdAt'];
+const draftColumnSettings = useColumnSettings('erp-sale-draft', draftColumns);
+const approvedColumnSettings = useColumnSettings('erp-sale-approved', approvedColumns);
+const currentColumnPageKey = computed(() => (isApprovedPage.value ? 'erp-sale-approved' : 'erp-sale-draft'));
+
+const isVisible = (key: string) => (
+  isApprovedPage.value
+    ? approvedColumnSettings.isVisible(key)
+    : draftColumnSettings.isVisible(key)
+);
+
+const fetchCurrentTenantKeys = () => (
+  isApprovedPage.value
+    ? approvedColumnSettings.fetchTenantKeys()
+    : draftColumnSettings.fetchTenantKeys()
+);
 
 const canShow = (key: string) => {
   if (key === 'netGrossProfit') {
@@ -1072,7 +1088,7 @@ onMounted(() => {
   fetchLocations();
   fetchList();
   bindPageSizeSync(size, fetchList);
-  fetchTenantKeys();
+  fetchCurrentTenantKeys();
   window.addEventListener('keydown', handleKeydown);
 });
 
@@ -1087,6 +1103,7 @@ onActivated(() => {
   fetchWarehouses();
   fetchLocations();
   fetchList();
+  fetchCurrentTenantKeys();
 });
 
 onDeactivated(() => {
@@ -1104,6 +1121,7 @@ watch(
     if (showSaleSummaryBar.value) {
       resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
     }
+    fetchCurrentTenantKeys();
     handleSearch();
   },
   { flush: 'sync' }

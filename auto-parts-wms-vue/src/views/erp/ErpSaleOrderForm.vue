@@ -884,12 +884,12 @@ const successDialogMessage = computed(() => {
 });
 
 const canViewProfit = computed(() => {
-  return hasPermission('column:erp-sale:profit')
+  return hasPermission('column:erp-sale-form:profit')
     && (hasPermission('erp-product:cost:view') || hasPermission('erp-product:cost:edit'));
 });
 
 const canShowProfit = computed(() => canViewProfit.value && showProfitColumn.value);
-const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale:discountAllocated'));
+const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale-form:discountAllocated'));
 const canUseQuickAssembly = computed(() => {
   return !isReadOnly.value
     && hasPermission('erp-assembly:view')
@@ -1377,7 +1377,7 @@ const getReturnPath = () => {
   if (route.query.from === 'approved' || route.query.mode === 'view' || formData.status === 'APPROVED') {
     return '/erp/sale-orders/approved';
   }
-  return '/erp/sale-orders';
+  return '/erp/sale-orders/draft';
 };
 
 const closePage = (redirectPath = getReturnPath()) => {

@@ -51,7 +51,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         String accessToken = jwtTokenService.generateToken(payload);
         Long audienceTenantId = payload.tenantId() == null ? user.getTenantId() : payload.tenantId();
         String refreshToken = createRefreshToken(user.getId(), user.getTenantId(), audienceTenantId);
-        return new TokenPairResponse(accessToken, refreshToken);
+        return new TokenPairResponse(accessToken, refreshToken, payload);
     }
 
     @Override
@@ -81,7 +81,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             AuthPayload audiencePayload = resolveAudiencePayload(payload, audienceTenantId);
             String accessToken = jwtTokenService.generateToken(audiencePayload);
             String newRefreshToken = createRefreshToken(user.getId(), user.getTenantId(), audiencePayload.tenantId());
-            return new TokenPairResponse(accessToken, newRefreshToken);
+            return new TokenPairResponse(accessToken, newRefreshToken, audiencePayload);
         } finally {
             TenantContext.clear();
         }

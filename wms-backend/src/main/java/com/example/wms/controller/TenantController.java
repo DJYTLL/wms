@@ -114,7 +114,7 @@ public class TenantController {
             .maxAge(java.time.Duration.ofDays(7))
             .build();
         httpResponse.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-        return ResponseEntity.ok(ApiResponse.ok(new TokenPairResponse(tokens.token(), null)));
+        return ResponseEntity.ok(ApiResponse.ok(new TokenPairResponse(tokens.token(), null, tokens.authPayload())));
     }
 
     // 查询租户菜单配置（超级管理员）

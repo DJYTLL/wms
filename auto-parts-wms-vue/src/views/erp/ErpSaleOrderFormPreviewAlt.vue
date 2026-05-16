@@ -393,12 +393,12 @@ const canApprove = computed(() => {
 });
 
 const canViewProfit = computed(() => {
-  return hasPermission('column:erp-sale:profit')
+  return hasPermission('column:erp-sale-form:profit')
     && (hasPermission('erp-product:cost:view') || hasPermission('erp-product:cost:edit'));
 });
 
 const canShowProfit = computed(() => canViewProfit.value && showProfitColumn.value);
-const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale:discountAllocated'));
+const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale-form:discountAllocated'));
 
 const isTypingTarget = (target: EventTarget | null) => {
   if (!target || !(target instanceof HTMLElement)) return false;

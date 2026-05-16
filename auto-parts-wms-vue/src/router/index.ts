@@ -284,6 +284,10 @@ const routes: Array<RouteRecordRaw> = [
           meta: { title: 'ERP采购单（已审核）', permission: 'erp-purchase:view', titleKey: 'page.erpPurchaseOrderApproved' }
         },
         {
+          path: 'erp/purchase-returns',
+          redirect: '/erp/purchase-returns/draft'
+        },
+        {
           path: 'erp/purchase-returns/create',
           name: 'erp-purchase-returns-create',
           component: () => import('../views/erp/ErpPurchaseReturnForm.vue'),
@@ -309,9 +313,7 @@ const routes: Array<RouteRecordRaw> = [
         },
       {
         path: 'erp/sale-orders',
-        name: 'erp-sale-orders',
-        component: () => import('../views/erp/ErpSaleOrderManagement.vue'),
-        meta: { title: 'ERP销售管理', permission: 'erp-sale:view' }
+        redirect: '/erp/sale-orders/draft'
       },
       {
         path: 'erp/sale-orders/create',
@@ -354,6 +356,10 @@ const routes: Array<RouteRecordRaw> = [
         name: 'erp-sale-orders-approved',
         component: () => import('../views/erp/ErpSaleOrderManagement.vue'),
         meta: { title: '销售单（已审核）', permission: 'erp-sale:view', titleKey: 'page.erpSaleOrderApproved', defaultStatus: 'APPROVED', lockStatus: true }
+      },
+      {
+        path: 'erp/sale-returns',
+        redirect: '/erp/sale-returns/draft'
       },
       {
         path: 'erp/sale-returns/create',

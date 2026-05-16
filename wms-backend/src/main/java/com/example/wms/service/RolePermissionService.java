@@ -1,5 +1,6 @@
 package com.example.wms.service;
 
+import com.example.wms.dto.RoleColumnSettingResponse;
 import com.example.wms.entity.Permission;
 
 import java.util.List;
@@ -11,6 +12,9 @@ public interface RolePermissionService {
 
     // 查询角色的列权限列表
     List<Permission> listColumnPermissions(Long roleId);
+
+    // 查询角色的页面列模板
+    RoleColumnSettingResponse getRoleColumnSetting(Long roleId, String pageKey);
 
     // 批量设置角色权限
     void setPermissions(Long roleId, List<Long> permissionIds);

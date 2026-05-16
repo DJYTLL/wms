@@ -812,7 +812,7 @@ const getReturnPath = () => {
   if (route.query.from === 'approved' || route.query.mode === 'view' || formData.status === 'APPROVED') {
     return '/erp/purchase-returns/approved';
   }
-  return '/erp/purchase-returns';
+  return '/erp/purchase-returns/draft';
 };
 
 const closePage = (redirectPath = getReturnPath()) => {

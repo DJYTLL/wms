@@ -44,7 +44,6 @@ public class JwtTokenService {
             .setIssuedAt(Date.from(now))
             .setExpiration(Date.from(now.plus(expirationMinutes, ChronoUnit.MINUTES)))
             .claim("user", userClaim)
-            .claim("permissions", payload.permissions())
             .claim("av", payload.authVersion())
             .claim("tid", payload.tenantId())
             .claim("tcode", payload.tenantCode())

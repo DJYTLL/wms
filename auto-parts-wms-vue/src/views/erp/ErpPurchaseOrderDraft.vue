@@ -147,7 +147,7 @@ const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
 
 const defaultColumns = ['orderNo', 'supplier', 'status', 'totalAmount', 'createdAt'];
-const { isVisible, fetchTenantKeys } = useColumnSettings('erp-purchase', defaultColumns);
+const { isVisible, fetchTenantKeys } = useColumnSettings('erp-purchase-draft', defaultColumns);
 
 const canShow = (key: string) => isVisible(key);
 

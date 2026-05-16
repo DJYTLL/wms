@@ -47,10 +47,10 @@ let accessToken: string | null = readStoredToken()
 
 export const getToken = () => accessToken
 
-const dispatchTokensUpdated = (token: string) => {
+const dispatchTokensUpdated = (token: string, authPayload?: unknown) => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
-      new CustomEvent('auth:tokens-updated', { detail: { token } }),
+      new CustomEvent('auth:tokens-updated', { detail: { token, authPayload } }),
     )
   }
 }
@@ -61,10 +61,10 @@ const dispatchTokensCleared = () => {
   }
 }
 
-export const setTokens = (token: string) => {
+export const setTokens = (token: string, authPayload?: unknown) => {
   accessToken = token
   persistToken(token)
-  dispatchTokensUpdated(token)
+  dispatchTokensUpdated(token, authPayload)
 }
 
 export const clearTokens = () => {
@@ -260,8 +260,8 @@ request.interceptors.response.use(
           throw new Error(refreshData?.message || 'refresh failed')
         }
 
-        const { token } = refreshData.data
-        setTokens(token)
+        const { token, authPayload } = refreshData.data
+        setTokens(token, authPayload)
 
         pendingQueue.forEach((cb) => cb(token))
         pendingQueue = []

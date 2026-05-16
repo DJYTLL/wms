@@ -13,6 +13,10 @@ public record TokenPairResponse(
     /**
      * 表示刷新令牌。
      */
-    String refreshToken
+    String refreshToken,
+    /**
+     * 表示当前登录态对应的鉴权上下文。
+     */
+    AuthPayload authPayload
 ) {
 }
