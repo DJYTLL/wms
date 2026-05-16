@@ -537,7 +537,7 @@ const canCreate = computed(() => {
 const canViewSaleReturn = computed(() => hasPermission('erp-sale-return:view'));
 
 const canViewProfit = computed(() => {
-  return hasPermission('column:erp-sale:profit')
+  return (hasPermission('column:erp-sale:profit') || hasPermission('column:erp-sale:netGrossProfit'))
     && (hasPermission('erp-product:cost:view') || hasPermission('erp-product:cost:edit'));
 });
 

@@ -16,7 +16,7 @@ public interface RolePermissionService {
     void setPermissions(Long roleId, List<Long> permissionIds);
 
     // 批量设置角色列权限
-    void setColumnPermissions(Long roleId, List<Long> permissionIds);
+    void setColumnPermissions(Long roleId, String pageKey, List<Long> permissionIds);
 
     // 追加单个权限
     void addPermission(Long roleId, Long permissionId);

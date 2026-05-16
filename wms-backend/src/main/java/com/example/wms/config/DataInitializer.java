@@ -324,6 +324,19 @@ public class DataInitializer {
                                         String description) {
         Permission existing = mapper.findByCode(code);
         if (existing != null) {
+            boolean updated = false;
+            if (shouldRepairSeedText(existing.getName()) && !equalsText(existing.getName(), name)) {
+                existing.setName(name);
+                updated = true;
+            }
+            if (shouldRepairSeedText(existing.getDescription()) && !equalsText(existing.getDescription(), description)) {
+                existing.setDescription(description);
+                updated = true;
+            }
+            if (updated) {
+                existing.setUpdatedAt(Instant.now());
+                mapper.updateById(existing);
+            }
             return existing;
         }
         Permission permission = new Permission();
@@ -335,6 +348,10 @@ public class DataInitializer {
         permission.setUpdatedAt(Instant.now());
         mapper.insert(permission);
         return permission;
+    }
+
+    private boolean shouldRepairSeedText(String value) {
+        return value == null || value.isBlank() || value.contains("?") || value.contains("\uFFFD");
     }
 
     // 解析管理员密码（为空时回退默认密码）

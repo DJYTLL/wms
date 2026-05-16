@@ -177,6 +177,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     @AuditLog(action = "ERP_PURCHASE_RETURN_CREATE", entityType = "erp_purchase_return", entityId = "{result.order.id}", detail = "orderNo={result.order.orderNo}")
     public ErpPurchaseReturnDetail create(ErpPurchaseReturnCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        String operator = resolveCurrentUsername();
         ErpPurchaseReturn order = new ErpPurchaseReturn();
         order.setTenantId(tenantId);
         order.setOrderNo(ensureOrderNo(tenantId, request.orderNo()));
@@ -197,7 +198,9 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         order.setInventoryReserved(false);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
+        order.setCreatedBy(operator);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         erpPurchaseReturnMapper.insert(order);
 
         List<ErpPurchaseReturnItem> items = buildItems(tenantId, order.getId(), request.items(), Set.of());
@@ -238,6 +241,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(resolveCurrentUsername());
 
         List<ErpPurchaseReturnItem> existingItems = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
         Set<Long> allowedDisabledProductIds = existingProductIds(existingItems);
@@ -297,10 +301,12 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         validateSettlementAmounts(tenantId, order, id);
         boolean inventoryReserved = Boolean.TRUE.equals(order.getInventoryReserved());
         order.setStatus(STATUS_APPROVED);
-        order.setApprovedBy(resolveCurrentUsername());
+        String operator = resolveCurrentUsername();
+        order.setApprovedBy(operator);
         order.setApprovedAt(Instant.now());
         order.setInventoryReserved(false);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         updateWithVersion(tenantId, order);
 
         String returnType = resolveReturnType(order.getReturnType());
@@ -314,7 +320,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                 applyStockDelta(tenantId, item, BigDecimal.ZERO, "PURCHASE_RETURN_SCRAP", id, false, false);
             }
         }
-        createReturnPayable(tenantId, order, resolveReturnTotal(order));
+        createReturnPayable(tenantId, order, resolveReturnTotal(order), operator);
     }
 
     @Override
@@ -358,6 +364,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         order.setStatus(STATUS_RED_FLUSHED);
         order.setRemark(appendRedFlushReason(order.getRemark(), reasonText));
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(resolveCurrentUsername());
         updateWithVersion(tenantId, order);
 
         List<ErpPurchaseReturnItem> items = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
@@ -1053,7 +1060,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         );
     }
 
-    private void createReturnPayable(Long tenantId, ErpPurchaseReturn order, BigDecimal delta) {
+    private void createReturnPayable(Long tenantId, ErpPurchaseReturn order, BigDecimal delta, String operator) {
         BigDecimal amount = delta == null ? BigDecimal.ZERO : delta;
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return;
@@ -1096,7 +1103,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             payable.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.updateById(payable);
         }
-        createAutoReturnPayment(tenantId, order, payable, refundAmount, discountAmount, negativeApplied);
+        createAutoReturnPayment(tenantId, order, payable, refundAmount, discountAmount, negativeApplied, operator);
     }
 
     private void createAutoReturnPayment(Long tenantId,
@@ -1104,7 +1111,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                                          ErpAccountsPayable payable,
                                          BigDecimal refundAmount,
                                          BigDecimal discountAmount,
-                                         BigDecimal negativeApplied) {
+                                         BigDecimal negativeApplied,
+                                         String operator) {
         if (negativeApplied.compareTo(BigDecimal.ZERO) == 0 || !REFUND_ACTION_REFUND.equals(order.getRefundAction())) {
             return;
         }
@@ -1122,7 +1130,9 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         payment.setPaidAt(Instant.now());
         payment.setRemark(AUTO_RETURN_PAYMENT_REMARK + ":" + order.getOrderNo());
         payment.setCreatedAt(Instant.now());
+        payment.setCreatedBy(operator);
         payment.setUpdatedAt(Instant.now());
+        payment.setUpdatedBy(operator);
         erpPaymentMapper.insert(payment);
 
         ErpPaymentPayable allocation = new ErpPaymentPayable();

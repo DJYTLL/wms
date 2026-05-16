@@ -106,6 +106,16 @@
                 </el-select>
               </el-form-item>
             </div>
+            <div class="form-group">
+              <el-form-item :label="$t('field.createdBy')">
+                <div class="readonly-field">{{ formData.createdBy || currentOperatorName }}</div>
+              </el-form-item>
+            </div>
+            <div class="form-group">
+              <el-form-item :label="$t('field.updatedBy')">
+                <div class="readonly-field">{{ formData.updatedBy || formData.createdBy || currentOperatorName }}</div>
+              </el-form-item>
+            </div>
           </div>
 
           <el-form-item :label="$t('field.remark')" class="sale-remark-item">
@@ -730,6 +740,11 @@ const canPrint = computed(() => {
   return isEditing.value && hasPermission('erp-sale:view');
 });
 
+const currentOperatorName = computed(() => {
+  const user = authStore.user as any;
+  return user?.displayName || user?.username || user?.name || 'system';
+});
+
 const canRedFlush = computed(() => {
   return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-sale:redflush');
 });
@@ -766,6 +781,8 @@ const formData = reactive({
   paidAmount: '',
   discountAmount: '',
   customerDebtTotal: '',
+  createdBy: '',
+  updatedBy: '',
   remark: '',
   items: [] as SaleOrderItem[]
 });
@@ -2359,6 +2376,8 @@ const loadDetail = async () => {
       formData.paidAmount = String(data.order?.paidAmount ?? data.paidAmount ?? '');
       formData.discountAmount = String(data.order?.discountAmount ?? data.discountAmount ?? '');
       formData.customerDebtTotal = String(data.customerDebtTotal ?? data.order?.customerDebtTotal ?? '');
+      formData.createdBy = data.order?.createdBy || data.createdBy || '';
+      formData.updatedBy = data.order?.updatedBy || data.updatedBy || formData.createdBy;
       formData.items = (data.items || data.order?.items || []).map((item: any) => ({
         id: item.id,
         productId: item.productId,
@@ -2443,6 +2462,8 @@ const resetForm = () => {
   formData.paidAmount = '';
   formData.discountAmount = '';
   formData.customerDebtTotal = '';
+  formData.createdBy = '';
+  formData.updatedBy = '';
   formData.remark = '';
   formData.items = [];
   selectedItems.value = [];

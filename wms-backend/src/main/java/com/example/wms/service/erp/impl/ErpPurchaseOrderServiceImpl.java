@@ -232,6 +232,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     @AuditLog(action = "ERP_PURCHASE_CREATE", entityType = "erp_purchase_order", entityId = "{result.order.id}", detail = "orderNo={result.order.orderNo}")
     public ErpPurchaseOrderDetail create(ErpPurchaseOrderCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        String operator = resolveCurrentUsername();
         String orderNo = ensureOrderNo(tenantId, request.orderNo(), ORDER_TYPE, "PO");
         ErpPurchaseOrder order = new ErpPurchaseOrder();
         order.setTenantId(tenantId);
@@ -252,7 +253,9 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setVersion(0L);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
+        order.setCreatedBy(operator);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         erpPurchaseOrderMapper.insert(order);
 
         List<ErpPurchaseOrderItem> items = buildItems(tenantId, order.getId(), request.items(), Set.of());
@@ -261,6 +264,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         }
         applyTotals(order, items);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         updateWithVersion(tenantId, order);
         return new ErpPurchaseOrderDetail(order, items);
     }
@@ -291,6 +295,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(resolveCurrentUsername());
 
         Set<Long> allowedDisabledProductIds = existingProductIds(erpPurchaseOrderItemMapper.findByOrderId(tenantId, id));
 
@@ -341,12 +346,14 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         for (ErpPurchaseOrderItem item : items) {
             applyStockDelta(tenantId, item, item.getQty(), "PURCHASE_APPROVE", id);
         }
+        String operator = resolveCurrentUsername();
         order.setStatus(STATUS_APPROVED);
-        order.setApprovedBy(resolveCurrentUsername());
+        order.setApprovedBy(operator);
         order.setApprovedAt(Instant.now());
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         updateWithVersion(tenantId, order);
-        ensurePayableAndPayment(tenantId, order);
+        ensurePayableAndPayment(tenantId, order, operator);
     }
 
     @Override
@@ -392,11 +399,13 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         } else if (!STATUS_DRAFT.equals(order.getStatus())) {
             throw new IllegalArgumentException("仅草稿或已审核状态可作废");
         }
+        String operator = resolveCurrentUsername();
         order.setStatus(STATUS_CANCELLED);
-        order.setCancelledBy(resolveCurrentUsername());
+        order.setCancelledBy(operator);
         order.setCancelledAt(Instant.now());
         order.setRemark(appendRedFlushReason(order.getRemark(), reason));
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         updateWithVersion(tenantId, order);
     }
 
@@ -661,7 +670,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         }
     }
 
-    private void ensurePayableAndPayment(Long tenantId, ErpPurchaseOrder order) {
+    private void ensurePayableAndPayment(Long tenantId, ErpPurchaseOrder order, String operator) {
         BigDecimal total = resolvePayableTotal(order);
         BigDecimal discount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
         BigDecimal paidCash = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
@@ -734,7 +743,9 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 payment.setPaidAt(Instant.now());
                 payment.setRemark(AUTO_PAYMENT_REMARK);
                 payment.setCreatedAt(Instant.now());
+                payment.setCreatedBy(operator);
                 payment.setUpdatedAt(Instant.now());
+                payment.setUpdatedBy(operator);
                 erpPaymentMapper.insert(payment);
             } else if (AUTO_PAYMENT_REMARK.equals(paymentExisting.getRemark())) {
                 paymentExisting.setPayableId(null);
@@ -747,6 +758,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 paymentExisting.setPaidAt(Instant.now());
                 paymentExisting.setRemark(AUTO_PAYMENT_REMARK);
                 paymentExisting.setUpdatedAt(Instant.now());
+                paymentExisting.setUpdatedBy(operator);
                 erpPaymentMapper.updateById(paymentExisting);
 
                 erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
@@ -763,6 +775,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             paymentExisting.setStatus(STATUS_APPROVED);
             paymentExisting.setPaidAt(Instant.now());
             paymentExisting.setUpdatedAt(Instant.now());
+            paymentExisting.setUpdatedBy(operator);
             erpPaymentMapper.updateById(paymentExisting);
             erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
                 .eq("tenant_id", tenantId)

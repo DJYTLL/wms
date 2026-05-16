@@ -103,6 +103,16 @@
                 />
               </el-form-item>
             </div>
+            <div class="form-group">
+              <el-form-item :label="$t('field.createdBy')">
+                <div class="readonly-field">{{ formData.createdBy || currentOperatorName }}</div>
+              </el-form-item>
+            </div>
+            <div class="form-group">
+              <el-form-item :label="$t('field.updatedBy')">
+                <div class="readonly-field">{{ formData.updatedBy || formData.createdBy || currentOperatorName }}</div>
+              </el-form-item>
+            </div>
           </div>
 
           <el-form-item :label="$t('field.remark')" class="purchase-remark-item">
@@ -542,6 +552,8 @@ const formData = reactive({
   paymentMethodCode: '',
   paidAmount: '',
   discountAmount: '',
+  createdBy: '',
+  updatedBy: '',
   remark: '',
   items: [] as PurchaseOrderItem[]
 });
@@ -561,6 +573,10 @@ const pageTitle = computed(() => {
 const currentSupplierName = computed(() => supplierOptions.value.find(item => item.id === formData.supplierId)?.name || '-');
 const currentSettlementMethodName = computed(() => settlementMethodOptions.value.find(item => item.code === formData.settlementMethod)?.name || '-');
 const currentPaymentMethodName = computed(() => paymentMethodOptions.value.find(item => item.code === formData.paymentMethodCode)?.name || '-');
+const currentOperatorName = computed(() => {
+  const user = authStore.user as any;
+  return user?.displayName || user?.username || user?.name || 'system';
+});
 const historyProductName = computed(() => historyProduct.value?.name || '-');
 const purchaseHistoryHeaderItems = computed(() => [
   { label: t('field.product'), value: historyProductName.value },
@@ -927,6 +943,8 @@ const resetForm = () => {
   formData.paymentMethodCode = '';
   formData.paidAmount = '';
   formData.discountAmount = '';
+  formData.createdBy = '';
+  formData.updatedBy = '';
   formData.remark = '';
   formData.items = [];
   selectedItems.value = [];
@@ -1185,6 +1203,8 @@ const loadDetail = async () => {
       formData.paymentMethodCode = order.paymentMethodCode || '';
       formData.paidAmount = order.paidAmount == null ? '' : String(order.paidAmount);
       formData.discountAmount = order.discountAmount == null ? '' : String(order.discountAmount);
+      formData.createdBy = order.createdBy || '';
+      formData.updatedBy = order.updatedBy || formData.createdBy;
       formData.orderAt = formatDateTime(new Date(order.orderAt || order.createdAt || Date.now()));
       formData.remark = order.remark || '';
       formData.items = (data.items || order.items || []).map((item: any) => ({

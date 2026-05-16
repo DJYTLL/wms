@@ -23,6 +23,7 @@ import com.example.wms.mapper.erp.ErpPaymentMapper;
 import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
+import com.example.wms.security.CurrentActor;
 import com.example.wms.service.erp.ErpPaymentService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -125,6 +126,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
     @Transactional
     public ErpPaymentDetail create(ErpPaymentCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        String operator = CurrentActor.username();
         BigDecimal amount = request.amount() == null ? BigDecimal.ZERO : request.amount();
         BigDecimal discountAmount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
 
@@ -236,7 +238,9 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         receipt.setPaidAt(parsePaidAt(request.paidAt()));
         receipt.setRemark(request.remark());
         receipt.setCreatedAt(Instant.now());
+        receipt.setCreatedBy(operator);
         receipt.setUpdatedAt(Instant.now());
+        receipt.setUpdatedBy(operator);
         erpPaymentMapper.insert(receipt);
 
         if (allocations == null) {
@@ -373,6 +377,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         receipt.setPaidAt(parsePaidAt(request.paidAt()));
         receipt.setRemark(request.remark());
         receipt.setUpdatedAt(Instant.now());
+        receipt.setUpdatedBy(CurrentActor.username());
         erpPaymentMapper.updateById(receipt);
 
         erpPaymentPayableMapper.delete(new QueryWrapper<ErpPaymentPayable>()
@@ -517,6 +522,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         validatePaymentApproval(tenantId, receipt);
         receipt.setStatus(STATUS_APPROVED);
         receipt.setUpdatedAt(Instant.now());
+        receipt.setUpdatedBy(CurrentActor.username());
         erpPaymentMapper.updateById(receipt);
 
         List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, receipt.getId());
@@ -557,6 +563,8 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             receipt.setRemark(originRemark + " | 红冲原因：" + reasonText);
         }
         receipt.setUpdatedAt(Instant.now());
+        String operator = CurrentActor.username();
+        receipt.setUpdatedBy(operator);
         erpPaymentMapper.updateById(receipt);
 
         ErpPayment redPayment = new ErpPayment();
@@ -573,7 +581,9 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         redPayment.setPaidAt(Instant.now());
         redPayment.setRemark("红冲付款单：" + reasonText);
         redPayment.setCreatedAt(Instant.now());
+        redPayment.setCreatedBy(operator);
         redPayment.setUpdatedAt(Instant.now());
+        redPayment.setUpdatedBy(operator);
         erpPaymentMapper.insert(redPayment);
 
         List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, receipt.getId());

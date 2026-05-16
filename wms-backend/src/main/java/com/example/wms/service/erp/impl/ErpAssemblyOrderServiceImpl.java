@@ -128,6 +128,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
     @AuditLog(action = "ERP_ASSEMBLY_CREATE", entityType = "erp_assembly_order", entityId = "{result.order.id}", detail = "orderNo={result.order.orderNo}")
     public ErpAssemblyOrderDetail create(ErpAssemblyOrderCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        String operator = resolveCurrentUsername();
         validateOrderRequest(
             request.finishedProductId(),
             request.finishedQty(),
@@ -154,7 +155,9 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         order.setOrderAt(orderAt == null ? Instant.now() : orderAt);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
+        order.setCreatedBy(operator);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         erpAssemblyOrderMapper.insert(order);
 
         List<ErpAssemblyOrderItem> items = buildItems(tenantId, order.getId(), request.items(), Set.of());
@@ -165,6 +168,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         reserveDraftStock(tenantId, order, items);
         order.setInventoryReserved(true);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         erpAssemblyOrderMapper.updateById(order);
         return new ErpAssemblyOrderDetail(order, items);
     }
@@ -204,6 +208,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         order.setOrderAt(orderAt == null ? order.getOrderAt() : orderAt);
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(resolveCurrentUsername());
 
         if (Boolean.TRUE.equals(order.getInventoryReserved())) {
             releaseDraftStock(tenantId, order, existingItems);
@@ -282,6 +287,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         order.setApprovedAt(Instant.now());
         order.setInventoryReserved(false);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         erpAssemblyOrderMapper.updateById(order);
     }
 

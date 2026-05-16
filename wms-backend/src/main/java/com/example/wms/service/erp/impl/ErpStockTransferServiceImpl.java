@@ -46,7 +46,9 @@ import java.util.UUID;
 
 @Service
 public class ErpStockTransferServiceImpl implements ErpStockTransferService {
+    private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_APPROVED = "APPROVED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
     private static final String BIZ_TYPE_OUT = "STOCK_TRANSFER_OUT";
     private static final String BIZ_TYPE_IN = "STOCK_TRANSFER_IN";
 
@@ -84,12 +86,15 @@ public class ErpStockTransferServiceImpl implements ErpStockTransferService {
     }
 
     @Override
-    public PageResponse<ErpStockTransfer> page(long page, long size, String keyword, String startAt, String endAt) {
+    public PageResponse<ErpStockTransfer> page(long page, long size, String keyword, String status, String startAt, String endAt) {
         Page<ErpStockTransfer> pageReq = Page.of(page, size);
         QueryWrapper<ErpStockTransfer> wrapper = new QueryWrapper<ErpStockTransfer>()
             .eq("tenant_id", TenantContext.requireTenantId())
             .orderByDesc("transfer_at")
             .orderByDesc("created_at");
+        if (status != null && !status.isBlank()) {
+            wrapper.eq("status", status);
+        }
         if (keyword != null && !keyword.isBlank()) {
             wrapper.and(q -> q.like("transfer_no", keyword).or().like("remark", keyword));
         }
@@ -127,34 +132,109 @@ public class ErpStockTransferServiceImpl implements ErpStockTransferService {
     @AuditLog(action = "ERP_STOCK_TRANSFER_CREATE", entityType = "erp_stock_transfer", entityId = "{result.transfer.id}", detail = "transferNo={result.transfer.transferNo}")
     public ErpStockTransferDetail create(ErpStockTransferCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
-        validateRequest(tenantId, request.items());
-        Instant now = Instant.now();
         String operator = resolveCurrentUsername();
+        validateRequest(tenantId, request.items(), Set.of());
+        Instant now = Instant.now();
 
         ErpStockTransfer transfer = new ErpStockTransfer();
         transfer.setTenantId(tenantId);
         transfer.setTransferNo(ensureTransferNo(tenantId, request.transferNo()));
-        transfer.setStatus(STATUS_APPROVED);
+        transfer.setStatus(STATUS_DRAFT);
         transfer.setTransferAt(parseInstant(request.transferAt()) == null ? now : parseInstant(request.transferAt()));
         transfer.setPrintCount(0);
         transfer.setLastPrintedAt(null);
         transfer.setRemark(request.remark());
         transfer.setCreatedAt(now);
+        transfer.setCreatedBy(operator);
         transfer.setUpdatedAt(now);
+        transfer.setUpdatedBy(operator);
         erpStockTransferMapper.insert(transfer);
 
         List<ErpStockTransferItem> items = buildItems(tenantId, transfer.getId(), request.items(), now);
         for (ErpStockTransferItem item : items) {
             erpStockTransferItemMapper.insert(item);
-            applyTransferItem(tenantId, transfer, item, operator);
         }
         return new ErpStockTransferDetail(transfer, items);
+    }
+
+    @Override
+    @Transactional
+    @AuditLog(action = "ERP_STOCK_TRANSFER_UPDATE", entityType = "erp_stock_transfer", entityId = "{arg0}", detail = "transferNo={result.transfer.transferNo}")
+    public ErpStockTransferDetail update(Long id, ErpStockTransferCreateRequest request) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpStockTransfer transfer = requireTransferById(tenantId, id, true);
+        if (!STATUS_DRAFT.equals(transfer.getStatus())) {
+            throw new IllegalArgumentException("仅草稿状态可编辑");
+        }
+        Set<Long> allowedDisabledProductIds = existingProductIds(erpStockTransferItemMapper.findByTransferId(tenantId, id));
+        validateRequest(tenantId, request.items(), allowedDisabledProductIds);
+        transfer.setTransferAt(parseInstant(request.transferAt()) == null ? transfer.getTransferAt() : parseInstant(request.transferAt()));
+        transfer.setRemark(request.remark());
+        transfer.setUpdatedAt(Instant.now());
+        transfer.setUpdatedBy(resolveCurrentUsername());
+        erpStockTransferMapper.updateById(transfer);
+
+        erpStockTransferItemMapper.delete(new QueryWrapper<ErpStockTransferItem>()
+            .eq("tenant_id", tenantId)
+            .eq("transfer_id", id));
+        List<ErpStockTransferItem> items = buildItems(tenantId, id, request.items(), Instant.now(), allowedDisabledProductIds);
+        for (ErpStockTransferItem item : items) {
+            erpStockTransferItemMapper.insert(item);
+        }
+        return new ErpStockTransferDetail(transfer, items);
+    }
+
+    @Override
+    @Transactional
+    @AuditLog(action = "ERP_STOCK_TRANSFER_APPROVE", entityType = "erp_stock_transfer", entityId = "{arg0}")
+    public void approve(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpStockTransfer transfer = requireTransferById(tenantId, id, true);
+        if (!STATUS_DRAFT.equals(transfer.getStatus())) {
+            throw new IllegalArgumentException("仅草稿状态可审核");
+        }
+        List<ErpStockTransferItem> items = erpStockTransferItemMapper.findByTransferId(tenantId, id);
+        validateRequest(tenantId, toItemRequests(items), existingProductIds(items));
+        String operator = resolveCurrentUsername();
+        for (ErpStockTransferItem item : items) {
+            applyTransferItem(tenantId, transfer, item, operator);
+        }
+        transfer.setStatus(STATUS_APPROVED);
+        transfer.setUpdatedAt(Instant.now());
+        transfer.setUpdatedBy(operator);
+        erpStockTransferMapper.updateById(transfer);
+    }
+
+    @Override
+    @Transactional
+    @AuditLog(action = "ERP_STOCK_TRANSFER_CANCEL", entityType = "erp_stock_transfer", entityId = "{arg0}")
+    public void cancel(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpStockTransfer transfer = requireTransferById(tenantId, id, true);
+        if (STATUS_CANCELLED.equals(transfer.getStatus())) {
+            return;
+        }
+        if (STATUS_APPROVED.equals(transfer.getStatus())) {
+            throw new IllegalArgumentException("已审核的移库单不可作废");
+        }
+        transfer.setStatus(STATUS_CANCELLED);
+        transfer.setUpdatedAt(Instant.now());
+        transfer.setUpdatedBy(resolveCurrentUsername());
+        erpStockTransferMapper.updateById(transfer);
     }
 
     private List<ErpStockTransferItem> buildItems(Long tenantId,
                                                   Long transferId,
                                                   List<ErpStockTransferItemRequest> requests,
                                                   Instant now) {
+        return buildItems(tenantId, transferId, requests, now, Set.of());
+    }
+
+    private List<ErpStockTransferItem> buildItems(Long tenantId,
+                                                  Long transferId,
+                                                  List<ErpStockTransferItemRequest> requests,
+                                                  Instant now,
+                                                  Set<Long> allowedDisabledProductIds) {
         List<ErpStockTransferItem> items = new ArrayList<>();
         int lineNo = 1;
         for (ErpStockTransferItemRequest request : requests) {
@@ -176,12 +256,13 @@ public class ErpStockTransferServiceImpl implements ErpStockTransferService {
             item.setRemark(request.remark());
             item.setCreatedAt(now);
             item.setUpdatedAt(now);
+            requireUsableProduct(tenantId, request.productId(), allowedDisabledProductIds);
             items.add(item);
         }
         return items;
     }
 
-    private void validateRequest(Long tenantId, List<ErpStockTransferItemRequest> requests) {
+    private void validateRequest(Long tenantId, List<ErpStockTransferItemRequest> requests, Set<Long> allowedDisabledProductIds) {
         if (requests == null || requests.isEmpty()) {
             throw new IllegalArgumentException("移库明细不能为空");
         }
@@ -193,7 +274,7 @@ public class ErpStockTransferServiceImpl implements ErpStockTransferService {
             if (request.qty() == null || request.qty().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("移库数量必须大于 0");
             }
-            requireUsableProduct(tenantId, request.productId());
+            requireUsableProduct(tenantId, request.productId(), allowedDisabledProductIds);
             validateScope(tenantId, request.fromWarehouseId(), request.fromLocationId(), "来源");
             validateScope(tenantId, request.toWarehouseId(), request.toLocationId(), "目标");
 
@@ -211,6 +292,22 @@ public class ErpStockTransferServiceImpl implements ErpStockTransferService {
                 throw new IllegalArgumentException("同一商品的相同移库路径不能重复录入");
             }
         }
+    }
+
+    private List<ErpStockTransferItemRequest> toItemRequests(List<ErpStockTransferItem> items) {
+        List<ErpStockTransferItemRequest> requests = new ArrayList<>();
+        for (ErpStockTransferItem item : items) {
+            requests.add(new ErpStockTransferItemRequest(
+                item.getProductId(),
+                item.getFromWarehouseId(),
+                item.getFromLocationId(),
+                item.getToWarehouseId(),
+                item.getToLocationId(),
+                item.getQty(),
+                item.getRemark()
+            ));
+        }
+        return requests;
     }
 
     private void applyTransferItem(Long tenantId, ErpStockTransfer transfer, ErpStockTransferItem item, String operator) {
@@ -300,17 +397,42 @@ public class ErpStockTransferServiceImpl implements ErpStockTransferService {
         }
     }
 
-    private ErpProduct requireUsableProduct(Long tenantId, Long productId) {
+    private ErpProduct requireUsableProduct(Long tenantId, Long productId, Set<Long> allowedDisabledProductIds) {
         ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
             .eq("tenant_id", tenantId)
             .eq("id", productId));
         if (product == null) {
             throw new IllegalArgumentException("商品不存在");
         }
-        if (Boolean.FALSE.equals(product.getEnabled())) {
+        if (Boolean.FALSE.equals(product.getEnabled()) && (allowedDisabledProductIds == null || !allowedDisabledProductIds.contains(productId))) {
             throw new IllegalArgumentException("商品已停用，不能新增引用");
         }
         return product;
+    }
+
+    private Set<Long> existingProductIds(List<ErpStockTransferItem> items) {
+        Set<Long> ids = new HashSet<>();
+        if (items == null) {
+            return ids;
+        }
+        for (ErpStockTransferItem item : items) {
+            if (item.getProductId() != null) {
+                ids.add(item.getProductId());
+            }
+        }
+        return ids;
+    }
+
+    private ErpStockTransfer requireTransferById(Long tenantId, Long id, boolean lock) {
+        ErpStockTransfer transfer = lock
+            ? erpStockTransferMapper.findByIdForUpdate(tenantId, id)
+            : erpStockTransferMapper.selectOne(new QueryWrapper<ErpStockTransfer>()
+                .eq("tenant_id", tenantId)
+                .eq("id", id));
+        if (transfer == null) {
+            throw new IllegalArgumentException("移库单不存在");
+        }
+        return transfer;
     }
 
     private BigDecimal resolveAvailableQty(Long tenantId, Long productId, Long warehouseId, Long locationId) {

@@ -12,10 +12,16 @@ import com.example.wms.mapper.UserAccountMapper;
 import com.example.wms.mapper.UserRoleMapper;
 import com.example.wms.aop.AuditLog;
 import com.example.wms.service.PermissionService;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 // 权限服务实现
 @Service
@@ -37,9 +43,16 @@ public class PermissionServiceImpl implements PermissionService {
 
     @Override
     public List<Permission> listAll() {
-        // 按 ID 排序查询
-        return permissionMapper.selectList(new QueryWrapper<Permission>()
-            .orderByAsc("id"));
+        QueryWrapper<Permission> wrapper = new QueryWrapper<Permission>()
+            .orderByAsc("id");
+        if (!currentActorHasRole("super_admin")) {
+            Set<String> permissionCodes = currentActorPermissionCodes();
+            if (permissionCodes.isEmpty()) {
+                return List.of();
+            }
+            wrapper.in("code", permissionCodes);
+        }
+        return permissionMapper.selectList(wrapper);
     }
 
     @Override
@@ -56,6 +69,13 @@ public class PermissionServiceImpl implements PermissionService {
         }
         if (enabled != null) {
             wrapper.eq("is_enabled", enabled);
+        }
+        if (!currentActorHasRole("super_admin")) {
+            Set<String> permissionCodes = currentActorPermissionCodes();
+            if (permissionCodes.isEmpty()) {
+                return new PageResponse<>(0, page, size, List.of());
+            }
+            wrapper.in("code", permissionCodes);
         }
         Page<Permission> result = permissionMapper.selectPage(pageReq, wrapper);
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
@@ -145,6 +165,39 @@ public class PermissionServiceImpl implements PermissionService {
 
     @Override
     public List<Permission> listColumnPermissions() {
-        return permissionMapper.findByCodePrefix("column:");
+        List<Permission> permissions = permissionMapper.findByCodePrefix("column:");
+        if (currentActorHasRole("super_admin")) {
+            return permissions;
+        }
+        Set<String> permissionCodes = currentActorPermissionCodes();
+        return permissions.stream()
+            .filter(permission -> permission.getCode() != null && permissionCodes.contains(permission.getCode()))
+            .toList();
+    }
+
+    private boolean currentActorHasRole(String roleCode) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
+        String expected = "ROLE_" + roleCode.toLowerCase(java.util.Locale.ROOT);
+        return authentication.getAuthorities().stream()
+            .anyMatch(authority -> authority != null && expected.equalsIgnoreCase(authority.getAuthority()));
+    }
+
+    private Set<String> currentActorPermissionCodes() {
+        Set<String> permissionCodes = new HashSet<>();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return permissionCodes;
+        }
+        Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
+        for (GrantedAuthority authority : authorities) {
+            String raw = authority == null ? null : authority.getAuthority();
+            if (raw != null && raw.startsWith("PERM_") && raw.length() > 5) {
+                permissionCodes.add(raw.substring(5));
+            }
+        }
+        return permissionCodes;
     }
 }

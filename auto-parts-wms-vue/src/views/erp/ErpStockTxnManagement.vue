@@ -190,7 +190,7 @@ const printPreviewTitle = ref('');
 const defaultColumns = ['docNo', 'bizType', 'product', 'warehouse', 'location', 'adjustmentReason', 'qtyDelta', 'qtyBefore', 'qtyAfter', 'operator', 'remark', 'unitCost', 'totalCost', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-stock-txn', defaultColumns);
 
-const canShow = (key: string) => key === 'docNo' || isVisible(key);
+const canShow = (key: string) => isVisible(key);
 
 const formatDateTime = (value?: string) => {
   if (!value) return '-';

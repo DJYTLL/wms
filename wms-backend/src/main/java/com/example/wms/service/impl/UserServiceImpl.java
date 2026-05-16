@@ -15,6 +15,7 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.entity.Role;
 import com.example.wms.entity.UserAccount;
 import com.example.wms.mapper.RoleMapper;
+import com.example.wms.mapper.RolePermissionMapper;
 import com.example.wms.mapper.UserAccountMapper;
 import com.example.wms.mapper.UserRoleMapper;
 import com.example.wms.service.UserService;
@@ -26,6 +27,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -37,15 +40,18 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
     private final UserAccountMapper userAccountMapper;
     private final RoleMapper roleMapper;
+    private final RolePermissionMapper rolePermissionMapper;
     private final UserRoleMapper userRoleMapper;
     private final PasswordEncoder passwordEncoder;
 
     public UserServiceImpl(UserAccountMapper userAccountMapper,
                            RoleMapper roleMapper,
+                           RolePermissionMapper rolePermissionMapper,
                            UserRoleMapper userRoleMapper,
                            PasswordEncoder passwordEncoder) {
         this.userAccountMapper = userAccountMapper;
         this.roleMapper = roleMapper;
+        this.rolePermissionMapper = rolePermissionMapper;
         this.userRoleMapper = userRoleMapper;
         this.passwordEncoder = passwordEncoder;
     }
@@ -249,16 +255,14 @@ public class UserServiceImpl implements UserService {
     @Override
     public List<RoleOptionResponse> listRoleOptions() {
         Long tenantId = TenantContext.requireTenantId();
-        boolean actorIsAdmin = currentActorHasRole("admin");
         boolean actorIsSuperAdmin = currentActorHasRole("super_admin");
         List<Role> roles = roleMapper.selectList(new QueryWrapper<Role>()
             .eq("tenant_id", tenantId)
             .eq("is_enabled", true)
             .orderByAsc("id"));
+        Set<String> actorPermissionCodes = currentActorPermissionCodes();
         return roles.stream()
-            .filter(role -> actorIsSuperAdmin
-                || (!"super_admin".equalsIgnoreCase(role.getCode())
-                    && (actorIsAdmin || !"admin".equalsIgnoreCase(role.getCode()))))
+            .filter(role -> actorIsSuperAdmin || isRolePermissionSubset(tenantId, role, actorPermissionCodes))
             .map(role -> new RoleOptionResponse(role.getId(), role.getCode(), role.getName()))
             .toList();
     }
@@ -283,6 +287,7 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("存在无效角色 ID");
         }
         List<Role> currentRoles = roleMapper.findByUserId(tenantId, id);
+        ensureAssignableRoles(tenantId, roles);
         enforceReservedRoleAssignmentRules(currentRoles, roles);
         userRoleMapper.deleteByUserId(tenantId, id);
         for (Long roleId : roleIds) {
@@ -384,6 +389,36 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    private void ensureAssignableRoles(Long tenantId, List<Role> roles) {
+        if (currentActorHasRole("super_admin")) {
+            return;
+        }
+        Set<String> actorPermissionCodes = currentActorPermissionCodes();
+        List<String> exceededRoles = new ArrayList<>();
+        for (Role role : roles) {
+            if (!isRolePermissionSubset(tenantId, role, actorPermissionCodes)) {
+                exceededRoles.add(role.getName() == null || role.getName().isBlank() ? role.getCode() : role.getName());
+            }
+        }
+        if (!exceededRoles.isEmpty()) {
+            throw new IllegalArgumentException("存在权限集合超出当前账号范围的角色，不能分配: " + String.join("、", exceededRoles));
+        }
+    }
+
+    private boolean isRolePermissionSubset(Long tenantId, Role role, Set<String> actorPermissionCodes) {
+        if (role == null) {
+            return false;
+        }
+        List<com.example.wms.entity.Permission> permissions = rolePermissionMapper.findPermissionsByRoleId(tenantId, role.getId());
+        for (com.example.wms.entity.Permission permission : permissions) {
+            String code = permission == null ? null : permission.getCode();
+            if (code != null && !code.isBlank() && !actorPermissionCodes.contains(code)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private boolean currentActorHasRole(String roleCode) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getAuthorities() == null) {
@@ -392,6 +427,28 @@ public class UserServiceImpl implements UserService {
         String expected = "ROLE_" + roleCode.toLowerCase(Locale.ROOT);
         return authentication.getAuthorities().stream()
             .anyMatch(authority -> authority != null && expected.equalsIgnoreCase(authority.getAuthority()));
+    }
+
+    private Set<String> currentActorPermissionCodes() {
+        Set<String> permissionCodes = new HashSet<>();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return permissionCodes;
+        }
+        Collection<?> authorities = authentication.getAuthorities();
+        if (authorities == null) {
+            return permissionCodes;
+        }
+        for (Object authorityObj : authorities) {
+            if (!(authorityObj instanceof org.springframework.security.core.GrantedAuthority authority)) {
+                continue;
+            }
+            String raw = authority.getAuthority();
+            if (raw != null && raw.startsWith("PERM_") && raw.length() > 5) {
+                permissionCodes.add(raw.substring(5));
+            }
+        }
+        return permissionCodes;
     }
 
     private Set<String> normalizeRoleCodes(List<Role> roles) {

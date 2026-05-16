@@ -85,7 +85,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/erp/stock-transfers/:id/print',
     name: 'erp-stock-transfer-print',
     component: () => import('../views/erp/ErpStockTransferPrint.vue'),
-    meta: { title: '库存移库打印', permission: 'erp-stock-count:view' }
+    meta: { title: '库存移库打印', permission: 'erp-stock-transfer:view' }
   },
   {
     path: '/erp/stock-inits/:id/print',
@@ -398,16 +398,70 @@ const routes: Array<RouteRecordRaw> = [
         meta: { title: '库存调整', permission: 'erp-stock-count:view', titleKey: 'page.erpStockCountManagement', countType: 'COUNT' }
       },
       {
+        path: 'erp/stock-counts/create',
+        name: 'erp-stock-count-create',
+        component: () => import('../views/erp/ErpStockCountManagement.vue'),
+        meta: { title: '新增库存调整', permission: 'erp-stock-count:add', titleKey: 'page.erpStockCountManagement', countType: 'COUNT', pageMode: 'form', formMode: 'create' }
+      },
+      {
+        path: 'erp/stock-counts/:id/edit',
+        name: 'erp-stock-count-edit',
+        component: () => import('../views/erp/ErpStockCountManagement.vue'),
+        meta: { title: '编辑库存调整', permission: 'erp-stock-count:edit', titleKey: 'page.erpStockCountManagement', countType: 'COUNT', pageMode: 'form', formMode: 'edit' }
+      },
+      {
+        path: 'erp/stock-counts/:id',
+        name: 'erp-stock-count-detail',
+        component: () => import('../views/erp/ErpStockCountManagement.vue'),
+        meta: { title: '查看库存调整', permission: 'erp-stock-count:view', titleKey: 'page.erpStockCountManagement', countType: 'COUNT', pageMode: 'form', formMode: 'view' }
+      },
+      {
         path: 'erp/stock-transfers',
         name: 'erp-stock-transfers',
         component: () => import('../views/erp/ErpStockTransferManagement.vue'),
-        meta: { title: '库存移库', permission: 'erp-stock-count:view', titleKey: 'page.erpStockTransferManagement' }
+        meta: { title: '库存移库', permission: 'erp-stock-transfer:view', titleKey: 'page.erpStockTransferManagement' }
+      },
+      {
+        path: 'erp/stock-transfers/create',
+        name: 'erp-stock-transfer-create',
+        component: () => import('../views/erp/ErpStockTransferManagement.vue'),
+        meta: { title: '新增库存移库', permission: 'erp-stock-transfer:add', titleKey: 'page.erpStockTransferManagement', pageMode: 'form', formMode: 'create' }
+      },
+      {
+        path: 'erp/stock-transfers/:id/edit',
+        name: 'erp-stock-transfer-edit',
+        component: () => import('../views/erp/ErpStockTransferManagement.vue'),
+        meta: { title: '编辑库存移库', permission: 'erp-stock-transfer:edit', titleKey: 'page.erpStockTransferManagement', pageMode: 'form', formMode: 'edit' }
+      },
+      {
+        path: 'erp/stock-transfers/:id',
+        name: 'erp-stock-transfer-detail',
+        component: () => import('../views/erp/ErpStockTransferManagement.vue'),
+        meta: { title: '查看库存移库', permission: 'erp-stock-transfer:view', titleKey: 'page.erpStockTransferManagement', pageMode: 'form', formMode: 'view' }
       },
       {
         path: 'erp/stock-inits',
         name: 'erp-stock-inits',
         component: () => import('../views/erp/ErpStockCountManagement.vue'),
         meta: { title: '初始库存', permission: 'erp-stock-init:view', titleKey: 'page.erpStockInitManagement', countType: 'INIT' }
+      },
+      {
+        path: 'erp/stock-inits/create',
+        name: 'erp-stock-init-create',
+        component: () => import('../views/erp/ErpStockCountManagement.vue'),
+        meta: { title: '新增初始库存', permission: 'erp-stock-init:add', titleKey: 'page.erpStockInitManagement', countType: 'INIT', pageMode: 'form', formMode: 'create' }
+      },
+      {
+        path: 'erp/stock-inits/:id/edit',
+        name: 'erp-stock-init-edit',
+        component: () => import('../views/erp/ErpStockCountManagement.vue'),
+        meta: { title: '编辑初始库存', permission: 'erp-stock-init:edit', titleKey: 'page.erpStockInitManagement', countType: 'INIT', pageMode: 'form', formMode: 'edit' }
+      },
+      {
+        path: 'erp/stock-inits/:id',
+        name: 'erp-stock-init-detail',
+        component: () => import('../views/erp/ErpStockCountManagement.vue'),
+        meta: { title: '查看初始库存', permission: 'erp-stock-init:view', titleKey: 'page.erpStockInitManagement', countType: 'INIT', pageMode: 'form', formMode: 'view' }
       },
       {
         path: 'erp/stock-warnings',

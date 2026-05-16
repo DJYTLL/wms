@@ -44,8 +44,8 @@
       <div class="table-body">
         <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
           <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column prop="code" :label="$t('field.code')" min-width="140" />
-          <el-table-column prop="name" :label="$t('field.name')" min-width="200">
+          <el-table-column v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="140" />
+          <el-table-column v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="200">
             <template #default="{ row }">
               <span>{{ row.name }}</span>
               <el-tag v-if="row.isDefault" size="small" type="warning" style="margin-left: 6px">
@@ -53,13 +53,13 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="docType" :label="$t('field.docType')" min-width="140">
+          <el-table-column v-if="canShow('docType')" prop="docType" :label="$t('field.docType')" min-width="140">
             <template #default="{ row }">
               {{ docTypeLabel(row.docType) }}
             </template>
           </el-table-column>
-          <el-table-column prop="sortNo" :label="$t('field.sortNo')" width="120" />
-          <el-table-column prop="enabled" :label="$t('field.status')" width="110">
+          <el-table-column v-if="canShow('sortNo')" prop="sortNo" :label="$t('field.sortNo')" width="120" />
+          <el-table-column v-if="canShow('enabled')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                 {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
@@ -287,6 +287,7 @@ import { computed, onActivated, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import DecimalInput from '@/components/DecimalInput.vue';
 import { normalizeColumnWidths as normalizeTemplateColumnWidths, parsePrintTemplateConfig, savePrintTemplatePreview } from '@/utils/printTemplate';
@@ -339,6 +340,9 @@ interface PreviewSampleOption {
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
+const defaultColumns = ['code', 'name', 'docType', 'sortNo', 'enabled'];
+const { isVisible, fetchTenantKeys } = useColumnSettings('erp-print-template', defaultColumns);
+const canShow = (key: string) => isVisible(key);
 
 const searchQuery = ref('');
 const docTypeFilter = ref('');
@@ -1094,6 +1098,7 @@ const handleSizeChange = (newSize: number) => {
 };
 
 onMounted(() => {
+  fetchTenantKeys();
   fetchList();
   bindPageSizeSync(size, fetchList);
 });

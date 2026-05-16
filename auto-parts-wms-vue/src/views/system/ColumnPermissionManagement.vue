@@ -223,16 +223,39 @@ const pageLabelMap = computed<Record<string, string>>(() => ({
   'inbound-management': t('page.inboundManagement'),
   'erp-product': t('page.erpProductManagement'),
   'erp-customer': t('page.erpCustomerManagement'),
+  'erp-customer-category': t('page.erpCustomerCategoryManagement'),
+  'erp-vehicle-brand': `${t('page.erpVehicleFitmentManagement')} - ${t('field.vehicleBrand')}`,
+  'erp-vehicle-series': `${t('page.erpVehicleFitmentManagement')} - ${t('field.vehicleSeries')}`,
+  'erp-vehicle-model': `${t('page.erpVehicleFitmentManagement')} - ${t('field.vehicleModel')}`,
+  'erp-product-fitment': `${t('page.erpVehicleFitmentManagement')} - ${t('field.productFitment')}`,
   'erp-supplier': t('page.erpSupplierManagement'),
   'erp-warehouse': t('page.erpWarehouseManagement'),
   'erp-location': t('page.erpLocationManagement'),
   'erp-category': t('page.erpCategoryManagement'),
   'erp-unit': t('page.erpUnitManagement'),
+  'erp-settlement-method': t('page.erpSettlementMethodManagement'),
+  'erp-payment-method': t('page.erpPaymentMethodManagement'),
+  'erp-receipt-method': t('page.erpReceiptMethodManagement'),
+  'erp-delivery-method': t('page.erpDeliveryMethodManagement'),
   'erp-purchase': t('page.erpPurchaseOrderManagement'),
+  'erp-purchase-return': t('page.erpPurchaseReturnManagement'),
   'erp-sale': t('page.erpSaleOrderManagement'),
   'erp-sale-return': t('page.erpSaleReturnManagement'),
+  'erp-ar': t('page.erpAccountsReceivableManagement'),
+  'erp-ap': t('page.erpAccountsPayableManagement'),
+  'erp-receipt': t('page.erpReceiptManagement'),
+  'erp-payment': t('page.erpPaymentManagement'),
+  'erp-finance-customer-debt': t('page.erpCustomerDebtManagement'),
+  'erp-finance-supplier-debt': t('page.erpSupplierDebtManagement'),
+  'erp-print-template': t('page.erpPrintTemplateManagement'),
   'erp-stock': t('page.erpStockManagement'),
   'erp-stock-txn': t('page.erpStockTxnManagement'),
+  'erp-stock-warning': t('page.erpStockWarningManagement'),
+  'erp-stock-count': t('page.erpStockCountManagement'),
+  'erp-stock-init': t('page.erpStockInitManagement'),
+  'erp-stock-transfer': t('page.erpStockTransferManagement'),
+  'erp-assemble-order': t('page.erpAssemblyOrderManagement'),
+  'erp-disassemble-order': t('page.erpDisassembleOrderManagement'),
 }))
 
 const pageOptions = computed(() => {
@@ -460,7 +483,8 @@ const saveRolePermissions = async () => {
   }
   try {
     await request.put(`/roles/${selectedRoleId.value}/column-permissions`, {
-      permissionIds: fullRolePermissionIds.value,
+      pageKey: pageKey.value,
+      permissionIds: selectedRolePermissionIds.value,
     })
     notifySuccess()
   } catch (error) {

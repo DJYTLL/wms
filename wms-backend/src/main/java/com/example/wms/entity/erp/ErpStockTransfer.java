@@ -38,8 +38,14 @@ public class ErpStockTransfer {
     @TableField("created_at")
     private Instant createdAt;
 
+    @TableField("created_by")
+    private String createdBy;
+
     @TableField("updated_at")
     private Instant updatedAt;
+
+    @TableField("updated_by")
+    private String updatedBy;
 
     @TableField(value = "deleted_by", fill = FieldFill.UPDATE)
     private String deletedBy;
@@ -123,12 +129,28 @@ public class ErpStockTransfer {
         this.createdAt = createdAt;
     }
 
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
     }
 
     public String getDeletedBy() {

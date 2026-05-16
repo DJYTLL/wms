@@ -23,6 +23,7 @@ import com.example.wms.mapper.erp.ErpReceiptMapper;
 import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
+import com.example.wms.security.CurrentActor;
 import com.example.wms.service.erp.ErpReceiptService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -124,6 +125,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
     @Transactional
     public ErpReceiptDetail create(ErpReceiptCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        String operator = CurrentActor.username();
         BigDecimal amount = request.amount() == null ? BigDecimal.ZERO : request.amount();
         BigDecimal discountAmount = request.discountAmount() == null ? BigDecimal.ZERO : request.discountAmount();
 
@@ -247,7 +249,9 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         receipt.setReceivedAt(parseReceivedAt(request.receivedAt()));
         receipt.setRemark(request.remark());
         receipt.setCreatedAt(Instant.now());
+        receipt.setCreatedBy(operator);
         receipt.setUpdatedAt(Instant.now());
+        receipt.setUpdatedBy(operator);
         erpReceiptMapper.insert(receipt);
 
         if (allocations == null) {
@@ -399,6 +403,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         receipt.setReceivedAt(parseReceivedAt(request.receivedAt()));
         receipt.setRemark(request.remark());
         receipt.setUpdatedAt(Instant.now());
+        receipt.setUpdatedBy(CurrentActor.username());
         erpReceiptMapper.updateById(receipt);
 
         erpReceiptReceivableMapper.delete(new QueryWrapper<ErpReceiptReceivable>()
@@ -544,7 +549,8 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
             throw new IllegalArgumentException("仅草稿状态可审核");
         }
         validateReceiptApproval(tenantId, receipt);
-        ErpReceipt approvedReceipt = erpReceiptMapper.approveDraft(tenantId, id);
+        String operator = CurrentActor.username();
+        ErpReceipt approvedReceipt = erpReceiptMapper.approveDraft(tenantId, id, operator);
         if (approvedReceipt == null) {
             throw new IllegalArgumentException("收款单状态已变化，请刷新重试");
         }
@@ -582,7 +588,8 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         } else {
             redFlushRemark = originRemark + " | 红冲原因：" + reasonText;
         }
-        ErpReceipt redFlushedReceipt = erpReceiptMapper.redFlushApproved(tenantId, id, redFlushRemark);
+        String operator = CurrentActor.username();
+        ErpReceipt redFlushedReceipt = erpReceiptMapper.redFlushApproved(tenantId, id, redFlushRemark, operator);
         if (redFlushedReceipt == null) {
             throw new IllegalArgumentException("收款单状态已变化，请刷新重试");
         }
@@ -604,7 +611,9 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         redReceipt.setReceivedAt(Instant.now());
         redReceipt.setRemark("红冲收款单：" + reasonText);
         redReceipt.setCreatedAt(Instant.now());
+        redReceipt.setCreatedBy(operator);
         redReceipt.setUpdatedAt(Instant.now());
+        redReceipt.setUpdatedBy(operator);
         erpReceiptMapper.insert(redReceipt);
 
         List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceiptId(tenantId, receipt.getId());

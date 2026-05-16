@@ -43,21 +43,21 @@
       <div class="table-body">
         <el-table :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')">
           <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column prop="customerName" :label="$t('field.customer')" min-width="160" />
-          <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="160">
+          <el-table-column v-if="canShow('customerName')" prop="customerName" :label="$t('field.customer')" min-width="160" />
+          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">{{ row.orderNo }}</el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="status" :label="$t('field.status')" width="120">
+          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ statusLabel(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <el-table-column prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
@@ -105,6 +105,7 @@ import { useI18n } from 'vue-i18n';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useRouter } from 'vue-router';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
@@ -130,6 +131,9 @@ const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
 
 const { notifyError } = useApiError();
+const defaultColumns = ['customerName', 'orderNo', 'status', 'totalAmount', 'createdAt'];
+const { isVisible, fetchTenantKeys } = useColumnSettings('erp-ar', defaultColumns);
+const canShow = (key: string) => isVisible(key);
 
 const statusOptions = [
   { value: 'OPEN', label: t('status.open') },
@@ -221,6 +225,7 @@ const formatDateTime = (value?: string) => {
 };
 
 onMounted(() => {
+  fetchTenantKeys();
   fetchCustomers();
   fetchList();
 });

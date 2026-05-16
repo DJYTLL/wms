@@ -128,6 +128,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
     @AuditLog(action = "ERP_STOCK_COUNT_CREATE", entityType = "erp_stock_count", entityId = "{result.count.id}", detail = "countNo={result.count.countNo}")
     public ErpStockCountDetail create(ErpStockCountCreateRequest request, String countType) {
         Long tenantId = TenantContext.requireTenantId();
+        String operator = resolveCurrentUsername();
         String type = normalizeType(countType == null ? request.countType() : countType);
         if (TYPE_INIT.equals(type) && hasActiveInit(tenantId)) {
             throw new IllegalArgumentException("初始库存仅允许创建一次");
@@ -145,7 +146,9 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         count.setCountAt(parseInstant(request.countAt()));
         count.setRemark(request.remark());
         count.setCreatedAt(Instant.now());
+        count.setCreatedBy(operator);
         count.setUpdatedAt(Instant.now());
+        count.setUpdatedBy(operator);
         erpStockCountMapper.insert(count);
 
         List<ErpStockCountItem> items = buildItems(tenantId, count, request.items(), Set.of());
@@ -176,6 +179,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         count.setCountAt(countAt == null ? count.getCountAt() : countAt);
         count.setRemark(request.remark());
         count.setUpdatedAt(Instant.now());
+        count.setUpdatedBy(resolveCurrentUsername());
         erpStockCountMapper.updateById(count);
 
         erpStockCountItemMapper.delete(new QueryWrapper<ErpStockCountItem>()
@@ -226,6 +230,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         count.setApprovedBy(operator);
         count.setApprovedAt(Instant.now());
         count.setUpdatedAt(Instant.now());
+        count.setUpdatedBy(operator);
         erpStockCountMapper.updateById(count);
     }
 
@@ -280,6 +285,7 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         count.setCancelledAt(Instant.now());
         count.setRemark(appendRedFlushReason(count.getRemark(), reason));
         count.setUpdatedAt(Instant.now());
+        count.setUpdatedBy(operator);
         erpStockCountMapper.updateById(count);
     }
 
@@ -295,10 +301,12 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         if (STATUS_APPROVED.equals(count.getStatus())) {
             throw new IllegalArgumentException("已审核的盘点单不可作废");
         }
+        String operator = resolveCurrentUsername();
         count.setStatus(STATUS_CANCELLED);
-        count.setCancelledBy(resolveCurrentUsername());
+        count.setCancelledBy(operator);
         count.setCancelledAt(Instant.now());
         count.setUpdatedAt(Instant.now());
+        count.setUpdatedBy(operator);
         erpStockCountMapper.updateById(count);
     }
 

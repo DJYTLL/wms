@@ -1,34 +1,48 @@
 import { computed, ref, watch } from 'vue'
 import request from '@/utils/request'
+import { useAuthStore } from '@/stores/auth'
 import { useApiError } from '@/composables/useApiError'
 
 const buildStorageKey = (key: string) => `table-columns:${key}`
 
 export const useColumnSettings = (key: string, defaultKeys: string[]) => {
   const { notifyError } = useApiError()
+  const authStore = useAuthStore()
   const storageKey = buildStorageKey(key)
   const stored = localStorage.getItem(storageKey)
-  const visibleKeys = ref<string[]>(stored ? JSON.parse(stored) : defaultKeys)
+  const visibleKeys = ref<string[]>(stored ? JSON.parse(stored) : [...defaultKeys])
   const tenantAllowedKeys = ref<string[] | null>(null)
 
+  const hasRoleColumnPermission = (columnKey: string) => {
+    const permission = `column:${key}:${columnKey}`
+    return authStore.hasPermission(permission) || authStore.hasPermission(`PERM_${permission}`)
+  }
+
   const effectiveKeys = computed(() => {
-    if (!tenantAllowedKeys.value || tenantAllowedKeys.value.length === 0) {
-      return visibleKeys.value
-    }
-    return visibleKeys.value.filter((keyItem) => tenantAllowedKeys.value?.includes(keyItem))
+    const tenantFilteredKeys = tenantAllowedKeys.value === null
+      ? visibleKeys.value
+      : visibleKeys.value.filter((keyItem) => tenantAllowedKeys.value?.includes(keyItem))
+
+    return tenantFilteredKeys.filter(hasRoleColumnPermission)
   })
 
-  const isVisible = (columnKey: string) => effectiveKeys.value.includes(columnKey)
+  const isVisible = (columnKey: string) => {
+    return effectiveKeys.value.includes(columnKey)
+  }
+
+  const applyUnrestrictedTenantKeys = () => {
+    tenantAllowedKeys.value = null
+    const merged = new Set<string>([...visibleKeys.value, ...defaultKeys])
+    visibleKeys.value = Array.from(merged).filter((item) => defaultKeys.includes(item))
+  }
 
   const applyTenantKeys = (keys: string[]) => {
-    // 约定：租户未配置（空数组）表示“不限制”，此时恢复默认列
-    if (!keys || keys.length === 0) {
-      tenantAllowedKeys.value = null
-      visibleKeys.value = [...defaultKeys]
+    tenantAllowedKeys.value = keys
+
+    if (keys.length === 0) {
+      visibleKeys.value = []
       return
     }
-
-    tenantAllowedKeys.value = keys
 
     // 关键修复：
     // 之前如果租户限制把列“裁短”了，localStorage 也会被裁短，
@@ -44,6 +58,11 @@ export const useColumnSettings = (key: string, defaultKeys: string[]) => {
       const res: any = await request.get(`/tenant-columns/${key}`)
       const data = res.data.data
       const keys = Array.isArray(data?.visibleColumns) ? data.visibleColumns : []
+      const hasTenantSetting = Boolean(data?.updatedAt || data?.updatedBy)
+      if (!hasTenantSetting) {
+        applyUnrestrictedTenantKeys()
+        return
+      }
       applyTenantKeys(keys)
     } catch (error) {
       notifyError(error)

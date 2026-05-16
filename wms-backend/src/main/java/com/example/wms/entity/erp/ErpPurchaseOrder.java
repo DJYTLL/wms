@@ -113,9 +113,17 @@ public class ErpPurchaseOrder {
     @TableField("created_at")
     private Instant createdAt;
 
+    // 制单人
+    @TableField("created_by")
+    private String createdBy;
+
     // 更新时间
     @TableField("updated_at")
     private Instant updatedAt;
+
+    // 最后修改人
+    @TableField("updated_by")
+    private String updatedBy;
 
     // 删除时间
     @TableField(value = "deleted_by", fill = FieldFill.UPDATE)
@@ -328,12 +336,28 @@ public class ErpPurchaseOrder {
         this.createdAt = createdAt;
     }
 
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
     public Instant getUpdatedAt() {
         return updatedAt;
     }
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
     }
 
     public String getDeletedBy() {

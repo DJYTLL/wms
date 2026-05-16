@@ -215,6 +215,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     @AuditLog(action = "ERP_SALE_RETURN_CREATE", entityType = "erp_sale_return", entityId = "{result.order.id}", detail = "orderNo={result.order.orderNo}")
     public ErpSaleReturnDetail create(ErpSaleReturnCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        String operator = resolveCurrentUsername();
         validateSaleReturnSourceFromRequest(tenantId, request.saleOrderId(), request.customerId(), request.items(), null);
         ErpSaleReturn order = new ErpSaleReturn();
         order.setTenantId(tenantId);
@@ -241,7 +242,9 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setVersion(0L);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
+        order.setCreatedBy(operator);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         erpSaleReturnMapper.insert(order);
 
         List<ErpSaleReturnItem> items = buildItems(tenantId, order.getId(), request.items(), Set.of());
@@ -252,6 +255,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         order.setPaidAmount(requestedPaidAmount);
         order.setDiscountAmount(requestedDiscountAmount);
         validateSettlementAmounts(tenantId, order, null);
+        order.setUpdatedBy(operator);
         erpSaleReturnMapper.updateById(order);
 
         return new ErpSaleReturnDetail(order, items);
@@ -284,6 +288,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             order.getReceiptMethodCode(), order.getRefundAction(), order.getPaidAmount());
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(resolveCurrentUsername());
 
         Set<Long> allowedDisabledProductIds = existingProductIds(erpSaleReturnItemMapper.findByReturnId(tenantId, id));
 
@@ -329,7 +334,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         validateNoOtherDraftOccupancy(tenantId, order.getSaleOrderId(), items, id);
         validateSaleReturnSourceFromItems(tenantId, order.getSaleOrderId(), order.getCustomerId(), items, id);
         validateSettlementAmounts(tenantId, order, id);
-        ErpSaleReturn approved = erpSaleReturnMapper.approveDraft(tenantId, id, resolveCurrentUsername());
+        String operator = resolveCurrentUsername();
+        ErpSaleReturn approved = erpSaleReturnMapper.approveDraft(tenantId, id, operator);
         if (approved == null) {
             throw new IllegalArgumentException("销售退货单状态已变化，请刷新重试");
         }
@@ -345,7 +351,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
                 applyStockDelta(tenantId, item, BigDecimal.ZERO, "SALE_RETURN_SCRAP", id, order.getSaleOrderId(), false);
             }
         }
-        createReturnReceivable(tenantId, order, resolveReturnTotal(order));
+        createReturnReceivable(tenantId, order, resolveReturnTotal(order), operator);
     }
 
     @Override
@@ -372,7 +378,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         } else {
             redFlushRemark = originRemark + " | 红冲原因：" + reasonText;
         }
-        ErpSaleReturn redFlushed = erpSaleReturnMapper.redFlushApproved(tenantId, id, redFlushRemark);
+        String operator = resolveCurrentUsername();
+        ErpSaleReturn redFlushed = erpSaleReturnMapper.redFlushApproved(tenantId, id, redFlushRemark, operator);
         if (redFlushed == null) {
             throw new IllegalArgumentException("销售退货单状态已变化，请刷新重试");
         }
@@ -1191,7 +1198,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         }
     }
 
-    private void createReturnReceivable(Long tenantId, ErpSaleReturn order, BigDecimal delta) {
+    private void createReturnReceivable(Long tenantId, ErpSaleReturn order, BigDecimal delta, String operator) {
         if (order.getSaleOrderId() == null) {
             return;
         }
@@ -1237,7 +1244,9 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             receipt.setReceivedAt(Instant.now());
             receipt.setRemark("销售退货单审核自动退款/优惠:" + order.getOrderNo());
             receipt.setCreatedAt(Instant.now());
+            receipt.setCreatedBy(operator);
             receipt.setUpdatedAt(Instant.now());
+            receipt.setUpdatedBy(operator);
             erpReceiptMapper.insert(receipt);
 
             ErpReceiptReceivable allocation = new ErpReceiptReceivable();

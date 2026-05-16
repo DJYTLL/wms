@@ -47,6 +47,14 @@ public class ErpStockCount extends TenantAuditableSoftDeleteEntity {
     @TableField("last_printed_at")
     private Instant lastPrintedAt;
 
+    // 制单人
+    @TableField("created_by")
+    private String createdBy;
+
+    // 最后修改人
+    @TableField("updated_by")
+    private String updatedBy;
+
     // 审核人
     @TableField("approved_by")
     private String approvedBy;
@@ -141,6 +149,22 @@ public class ErpStockCount extends TenantAuditableSoftDeleteEntity {
 
     public void setLastPrintedAt(Instant lastPrintedAt) {
         this.lastPrintedAt = lastPrintedAt;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
     }
 
     public String getApprovedBy() {

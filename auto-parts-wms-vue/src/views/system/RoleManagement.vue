@@ -52,15 +52,15 @@
         <el-table-column :label="$t('table.actions')" width="150" fixed="right">
           <template #default="{ row }">
             <el-tooltip
-              :disabled="!isReservedRole(row.code)"
-              content="保留角色不允许通过角色管理接口修改"
+              :disabled="canEditRole(row.code)"
+              :content="editDisabledReason(row.code)"
               placement="top"
             >
               <el-button
                 link
                 type="primary"
                 size="small"
-                :disabled="isReservedRole(row.code)"
+                :disabled="!canEditRole(row.code)"
                 @click="openEditModal(row)"
               >
                 {{ $t('action.edit') }}
@@ -109,16 +109,16 @@
     >
       <el-form :model="formData" label-width="100px">
         <el-form-item :label="$t('field.name')" required>
-          <el-input v-model="formData.name" placeholder="Ex: Administrator" />
+          <el-input v-model="formData.name" placeholder="Ex: Administrator" :disabled="isPermissionOnlyMode" />
         </el-form-item>
         <el-form-item :label="$t('field.code')" required>
-          <el-input v-model="formData.code" placeholder="Ex: admin" />
+          <el-input v-model="formData.code" placeholder="Ex: admin" :disabled="isPermissionOnlyMode" />
         </el-form-item>
         <el-form-item :label="$t('field.description')">
-          <el-input v-model="formData.description" type="textarea" />
+          <el-input v-model="formData.description" type="textarea" :disabled="isPermissionOnlyMode" />
         </el-form-item>
         <el-form-item :label="$t('field.status')">
-          <el-switch v-model="formData.enabled" />
+          <el-switch v-model="formData.enabled" :disabled="isPermissionOnlyMode" />
         </el-form-item>
         
         <!-- 权限分配树 -->
@@ -201,6 +201,7 @@ const columnPermissionMap: Record<string, string> = {
   status: 'column:role-management:status'
 };
 const reservedRoleCodes = new Set(['admin', 'super_admin']);
+const isPermissionOnlyMode = ref(false);
 
 
 const formData = reactive<Omit<Role, 'id'>>({
@@ -213,6 +214,30 @@ const currentId = ref<number | null>(null);
 
 // --- 计算属性 ---
 const filteredData = computed(() => roleList.value);
+
+const canManageReservedRole = (code?: string) => {
+  const normalized = (code || '').trim().toLowerCase();
+  if (normalized === 'super_admin') {
+    return authStore.hasRole('super_admin');
+  }
+  if (normalized === 'admin') {
+    return authStore.hasRole('super_admin');
+  }
+  return true;
+};
+
+const canEditRole = (code?: string) => !isReservedRole(code) || canManageReservedRole(code);
+
+const editDisabledReason = (code?: string) => {
+  const normalized = (code || '').trim().toLowerCase();
+  if (!reservedRoleCodes.has(normalized)) {
+    return '';
+  }
+  if (normalized === 'super_admin') {
+    return '仅系统超级管理员可维护 super_admin 角色权限';
+  }
+  return '仅系统超级管理员可维护 admin 角色权限';
+};
 
 // 构建权限树数据：根据 code 前缀手动分组
 const permissionTreeData = computed(() => {
@@ -315,6 +340,7 @@ const isReservedRole = (code?: string) => reservedRoleCodes.has((code || '').tri
 const openAddModal = () => {
   isEditing.value = false;
   currentId.value = null;
+  isPermissionOnlyMode.value = false;
   resetForm();
   showModal.value = true;
   nextTick(() => {
@@ -323,13 +349,14 @@ const openAddModal = () => {
 };
 
 const openEditModal = async (row: Role) => {
-  if (isReservedRole(row.code)) {
-    notifyWarning('保留角色不允许通过角色管理接口修改');
+  if (!canEditRole(row.code)) {
+    notifyWarning(editDisabledReason(row.code));
     return;
   }
 
   isEditing.value = true;
   currentId.value = row.id;
+  isPermissionOnlyMode.value = isReservedRole(row.code);
   formData.name = row.name;
   formData.code = row.code;
   formData.description = row.description || '';
@@ -356,6 +383,7 @@ const resetForm = () => {
   formData.code = '';
   formData.description = '';
   formData.enabled = true;
+  isPermissionOnlyMode.value = false;
 };
 
 const canShow = (key: string) => {
@@ -372,39 +400,33 @@ const saveData = async () => {
     return;
   }
 
-  if (isEditing.value && isReservedRole(formData.code)) {
-    notifyWarning('保留角色不允许通过角色管理接口修改');
-    return;
-  }
-
   try {
-    const url = isEditing.value && currentId.value 
-      ? `/roles/${currentId.value}` 
-      : '/roles';
-    
-    const method = isEditing.value ? request.put : request.post;
+    let roleId = currentId.value;
 
-    // 1. 保存角色基本信息
-    const res: any = await method(url, {
-      name: formData.name,
-      code: formData.code,
-      description: formData.description,
-      enabled: formData.enabled
-    });
-    
-    if (res.data.code === 200) {
-      const roleId = isEditing.value ? currentId.value : res.data.data.id;
-      
-      // 2. 批量设置权限
-      const checkedKeys = treeRef.value?.getCheckedKeys(true) || [];
-      const permissionIds = checkedKeys.filter(k => typeof k === 'number') as number[];
-      
-      await request.put(`/roles/${roleId}/permissions`, { permissionIds });
-
-      notifySuccess();
-      showModal.value = false;
-      fetchRoles();
+    if (!isEditing.value || !isPermissionOnlyMode.value) {
+      const url = isEditing.value && currentId.value
+        ? `/roles/${currentId.value}`
+        : '/roles';
+      const method = isEditing.value ? request.put : request.post;
+      const res: any = await method(url, {
+        name: formData.name,
+        code: formData.code,
+        description: formData.description,
+        enabled: formData.enabled
+      });
+      if (res.data.code !== 200) {
+        return;
+      }
+      roleId = isEditing.value ? currentId.value : res.data.data.id;
     }
+
+    const checkedKeys = treeRef.value?.getCheckedKeys(true) || [];
+    const permissionIds = checkedKeys.filter(k => typeof k === 'number') as number[];
+    await request.put(`/roles/${roleId}/permissions`, { permissionIds });
+
+    notifySuccess();
+    showModal.value = false;
+    fetchRoles();
   } catch (error) {
     notifyError(error);
   }

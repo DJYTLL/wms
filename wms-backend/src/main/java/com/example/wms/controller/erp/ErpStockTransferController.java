@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,9 +32,10 @@ public class ErpStockTransferController {
     public ResponseEntity<ApiResponse<PageResponse<ErpStockTransfer>>> page(@RequestParam(defaultValue = "1") long page,
                                                                             @RequestParam(defaultValue = "20") long size,
                                                                             @RequestParam(required = false) String keyword,
+                                                                            @RequestParam(required = false) String status,
                                                                             @RequestParam(required = false) String startAt,
                                                                             @RequestParam(required = false) String endAt) {
-        return ResponseEntity.ok(ApiResponse.ok(erpStockTransferService.page(page, size, keyword, startAt, endAt)));
+        return ResponseEntity.ok(ApiResponse.ok(erpStockTransferService.page(page, size, keyword, status, startAt, endAt)));
     }
 
     @GetMapping("/{id}")
@@ -52,5 +54,26 @@ public class ErpStockTransferController {
     @PreAuthorize("hasAnyAuthority('PERM_erp-stock-transfer:add','PERM_erp-stock-count:add')")
     public ResponseEntity<ApiResponse<ErpStockTransferDetail>> create(@Valid @RequestBody ErpStockTransferCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpStockTransferService.create(request)));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-stock-transfer:edit','PERM_erp-stock-count:edit')")
+    public ResponseEntity<ApiResponse<ErpStockTransferDetail>> update(@PathVariable Long id,
+                                                                      @Valid @RequestBody ErpStockTransferCreateRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockTransferService.update(id, request)));
+    }
+
+    @PostMapping("/{id}/approve")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-stock-transfer:approve','PERM_erp-stock-count:approve')")
+    public ResponseEntity<ApiResponse<Void>> approve(@PathVariable Long id) {
+        erpStockTransferService.approve(id);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-stock-transfer:cancel','PERM_erp-stock-count:cancel')")
+    public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id) {
+        erpStockTransferService.cancel(id);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

@@ -46,22 +46,22 @@
       <div class="table-body">
         <el-table :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')" :row-class-name="paymentRowClass">
           <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column prop="paymentNo" :label="$t('field.paymentNo')" min-width="160">
+          <el-table-column v-if="canShow('paymentNo')" prop="paymentNo" :label="$t('field.paymentNo')" min-width="160">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">{{ row.paymentNo }}</el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="supplierName" :label="$t('field.supplier')" min-width="160" />
-          <el-table-column prop="status" :label="$t('field.status')" width="120">
+          <el-table-column v-if="canShow('supplierName')" prop="supplierName" :label="$t('field.supplier')" min-width="160" />
+          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ statusLabel(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="amount" :label="$t('field.paymentAmount')" min-width="140" />
-          <el-table-column prop="discountAmount" :label="$t('field.discountAmount')" min-width="140" />
-          <el-table-column prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          <el-table-column v-if="canShow('amount')" prop="amount" :label="$t('field.paymentAmount')" min-width="140" />
+          <el-table-column v-if="canShow('discountAmount')" prop="discountAmount" :label="$t('field.discountAmount')" min-width="140" />
+          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
@@ -126,6 +126,7 @@ import { onActivated, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useRouter } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
@@ -153,6 +154,9 @@ const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
 
 const { notifyError } = useApiError();
+const defaultColumns = ['paymentNo', 'supplierName', 'status', 'amount', 'discountAmount', 'createdAt'];
+const { isVisible, fetchTenantKeys } = useColumnSettings('erp-payment', defaultColumns);
+const canShow = (key: string) => isVisible(key);
 
 const statusOptions = [
   { value: 'DRAFT', label: t('status.draft') },
@@ -286,6 +290,7 @@ const redFlushRow = async (row: any) => {
 };
 
 onMounted(() => {
+  fetchTenantKeys();
   fetchSuppliers();
   fetchList();
 });

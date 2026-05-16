@@ -61,6 +61,7 @@ public interface ErpSaleReturnMapper extends BaseMapper<ErpSaleReturn> {
             approved_by = #{operator},
             approved_at = NOW(),
             updated_at = NOW(),
+            updated_by = #{operator},
             version = COALESCE(version, 0) + 1
         WHERE tenant_id = #{tenantId}
           AND id = #{id}
@@ -79,6 +80,7 @@ public interface ErpSaleReturnMapper extends BaseMapper<ErpSaleReturn> {
             red_flush_source_id = id,
             remark = #{remark},
             updated_at = NOW(),
+            updated_by = #{operator},
             version = COALESCE(version, 0) + 1
         WHERE tenant_id = #{tenantId}
           AND id = #{id}
@@ -88,5 +90,6 @@ public interface ErpSaleReturnMapper extends BaseMapper<ErpSaleReturn> {
         """)
     ErpSaleReturn redFlushApproved(@Param("tenantId") Long tenantId,
                                    @Param("id") Long id,
-                                   @Param("remark") String remark);
+                                   @Param("remark") String remark,
+                                   @Param("operator") String operator);
 }

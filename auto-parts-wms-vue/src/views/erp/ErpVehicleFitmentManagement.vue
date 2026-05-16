@@ -32,16 +32,16 @@
           <div class="table-body">
             <el-table :data="brandTable" style="width: 100%" stripe v-loading="brandLoading" :empty-text="$t('table.empty')">
               <el-table-column type="index" :label="$t('table.index')" width="70" />
-              <el-table-column prop="code" :label="$t('field.code')" min-width="120" />
-              <el-table-column prop="name" :label="$t('field.name')" min-width="160" />
-              <el-table-column prop="enabled" :label="$t('field.status')" width="110">
+              <el-table-column v-if="canShowBrand('code')" prop="code" :label="$t('field.code')" min-width="120" />
+              <el-table-column v-if="canShowBrand('name')" prop="name" :label="$t('field.name')" min-width="160" />
+              <el-table-column v-if="canShowBrand('enabled')" prop="enabled" :label="$t('field.status')" width="110">
                 <template #default="{ row }">
                   <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                     {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
+              <el-table-column v-if="canShowBrand('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
               <el-table-column :label="$t('table.actions')" width="160" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" size="small" v-permission="'erp-vehicle-brand:edit'" @click="openBrandEdit(row)">
@@ -99,21 +99,21 @@
           <div class="table-body">
             <el-table :data="seriesTable" style="width: 100%" stripe v-loading="seriesLoading" :empty-text="$t('table.empty')">
               <el-table-column type="index" :label="$t('table.index')" width="70" />
-              <el-table-column prop="code" :label="$t('field.code')" min-width="120" />
-              <el-table-column :label="$t('field.vehicleBrand')" min-width="160">
+              <el-table-column v-if="canShowSeries('code')" prop="code" :label="$t('field.code')" min-width="120" />
+              <el-table-column v-if="canShowSeries('brand')" :label="$t('field.vehicleBrand')" min-width="160">
                 <template #default="{ row }">
                   {{ getBrandName(row.brandId) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="name" :label="$t('field.name')" min-width="160" />
-              <el-table-column prop="enabled" :label="$t('field.status')" width="110">
+              <el-table-column v-if="canShowSeries('name')" prop="name" :label="$t('field.name')" min-width="160" />
+              <el-table-column v-if="canShowSeries('enabled')" prop="enabled" :label="$t('field.status')" width="110">
                 <template #default="{ row }">
                   <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                     {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
+              <el-table-column v-if="canShowSeries('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
               <el-table-column :label="$t('table.actions')" width="160" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" size="small" v-permission="'erp-vehicle-series:edit'" @click="openSeriesEdit(row)">
@@ -176,33 +176,33 @@
           <div class="table-body">
             <el-table :data="modelTable" style="width: 100%" stripe v-loading="modelLoading" :empty-text="$t('table.empty')">
               <el-table-column type="index" :label="$t('table.index')" width="70" />
-              <el-table-column prop="code" :label="$t('field.code')" min-width="120" />
-              <el-table-column :label="$t('field.vehicleSeries')" min-width="180">
+              <el-table-column v-if="canShowModel('code')" prop="code" :label="$t('field.code')" min-width="120" />
+              <el-table-column v-if="canShowModel('series')" :label="$t('field.vehicleSeries')" min-width="180">
                 <template #default="{ row }">
                   {{ getSeriesLabel(row.seriesId) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="name" :label="$t('field.name')" min-width="160" />
-              <el-table-column :label="$t('field.yearFrom')" width="100">
+              <el-table-column v-if="canShowModel('name')" prop="name" :label="$t('field.name')" min-width="160" />
+              <el-table-column v-if="canShowModel('yearFrom')" :label="$t('field.yearFrom')" width="100">
                 <template #default="{ row }">
                   {{ row.yearFrom || '-' }}
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('field.yearTo')" width="100">
+              <el-table-column v-if="canShowModel('yearTo')" :label="$t('field.yearTo')" width="100">
                 <template #default="{ row }">
                   {{ row.yearTo || '-' }}
                 </template>
               </el-table-column>
-              <el-table-column prop="displacement" :label="$t('field.displacement')" min-width="120" />
-              <el-table-column prop="engine" :label="$t('field.engine')" min-width="140" />
-              <el-table-column prop="enabled" :label="$t('field.status')" width="110">
+              <el-table-column v-if="canShowModel('displacement')" prop="displacement" :label="$t('field.displacement')" min-width="120" />
+              <el-table-column v-if="canShowModel('engine')" prop="engine" :label="$t('field.engine')" min-width="140" />
+              <el-table-column v-if="canShowModel('enabled')" prop="enabled" :label="$t('field.status')" width="110">
                 <template #default="{ row }">
                   <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                     {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
+              <el-table-column v-if="canShowModel('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
               <el-table-column :label="$t('table.actions')" width="160" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" size="small" v-permission="'erp-vehicle-model:edit'" @click="openModelEdit(row)">
@@ -260,17 +260,17 @@
           <div class="table-body">
             <el-table :data="fitmentTable" style="width: 100%" stripe v-loading="fitmentLoading" :empty-text="$t('table.empty')">
               <el-table-column type="index" :label="$t('table.index')" width="70" />
-              <el-table-column :label="$t('field.product')" min-width="200">
+              <el-table-column v-if="canShowFitment('product')" :label="$t('field.product')" min-width="200">
                 <template #default="{ row }">
                   {{ getProductLabel(row.productId) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="$t('field.vehicleModel')" min-width="240">
+              <el-table-column v-if="canShowFitment('vehicleModel')" :label="$t('field.vehicleModel')" min-width="240">
                 <template #default="{ row }">
                   {{ getModelLabel(row.modelId) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="remark" :label="$t('field.remark')" min-width="200" show-overflow-tooltip />
+              <el-table-column v-if="canShowFitment('remark')" prop="remark" :label="$t('field.remark')" min-width="200" show-overflow-tooltip />
               <el-table-column :label="$t('table.actions')" width="160" fixed="right">
                 <template #default="{ row }">
                   <el-button link type="primary" size="small" v-permission="'erp-product-fitment:edit'" @click="openFitmentEdit(row)">
@@ -422,6 +422,7 @@ import { computed, ref, reactive, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 
 interface ProductOption {
@@ -470,6 +471,25 @@ interface Fitment {
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
+const brandColumns = ['code', 'name', 'enabled', 'remark'];
+const seriesColumns = ['code', 'brand', 'name', 'enabled', 'remark'];
+const modelColumns = ['code', 'series', 'name', 'yearFrom', 'yearTo', 'displacement', 'engine', 'enabled', 'remark'];
+const fitmentColumns = ['product', 'vehicleModel', 'remark'];
+const brandColumnSettings = useColumnSettings('erp-vehicle-brand', brandColumns);
+const seriesColumnSettings = useColumnSettings('erp-vehicle-series', seriesColumns);
+const modelColumnSettings = useColumnSettings('erp-vehicle-model', modelColumns);
+const fitmentColumnSettings = useColumnSettings('erp-product-fitment', fitmentColumns);
+const canShowBrand = (key: string) => brandColumnSettings.isVisible(key);
+const canShowSeries = (key: string) => seriesColumnSettings.isVisible(key);
+const canShowModel = (key: string) => modelColumnSettings.isVisible(key);
+const canShowFitment = (key: string) => fitmentColumnSettings.isVisible(key);
+
+const fetchColumnKeys = () => {
+  brandColumnSettings.fetchTenantKeys();
+  seriesColumnSettings.fetchTenantKeys();
+  modelColumnSettings.fetchTenantKeys();
+  fitmentColumnSettings.fetchTenantKeys();
+};
 
 const activeTab = ref('brands');
 
@@ -1055,6 +1075,7 @@ const initData = () => {
 };
 
 onMounted(() => {
+  fetchColumnKeys();
   initData();
   bindPageSizeSync(brandSize, fetchBrandList);
   bindPageSizeSync(seriesSize, fetchSeriesList);
@@ -1062,6 +1083,7 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  fetchColumnKeys();
   initData();
 });
 </script>

@@ -55,6 +55,12 @@ public class ErpReceipt extends TenantAuditableSoftDeleteEntity {
     @TableField("last_printed_at")
     private Instant lastPrintedAt;
 
+    @TableField("created_by")
+    private String createdBy;
+
+    @TableField("updated_by")
+    private String updatedBy;
+
     public Long getReceivableId() {
         return receivableId;
     }
@@ -173,6 +179,22 @@ public class ErpReceipt extends TenantAuditableSoftDeleteEntity {
 
     public void setLastPrintedAt(Instant lastPrintedAt) {
         this.lastPrintedAt = lastPrintedAt;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
     }
 
 }

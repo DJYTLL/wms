@@ -3,6 +3,7 @@ package com.example.wms.controller;
 import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.DeleteRequest;
+import com.example.wms.dto.RoleColumnPermissionUpdateRequest;
 import com.example.wms.dto.RoleCreateRequest;
 import com.example.wms.dto.RolePermissionUpdateRequest;
 import com.example.wms.dto.RoleUpdateRequest;
@@ -128,8 +129,8 @@ public class RoleController {
     @PutMapping("/{id}/column-permissions")
     @PreAuthorize("hasAuthority('PERM_column:role:manage')")
     public ResponseEntity<ApiResponse<Void>> setColumnPermissions(@PathVariable Long id,
-                                                                  @Valid @RequestBody RolePermissionUpdateRequest request) {
-        rolePermissionService.setColumnPermissions(id, request.permissionIds());
+                                                                  @Valid @RequestBody RoleColumnPermissionUpdateRequest request) {
+        rolePermissionService.setColumnPermissions(id, request.pageKey(), request.permissionIds());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 

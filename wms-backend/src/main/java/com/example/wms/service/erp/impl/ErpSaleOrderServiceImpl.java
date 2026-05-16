@@ -232,6 +232,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     @AuditLog(action = "ERP_SALE_CREATE", entityType = "erp_sale_order", entityId = "{result.order.id}", detail = "orderNo={result.order.orderNo}")
     public ErpSaleOrderDetail create(ErpSaleOrderCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        String operator = resolveCurrentUsername();
         String orderNo = ensureOrderNo(tenantId, request.orderNo(), ORDER_TYPE, "SO");
         ErpSaleOrder order = new ErpSaleOrder();
         order.setTenantId(tenantId);
@@ -251,7 +252,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setInventoryReserved(false);
         order.setRemark(request.remark());
         order.setCreatedAt(Instant.now());
+        order.setCreatedBy(operator);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
 
         List<ErpSaleOrderItem> items = buildItems(tenantId, null, order.getCustomerId(), request.items(), Set.of());
         applyTotals(order, items);
@@ -265,6 +268,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         reserveDraftStock(tenantId, items);
         order.setInventoryReserved(true);
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         updateWithVersion(tenantId, order);
         return new ErpSaleOrderDetail(order, items);
     }
@@ -298,6 +302,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         order.setDiscountAmount(normalizeAmount(request.discountAmount()));
         order.setRemark(request.remark());
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(resolveCurrentUsername());
 
         List<ErpSaleOrderItem> existingItems = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
         Set<Long> allowedDisabledProductIds = existingProductIds(existingItems);
@@ -358,7 +363,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
         validateSettlementAmounts(order);
         boolean inventoryReserved = Boolean.TRUE.equals(order.getInventoryReserved());
-        ErpSaleOrder approved = erpSaleOrderMapper.approveDraft(tenantId, id, resolveCurrentUsername());
+        String operator = resolveCurrentUsername();
+        ErpSaleOrder approved = erpSaleOrderMapper.approveDraft(tenantId, id, operator);
         if (approved == null) {
             throw new IllegalArgumentException("销售单状态已变化，请刷新重试");
         }
@@ -367,8 +373,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         }
         approved.setInventoryReserved(false);
         approved.setUpdatedAt(Instant.now());
+        approved.setUpdatedBy(operator);
         erpSaleOrderMapper.updateById(approved);
-        ensureReceivableAndReceipt(tenantId, order);
+        ensureReceivableAndReceipt(tenantId, order, operator);
     }
 
     @Transactional
@@ -387,10 +394,12 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             releaseDraftStock(tenantId, items);
             order.setInventoryReserved(false);
         }
+        String operator = resolveCurrentUsername();
         order.setStatus(STATUS_CANCELLED);
-        order.setCancelledBy(resolveCurrentUsername());
+        order.setCancelledBy(operator);
         order.setCancelledAt(Instant.now());
         order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
         updateWithVersion(tenantId, order);
     }
 
@@ -413,7 +422,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             throw new IllegalArgumentException("请先红冲销售退货单");
         }
         String redFlushRemark = appendRedFlushReason(order.getRemark(), reason);
-        ErpSaleOrder redFlushed = erpSaleOrderMapper.redFlushApproved(tenantId, id, redFlushRemark);
+        String operator = resolveCurrentUsername();
+        ErpSaleOrder redFlushed = erpSaleOrderMapper.redFlushApproved(tenantId, id, redFlushRemark, operator);
         if (redFlushed == null) {
             throw new IllegalArgumentException("销售单状态已变化，请刷新重试");
         }
@@ -1159,7 +1169,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         return prefix + dateKey + seqStr;
     }
 
-    private void ensureReceivableAndReceipt(Long tenantId, ErpSaleOrder order) {
+    private void ensureReceivableAndReceipt(Long tenantId, ErpSaleOrder order, String operator) {
         BigDecimal total = order.getTotalAmountInclTax() == null ? BigDecimal.ZERO : order.getTotalAmountInclTax();
         BigDecimal discount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
         if (discount.compareTo(total) > 0) {
@@ -1236,7 +1246,9 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 receipt.setReceivedAt(Instant.now());
                 receipt.setRemark(AUTO_RECEIPT_REMARK);
                 receipt.setCreatedAt(Instant.now());
+                receipt.setCreatedBy(operator);
                 receipt.setUpdatedAt(Instant.now());
+                receipt.setUpdatedBy(operator);
                 erpReceiptMapper.insert(receipt);
             } else if (AUTO_RECEIPT_REMARK.equals(receiptExisting.getRemark())) {
                 receiptExisting.setReceivableId(null);
@@ -1249,6 +1261,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 receiptExisting.setReceivedAt(Instant.now());
                 receiptExisting.setRemark(AUTO_RECEIPT_REMARK);
                 receiptExisting.setUpdatedAt(Instant.now());
+                receiptExisting.setUpdatedBy(operator);
                 erpReceiptMapper.updateById(receiptExisting);
 
                 erpReceiptReceivableMapper.delete(new QueryWrapper<ErpReceiptReceivable>()
@@ -1265,6 +1278,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             receiptExisting.setStatus(STATUS_APPROVED);
             receiptExisting.setReceivedAt(Instant.now());
             receiptExisting.setUpdatedAt(Instant.now());
+            receiptExisting.setUpdatedBy(operator);
             erpReceiptMapper.updateById(receiptExisting);
             erpReceiptReceivableMapper.delete(new QueryWrapper<ErpReceiptReceivable>()
                 .eq("tenant_id", tenantId)

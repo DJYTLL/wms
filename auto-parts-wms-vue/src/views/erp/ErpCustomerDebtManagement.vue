@@ -22,8 +22,8 @@
       <div class="table-body">
         <el-table :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')">
           <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column prop="customerName" :label="$t('field.customer')" min-width="180" />
-          <el-table-column prop="totalDebt" :label="$t('field.customerDebtTotal')" min-width="160">
+          <el-table-column v-if="canShow('customerName')" prop="customerName" :label="$t('field.customer')" min-width="180" />
+          <el-table-column v-if="canShow('totalDebt')" prop="totalDebt" :label="$t('field.customerDebtTotal')" min-width="160">
             <template #default="{ row }">
               {{ formatAmount(row.totalDebt) }}
             </template>
@@ -38,8 +38,12 @@
 import { onMounted, ref } from 'vue';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useColumnSettings } from '@/composables/useColumnSettings';
 
 const { notifyError } = useApiError();
+const defaultColumns = ['customerName', 'totalDebt'];
+const { isVisible, fetchTenantKeys } = useColumnSettings('erp-finance-customer-debt', defaultColumns);
+const canShow = (key: string) => isVisible(key);
 
 const tableData = ref<Array<{ customerId: number; customerName: string; totalDebt: number }>>([]);
 const searchQuery = ref('');
@@ -68,6 +72,7 @@ const handleSearch = () => {
 };
 
 onMounted(() => {
+  fetchTenantKeys();
   fetchData();
 });
 </script>
