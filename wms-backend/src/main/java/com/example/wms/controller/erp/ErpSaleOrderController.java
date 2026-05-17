@@ -58,6 +58,33 @@ public class ErpSaleOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.page(page, size, keyword, status, customerId, startInstant, endInstant)));
     }
 
+    @GetMapping("/draft/page")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:view')")
+    public ResponseEntity<ApiResponse<PageResponse<ErpSaleOrder>>> draftPage(@RequestParam(defaultValue = "1") long page,
+                                                                             @RequestParam(defaultValue = "20") long size,
+                                                                             @RequestParam(required = false) String keyword,
+                                                                             @RequestParam(required = false) Long customerId,
+                                                                             @RequestParam(required = false) String startAt,
+                                                                             @RequestParam(required = false) String endAt) {
+        Instant startInstant = parseInstant(startAt);
+        Instant endInstant = parseInstant(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.draftPage(page, size, keyword, customerId, startInstant, endInstant)));
+    }
+
+    @GetMapping("/approved/page")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:view')")
+    public ResponseEntity<ApiResponse<PageResponse<ErpSaleOrder>>> approvedPage(@RequestParam(defaultValue = "1") long page,
+                                                                                @RequestParam(defaultValue = "20") long size,
+                                                                                @RequestParam(required = false) String keyword,
+                                                                                @RequestParam(required = false) String status,
+                                                                                @RequestParam(required = false) Long customerId,
+                                                                                @RequestParam(required = false) String startAt,
+                                                                                @RequestParam(required = false) String endAt) {
+        Instant startInstant = parseInstant(startAt);
+        Instant endInstant = parseInstant(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.approvedPage(page, size, keyword, status, customerId, startInstant, endInstant)));
+    }
+
     // 销售单汇总
     @GetMapping("/summary")
     @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
@@ -73,6 +100,29 @@ public class ErpSaleOrderController {
         ));
     }
 
+    @GetMapping("/draft/summary")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:view')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderSummary>> draftSummary(@RequestParam(required = false) String keyword,
+                                                                         @RequestParam(required = false) Long customerId,
+                                                                         @RequestParam(required = false) String startAt,
+                                                                         @RequestParam(required = false) String endAt) {
+        Instant startInstant = parseInstant(startAt);
+        Instant endInstant = parseInstant(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.draftSummary(keyword, customerId, startInstant, endInstant)));
+    }
+
+    @GetMapping("/approved/summary")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:view')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderSummary>> approvedSummary(@RequestParam(required = false) String keyword,
+                                                                            @RequestParam(required = false) String status,
+                                                                            @RequestParam(required = false) Long customerId,
+                                                                            @RequestParam(required = false) String startAt,
+                                                                            @RequestParam(required = false) String endAt) {
+        Instant startInstant = parseInstant(startAt);
+        Instant endInstant = parseInstant(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.approvedSummary(keyword, status, customerId, startInstant, endInstant)));
+    }
+
     // 查询销售单详情
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
@@ -80,9 +130,33 @@ public class ErpSaleOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.getDetail(id)));
     }
 
+    @GetMapping("/draft/{id}")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:view')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> getDraft(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.getDraftDetail(id)));
+    }
+
+    @GetMapping("/draft/{id}/print")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:print')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> getDraftPrint(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.getDraftDetail(id)));
+    }
+
+    @GetMapping("/approved/{id}")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:view')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> getApproved(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.getApprovedDetail(id)));
+    }
+
+    @GetMapping("/approved/{id}/print")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:print')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> getApprovedPrint(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.getApprovedDetail(id)));
+    }
+
     // 最近包含指定商品的销售单明细（退货参考）
     @GetMapping("/recent-items")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:view')")
     public ResponseEntity<ApiResponse<List<ErpSaleOrderRecentItem>>> recentItems(@RequestParam Long customerId,
                                                                                  @RequestParam Long productId,
                                                                                  @RequestParam(defaultValue = "10") int limit) {
@@ -91,7 +165,7 @@ public class ErpSaleOrderController {
 
     // 分页查询包含指定商品的销售单明细（商品退货选择来源单）
     @GetMapping("/recent-items/page")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:view')")
     public ResponseEntity<ApiResponse<PageResponse<ErpSaleOrderRecentItem>>> recentItemsPage(@RequestParam Long customerId,
                                                                                              @RequestParam Long productId,
                                                                                              @RequestParam(defaultValue = "1") long page,
@@ -123,10 +197,22 @@ public class ErpSaleOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.nextOrderNo()));
     }
 
+    @GetMapping("/draft/next-order-no")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:add')")
+    public ResponseEntity<ApiResponse<String>> draftNextOrderNo() {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.nextOrderNo()));
+    }
+
     // 新增销售单
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_erp-sale:add')")
     public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> create(@Valid @RequestBody ErpSaleOrderCreateRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.create(request)));
+    }
+
+    @PostMapping("/draft")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:add')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> createDraft(@Valid @RequestBody ErpSaleOrderCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.create(request)));
     }
 
@@ -135,6 +221,14 @@ public class ErpSaleOrderController {
     @PreAuthorize("hasAuthority('PERM_erp-sale:edit')")
     public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> update(@PathVariable Long id,
                                                                   @Valid @RequestBody ErpSaleOrderUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.update(id, request)));
+    }
+
+    @PutMapping("/draft/{id}")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:edit')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> updateDraft(@PathVariable Long id,
+                                                                       @Valid @RequestBody ErpSaleOrderUpdateRequest request) {
+        erpSaleOrderService.getDraftDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.update(id, request)));
     }
 
@@ -149,10 +243,29 @@ public class ErpSaleOrderController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @DeleteMapping("/draft/{id}")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:delete')")
+    public ResponseEntity<ApiResponse<Void>> deleteDraft(@PathVariable Long id,
+                                                         @Valid @RequestBody DeleteRequest request) {
+        erpSaleOrderService.getDraftDetail(id);
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            erpSaleOrderService.delete(id);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     // 审核销售单
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('PERM_erp-sale:approve')")
     public ResponseEntity<ApiResponse<Void>> approve(@PathVariable Long id) {
+        erpSaleOrderService.approve(id);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PostMapping("/draft/{id}/approve")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:approve')")
+    public ResponseEntity<ApiResponse<Void>> approveDraft(@PathVariable Long id) {
+        erpSaleOrderService.getDraftDetail(id);
         erpSaleOrderService.approve(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
@@ -165,6 +278,16 @@ public class ErpSaleOrderController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @PostMapping("/approved/{id}/cancel")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:cancel')")
+    public ResponseEntity<ApiResponse<Void>> cancelApproved(@PathVariable Long id,
+                                                           @RequestBody(required = false) RedFlushRequest request) {
+        String reason = request == null ? null : request.reason();
+        erpSaleOrderService.getApprovedDetail(id);
+        erpSaleOrderService.cancel(id, reason);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     // 红冲销售单
     @PostMapping("/{id}/red-flush")
     @PreAuthorize("hasAuthority('PERM_erp-sale:redflush')")
@@ -173,6 +296,22 @@ public class ErpSaleOrderController {
         String reason = request == null ? null : request.reason();
         erpSaleOrderService.redFlush(id, reason);
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PostMapping("/approved/{id}/red-flush")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:redflush')")
+    public ResponseEntity<ApiResponse<Void>> redFlushApproved(@PathVariable Long id,
+                                                             @RequestBody(required = false) RedFlushRequest request) {
+        String reason = request == null ? null : request.reason();
+        erpSaleOrderService.getApprovedDetail(id);
+        erpSaleOrderService.redFlush(id, reason);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PostMapping("/approved/{id}/copy")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:copy') and hasAuthority('PERM_erp-sale-draft:add')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> copyApproved(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.copyApprovedToDraft(id)));
     }
 
     public record RedFlushRequest(String reason) {}

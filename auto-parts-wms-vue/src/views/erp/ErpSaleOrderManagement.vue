@@ -40,7 +40,7 @@
             <el-button
               v-if="canCreate"
               type="primary"
-              v-permission="'erp-sale:add'"
+              v-permission="'erp-sale-draft:add'"
               @click="openCreatePage"
             >
               {{ $t('action.add') }}
@@ -52,162 +52,153 @@
 
     <div class="table-card" :class="{ 'sale-approved-card': isApprovedPage }">
       <div class="table-body">
-        <el-table
-          :data="tableData"
-          style="width: 100%"
-          stripe
-          v-loading="loading"
-          :empty-text="$t('table.empty')"
-          :row-class-name="rowClassName"
-        >
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
-          <el-table-column v-if="canShow('customer')" :label="$t('field.customer')" min-width="160">
-            <template #default="{ row }">
-              {{ getCustomerName(row.customerId) }}
-            </template>
-          </el-table-column>
-          <el-table-column v-if="isApprovedPage && canShow('status')" prop="status" :label="$t('field.status')" width="120">
-            <template #default="{ row }">
-              <el-tag :type="statusTagType(row.status)" size="small">
-                {{ formatStatus(row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <el-table-column v-if="canShow('netSaleAmount')" :label="$t('field.netSaleAmount')" min-width="140">
-            <template #default="{ row }">
-              {{ formatAmount(row.netSaleAmount) }}
-            </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('netGrossProfit')" :label="$t('field.netGrossProfit')" min-width="140">
-            <template #default="{ row }">
-              {{ formatAmount(row.netGrossProfit) }}
-            </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('receivableStatus')" :label="$t('field.receivableStatus')" min-width="150">
-            <template #default="{ row }">
-              <el-tag :type="financeStatusTagType(row.receivableStatus)" size="small">
-                {{ formatFinanceStatus(row.receivableStatus, row.receivableUnpaidAmount) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="isApprovedPage && canShow('returnStatus')" :label="$t('field.returnStatus')" min-width="130">
-            <template #default="{ row }">
-              <div class="return-tag-list">
-                <template v-if="Number(row.approvedReturnCount || 0) > 0">
-                  <el-tag
-                    v-for="(_, index) in buildReturnTagIndexes(row.approvedReturnCount)"
-                    :key="`${row.id}-return-${index}`"
-                    type="warning"
-                    size="small"
-                    class="return-tag-item"
-                    :class="{ 'return-tag-item--clickable': canViewSaleReturn }"
-                    @click="handleReturnTagClick(row, index)"
-                  >
-                    {{ `退货${index + 1}` }}
+        <div class="sale-order-table-scroll" v-loading="loading">
+          <table class="sale-order-table">
+            <colgroup>
+              <col class="sale-order-table__col--index" />
+              <col v-if="canShow('orderNo')" class="sale-order-table__col--order" />
+              <col v-if="canShow('customer')" class="sale-order-table__col--customer" />
+              <col v-if="isApprovedPage && canShow('status')" class="sale-order-table__col--status" />
+              <col v-if="canShow('totalAmount')" class="sale-order-table__col--amount" />
+              <col v-if="canShow('netSaleAmount')" class="sale-order-table__col--amount" />
+              <col v-if="canShow('netGrossProfit')" class="sale-order-table__col--amount" />
+              <col v-if="canShow('receivableStatus')" class="sale-order-table__col--receivable" />
+              <col v-if="isApprovedPage && canShow('returnStatus')" class="sale-order-table__col--return" />
+              <col v-if="isApprovedPage && canShow('redFlushTrace')" class="sale-order-table__col--trace" />
+              <col v-if="canShow('createdAt')" class="sale-order-table__col--datetime" />
+              <col class="sale-order-table__col--actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>{{ $t('table.index') }}</th>
+                <th v-if="canShow('orderNo')">{{ $t('field.orderNo') }}</th>
+                <th v-if="canShow('customer')">{{ $t('field.customer') }}</th>
+                <th v-if="isApprovedPage && canShow('status')">{{ $t('field.status') }}</th>
+                <th v-if="canShow('totalAmount')">{{ $t('field.totalAmount') }}</th>
+                <th v-if="canShow('netSaleAmount')">{{ $t('field.netSaleAmount') }}</th>
+                <th v-if="canShow('netGrossProfit')">{{ $t('field.netGrossProfit') }}</th>
+                <th v-if="canShow('receivableStatus')">{{ $t('field.receivableStatus') }}</th>
+                <th v-if="isApprovedPage && canShow('returnStatus')">{{ $t('field.returnStatus') }}</th>
+                <th v-if="isApprovedPage && canShow('redFlushTrace')">{{ $t('field.redFlushTrace') }}</th>
+                <th v-if="canShow('createdAt')">{{ $t('field.createdTime') }}</th>
+                <th>{{ $t('table.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!tableData.length">
+                <td class="sale-order-table__empty" :colspan="visibleListColumnCount">{{ $t('table.empty') }}</td>
+              </tr>
+              <tr v-for="(row, index) in tableData" :key="row.id" :class="rowClassName({ row })">
+                <td>{{ index + 1 }}</td>
+                <td v-if="canShow('orderNo')">{{ row.orderNo }}</td>
+                <td v-if="canShow('customer')">{{ getCustomerName(row.customerId) }}</td>
+                <td v-if="isApprovedPage && canShow('status')">
+                  <el-tag :type="statusTagType(row.status)" size="small">
+                    {{ formatStatus(row.status) }}
                   </el-tag>
-                </template>
-                <el-tag v-else type="info" size="small">
-                  {{ formatReturnStatus(row.approvedReturnCount) }}
-                </el-tag>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="isApprovedPage && canShow('redFlushTrace')" :label="$t('field.redFlushTrace')" min-width="160">
-            <template #default="{ row }">
-              <span>{{ row.redFlushTrace || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
-            <template #default="{ row }">
-              {{ formatDateTime(row.createdAt) }}
-            </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="300" fixed="right">
-            <template #default="{ row }">
-              <template v-if="isApprovedPage">
-                <el-button
-                  link
-                  type="primary"
-                  size="small"
-                  @click="openViewPage(row)"
-                >
-                  {{ $t('action.view') }}
-                </el-button>
-                <el-button
-                  link
-                  type="primary"
-                  size="small"
-                  v-permission="'erp-sale:view'"
-                  @click="openPrintPage(row)"
-                >
-                  {{ $t('action.print') }}
-                </el-button>
-                <el-button
-                  link
-                  type="primary"
-                  size="small"
-                  v-permission="'erp-sale:add'"
-                  @click="handleCopy(row)"
-                >
-                  {{ $t('action.copy') }}
-                </el-button>
-                <el-button
-                  v-if="row.status === 'APPROVED'"
-                  link
-                  type="danger"
-                  size="small"
-                  v-permission="'erp-sale:redflush'"
-                  @click="handleRedFlush(row)"
-                >
-                  {{ $t('action.redFlush') }}
-                </el-button>
-              </template>
-              <template v-else>
-                <el-button
-                  v-if="row.status === 'DRAFT'"
-                  link
-                  type="primary"
-                  size="small"
-                  v-permission="'erp-sale:edit'"
-                  @click="openEditPage(row)"
-                >
-                  {{ $t('action.edit') }}
-                </el-button>
-                <el-button
-                  link
-                  type="primary"
-                  size="small"
-                  v-permission="'erp-sale:view'"
-                  @click="openPrintPage(row)"
-                >
-                  {{ $t('action.print') }}
-                </el-button>
-                <el-button
-                  v-if="row.status === 'DRAFT'"
-                  link
-                  type="success"
-                  size="small"
-                  v-permission="'erp-sale:approve'"
-                  @click="handleApprove(row)"
-                >
-                  {{ $t('action.approve') }}
-                </el-button>
-                <el-button
-                  v-if="row.status === 'DRAFT'"
-                  link
-                  type="danger"
-                  size="small"
-                  v-permission="'erp-sale:edit'"
-                  @click="handleDelete(row)"
-                >
-                  {{ $t('action.delete') }}
-                </el-button>
-              </template>
-            </template>
-          </el-table-column>
-        </el-table>
+                </td>
+                <td v-if="canShow('totalAmount')">{{ row.totalAmount }}</td>
+                <td v-if="canShow('netSaleAmount')">{{ formatAmount(row.netSaleAmount) }}</td>
+                <td v-if="canShow('netGrossProfit')">{{ formatAmount(row.netGrossProfit) }}</td>
+                <td v-if="canShow('receivableStatus')">
+                  <el-tag :type="financeStatusTagType(row.receivableStatus)" size="small">
+                    {{ formatFinanceStatus(row.receivableStatus, row.receivableUnpaidAmount) }}
+                  </el-tag>
+                </td>
+                <td v-if="isApprovedPage && canShow('returnStatus')">
+                  <div class="return-tag-list">
+                    <template v-if="Number(row.approvedReturnCount || 0) > 0">
+                      <el-tag
+                        v-for="(_, returnIndex) in buildReturnTagIndexes(row.approvedReturnCount)"
+                        :key="`${row.id}-return-${returnIndex}`"
+                        type="warning"
+                        size="small"
+                        class="return-tag-item"
+                        :class="{ 'return-tag-item--clickable': canViewSaleReturn }"
+                        @click="handleReturnTagClick(row, returnIndex)"
+                      >
+                        {{ `退货${returnIndex + 1}` }}
+                      </el-tag>
+                    </template>
+                    <el-tag v-else type="info" size="small">
+                      {{ formatReturnStatus(row.approvedReturnCount) }}
+                    </el-tag>
+                  </div>
+                </td>
+                <td v-if="isApprovedPage && canShow('redFlushTrace')">{{ row.redFlushTrace || '-' }}</td>
+                <td v-if="canShow('createdAt')" class="sale-order-table__nowrap">{{ formatDateTime(row.createdAt) }}</td>
+                <td class="sale-order-table__actions">
+                  <template v-if="isApprovedPage">
+                    <el-button link type="primary" size="small" @click="openViewPage(row)">
+                      {{ $t('action.view') }}
+                    </el-button>
+                    <el-button link type="primary" size="small" v-permission="'erp-sale-approved:print'" @click="openPrintPage(row)">
+                      {{ $t('action.print') }}
+                    </el-button>
+                    <el-button link type="primary" size="small" v-permission="'erp-sale-approved:copy'" @click="handleCopy(row)">
+                      {{ $t('action.copy') }}
+                    </el-button>
+                    <el-button
+                      v-if="row.status === 'APPROVED'"
+                      link
+                      type="danger"
+                      size="small"
+                      v-permission="'erp-sale-approved:cancel'"
+                      @click="handleCancel(row)"
+                    >
+                      {{ $t('action.cancel') }}
+                    </el-button>
+                    <el-button
+                      v-if="row.status === 'APPROVED'"
+                      link
+                      type="danger"
+                      size="small"
+                      v-permission="'erp-sale-approved:redflush'"
+                      @click="handleRedFlush(row)"
+                    >
+                      {{ $t('action.redFlush') }}
+                    </el-button>
+                  </template>
+                  <template v-else>
+                    <el-button
+                      v-if="row.status === 'DRAFT'"
+                      link
+                      type="primary"
+                      size="small"
+                      v-permission="'erp-sale-draft:edit'"
+                      @click="openEditPage(row)"
+                    >
+                      {{ $t('action.edit') }}
+                    </el-button>
+                    <el-button link type="primary" size="small" v-permission="'erp-sale-draft:print'" @click="openPrintPage(row)">
+                      {{ $t('action.print') }}
+                    </el-button>
+                    <el-button
+                      v-if="row.status === 'DRAFT'"
+                      link
+                      type="success"
+                      size="small"
+                      v-permission="'erp-sale-draft:approve'"
+                      @click="handleApprove(row)"
+                    >
+                      {{ $t('action.approve') }}
+                    </el-button>
+                    <el-button
+                      v-if="row.status === 'DRAFT'"
+                      link
+                      type="danger"
+                      size="small"
+                      v-permission="'erp-sale-draft:delete'"
+                      @click="handleDelete(row)"
+                    >
+                      {{ $t('action.delete') }}
+                    </el-button>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       <div class="table-pagination">
         <div v-if="showSaleSummaryBar" class="sale-summary-bar">
@@ -245,7 +236,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="SALE_ORDER"
+      :doc-type="printDocType"
       :doc-id="printDocId"
       :title="$t('page.erpSaleOrderPrint')"
     />
@@ -379,6 +370,10 @@ import { ElMessageBox } from 'element-plus';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
+const props = defineProps<{
+  workspace?: 'draft' | 'approved';
+}>();
+
 interface OptionItem {
   id: number;
   name: string;
@@ -497,9 +492,18 @@ const productOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 
-const isDraftPage = computed(() => route.meta.defaultStatus === 'DRAFT');
-const isApprovedPage = computed(() => route.meta.defaultStatus === 'APPROVED');
+const currentWorkspace = computed<'draft' | 'approved'>(() => {
+  if (route.path.includes('/erp/sale-orders/draft')) return 'draft';
+  if (route.path.includes('/erp/sale-orders/approved')) return 'approved';
+  if (route.meta.defaultStatus === 'DRAFT') return 'draft';
+  if (route.meta.defaultStatus === 'APPROVED') return 'approved';
+  return props.workspace || 'draft';
+});
+const isDraftPage = computed(() => currentWorkspace.value === 'draft');
+const isApprovedPage = computed(() => currentWorkspace.value === 'approved');
 const showSaleSummaryBar = computed(() => isApprovedPage.value || isDraftPage.value);
+const saleOrderApiBase = computed(() => (isApprovedPage.value ? '/erp/sale-orders/approved' : '/erp/sale-orders/draft'));
+const printDocType = computed(() => (isApprovedPage.value ? 'SALE_ORDER_APPROVED' : 'SALE_ORDER_DRAFT'));
 
 const statusOptions = computed(() => {
   const base = [
@@ -524,14 +528,7 @@ const hasPermission = (code: string) => {
 };
 
 const canCreate = computed(() => {
-  const defaultStatus = route.meta.defaultStatus as string | undefined;
-  if (defaultStatus === 'APPROVED') {
-    return false;
-  }
-  if (statusLocked.value && statusFilter.value === 'APPROVED') {
-    return false;
-  }
-  return true;
+  return isDraftPage.value && hasPermission('erp-sale-draft:add');
 });
 
 const canViewSaleReturn = computed(() => hasPermission('erp-sale-return:view'));
@@ -572,6 +569,21 @@ const canShow = (key: string) => {
   return isVisible(key);
 };
 
+const visibleListColumnCount = computed(() => {
+  let count = 2; // index + actions
+  if (canShow('orderNo')) count += 1;
+  if (canShow('customer')) count += 1;
+  if (isApprovedPage.value && canShow('status')) count += 1;
+  if (canShow('totalAmount')) count += 1;
+  if (canShow('netSaleAmount')) count += 1;
+  if (canShow('netGrossProfit')) count += 1;
+  if (canShow('receivableStatus')) count += 1;
+  if (isApprovedPage.value && canShow('returnStatus')) count += 1;
+  if (isApprovedPage.value && canShow('redFlushTrace')) count += 1;
+  if (canShow('createdAt')) count += 1;
+  return count;
+});
+
 const hasSelectedDateRange = computed(() => {
   return Array.isArray(dateRange.value) && dateRange.value.length === 2 && !!dateRange.value[0] && !!dateRange.value[1];
 });
@@ -606,6 +618,8 @@ const handleKeydown = (event: KeyboardEvent) => {
   if ((!isApprovedPage.value && !isDraftPage.value) || !canViewProfit.value) return;
   if (isTypingTarget(event.target)) return;
   if (event.key && event.key.toLowerCase() === 'u') {
+    if (event.repeat) return;
+    event.preventDefault();
     showProfitColumn.value = !showProfitColumn.value;
   }
 };
@@ -751,7 +765,7 @@ const fetchRangeSummary = async () => {
   const params = buildListParams();
   delete params.page;
   delete params.size;
-  const res: any = await request.get('/erp/sale-orders/summary', { params });
+  const res: any = await request.get(`${saleOrderApiBase.value}/summary`, { params });
   if (res.data.code === 200) {
     setSummary({
       saleAmountTotal: res.data.data?.saleAmountTotal,
@@ -827,7 +841,7 @@ const fetchList = async () => {
   loading.value = true;
   try {
     const params = buildListParams();
-    const res: any = await request.get('/erp/sale-orders/page', { params });
+    const res: any = await request.get(`${saleOrderApiBase.value}/page`, { params });
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -857,7 +871,7 @@ const applyRouteStatus = () => {
   statusLocked.value = lockStatus;
   if (defaultStatus) {
     if (defaultStatus === 'APPROVED') {
-      statusFilter.value = 'APPROVED,RED_FLUSHED';
+      statusFilter.value = 'APPROVED,CANCELLED,RED_FLUSHED';
     } else {
       statusFilter.value = defaultStatus;
     }
@@ -889,19 +903,19 @@ const handleSizeChange = (newSize: number) => {
 const openCreatePage = () => {
   const query: Record<string, string> = { returnTo: route.path };
   if (isDraftPage.value) query.from = 'draft';
-  router.push({ path: '/erp/sale-orders/create', query });
+  router.push({ path: '/erp/sale-orders/draft/create', query });
 };
 
 const openEditPage = (row: SaleOrder) => {
   const query: Record<string, string> = { returnTo: route.path };
   if (isDraftPage.value) query.from = 'draft';
-  router.push({ path: `/erp/sale-orders/${row.id}/edit`, query });
+  router.push({ path: `/erp/sale-orders/draft/${row.id}/edit`, query });
 };
 
 const openViewPage = (row: SaleOrder) => {
   const query: Record<string, string> = { mode: 'view', returnTo: route.path };
   if (isApprovedPage.value) query.from = 'approved';
-  router.push({ path: `/erp/sale-orders/${row.id}/edit`, query });
+  router.push({ path: `/erp/sale-orders/approved/${row.id}`, query });
 };
 
 const openPrintPage = (row: SaleOrder) => {
@@ -956,7 +970,7 @@ const handleApprove = async (row: SaleOrder) => {
         type: 'warning'
       }
     );
-    await request.post(`/erp/sale-orders/${row.id}/approve`);
+    await request.post(`/erp/sale-orders/draft/${row.id}/approve`);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -980,7 +994,29 @@ const handleRedFlush = async (row: SaleOrder) => {
     if (!value || !String(value).trim()) {
       return;
     }
-    await request.post(`/erp/sale-orders/${row.id}/red-flush`, { reason: String(value).trim() });
+    await request.post(`/erp/sale-orders/approved/${row.id}/red-flush`, { reason: String(value).trim() });
+    notifySuccess();
+    fetchList();
+  } catch (error) {
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
+  }
+};
+
+const handleCancel = async (row: SaleOrder) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      t('message.confirmCancel'),
+      t('action.cancel'),
+      {
+        inputPlaceholder: t('placeholder.required'),
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel')
+      }
+    );
+    if (!value || !String(value).trim()) return;
+    await request.post(`/erp/sale-orders/approved/${row.id}/cancel`, { reason: String(value).trim() });
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -1005,45 +1041,17 @@ const handleCopy = async (row: SaleOrder) => {
     return;
   }
   try {
-    const detailRes: any = await request.get(`/erp/sale-orders/${row.id}`);
-    const detail = detailRes.data?.data;
-    if (!detail?.order) {
-      notifyWarning(t('message.noItems'));
+    if (!hasPermission('erp-sale-draft:add')) {
+      notifyWarning('缺少销售草稿新增权限');
       return;
     }
-    const order = detail.order;
-    const items = (detail.items || []).map((item: any, index: number) => ({
-      productId: item.productId,
-      warehouseId: item.warehouseId,
-      locationId: item.locationId,
-      qty: item.qty,
-      price: item.price,
-      taxRate: item.taxRate,
-      remark: item.remark,
-      sortNo: index + 1
-    }));
-
-    const orderNoRes: any = await request.get('/erp/sale-orders/next-order-no');
-    const orderNo = orderNoRes.data?.data || '';
-
-    const payload = {
-      orderNo,
-      orderAt: order.orderAt,
-      customerId: order.customerId,
-      settlementMethod: order.settlementMethod,
-      deliveryMethod: order.deliveryMethod || undefined,
-      paidAmount: order.paidAmount,
-      discountAmount: order.discountAmount,
-      remark: order.remark,
-      items
-    };
-    const createRes: any = await request.post('/erp/sale-orders', payload);
+    const createRes: any = await request.post(`/erp/sale-orders/approved/${row.id}/copy`);
     if (createRes.data.code === 200) {
       const data = createRes.data.data || {};
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
-        await router.push({ path: `/erp/sale-orders/${newId}/edit`, query: { from: 'draft' } });
+        await router.push({ path: `/erp/sale-orders/draft/${newId}/edit`, query: { from: 'draft' } });
       }
     }
   } catch (error) {
@@ -1062,7 +1070,7 @@ const handleDelete = async (row: SaleOrder) => {
         type: 'warning'
       }
     );
-    await request.delete(`/erp/sale-orders/${row.id}`, {
+    await request.delete(`/erp/sale-orders/draft/${row.id}`, {
       data: { reason: '删除销售单草稿' },
       skipDeleteReasonPrompt: true
     } as any);
@@ -1209,6 +1217,112 @@ watch(saleReturnDetailDialogVisible, (visible) => {
 .sale-approved-card .table-body {
   max-height: 100%;
   overflow: auto;
+}
+
+.sale-order-table-scroll {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.sale-order-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #374151;
+  font-size: 14px;
+}
+
+.sale-order-table__col--index {
+  width: 70px;
+}
+
+.sale-order-table__col--order,
+.sale-order-table__col--customer,
+.sale-order-table__col--trace {
+  width: 160px;
+}
+
+.sale-order-table__col--status {
+  width: 120px;
+}
+
+.sale-order-table__col--amount {
+  width: 140px;
+}
+
+.sale-order-table__col--receivable {
+  width: 150px;
+}
+
+.sale-order-table__col--return {
+  width: 130px;
+}
+
+.sale-order-table__col--datetime {
+  width: 180px;
+}
+
+.sale-order-table__col--actions {
+  width: 300px;
+}
+
+.sale-order-table th,
+.sale-order-table td {
+  height: 48px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #ebeef5;
+  text-align: left;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.sale-order-table th {
+  color: #6b7280;
+  font-weight: 600;
+  background: #ffffff;
+  white-space: nowrap;
+}
+
+.sale-order-table th:last-child,
+.sale-order-table__actions {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: #ffffff;
+  box-shadow: -1px 0 0 #ebeef5;
+}
+
+.sale-order-table th:last-child {
+  z-index: 2;
+}
+
+.sale-order-table tbody tr:nth-child(even) td {
+  background: #fafafa;
+}
+
+.sale-order-table tbody tr:nth-child(even) .sale-order-table__actions {
+  background: #fafafa;
+}
+
+.sale-order-table tbody tr:hover td {
+  background: #f5f7fa;
+}
+
+.sale-order-table tbody tr:hover .sale-order-table__actions {
+  background: #f5f7fa;
+}
+
+.sale-order-table__nowrap,
+.sale-order-table__actions {
+  white-space: nowrap;
+}
+
+.sale-order-table__empty {
+  height: 96px;
+  color: #909399;
+  text-align: center !important;
 }
 
 .sale-summary-bar {

@@ -37,9 +37,17 @@ interface Props {
   modelValue: boolean;
   docType:
     | 'SALE_ORDER'
+    | 'SALE_ORDER_DRAFT'
+    | 'SALE_ORDER_APPROVED'
     | 'PURCHASE_ORDER'
+    | 'PURCHASE_ORDER_DRAFT'
+    | 'PURCHASE_ORDER_APPROVED'
     | 'SALE_RETURN'
+    | 'SALE_RETURN_DRAFT'
+    | 'SALE_RETURN_APPROVED'
     | 'PURCHASE_RETURN'
+    | 'PURCHASE_RETURN_DRAFT'
+    | 'PURCHASE_RETURN_APPROVED'
     | 'RECEIPT'
     | 'PAYMENT'
     | 'ACCOUNTS_RECEIVABLE'
@@ -72,9 +80,17 @@ const previewUrl = computed(() => {
   if (!props.docId) return 'about:blank';
   const prefixMap: Record<string, string> = {
     SALE_ORDER: 'sale-orders',
+    SALE_ORDER_DRAFT: 'sale-orders/draft',
+    SALE_ORDER_APPROVED: 'sale-orders/approved',
     PURCHASE_ORDER: 'purchase-orders',
+    PURCHASE_ORDER_DRAFT: 'purchase-orders/draft',
+    PURCHASE_ORDER_APPROVED: 'purchase-orders/approved',
     SALE_RETURN: 'sale-returns',
+    SALE_RETURN_DRAFT: 'sale-returns/draft',
+    SALE_RETURN_APPROVED: 'sale-returns/approved',
     PURCHASE_RETURN: 'purchase-returns',
+    PURCHASE_RETURN_DRAFT: 'purchase-returns/draft',
+    PURCHASE_RETURN_APPROVED: 'purchase-returns/approved',
     RECEIPT: 'receipts',
     PAYMENT: 'payments',
     ACCOUNTS_RECEIVABLE: 'ar',

@@ -147,16 +147,39 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     }
 
     @Override
+    public PageResponse<ErpPurchaseReturn> draftPage(long page, long size, String keyword, Long supplierId, Instant startAt, Instant endAt) {
+        return page(page, size, keyword, STATUS_DRAFT, supplierId, startAt, endAt);
+    }
+
+    @Override
+    public PageResponse<ErpPurchaseReturn> approvedPage(long page, long size, String keyword, Long supplierId, Instant startAt, Instant endAt) {
+        return page(page, size, keyword, STATUS_APPROVED + "," + STATUS_RED_FLUSHED, supplierId, startAt, endAt);
+    }
+
+    @Override
     public ErpPurchaseReturnDetail getDetail(Long id) {
         Long tenantId = TenantContext.requireTenantId();
-        ErpPurchaseReturn order = erpPurchaseReturnMapper.selectOne(new QueryWrapper<ErpPurchaseReturn>()
-            .eq("tenant_id", tenantId)
-            .eq("id", id));
-        if (order == null) {
-            throw new IllegalArgumentException("采购退货单不存在");
-        }
+        ErpPurchaseReturn order = loadExisting(tenantId, id);
         List<ErpPurchaseReturnItem> items = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
         return new ErpPurchaseReturnDetail(order, items);
+    }
+
+    @Override
+    public ErpPurchaseReturnDetail getDraftDetail(Long id) {
+        ErpPurchaseReturnDetail detail = getDetail(id);
+        if (!STATUS_DRAFT.equals(detail.order().getStatus())) {
+            throw new IllegalArgumentException("采购退货草稿不存在");
+        }
+        return detail;
+    }
+
+    @Override
+    public ErpPurchaseReturnDetail getApprovedDetail(Long id) {
+        ErpPurchaseReturnDetail detail = getDetail(id);
+        if (STATUS_DRAFT.equals(detail.order().getStatus())) {
+            throw new IllegalArgumentException("已审核采购退货单不存在");
+        }
+        return detail;
     }
 
     @Override
@@ -325,6 +348,41 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
 
     @Override
     @Transactional
+    public ErpPurchaseReturnDetail copyApproved(Long id) {
+        ErpPurchaseReturnDetail source = getApprovedDetail(id);
+        ErpPurchaseReturn order = source.order();
+        List<ErpPurchaseReturnItemRequest> itemRequests = source.items().stream()
+            .map(item -> new ErpPurchaseReturnItemRequest(
+                item.getProductId(),
+                item.getWarehouseId(),
+                item.getLocationId(),
+                item.getQty(),
+                item.getPrice(),
+                item.getPriceInclTax(),
+                item.getTaxRate(),
+                item.getSortNo(),
+                item.getRemark()
+            ))
+            .toList();
+        ErpPurchaseReturnCreateRequest request = new ErpPurchaseReturnCreateRequest(
+            null,
+            null,
+            order.getReturnType(),
+            order.getSupplierId(),
+            order.getPurchaseOrderId(),
+            order.getSettlementMethod(),
+            order.getPaymentMethodCode(),
+            order.getRefundAction(),
+            order.getPaidAmount(),
+            order.getDiscountAmount(),
+            itemRequests,
+            order.getRemark()
+        );
+        return create(request);
+    }
+
+    @Override
+    @Transactional
     @AuditLog(action = "ERP_PURCHASE_RETURN_RED_FLUSH", entityType = "erp_purchase_return", entityId = "{arg0}")
     public void cancel(Long id, String reason) {
         Long tenantId = TenantContext.requireTenantId();
@@ -415,6 +473,16 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             wrapper.le("order_at", endAt);
         }
         return wrapper;
+    }
+
+    private ErpPurchaseReturn loadExisting(Long tenantId, Long id) {
+        ErpPurchaseReturn order = erpPurchaseReturnMapper.selectOne(new QueryWrapper<ErpPurchaseReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("id", id));
+        if (order == null) {
+            throw new IllegalArgumentException("采购退货单不存在");
+        }
+        return order;
     }
 
     private List<ErpPurchaseReturnItem> buildItems(Long tenantId,

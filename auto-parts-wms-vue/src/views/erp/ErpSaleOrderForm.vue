@@ -39,6 +39,16 @@
         >
           {{ $t('action.redFlush') }}
         </el-button>
+        <el-button
+          v-if="canCancel"
+          type="danger"
+          plain
+          class="action-button action-button--danger"
+          :disabled="isInitializing"
+          @click="handleCancel"
+        >
+          {{ $t('action.cancel') }}
+        </el-button>
         <el-button v-if="!isReadOnly" class="action-button action-button--save" :loading="isSaving" :disabled="isSaving" @click="handleSave">{{ $t('action.save') }}</el-button>
         <el-button
           v-if="shouldShowApproveButton"
@@ -566,7 +576,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="SALE_ORDER"
+      :doc-type="printDocType"
       :doc-id="printDocId"
       :title="$t('page.erpSaleOrderPrint')"
     />
@@ -710,6 +720,9 @@ interface AssemblyQuickItem {
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
+const props = defineProps<{
+  workspace?: 'draft' | 'approved';
+}>();
 const isSaleOrderRoute = () => route.path.startsWith('/erp/sale-orders');
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { requiredFieldMessage, positiveRowFieldMessage, invalidRowFieldMessage } = useValidationMessage();
@@ -717,7 +730,12 @@ const authStore = useAuthStore();
 const isSaving = ref(false);
 
 const isEditing = computed(() => Boolean(route.params.id));
+const isApprovedWorkspace = computed(() => props.workspace === 'approved' || route.path.startsWith('/erp/sale-orders/approved'));
+const isDraftWorkspace = computed(() => props.workspace === 'draft' || route.path.startsWith('/erp/sale-orders/draft') || !isApprovedWorkspace.value);
+const detailApiBase = computed(() => (isApprovedWorkspace.value ? '/erp/sale-orders/approved' : '/erp/sale-orders/draft'));
+const printDocType = computed(() => (isApprovedWorkspace.value ? 'SALE_ORDER_APPROVED' : 'SALE_ORDER_DRAFT'));
 const isReadOnly = computed(() => {
+  if (isApprovedWorkspace.value) return true;
   if (route.query.mode === 'view') return true;
   if (!formData.status) return false;
   return formData.status !== 'DRAFT';
@@ -726,18 +744,19 @@ const isReadOnly = computed(() => {
 const canCopy = computed(() => {
   return isReadOnly.value
     && (formData.status === 'APPROVED' || formData.status === 'RED_FLUSHED')
-    && hasPermission('erp-sale:add');
+    && hasPermission('erp-sale-approved:copy')
+    && hasPermission('erp-sale-draft:add');
 });
 const shouldShowCopyButton = computed(() => {
   if (canCopy.value) return true;
   return isInitializing.value
     && isEditing.value
     && (route.query.mode === 'view' || route.query.from === 'approved')
-    && hasPermission('erp-sale:add');
+    && hasPermission('erp-sale-approved:copy');
 });
 
 const canPrint = computed(() => {
-  return isEditing.value && hasPermission('erp-sale:view');
+  return isEditing.value && hasPermission(isApprovedWorkspace.value ? 'erp-sale-approved:print' : 'erp-sale-draft:print');
 });
 
 const currentOperatorName = computed(() => {
@@ -746,14 +765,17 @@ const currentOperatorName = computed(() => {
 });
 
 const canRedFlush = computed(() => {
-  return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-sale:redflush');
+  return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-sale-approved:redflush');
+});
+const canCancel = computed(() => {
+  return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-sale-approved:cancel');
 });
 const shouldShowRedFlushButton = computed(() => {
   if (canRedFlush.value) return true;
   return isInitializing.value
     && isEditing.value
     && (route.query.mode === 'view' || route.query.from === 'approved')
-    && hasPermission('erp-sale:redflush');
+    && hasPermission('erp-sale-approved:redflush');
 });
 
 const pageTitle = computed(() => {
@@ -859,18 +881,18 @@ const hasPermission = (code: string) => {
 };
 
 const canApprove = computed(() => {
-  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale:approve');
+  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale-draft:approve');
 });
 
 const shouldShowApproveButton = computed(() => {
   if (canApprove.value) return true;
   if (!isInitializing.value) return false;
   if (route.query.mode === 'view') return false;
-  return hasPermission('erp-sale:approve');
+  return hasPermission('erp-sale-draft:approve');
 });
 
 const canApproveSavedOrder = computed(() => {
-  return Boolean(saveSuccessOrderId.value) && hasPermission('erp-sale:approve');
+  return Boolean(saveSuccessOrderId.value) && hasPermission('erp-sale-draft:approve');
 });
 const successDialogTitle = computed(() => {
   return saveSuccessDialogMode.value === 'approve'
@@ -943,6 +965,8 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
   if (!canViewProfit.value) return;
   if (event.key && event.key.toLowerCase() === 'u') {
+    if (event.repeat) return;
+    event.preventDefault();
     showProfitColumn.value = !showProfitColumn.value;
   }
 };
@@ -1459,10 +1483,10 @@ const handleApprove = async () => {
 
   try {
     const savedOrderNo = formData.orderNo;
-    await request.post(`/erp/sale-orders/${savedId}/approve`);
+    await request.post(`/erp/sale-orders/draft/${savedId}/approve`);
     formData.status = 'APPROVED';
     await router.replace({
-      path: `/erp/sale-orders/${savedId}/edit`,
+      path: `/erp/sale-orders/approved/${savedId}`,
       query: { mode: 'view', from: 'approved', returnTo: '/erp/sale-orders/approved' }
     });
     await nextTick();
@@ -1501,7 +1525,31 @@ const handleRedFlush = async () => {
     if (!value || !String(value).trim()) {
       return;
     }
-    await request.post(`/erp/sale-orders/${route.params.id}/red-flush`, { reason: String(value).trim() });
+    await request.post(`/erp/sale-orders/approved/${route.params.id}/red-flush`, { reason: String(value).trim() });
+    notifySuccess();
+    closePage();
+    await router.push('/erp/sale-orders/approved');
+  } catch (error) {
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
+  }
+};
+
+const handleCancel = async () => {
+  if (!isEditing.value) return;
+  try {
+    const { value } = await ElMessageBox.prompt(
+      t('message.confirmCancel'),
+      t('action.cancel'),
+      {
+        inputPlaceholder: t('placeholder.required'),
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel')
+      }
+    );
+    if (!value || !String(value).trim()) return;
+    await request.post(`/erp/sale-orders/approved/${route.params.id}/cancel`, { reason: String(value).trim() });
     notifySuccess();
     closePage();
     await router.push('/erp/sale-orders/approved');
@@ -1567,7 +1615,7 @@ const handleSaveSuccessDialogClosed = async () => {
 const handleContinueCreate = async () => {
   closeSaveSuccessDialog();
   const createRoute = {
-    path: '/erp/sale-orders/create',
+    path: '/erp/sale-orders/draft/create',
     query: { from: 'draft', returnTo: '/erp/sale-orders/draft' }
   };
   const targetFullPath = router.resolve(createRoute).fullPath;
@@ -1592,7 +1640,7 @@ const handleStayOnCurrentOrder = async () => {
   closeSaveSuccessDialog();
   if (!savedId) return;
   if (dialogMode === 'approve') return;
-  await router.replace(`/erp/sale-orders/${savedId}/edit`);
+  await router.replace(`/erp/sale-orders/draft/${savedId}/edit`);
 };
 
 const handleBackToList = async () => {
@@ -1613,10 +1661,10 @@ const handleApproveSavedOrder = async () => {
   const sourcePath = route.path;
   try {
     const savedOrderNo = saveSuccessOrderNo.value;
-    await request.post(`/erp/sale-orders/${savedId}/approve`);
+    await request.post(`/erp/sale-orders/draft/${savedId}/approve`);
     closeSaveSuccessDialog();
     await router.replace({
-      path: `/erp/sale-orders/${savedId}/edit`,
+      path: `/erp/sale-orders/approved/${savedId}`,
       query: { mode: 'view', from: 'approved', returnTo: '/erp/sale-orders/approved' }
     });
     await nextTick();
@@ -1684,6 +1732,10 @@ const handleApproveSavedOrder = async () => {
   };
 
   const handleCopy = async () => {
+    if (!hasPermission('erp-sale-draft:add')) {
+      notifyWarning('缺少销售草稿新增权限');
+      return;
+    }
     if (!formData.customerId || !formData.items.length) {
       notifyWarning(t('message.noItems'));
       return;
@@ -1702,41 +1754,39 @@ const handleApproveSavedOrder = async () => {
     return;
   }
     try {
-      const orderNoRes: any = await request.get('/erp/sale-orders/next-order-no');
-      const orderNo = orderNoRes.data?.data || '';
-      const items = formData.items
-        .filter(item => item.productId)
-        .map((item, index) => {
-          ensureStockBinding(item);
-          return {
-            productId: item.productId,
-            warehouseId: item.warehouseId,
-            locationId: item.locationId,
-            qty: parseDecimal(item.qty, 4),
-            price: parseDecimal(item.price, 4),
-            taxRate: item.taxRate,
-            remark: item.remark,
-            sortNo: index + 1
-          };
+    const res: any = route.params.id
+      ? await request.post(`/erp/sale-orders/approved/${route.params.id}/copy`)
+      : await request.post('/erp/sale-orders/draft', {
+          orderNo: ((await request.get('/erp/sale-orders/draft/next-order-no')) as any).data?.data || '',
+          orderAt: formatDateTime(new Date()),
+          customerId: formData.customerId,
+          settlementMethod: formData.settlementMethod,
+          deliveryMethod: formData.deliveryMethod || undefined,
+          paidAmount: parseAmount(formData.paidAmount),
+          discountAmount: parseAmount(formData.discountAmount),
+          remark: formData.remark,
+          items: formData.items
+            .filter(item => item.productId)
+            .map((item, index) => {
+              ensureStockBinding(item);
+              return {
+                productId: item.productId,
+                warehouseId: item.warehouseId,
+                locationId: item.locationId,
+                qty: parseDecimal(item.qty, 4),
+                price: parseDecimal(item.price, 4),
+                taxRate: item.taxRate,
+                remark: item.remark,
+                sortNo: index + 1
+              };
+            })
         });
-    const payload = {
-      orderNo,
-      orderAt: formatDateTime(new Date()),
-      customerId: formData.customerId,
-      settlementMethod: formData.settlementMethod,
-      deliveryMethod: formData.deliveryMethod || undefined,
-      paidAmount: parseAmount(formData.paidAmount),
-      discountAmount: parseAmount(formData.discountAmount),
-      remark: formData.remark,
-      items
-    };
-    const res: any = await request.post('/erp/sale-orders', payload);
     if (res.data.code === 200) {
       const data = res.data.data || {};
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
-        await router.push({ path: `/erp/sale-orders/${newId}/edit`, query: { from: 'draft' } });
+        await router.push({ path: `/erp/sale-orders/draft/${newId}/edit`, query: { from: 'draft' } });
       }
     }
   } catch (error) {
@@ -2361,7 +2411,7 @@ const loadDetail = async () => {
       return;
     }
     const id = route.params.id;
-    const res: any = await request.get(`/erp/sale-orders/${id}`);
+    const res: any = await request.get(`${detailApiBase.value}/${id}`);
     if (seq !== loadDetailSeq) return;
     if (res.data.code === 200) {
       const data = res.data.data || {};
@@ -2525,7 +2575,7 @@ const applyDefaultMethods = () => {
 
 const fetchNextOrderNo = async () => {
   try {
-    const res: any = await request.get('/erp/sale-orders/next-order-no');
+    const res: any = await request.get('/erp/sale-orders/draft/next-order-no');
     if (res.data.code === 200) {
       formData.orderNo = res.data.data || '';
     }
@@ -2601,8 +2651,8 @@ const fetchNextOrderNo = async () => {
   try {
     isSaving.value = true;
     const res: any = isEditing.value
-      ? await request.put(`/erp/sale-orders/${route.params.id}`, payload)
-      : await request.post('/erp/sale-orders', payload);
+      ? await request.put(`/erp/sale-orders/draft/${route.params.id}`, payload)
+      : await request.post('/erp/sale-orders/draft', payload);
 
     if (res.data.code === 200) {
       const data = res.data.data || {};
@@ -2612,7 +2662,7 @@ const fetchNextOrderNo = async () => {
         if (!silentSuccess) {
           notifySuccess(t('message.saveSuccess'));
         }
-        await router.replace(`/erp/sale-orders/${savedId}/edit`);
+        await router.replace(`/erp/sale-orders/draft/${savedId}/edit`);
       }
       if (savedId && showPostSaveDialog) {
         openSaveSuccessDialog(savedId, savedOrderNo);

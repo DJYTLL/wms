@@ -15,9 +15,17 @@ public interface ErpSaleReturnService {
 
     PageResponse<ErpSaleReturn> page(long page, long size, String keyword, String status, Long customerId, Instant startAt, Instant endAt);
 
+    PageResponse<ErpSaleReturn> draftPage(long page, long size, String keyword, Long customerId, Instant startAt, Instant endAt);
+
+    PageResponse<ErpSaleReturn> approvedPage(long page, long size, String keyword, String status, Long customerId, Instant startAt, Instant endAt);
+
     List<ErpSaleReturn> listBySaleOrderId(Long saleOrderId, boolean includeDraft);
 
     ErpSaleReturnDetail getDetail(Long id);
+
+    ErpSaleReturnDetail getDraftDetail(Long id);
+
+    ErpSaleReturnDetail getApprovedDetail(Long id);
 
     ErpSaleReturnRefundSummary getSaleOrderRefundSummary(Long saleOrderId);
 
@@ -25,11 +33,15 @@ public interface ErpSaleReturnService {
 
     ErpSaleReturnDetail create(ErpSaleReturnCreateRequest request);
 
+    ErpSaleReturnDetail copyToDraft(Long id);
+
     ErpSaleReturnDetail update(Long id, ErpSaleReturnUpdateRequest request);
 
     void delete(Long id);
 
     void approve(Long id);
+
+    void cancel(Long id, String reason);
 
     void redFlush(Long id, String reason);
 }

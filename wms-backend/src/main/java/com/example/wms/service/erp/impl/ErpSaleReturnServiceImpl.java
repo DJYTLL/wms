@@ -72,6 +72,7 @@ import java.util.stream.Collectors;
 public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private static final String STATUS_DRAFT = "DRAFT";
     private static final String STATUS_APPROVED = "APPROVED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
     private static final String STATUS_RED_FLUSHED = "RED_FLUSHED";
     private static final String STATUS_SETTLED = "SETTLED";
     private static final String STATUS_OPEN = "OPEN";
@@ -163,6 +164,17 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     }
 
     @Override
+    public PageResponse<ErpSaleReturn> draftPage(long page, long size, String keyword, Long customerId, Instant startAt, Instant endAt) {
+        return page(page, size, keyword, STATUS_DRAFT, customerId, startAt, endAt);
+    }
+
+    @Override
+    public PageResponse<ErpSaleReturn> approvedPage(long page, long size, String keyword, String status, Long customerId, Instant startAt, Instant endAt) {
+        String approvedStatus = normalizeApprovedStatusFilter(status);
+        return page(page, size, keyword, approvedStatus, customerId, startAt, endAt);
+    }
+
+    @Override
     public List<ErpSaleReturn> listBySaleOrderId(Long saleOrderId, boolean includeDraft) {
         Long tenantId = TenantContext.requireTenantId();
         if (saleOrderId == null) {
@@ -195,6 +207,24 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         }
         List<ErpSaleReturnItem> items = erpSaleReturnItemMapper.findByReturnId(tenantId, id);
         return new ErpSaleReturnDetail(order, items);
+    }
+
+    @Override
+    public ErpSaleReturnDetail getDraftDetail(Long id) {
+        ErpSaleReturnDetail detail = getDetail(id);
+        if (!STATUS_DRAFT.equals(detail.order().getStatus())) {
+            throw new IllegalArgumentException("销售退货草稿不存在");
+        }
+        return detail;
+    }
+
+    @Override
+    public ErpSaleReturnDetail getApprovedDetail(Long id) {
+        ErpSaleReturnDetail detail = getDetail(id);
+        if (STATUS_DRAFT.equals(detail.order().getStatus())) {
+            throw new IllegalArgumentException("销售退货已审核单不存在");
+        }
+        return detail;
     }
 
     @Override
@@ -259,6 +289,42 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         erpSaleReturnMapper.updateById(order);
 
         return new ErpSaleReturnDetail(order, items);
+    }
+
+    @Override
+    @Transactional
+    @AuditLog(action = "ERP_SALE_RETURN_CREATE", entityType = "erp_sale_return", entityId = "{result.order.id}", detail = "copyFrom={arg0}")
+    public ErpSaleReturnDetail copyToDraft(Long id) {
+        ErpSaleReturnDetail source = getApprovedDetail(id);
+        ErpSaleReturn order = source.order();
+        List<ErpSaleReturnItemRequest> items = source.items().stream()
+            .map(item -> new ErpSaleReturnItemRequest(
+                item.getProductId(),
+                item.getWarehouseId(),
+                item.getLocationId(),
+                item.getQty(),
+                item.getPrice(),
+                item.getPriceInclTax(),
+                item.getTaxRate(),
+                item.getSortNo(),
+                item.getRemark()
+            ))
+            .toList();
+        ErpSaleReturnCreateRequest request = new ErpSaleReturnCreateRequest(
+            null,
+            order.getOrderAt() == null ? null : order.getOrderAt().toString(),
+            order.getReturnType(),
+            order.getCustomerId(),
+            order.getSaleOrderId(),
+            order.getSettlementMethod(),
+            order.getReceiptMethodCode(),
+            order.getRefundAction(),
+            order.getPaidAmount(),
+            order.getDiscountAmount(),
+            items,
+            order.getRemark()
+        );
+        return create(request);
     }
 
     @Override
@@ -356,6 +422,28 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
 
     @Override
     @Transactional
+    public void cancel(Long id, String reason) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpSaleReturn order = loadForUpdate(tenantId, id);
+        if (!STATUS_APPROVED.equals(order.getStatus())) {
+            throw new IllegalArgumentException("仅已审核状态可作废");
+        }
+        String reasonText = reason == null ? "" : reason.trim();
+        if (reasonText.isEmpty()) {
+            throw new IllegalArgumentException("请填写作废原因");
+        }
+        String remark = order.getRemark();
+        order.setRemark((remark == null || remark.isBlank())
+            ? "作废原因：" + reasonText
+            : remark + " | 作废原因：" + reasonText);
+        order.setStatus(STATUS_CANCELLED);
+        order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(resolveCurrentUsername());
+        updateWithVersion(tenantId, order);
+    }
+
+    @Override
+    @Transactional
     @AuditLog(action = "ERP_SALE_RETURN_RED_FLUSH", entityType = "erp_sale_return", entityId = "{arg0}")
     public void redFlush(Long id, String reason) {
         Long tenantId = TenantContext.requireTenantId();
@@ -435,6 +523,23 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             wrapper.le("order_at", endAt);
         }
         return wrapper;
+    }
+
+    private String normalizeApprovedStatusFilter(String status) {
+        if (status == null || status.isBlank()) {
+            return STATUS_APPROVED + "," + STATUS_CANCELLED + "," + STATUS_RED_FLUSHED;
+        }
+        List<String> statuses = new ArrayList<>();
+        for (String part : status.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isBlank() && !STATUS_DRAFT.equals(trimmed)) {
+                statuses.add(trimmed);
+            }
+        }
+        if (statuses.isEmpty()) {
+            return STATUS_APPROVED + "," + STATUS_CANCELLED + "," + STATUS_RED_FLUSHED;
+        }
+        return String.join(",", statuses);
     }
 
     private void validateHeaderMasterData(Long tenantId,

@@ -411,6 +411,8 @@ const handleKeydown = (event: KeyboardEvent) => {
   if (!canViewProfit.value) return;
   if (isTypingTarget(event.target)) return;
   if (event.key && event.key.toLowerCase() === 'u') {
+    if (event.repeat) return;
+    event.preventDefault();
     showProfitColumn.value = !showProfitColumn.value;
   }
 };

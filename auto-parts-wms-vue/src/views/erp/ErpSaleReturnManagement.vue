@@ -39,7 +39,7 @@
             <el-button
               v-if="canCreate"
               type="primary"
-              v-permission="'erp-sale-return:add'"
+              v-permission="'erp-sale-return-draft:add'"
               @click="openCreatePage"
             >
               {{ $t('action.add') }}
@@ -101,7 +101,7 @@
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-sale-return:view'"
+                  v-permission="'erp-sale-return-approved:print'"
                   @click="openPrintPage(row)"
                 >
                   {{ $t('action.print') }}
@@ -110,7 +110,7 @@
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-sale-return:add'"
+                  v-permission="'erp-sale-return-approved:copy'"
                   @click="handleCopy(row)"
                 >
                   {{ $t('action.copy') }}
@@ -118,9 +118,19 @@
                 <el-button
                   v-if="row.status === 'APPROVED'"
                   link
+                  type="warning"
+                  size="small"
+                  v-permission="'erp-sale-return-approved:cancel'"
+                  @click="handleCancel(row)"
+                >
+                  {{ $t('action.cancel') }}
+                </el-button>
+                <el-button
+                  v-if="row.status === 'APPROVED'"
+                  link
                   type="danger"
                   size="small"
-                  v-permission="'erp-sale-return:redflush'"
+                  v-permission="'erp-sale-return-approved:redflush'"
                   @click="handleRedFlush(row)"
                 >
                   {{ $t('action.redFlush') }}
@@ -132,7 +142,7 @@
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-sale-return:edit'"
+                  v-permission="'erp-sale-return-draft:edit'"
                   @click="openEditPage(row)"
                 >
                   {{ $t('action.edit') }}
@@ -141,7 +151,7 @@
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-sale-return:view'"
+                  v-permission="'erp-sale-return-draft:print'"
                   @click="openPrintPage(row)"
                 >
                   {{ $t('action.print') }}
@@ -151,7 +161,7 @@
                   link
                   type="success"
                   size="small"
-                  v-permission="'erp-sale-return:approve'"
+                  v-permission="'erp-sale-return-draft:approve'"
                   @click="handleApprove(row)"
                 >
                   {{ $t('action.approve') }}
@@ -161,7 +171,7 @@
                   link
                   type="danger"
                   size="small"
-                  v-permission="'erp-sale-return:edit'"
+                  v-permission="'erp-sale-return-draft:delete'"
                   @click="handleDelete(row)"
                 >
                   {{ $t('action.delete') }}
@@ -187,7 +197,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="SALE_RETURN"
+      :doc-type="printDocType"
       :doc-id="printDocId"
       :title="$t('page.erpSaleReturnPrint')"
     />
@@ -260,17 +270,26 @@ const productOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 
-const isDraftPage = computed(() => route.meta.defaultStatus === 'DRAFT');
-const isApprovedPage = computed(() => route.meta.defaultStatus === 'APPROVED');
+const currentWorkspace = computed<'draft' | 'approved'>(() => {
+  if (route.path.includes('/erp/sale-returns/draft')) return 'draft';
+  if (route.path.includes('/erp/sale-returns/approved')) return 'approved';
+  if (route.meta.workspace === 'draft' || route.meta.defaultStatus === 'DRAFT') return 'draft';
+  if (route.meta.workspace === 'approved' || route.meta.defaultStatus === 'APPROVED') return 'approved';
+  return 'draft';
+});
+const isDraftPage = computed(() => currentWorkspace.value === 'draft');
+const isApprovedPage = computed(() => currentWorkspace.value === 'approved');
+const printDocType = computed(() => isApprovedPage.value ? 'SALE_RETURN_APPROVED' : 'SALE_RETURN_DRAFT');
 
 const statusOptions = computed(() => {
   const base = [
     { value: 'DRAFT', label: t('status.draft') },
     { value: 'APPROVED', label: t('status.approved') },
+    { value: 'CANCELLED', label: t('status.cancelled') },
     { value: 'RED_FLUSHED', label: t('status.redFlushed') }
   ];
   if (isApprovedPage.value) {
-    base.unshift({ value: 'APPROVED,RED_FLUSHED', label: `${t('status.approved')}/${t('status.redFlushed')}` });
+    base.unshift({ value: 'APPROVED,CANCELLED,RED_FLUSHED', label: `${t('status.approved')}/${t('status.cancelled')}/${t('status.redFlushed')}` });
   }
   return base;
 });
@@ -311,6 +330,7 @@ const canShow = (key: string) => isVisible(key);
 
 const statusTagType = (status: string) => {
   if (status === 'APPROVED') return 'success';
+  if (status === 'CANCELLED') return 'warning';
   if (status === 'RED_FLUSHED') return 'danger';
   return 'info';
 };
@@ -319,6 +339,7 @@ const formatStatus = (status: string) => {
   const mapping: Record<string, string> = {
     DRAFT: t('status.draft'),
     APPROVED: t('status.approved'),
+    CANCELLED: t('status.cancelled'),
     RED_FLUSHED: t('status.redFlushed')
   };
   return mapping[status] || status;
@@ -422,7 +443,8 @@ const fetchList = async () => {
       params.endAt = end;
     }
 
-    const res: any = await request.get('/erp/sale-returns/page', { params });
+    const endpoint = isApprovedPage.value ? '/erp/sale-returns/approved/page' : '/erp/sale-returns/draft/page';
+    const res: any = await request.get(endpoint, { params });
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -440,7 +462,7 @@ const applyRouteStatus = () => {
   statusLocked.value = lockStatus;
   if (defaultStatus) {
     if (defaultStatus === 'APPROVED') {
-      statusFilter.value = 'APPROVED,RED_FLUSHED';
+      statusFilter.value = 'APPROVED,CANCELLED,RED_FLUSHED';
     } else {
       statusFilter.value = defaultStatus;
     }
@@ -473,26 +495,26 @@ const openCreatePage = () => {
   const query = isDraftPage.value
     ? { from: 'draft', returnTo: route.path }
     : { returnTo: route.path };
-  router.push({ path: '/erp/sale-returns/create', query });
+  router.push({ path: '/erp/sale-returns/draft/create', query });
 };
 
 const openEditPage = (row: SaleReturn) => {
   const query = isDraftPage.value
     ? { from: 'draft', returnTo: route.path }
     : { returnTo: route.path };
-  router.push({ path: `/erp/sale-returns/${row.id}/edit`, query });
+  router.push({ path: `/erp/sale-returns/draft/${row.id}/edit`, query });
 };
 
 const openViewPage = (row: SaleReturn) => {
   router.push({
-    path: `/erp/sale-returns/${row.id}/edit`,
+    path: `/erp/sale-returns/approved/${row.id}`,
     query: { mode: 'view', from: 'approved', returnTo: route.path }
   });
 };
 
 const handleApprove = async (row: SaleReturn) => {
   try {
-    await request.post(`/erp/sale-returns/${row.id}/approve`);
+    await request.post(`/erp/sale-returns/draft/${row.id}/approve`);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -514,7 +536,33 @@ const handleRedFlush = async (row: SaleReturn) => {
     if (!value || !String(value).trim()) {
       return;
     }
-    await request.post(`/erp/sale-returns/${row.id}/red-flush`, null, {
+    await request.post(`/erp/sale-returns/approved/${row.id}/red-flush`, null, {
+      params: { reason: String(value).trim() }
+    });
+    notifySuccess();
+    fetchList();
+  } catch (error) {
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
+  }
+};
+
+const handleCancel = async (row: SaleReturn) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      t('message.confirmCancel'),
+      t('action.cancel'),
+      {
+        inputPlaceholder: t('placeholder.required'),
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel')
+      }
+    );
+    if (!value || !String(value).trim()) {
+      return;
+    }
+    await request.post(`/erp/sale-returns/approved/${row.id}/cancel`, null, {
       params: { reason: String(value).trim() }
     });
     notifySuccess();
@@ -541,47 +589,14 @@ const handleCopy = async (row: SaleReturn) => {
     return;
   }
   try {
-    const detailRes: any = await request.get(`/erp/sale-returns/${row.id}`);
-    const detail = detailRes.data?.data;
-    if (!detail?.order) {
-      notifyWarning(t('message.noItems'));
-      return;
-    }
-    const order = detail.order;
-    const items = (detail.items || []).map((item: any, index: number) => ({
-      productId: item.productId,
-      warehouseId: item.warehouseId,
-      locationId: item.locationId,
-      qty: item.qty,
-      price: item.price,
-      taxRate: item.taxRate,
-      remark: item.remark,
-      sortNo: index + 1
-    }));
-
-    const orderNoRes: any = await request.get('/erp/sale-returns/next-no');
-    const orderNo = orderNoRes.data?.data || '';
-
-    const payload = {
-      orderNo,
-      orderAt: order.orderAt,
-      returnType: order.returnType || 'RESTOCK',
-      customerId: order.customerId,
-      saleOrderId: order.saleOrderId || undefined,
-      settlementMethod: order.settlementMethod,
-      paidAmount: order.paidAmount,
-      discountAmount: order.discountAmount,
-      remark: order.remark,
-      items
-    };
-    const createRes: any = await request.post('/erp/sale-returns', payload);
+    const createRes: any = await request.post(`/erp/sale-returns/approved/${row.id}/copy`);
     if (createRes.data.code === 200) {
       const data = createRes.data.data || {};
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
         await router.push({
-          path: `/erp/sale-returns/${newId}/edit`,
+          path: `/erp/sale-returns/draft/${newId}/edit`,
           query: { from: 'draft', returnTo: '/erp/sale-returns/draft' }
         });
       }
@@ -602,7 +617,7 @@ const handleDelete = async (row: SaleReturn) => {
         type: 'warning'
       }
     );
-    await request.delete(`/erp/sale-returns/${row.id}`);
+    await request.delete(`/erp/sale-returns/draft/${row.id}`);
     notifySuccess();
     fetchList();
   } catch (error) {

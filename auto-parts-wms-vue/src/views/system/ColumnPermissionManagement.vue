@@ -244,9 +244,11 @@
 </template>
 
 <script setup lang="ts">
+import axios from 'axios'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import request from '@/utils/request'
+import { setTokens } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore, type MenuItem } from '@/stores/menu'
 import { useApiError } from '@/composables/useApiError'
@@ -322,6 +324,7 @@ const pageTreeOpenState = ref<Record<string, boolean>>({})
 const permissions = ref<PermissionItem[]>([])
 const roleOptions = ref<RoleOption[]>([])
 const tenantOptions = ref<TenantOption[]>([])
+const treeMenus = ref<MenuItem[]>([])
 
 const selectedRoleId = ref<number | null>(null)
 const selectedRolePermissionIds = ref<number[]>([])
@@ -350,10 +353,10 @@ const menuPageKeyMap: Record<string, string[]> = {
   permissions: ['permission-management'],
   'audit-logs': ['audit-logs'],
   'column-permissions': [],
+  columnPermissions: [],
   'menu-management': ['menu-management'],
   'system-config': ['system-configs'],
   tenants: ['tenant-management'],
-  inbound: ['inbound-management'],
   'erp-product': ['erp-product'],
   'erp-vehicle-fitment': ['erp-vehicle-brand', 'erp-vehicle-series', 'erp-vehicle-model', 'erp-product-fitment'],
   'erp-customer': ['erp-customer'],
@@ -386,6 +389,7 @@ const menuPageKeyMap: Record<string, string[]> = {
   'erp-disassemble-order': ['erp-disassemble-order'],
   'erp-ar': ['erp-ar'],
   'erp-finance-summary': ['erp-finance-customer-debt'],
+  'erp-finance-customer-debt': ['erp-finance-customer-debt'],
   'erp-finance-supplier-debt': ['erp-finance-supplier-debt'],
   'erp-ap': ['erp-ap'],
   'erp-receipt': ['erp-receipt'],
@@ -393,9 +397,6 @@ const menuPageKeyMap: Record<string, string[]> = {
 }
 
 const menuExtraPageMap: Record<string, ExtraPageNode[]> = {
-  'erp-warehouse-module': [
-    { pageKey: 'inbound-management', label: t('page.inboundManagement') },
-  ],
   'erp-sale-approved': [
     { pageKey: 'erp-sale-form', label: '销售单表单/打印' },
   ],
@@ -409,7 +410,6 @@ const pageLabelMap = computed<Record<string, string>>(() => ({
   'tenant-management': t('page.tenantManagement'),
   'audit-logs': t('page.auditLogManagement'),
   'system-configs': t('page.systemConfigManagement'),
-  'inbound-management': t('page.inboundManagement'),
   'erp-product': t('page.erpProductManagement'),
   'erp-customer': t('page.erpCustomerManagement'),
   'erp-customer-category': t('page.erpCustomerCategoryManagement'),
@@ -549,7 +549,10 @@ const buildTreeNode = (item: MenuItem, parentId: string): PageTreeNode | null =>
     .filter((child): child is PageTreeNode => Boolean(child))
 
   const firstMappedNode = mappedNodes[0]
-  const onlyDirectLeaf = mappedNodes.length === 1 && Boolean(firstMappedNode?.pageKey) && childNodes.length === 0
+  const onlyDirectLeaf = mappedNodes.length === 1
+    && Boolean(firstMappedNode?.pageKey)
+    && childNodes.length === 0
+    && extraNodes.length === 0
   const directPageKey = onlyDirectLeaf ? firstMappedNode?.pageKey : undefined
   const children = onlyDirectLeaf ? [] : [...mappedNodes, ...extraNodes, ...childNodes]
 
@@ -570,8 +573,7 @@ const buildTreeNode = (item: MenuItem, parentId: string): PageTreeNode | null =>
 }
 
 const pageTreeData = computed<PageTreeNode[]>(() => {
-  const tree = menuStore.menus
-    .filter((item) => item.key !== 'warehouse')
+  const tree = treeMenus.value
     .map((item) => buildTreeNode(item, 'root'))
     .filter((item): item is PageTreeNode => Boolean(item))
 
@@ -678,6 +680,33 @@ const roleTemplateSummary = computed(() => {
   return `${selectedCount}/${totalCount}`
 })
 
+const currentUserRoleCodes = computed(() => {
+  const roles = (authStore.user as { roles?: Array<string | { code?: string }> } | null)?.roles
+  if (!Array.isArray(roles)) return [] as string[]
+  return roles
+    .map((item) => {
+      if (typeof item === 'string') return item
+      return item?.code || ''
+    })
+    .filter((item) => Boolean(item))
+})
+
+const isEditingCurrentUserRole = computed(() => {
+  if (!selectedRoleId.value) return false
+  const targetRole = roleOptions.value.find((item) => item.id === selectedRoleId.value)
+  if (!targetRole?.code) return false
+  return currentUserRoleCodes.value.includes(targetRole.code)
+})
+
+const refreshCurrentSession = async () => {
+  const res: any = await axios.post('/api/refresh', {}, { withCredentials: true })
+  const refreshData = res?.data
+  if (!refreshData || refreshData.code !== 200 || !refreshData.data?.token) {
+    throw new Error(refreshData?.message || '刷新登录态失败')
+  }
+  setTokens(refreshData.data.token, refreshData.data.authPayload)
+}
+
 const clampRoleSelections = () => {
   sanitizeFullForCurrentPage()
   setRoleSelectionFromFull()
@@ -750,6 +779,33 @@ const loadRoleOptions = async () => {
   try {
     const res: any = await request.get('/roles/options')
     roleOptions.value = res.data.data || []
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const normalizeTreeMenu = (item: any): MenuItem => {
+  return {
+    id: Number(item.id),
+    key: String(item.code || item.key || ''),
+    title: item.title || '',
+    path: item.path || '',
+    icon: item.icon || '',
+    permissionCode: item.permissionCode || null,
+    children: Array.isArray(item.children) ? item.children.map((child: any) => normalizeTreeMenu(child)) : [],
+  }
+}
+
+const loadTreeMenus = async () => {
+  try {
+    if (isSuperAdmin.value) {
+      const res: any = await request.get('/menus/all')
+      const data = res.data.data || []
+      treeMenus.value = Array.isArray(data) ? data.map((item: any) => normalizeTreeMenu(item)) : []
+      return
+    }
+    await menuStore.fetchMenus()
+    treeMenus.value = menuStore.menus
   } catch (error) {
     notifyError(error)
   }
@@ -907,6 +963,9 @@ const saveRolePermissions = async () => {
       updatedAt: new Date().toISOString(),
     }
     roleSettingExists.value = true
+    if (isEditingCurrentUserRole.value) {
+      await refreshCurrentSession()
+    }
     notifySuccess()
   } catch (error) {
     notifyError(error)
@@ -1034,7 +1093,7 @@ watch(basePagePermissions, () => {
 })
 
 onMounted(async () => {
-  await menuStore.fetchMenus()
+  await loadTreeMenus()
   await loadColumnPermissions()
   await loadRoleOptions()
   await loadTenantOptions()

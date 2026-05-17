@@ -39,7 +39,6 @@
             <el-button
               v-if="canCreate"
               type="primary"
-              v-permission="'erp-purchase-return:add'"
               @click="openCreatePage"
             >
               {{ $t('action.add') }}
@@ -93,7 +92,7 @@
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-purchase-return:view'"
+                  v-if="canPrint"
                   @click="openPrintPage(row)"
                 >
                   {{ $t('action.print') }}
@@ -102,17 +101,16 @@
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-purchase-return:add'"
+                  v-if="canCopy"
                   @click="handleCopy(row)"
                 >
                   {{ $t('action.copy') }}
                 </el-button>
                 <el-button
-                  v-if="row.status === 'APPROVED'"
+                  v-if="row.status === 'APPROVED' && canCancel"
                   link
                   type="danger"
                   size="small"
-                  v-permission="'erp-purchase-return:cancel'"
                   @click="handleCancel(row)"
                 >
                   {{ $t('action.cancel') }}
@@ -120,11 +118,10 @@
               </template>
               <template v-else>
                 <el-button
-                  v-if="row.status === 'DRAFT'"
+                  v-if="row.status === 'DRAFT' && canEdit"
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-purchase-return:edit'"
                   @click="openEditPage(row)"
                 >
                   {{ $t('action.edit') }}
@@ -133,27 +130,25 @@
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-purchase-return:view'"
+                  v-if="canPrint"
                   @click="openPrintPage(row)"
                 >
                   {{ $t('action.print') }}
                 </el-button>
                 <el-button
-                  v-if="row.status === 'DRAFT'"
+                  v-if="row.status === 'DRAFT' && canApprove"
                   link
                   type="success"
                   size="small"
-                  v-permission="'erp-purchase-return:approve'"
                   @click="handleApprove(row)"
                 >
                   {{ $t('action.approve') }}
                 </el-button>
                 <el-button
-                  v-if="row.status === 'DRAFT'"
+                  v-if="row.status === 'DRAFT' && canDelete"
                   link
                   type="danger"
                   size="small"
-                  v-permission="'erp-purchase-return:edit'"
                   @click="handleDelete(row)"
                 >
                   {{ $t('action.delete') }}
@@ -179,7 +174,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="PURCHASE_RETURN"
+      :doc-type="printDocType"
       :doc-id="printDocId"
       :title="$t('page.erpPurchaseReturnPrint')"
     />
@@ -198,6 +193,7 @@ import { useApiError } from '@/composables/useApiError';
   import { ElMessageBox } from 'element-plus';
   import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
   import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
+  import { useAuthStore } from '@/stores/auth';
 
 interface OptionItem {
   id: number;
@@ -219,6 +215,7 @@ const route = useRoute();
 const router = useRouter();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
+const authStore = useAuthStore();
 
 const searchQuery = ref('');
 const statusFilter = ref('');
@@ -237,6 +234,21 @@ const supplierOptions = ref<OptionItem[]>([]);
 
 const isDraftPage = computed(() => route.meta.defaultStatus === 'DRAFT');
 const isApprovedPage = computed(() => route.meta.defaultStatus === 'APPROVED');
+const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
+const listEndpoint = computed(() => isApprovedPage.value ? '/erp/purchase-returns/approved/page' : '/erp/purchase-returns/draft/page');
+const detailEndpoint = computed(() => isApprovedPage.value ? '/erp/purchase-returns/approved' : '/erp/purchase-returns/draft');
+const printDocType = computed<'PURCHASE_RETURN_APPROVED' | 'PURCHASE_RETURN_DRAFT'>(() => isApprovedPage.value ? 'PURCHASE_RETURN_APPROVED' : 'PURCHASE_RETURN_DRAFT');
+const canCreate = computed(() => isDraftPage.value && hasPermission('erp-purchase-return-draft:add'));
+const canEdit = computed(() => isDraftPage.value && hasPermission('erp-purchase-return-draft:edit'));
+const canDelete = computed(() => isDraftPage.value && hasPermission('erp-purchase-return-draft:delete'));
+const canApprove = computed(() => isDraftPage.value && hasPermission('erp-purchase-return-draft:approve'));
+const canPrint = computed(() => isApprovedPage.value
+  ? hasPermission('erp-purchase-return-approved:print')
+  : hasPermission('erp-purchase-return-draft:print'));
+const canCopy = computed(() => isApprovedPage.value
+  && hasPermission('erp-purchase-return-approved:copy')
+  && hasPermission('erp-purchase-return-draft:add'));
+const canCancel = computed(() => isApprovedPage.value && hasPermission('erp-purchase-return-approved:cancel'));
 
 const statusOptions = computed(() => ([
   { value: 'DRAFT', label: t('status.draft') },
@@ -247,17 +259,6 @@ const statusOptions = computed(() => ([
 const pageTitle = computed(() => {
   const key = route.meta.titleKey as string | undefined;
   return key ? t(key) : t('page.erpPurchaseReturnManagement');
-});
-
-const canCreate = computed(() => {
-  const defaultStatus = route.meta.defaultStatus as string | undefined;
-  if (defaultStatus === 'APPROVED') {
-    return false;
-  }
-  if (statusLocked.value && statusFilter.value === 'APPROVED') {
-    return false;
-  }
-  return true;
 });
 
 const defaultColumns = ['orderNo', 'supplier', 'status', 'totalAmount', 'createdAt'];
@@ -327,7 +328,6 @@ const fetchList = async () => {
       size: size.value
     };
     if (searchQuery.value) params.keyword = searchQuery.value.trim();
-    if (statusFilter.value) params.status = statusFilter.value;
     if (supplierFilter.value) params.supplierId = supplierFilter.value;
     if (dateRange.value && dateRange.value.length === 2) {
       const start = Number(dateRange.value[0]);
@@ -336,7 +336,7 @@ const fetchList = async () => {
       params.endAt = end;
     }
 
-    const res: any = await request.get('/erp/purchase-returns/page', { params });
+    const res: any = await request.get(listEndpoint.value, { params });
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -381,21 +381,21 @@ const handleSizeChange = (newSize: number) => {
 
 const openCreatePage = () => {
   const query = isDraftPage.value ? { from: 'draft' } : undefined;
-  router.push({ path: '/erp/purchase-returns/create', query });
+  router.push({ path: '/erp/purchase-returns/draft/create', query });
 };
 
 const openEditPage = (row: PurchaseReturn) => {
   const query = isDraftPage.value ? { from: 'draft' } : undefined;
-  router.push({ path: `/erp/purchase-returns/${row.id}/edit`, query });
+  router.push({ path: `/erp/purchase-returns/draft/${row.id}/edit`, query });
 };
 
 const openViewPage = (row: PurchaseReturn) => {
-  router.push({ path: `/erp/purchase-returns/${row.id}/edit`, query: { mode: 'view' } });
+  router.push({ path: `/erp/purchase-returns/approved/${row.id}`, query: { mode: 'view', from: 'approved' } });
 };
 
 const handleApprove = async (row: PurchaseReturn) => {
   try {
-    await request.post(`/erp/purchase-returns/${row.id}/approve`);
+    await request.post(`/erp/purchase-returns/draft/${row.id}/approve`);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -418,46 +418,13 @@ const handleCopy = async (row: PurchaseReturn) => {
     return;
   }
   try {
-    const detailRes: any = await request.get(`/erp/purchase-returns/${row.id}`);
-    const detail = detailRes.data?.data;
-    if (!detail?.order) {
-      notifyWarning(t('message.noItems'));
-      return;
-    }
-    const order = detail.order;
-    const items = (detail.items || []).map((item: any, index: number) => ({
-      productId: item.productId,
-      warehouseId: item.warehouseId,
-      locationId: item.locationId,
-      qty: item.qty,
-      price: item.price,
-      taxRate: item.taxRate,
-      remark: item.remark,
-      sortNo: index + 1
-    }));
-
-    const orderNoRes: any = await request.get('/erp/purchase-returns/next-no');
-    const orderNo = orderNoRes.data?.data || '';
-
-    const payload = {
-      orderNo,
-      orderAt: order.orderAt,
-      returnType: order.returnType || 'RETURN',
-      supplierId: order.supplierId,
-      purchaseOrderId: order.purchaseOrderId || undefined,
-      settlementMethod: order.settlementMethod,
-      paidAmount: order.paidAmount,
-      discountAmount: order.discountAmount,
-      remark: order.remark,
-      items
-    };
-    const createRes: any = await request.post('/erp/purchase-returns', payload);
+    const createRes: any = await request.post(`/erp/purchase-returns/approved/${row.id}/copy`);
     if (createRes.data.code === 200) {
       const data = createRes.data.data || {};
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
-        await router.push({ path: `/erp/purchase-returns/${newId}/edit`, query: { from: 'draft' } });
+        await router.push({ path: `/erp/purchase-returns/draft/${newId}/edit`, query: { from: 'draft' } });
       }
     }
   } catch (error) {
@@ -476,7 +443,7 @@ const handleDelete = async (row: PurchaseReturn) => {
         type: 'warning'
       }
     );
-    await request.delete(`/erp/purchase-returns/${row.id}`);
+    await request.delete(`/erp/purchase-returns/draft/${row.id}`);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -499,7 +466,7 @@ const handleCancel = async (row: PurchaseReturn) => {
         type: 'warning'
       }
     );
-    await request.post(`/erp/purchase-returns/${row.id}/cancel`, { reason: value });
+    await request.post(`/erp/purchase-returns/approved/${row.id}/cancel`, { reason: value });
     notifySuccess();
     fetchList();
   } catch (error) {

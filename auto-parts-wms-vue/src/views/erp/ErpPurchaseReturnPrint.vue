@@ -81,6 +81,11 @@ const purchaseOrderNo = ref<string>('');
 const orderId = computed(() => Number(route.params.id));
 const isPreview = computed(() => route.query.preview === '1' || route.query.preview === 'true');
 const shouldAutoPrint = computed(() => route.query.auto === '1' || route.query.auto === 'true');
+const isApprovedPrint = computed(() => route.path.includes('/purchase-returns/approved/'));
+const printDocType = computed(() => isApprovedPrint.value ? 'PURCHASE_RETURN_APPROVED' : 'PURCHASE_RETURN_DRAFT');
+const detailEndpoint = computed(() => isApprovedPrint.value
+  ? `/erp/purchase-returns/approved/${orderId.value}/print`
+  : `/erp/purchase-returns/draft/${orderId.value}/print`);
 
 const headerTitle = computed(() => template.value?.headerTitle || t('print.purchaseReturnTitle'));
 const subTitle = computed(() => template.value?.subTitle || '');
@@ -282,7 +287,7 @@ const fetchTemplate = async () => {
       applyTemplate(template.value);
       return;
     }
-    template.value = await fetchPrintTemplate('PURCHASE_RETURN', resolveTemplateId(route.query.templateId));
+    template.value = await fetchPrintTemplate(printDocType.value, resolveTemplateId(route.query.templateId));
     applyTemplate(template.value);
   } catch {
     template.value = null;
@@ -291,7 +296,7 @@ const fetchTemplate = async () => {
 };
 
 const fetchDetail = async () => {
-  const res: any = await request.get(`/erp/purchase-returns/${orderId.value}`);
+  const res: any = await request.get(detailEndpoint.value);
   const data = res.data.data || {};
   order.value = data.order || null;
   items.value = data.items || [];
@@ -304,7 +309,7 @@ const fetchDetail = async () => {
 const recordPrint = async () => {
   try {
     await request.post('/erp/print/logs', {
-      docType: 'PURCHASE_RETURN',
+      docType: printDocType.value,
       docId: orderId.value,
       templateId: template.value?.id || null
     });

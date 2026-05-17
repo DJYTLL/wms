@@ -149,6 +149,17 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     }
 
     @Override
+    public PageResponse<ErpSaleOrder> draftPage(long page, long size, String keyword, Long customerId, Instant startAt, Instant endAt) {
+        return page(page, size, keyword, STATUS_DRAFT, customerId, startAt, endAt);
+    }
+
+    @Override
+    public PageResponse<ErpSaleOrder> approvedPage(long page, long size, String keyword, String status, Long customerId, Instant startAt, Instant endAt) {
+        String normalizedStatus = normalizeApprovedStatusFilter(status);
+        return page(page, size, keyword, normalizedStatus, customerId, startAt, endAt);
+    }
+
+    @Override
     public ErpSaleOrderSummary summary(String keyword, String status, Long customerId, Instant startAt, Instant endAt) {
         Long tenantId = tenantId();
         QueryWrapper<ErpSaleOrder> wrapper = baseWrapper(keyword, status, customerId, startAt, endAt);
@@ -204,6 +215,16 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     }
 
     @Override
+    public ErpSaleOrderSummary draftSummary(String keyword, Long customerId, Instant startAt, Instant endAt) {
+        return summary(keyword, STATUS_DRAFT, customerId, startAt, endAt);
+    }
+
+    @Override
+    public ErpSaleOrderSummary approvedSummary(String keyword, String status, Long customerId, Instant startAt, Instant endAt) {
+        return summary(keyword, normalizeApprovedStatusFilter(status), customerId, startAt, endAt);
+    }
+
+    @Override
     public ErpSaleOrderDetail getDetail(Long id) {
         Long tenantId = TenantContext.requireTenantId();
         ErpSaleOrder order = erpSaleOrderMapper.selectOne(new QueryWrapper<ErpSaleOrder>()
@@ -219,6 +240,24 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             ? BigDecimal.ZERO
             : erpAccountsReceivableMapper.sumCustomerDebt(tenantId, order.getCustomerId());
         return new ErpSaleOrderDetail(order, items, customerDebtTotal == null ? BigDecimal.ZERO : customerDebtTotal);
+    }
+
+    @Override
+    public ErpSaleOrderDetail getDraftDetail(Long id) {
+        ErpSaleOrderDetail detail = getDetail(id);
+        if (!STATUS_DRAFT.equals(detail.order().getStatus())) {
+            throw new IllegalArgumentException("草稿接口不能访问已审核销售单");
+        }
+        return detail;
+    }
+
+    @Override
+    public ErpSaleOrderDetail getApprovedDetail(Long id) {
+        ErpSaleOrderDetail detail = getDetail(id);
+        if (STATUS_DRAFT.equals(detail.order().getStatus())) {
+            throw new IllegalArgumentException("已审核接口不能访问草稿销售单");
+        }
+        return detail;
     }
 
     @Override
@@ -381,12 +420,43 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     @Transactional
     @AuditLog(action = "ERP_SALE_CANCEL", entityType = "erp_sale_order", entityId = "{arg0}")
     public void cancel(Long id) {
+        cancel(id, null);
+    }
+
+    @Override
+    @Transactional
+    @AuditLog(action = "ERP_SALE_CANCEL", entityType = "erp_sale_order", entityId = "{arg0}")
+    public void cancel(Long id, String reason) {
         Long tenantId = TenantContext.requireTenantId();
         ErpSaleOrder order = loadForUpdate(tenantId, id);
         if (STATUS_APPROVED.equals(order.getStatus())) {
-            throw new IllegalArgumentException("已审核单据不可取消，请使用红冲");
-        }
-        if (!STATUS_DRAFT.equals(order.getStatus())) {
+            if (reason == null || reason.trim().isEmpty()) {
+                throw new IllegalArgumentException("作废原因不能为空");
+            }
+            if (hasApprovedReceiptImpact(tenantId, order.getId())) {
+                throw new IllegalArgumentException("请先红冲收款单");
+            }
+            if (hasApprovedSaleReturn(tenantId, order.getId())) {
+                throw new IllegalArgumentException("请先红冲销售退货单");
+            }
+            List<ErpSaleOrderItem> items = erpSaleOrderItemMapper.findByOrderId(tenantId, id);
+            for (ErpSaleOrderItem item : items) {
+                applyStockDelta(tenantId, item, item.getQty(), "SALE_CANCEL", id, false);
+            }
+            ErpAccountsReceivable receivable = erpAccountsReceivableMapper.findBySaleOrderId(tenantId, order.getId());
+            if (receivable != null) {
+                receivable.setTotalAmount(BigDecimal.ZERO);
+                receivable.setPaidAmount(BigDecimal.ZERO);
+                receivable.setUnpaidAmount(BigDecimal.ZERO);
+                receivable.setStatus("CANCELLED");
+                receivable.setRemark(appendRedFlushReason(receivable.getRemark(), reason));
+                receivable.setRedFlushSourceType(SOURCE_SALE_ORDER);
+                receivable.setRedFlushSourceId(order.getId());
+                receivable.setUpdatedAt(Instant.now());
+                erpAccountsReceivableMapper.updateById(receivable);
+            }
+            order.setRemark(appendRedFlushReason(order.getRemark(), reason));
+        } else if (!STATUS_DRAFT.equals(order.getStatus())) {
             throw new IllegalArgumentException("仅草稿状态可取消");
         }
         if (Boolean.TRUE.equals(order.getInventoryReserved())) {
@@ -443,6 +513,39 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             receivable.setUpdatedAt(Instant.now());
             erpAccountsReceivableMapper.updateById(receivable);
         }
+    }
+
+    @Override
+    @Transactional
+    @AuditLog(action = "ERP_SALE_COPY_APPROVED", entityType = "erp_sale_order", entityId = "{arg0}", detail = "newOrderNo={result.order.orderNo}")
+    public ErpSaleOrderDetail copyApprovedToDraft(Long id) {
+        ErpSaleOrderDetail source = getApprovedDetail(id);
+        ErpSaleOrder order = source.order();
+        ErpSaleOrderCreateRequest request = new ErpSaleOrderCreateRequest(
+            nextOrderNo(),
+            order.getOrderAt() == null ? null : order.getOrderAt().toString(),
+            order.getCustomerId(),
+            order.getSettlementMethod(),
+            order.getReceiptMethodCode(),
+            order.getDeliveryMethod(),
+            order.getPaidAmount(),
+            order.getDiscountAmount(),
+            source.items().stream()
+                .map(item -> new ErpSaleOrderItemRequest(
+                    item.getProductId(),
+                    item.getWarehouseId(),
+                    item.getLocationId(),
+                    item.getQty(),
+                    item.getPrice(),
+                    item.getPriceInclTax(),
+                    item.getTaxRate(),
+                    item.getSortNo(),
+                    item.getRemark()
+                ))
+                .toList(),
+            order.getRemark()
+        );
+        return create(request);
     }
 
     private Long tenantId() {
@@ -683,6 +786,21 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             wrapper.le("order_at", endAt);
         }
         return wrapper;
+    }
+
+    private String normalizeApprovedStatusFilter(String status) {
+        if (status == null || status.isBlank()) {
+            return "APPROVED,CANCELLED,RED_FLUSHED";
+        }
+        List<String> statuses = java.util.Arrays.stream(status.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .filter(s -> !STATUS_DRAFT.equals(s))
+            .toList();
+        if (statuses.isEmpty()) {
+            throw new IllegalArgumentException("已审核接口不能查询草稿状态");
+        }
+        return String.join(",", statuses);
     }
 
     private void validateHeaderMasterData(Long tenantId,

@@ -32,7 +32,7 @@
             />
           </div>
           <div class="table-actions">
-            <el-button type="primary" v-permission="'erp-purchase:add'" @click="openCreatePage">
+            <el-button type="primary" v-permission="'erp-purchase-draft:add'" @click="openCreatePage">
               {{ $t('action.add') }}
             </el-button>
           </div>
@@ -67,14 +67,17 @@
           </el-table-column>
           <el-table-column :label="$t('table.actions')" width="220" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" v-permission="'erp-purchase:edit'" @click="openEditPage(row)">
+              <el-button link type="primary" size="small" v-permission="'erp-purchase-draft:edit'" @click="openEditPage(row)">
                 {{ $t('action.edit') }}
               </el-button>
-              <el-button link type="primary" size="small" v-permission="'erp-purchase:view'" @click="openPrintPage(row)">
+              <el-button link type="primary" size="small" v-permission="'erp-purchase-draft:print'" @click="openPrintPage(row)">
                 {{ $t('action.print') }}
               </el-button>
-              <el-button link type="success" size="small" v-permission="'erp-purchase:approve'" @click="handleApprove(row)">
+              <el-button link type="success" size="small" v-permission="'erp-purchase-draft:approve'" @click="handleApprove(row)">
                 {{ $t('action.approve') }}
+              </el-button>
+              <el-button link type="danger" size="small" v-permission="'erp-purchase-draft:delete'" @click="handleDelete(row)">
+                {{ $t('action.delete') }}
               </el-button>
             </template>
           </el-table-column>
@@ -96,7 +99,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="PURCHASE_ORDER"
+      doc-type="PURCHASE_ORDER_DRAFT"
       :doc-id="printDocId"
       :title="$t('page.erpPurchaseOrderPrint')"
     />
@@ -202,7 +205,7 @@ const fetchList = async () => {
       params.startAt = Number(dateRange.value[0]);
       params.endAt = Number(dateRange.value[1]);
     }
-    const res: any = await request.get('/erp/purchase-orders/page', { params });
+    const res: any = await request.get('/erp/purchase-orders/draft/page', { params });
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -232,7 +235,7 @@ const handleSizeChange = (newSize: number) => {
 
 const openCreatePage = () => {
   router.push({
-    path: '/erp/purchase-orders/create',
+    path: '/erp/purchase-orders/draft/create',
     query: {
       returnTo: '/erp/purchase-orders/draft',
       from: 'draft'
@@ -242,7 +245,7 @@ const openCreatePage = () => {
 
 const openEditPage = (row: PurchaseOrder) => {
   router.push({
-    path: `/erp/purchase-orders/${row.id}/edit`,
+    path: `/erp/purchase-orders/draft/${row.id}/edit`,
     query: {
       returnTo: '/erp/purchase-orders/draft',
       from: 'draft'
@@ -266,8 +269,31 @@ const handleApprove = async (row: PurchaseOrder) => {
         type: 'warning'
       }
     );
-    await request.post(`/erp/purchase-orders/${row.id}/approve`);
+    await request.post(`/erp/purchase-orders/draft/${row.id}/approve`);
     notifySuccess(t('message.approveSuccess'));
+    fetchList();
+  } catch (error) {
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
+  }
+};
+
+const handleDelete = async (row: PurchaseOrder) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      t('message.confirmDelete'),
+      t('action.delete'),
+      {
+        inputPlaceholder: t('placeholder.required'),
+        confirmButtonText: t('action.delete'),
+        cancelButtonText: t('action.cancel'),
+        type: 'warning'
+      }
+    );
+    if (!value || !String(value).trim()) return;
+    await request.delete(`/erp/purchase-orders/draft/${row.id}`, { data: { reason: String(value).trim() } });
+    notifySuccess();
     fetchList();
   } catch (error) {
     if (error && error !== 'cancel' && error !== 'close') {

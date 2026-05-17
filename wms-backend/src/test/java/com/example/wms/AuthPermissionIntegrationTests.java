@@ -10,13 +10,16 @@ import com.example.wms.dto.RoleCreateRequest;
 import com.example.wms.dto.UserClaim;
 import com.example.wms.dto.UserRoleUpdateRequest;
 import com.example.wms.entity.Role;
+import com.example.wms.entity.Permission;
 import com.example.wms.entity.Tenant;
 import com.example.wms.entity.UserAccount;
 import com.example.wms.mapper.MenuMapper;
 import com.example.wms.mapper.PermissionMapper;
+import com.example.wms.mapper.RoleColumnSettingMapper;
 import com.example.wms.mapper.RoleMapper;
 import com.example.wms.mapper.RolePermissionMapper;
 import com.example.wms.mapper.TenantMapper;
+import com.example.wms.mapper.TenantColumnSettingMapper;
 import com.example.wms.mapper.TenantMenuMapper;
 import com.example.wms.mapper.UserAccountMapper;
 import com.example.wms.mapper.UserRoleMapper;
@@ -24,6 +27,7 @@ import com.example.wms.security.JwtAuthenticationFilter;
 import com.example.wms.security.JwtTokenService;
 import com.example.wms.service.RefreshTokenService;
 import com.example.wms.service.UserAccountService;
+import com.example.wms.service.impl.RolePermissionServiceImpl;
 import com.example.wms.service.impl.RoleServiceImpl;
 import com.example.wms.service.impl.TenantServiceImpl;
 import com.example.wms.service.impl.UserServiceImpl;
@@ -86,7 +90,11 @@ class AuthPermissionIntegrationTests {
     @Mock
     private RoleMapper roleMapper;
     @Mock
+    private RoleColumnSettingMapper roleColumnSettingMapper;
+    @Mock
     private RolePermissionMapper rolePermissionMapper;
+    @Mock
+    private TenantColumnSettingMapper tenantColumnSettingMapper;
     @Mock
     private UserRoleMapper userRoleMapper;
     @Mock
@@ -263,6 +271,47 @@ class AuthPermissionIntegrationTests {
     }
 
     @Test
+    void rolePermissionSavePreservesConcreteColumnPermissions() {
+        RolePermissionServiceImpl service = new RolePermissionServiceImpl(
+            roleMapper,
+            permissionMapper,
+            roleColumnSettingMapper,
+            rolePermissionMapper,
+            tenantColumnSettingMapper,
+            userRoleMapper,
+            userAccountMapper
+        );
+        TenantContext.setTenantId(1L);
+        Role role = role(8L, 1L, "ops");
+        Permission oldFeature = permission(1L, "erp-sale:view");
+        Permission retainedColumn = permission(2L, "column:erp-sale-draft:totalAmount");
+        Permission newFeature = permission(3L, "erp-purchase:view");
+        Permission requestedColumn = permission(4L, "column:erp-purchase-draft:supplier");
+        Permission columnManager = permission(5L, "column:role:manage");
+
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                "sysadmin",
+                "N/A",
+                List.of(new SimpleGrantedAuthority("ROLE_super_admin"))
+            )
+        );
+        when(roleMapper.selectOne(any())).thenReturn(role);
+        when(permissionMapper.selectList(any())).thenReturn(List.of(newFeature, requestedColumn, columnManager));
+        when(rolePermissionMapper.findPermissionsByRoleId(1L, 8L)).thenReturn(List.of(oldFeature, retainedColumn));
+        when(userRoleMapper.findUserIdsByRoleId(1L, 8L)).thenReturn(List.of());
+
+        service.setPermissions(8L, List.of(3L, 4L, 5L));
+
+        verify(rolePermissionMapper).deleteByRoleId(1L, 8L);
+        verify(rolePermissionMapper).insertIgnore(1L, 8L, 3L);
+        verify(rolePermissionMapper).insertIgnore(1L, 8L, 5L);
+        verify(rolePermissionMapper).insertIgnore(1L, 8L, 2L);
+        verify(rolePermissionMapper, never()).insertIgnore(1L, 8L, 1L);
+        verify(rolePermissionMapper, never()).insertIgnore(1L, 8L, 4L);
+    }
+
+    @Test
     void crossTenantFilterWritesStructuredAuditFields() throws Exception {
         JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtTokenService, userAccountService);
         DefaultClaims claims = new DefaultClaims();
@@ -371,6 +420,15 @@ class AuthPermissionIntegrationTests {
         role.setCode(code);
         role.setEnabled(true);
         return role;
+    }
+
+    private Permission permission(Long id, String code) {
+        Permission permission = new Permission();
+        permission.setId(id);
+        permission.setCode(code);
+        permission.setName(code);
+        permission.setEnabled(true);
+        return permission;
     }
 
     private AuthPayload authPayload(String username, Long tenantId, String tenantCode, List<String> roles) {

@@ -54,6 +54,33 @@ public class ErpSaleReturnController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.page(page, size, keyword, status, customerId, start, end)));
     }
 
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:view')")
+    @GetMapping("/draft/page")
+    public ResponseEntity<ApiResponse<PageResponse<ErpSaleReturn>>> draftPage(@RequestParam(defaultValue = "1") long page,
+                                                                              @RequestParam(defaultValue = "20") long size,
+                                                                              @RequestParam(required = false) String keyword,
+                                                                              @RequestParam(required = false) Long customerId,
+                                                                              @RequestParam(required = false) Long startAt,
+                                                                              @RequestParam(required = false) Long endAt) {
+        Instant start = startAt == null ? null : Instant.ofEpochMilli(startAt);
+        Instant end = endAt == null ? null : Instant.ofEpochMilli(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.draftPage(page, size, keyword, customerId, start, end)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:view')")
+    @GetMapping("/approved/page")
+    public ResponseEntity<ApiResponse<PageResponse<ErpSaleReturn>>> approvedPage(@RequestParam(defaultValue = "1") long page,
+                                                                                 @RequestParam(defaultValue = "20") long size,
+                                                                                 @RequestParam(required = false) String keyword,
+                                                                                 @RequestParam(required = false) String status,
+                                                                                 @RequestParam(required = false) Long customerId,
+                                                                                 @RequestParam(required = false) Long startAt,
+                                                                                 @RequestParam(required = false) Long endAt) {
+        Instant start = startAt == null ? null : Instant.ofEpochMilli(startAt);
+        Instant end = endAt == null ? null : Instant.ofEpochMilli(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.approvedPage(page, size, keyword, status, customerId, start, end)));
+    }
+
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:view')")
     @GetMapping("/sale-order/{saleOrderId}")
     public ResponseEntity<ApiResponse<List<ErpSaleReturn>>> listBySaleOrderId(@PathVariable Long saleOrderId,
@@ -67,15 +94,51 @@ public class ErpSaleReturnController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getSaleOrderRefundSummary(saleOrderId)));
     }
 
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale-return-draft:view','PERM_erp-sale-return-approved:view')")
+    @GetMapping("/sale-order/{saleOrderId}/refund-summary/split")
+    public ResponseEntity<ApiResponse<ErpSaleReturnRefundSummary>> getSaleOrderRefundSummarySplit(@PathVariable Long saleOrderId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getSaleOrderRefundSummary(saleOrderId)));
+    }
+
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:view')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getDetail(id)));
     }
 
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:view')")
+    @GetMapping("/draft/{id}")
+    public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> getDraft(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getDraftDetail(id)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:print')")
+    @GetMapping("/draft/{id}/print")
+    public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> getDraftPrint(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getDraftDetail(id)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:view')")
+    @GetMapping("/approved/{id}")
+    public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> getApproved(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getApprovedDetail(id)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:print')")
+    @GetMapping("/approved/{id}/print")
+    public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> getApprovedPrint(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getApprovedDetail(id)));
+    }
+
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:add')")
     @GetMapping("/next-no")
     public ResponseEntity<ApiResponse<String>> nextNo() {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.nextOrderNo()));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:add')")
+    @GetMapping("/draft/next-no")
+    public ResponseEntity<ApiResponse<String>> draftNextNo() {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.nextOrderNo()));
     }
 
@@ -85,10 +148,24 @@ public class ErpSaleReturnController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.create(request)));
     }
 
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:add')")
+    @PostMapping("/draft")
+    public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> createDraft(@Valid @RequestBody ErpSaleReturnCreateRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.create(request)));
+    }
+
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:edit')")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> update(@PathVariable Long id,
                                                                    @Valid @RequestBody ErpSaleReturnUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.update(id, request)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:edit')")
+    @PutMapping("/draft/{id}")
+    public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> updateDraft(@PathVariable Long id,
+                                                                        @Valid @RequestBody ErpSaleReturnUpdateRequest request) {
+        erpSaleReturnService.getDraftDetail(id);
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.update(id, request)));
     }
 
@@ -102,6 +179,17 @@ public class ErpSaleReturnController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:delete')")
+    @DeleteMapping("/draft/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteDraft(@PathVariable Long id,
+                                                         @Valid @RequestBody DeleteRequest request) {
+        erpSaleReturnService.getDraftDetail(id);
+        try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
+            erpSaleReturnService.delete(id);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:approve')")
     @PostMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<Void>> approve(@PathVariable Long id) {
@@ -109,9 +197,39 @@ public class ErpSaleReturnController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:approve')")
+    @PostMapping("/draft/{id}/approve")
+    public ResponseEntity<ApiResponse<Void>> approveDraft(@PathVariable Long id) {
+        erpSaleReturnService.getDraftDetail(id);
+        erpSaleReturnService.approve(id);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:copy') and hasAuthority('PERM_erp-sale-return-draft:add')")
+    @PostMapping("/approved/{id}/copy")
+    public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> copyApproved(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.copyToDraft(id)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:cancel')")
+    @PostMapping("/approved/{id}/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancelApproved(@PathVariable Long id, @RequestParam String reason) {
+        erpSaleReturnService.getApprovedDetail(id);
+        erpSaleReturnService.cancel(id, reason);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     @PreAuthorize("hasAuthority('PERM_erp-sale-return:redflush')")
     @PostMapping("/{id}/red-flush")
     public ResponseEntity<ApiResponse<Void>> redFlush(@PathVariable Long id, @RequestParam String reason) {
+        erpSaleReturnService.redFlush(id, reason);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:redflush')")
+    @PostMapping("/approved/{id}/red-flush")
+    public ResponseEntity<ApiResponse<Void>> redFlushApproved(@PathVariable Long id, @RequestParam String reason) {
+        erpSaleReturnService.getApprovedDetail(id);
         erpSaleReturnService.redFlush(id, reason);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }

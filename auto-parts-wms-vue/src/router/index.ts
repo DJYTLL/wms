@@ -30,7 +30,7 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/erp/sale-orders/:id/print',
     name: 'erp-sale-order-print',
-    component: () => import('../views/erp/ErpSaleOrderPrint.vue'),
+    component: () => import('../views/erp/ErpSaleOrderPrintRedirect.vue'),
     meta: { title: '销售单打印', permission: 'erp-sale:view' }
   },
   {
@@ -40,16 +40,52 @@ const routes: Array<RouteRecordRaw> = [
     meta: { title: '采购单打印', permission: 'erp-purchase:view' }
   },
   {
+    path: '/erp/purchase-orders/draft/:id/print',
+    name: 'erp-purchase-order-draft-print',
+    component: () => import('../views/erp/ErpPurchaseOrderDraftPrint.vue'),
+    meta: { title: '采购单草稿打印', permission: 'erp-purchase-draft:print' }
+  },
+  {
+    path: '/erp/purchase-orders/approved/:id/print',
+    name: 'erp-purchase-order-approved-print',
+    component: () => import('../views/erp/ErpPurchaseOrderApprovedPrint.vue'),
+    meta: { title: '采购单已审核打印', permission: 'erp-purchase-approved:print' }
+  },
+  {
     path: '/erp/sale-returns/:id/print',
     name: 'erp-sale-return-print',
     component: () => import('../views/erp/ErpSaleReturnPrint.vue'),
     meta: { title: '销售退货单打印', permission: 'erp-sale-return:view' }
   },
   {
+    path: '/erp/sale-returns/draft/:id/print',
+    name: 'erp-sale-return-draft-print',
+    component: () => import('../views/erp/ErpSaleReturnDraftPrint.vue'),
+    meta: { title: '销售退货草稿打印', permission: 'erp-sale-return-draft:print' }
+  },
+  {
+    path: '/erp/sale-returns/approved/:id/print',
+    name: 'erp-sale-return-approved-print',
+    component: () => import('../views/erp/ErpSaleReturnApprovedPrint.vue'),
+    meta: { title: '销售退货已审核打印', permission: 'erp-sale-return-approved:print' }
+  },
+  {
+    path: '/erp/purchase-returns/draft/:id/print',
+    name: 'erp-purchase-return-draft-print',
+    component: () => import('../views/erp/ErpPurchaseReturnDraftPrint.vue'),
+    meta: { title: '采购退货草稿打印', permission: 'erp-purchase-return-draft:print' }
+  },
+  {
+    path: '/erp/purchase-returns/approved/:id/print',
+    name: 'erp-purchase-return-approved-print',
+    component: () => import('../views/erp/ErpPurchaseReturnApprovedPrint.vue'),
+    meta: { title: '采购退货已审核打印', permission: 'erp-purchase-return-approved:print' }
+  },
+  {
     path: '/erp/purchase-returns/:id/print',
     name: 'erp-purchase-return-print',
-    component: () => import('../views/erp/ErpPurchaseReturnPrint.vue'),
-    meta: { title: '采购退货单打印', permission: 'erp-purchase-return:view' }
+    component: () => import('../views/erp/ErpPurchaseReturnLegacyPrintRedirect.vue'),
+    meta: { title: '采购退货单打印' }
   },
   {
     path: '/erp/receipts/:id/print',
@@ -103,27 +139,6 @@ const routes: Array<RouteRecordRaw> = [
         name: 'dashboard',
         component: () => import('../views/HomeView.vue'), // 假设你有 HomeView
         meta: { title: '仪表盘' }
-      },
-      // --- 仓库管理 (对应 menuData) ---
-      {
-        path: 'inbound', // 完整路径 /inbound
-        name: 'inbound',
-        component: () => import('../views/warehouse/InboundManagement.vue'),
-        meta: { title: '入库管理', permission: 'inbound:view' }
-      },
-      // --- 出库管理 (三级菜单) ---
-      // 注意：虽然菜单是嵌套的，但路由我们可以把它扁平化处理，或者按照路径层级写
-      {
-        path: 'outbound/normal', // 完整路径 /outbound/normal
-        name: 'outbound-normal',
-        component: TempComponent('普通出库'),
-        meta: { title: '普通出库', permission: 'outbound:view' }
-      },
-      {
-        path: 'outbound/urgent', // 完整路径 /outbound/urgent
-        name: 'outbound-urgent',
-        component: TempComponent('加急出库'),
-        meta: { title: '加急出库', permission: 'outbound:view' }
       },
       // --- 系统设置 ---
       {
@@ -260,28 +275,49 @@ const routes: Array<RouteRecordRaw> = [
         meta: { title: '打印模板', permission: 'erp-print-template:view', titleKey: 'page.erpPrintTemplateManagement' }
       },
         {
+          path: 'erp/purchase-orders',
+          redirect: '/erp/purchase-orders/draft'
+        },
+        {
           path: 'erp/purchase-orders/draft',
           name: 'erp-purchase-draft',
           component: () => import('../views/erp/ErpPurchaseOrderDraft.vue'),
-          meta: { title: 'ERP采购单（草稿）', permission: 'erp-purchase:view', titleKey: 'page.erpPurchaseOrderDraft' }
+          meta: { title: 'ERP采购单（草稿）', permission: 'erp-purchase-draft:view', titleKey: 'page.erpPurchaseOrderDraft' }
+        },
+        {
+          path: 'erp/purchase-orders/draft/create',
+          name: 'erp-purchase-draft-create',
+          component: () => import('../views/erp/ErpPurchaseOrderDraftForm.vue'),
+          meta: { title: 'ERP采购单新增', permission: 'erp-purchase-draft:add', titleKey: 'page.erpPurchaseOrderCreate' }
+        },
+        {
+          path: 'erp/purchase-orders/draft/:id/edit',
+          name: 'erp-purchase-draft-edit',
+          component: () => import('../views/erp/ErpPurchaseOrderDraftForm.vue'),
+          meta: { title: 'ERP采购单编辑', permission: 'erp-purchase-draft:edit', titleKey: 'page.erpPurchaseOrderEdit' }
         },
         {
           path: 'erp/purchase-orders/create',
-          name: 'erp-purchase-create',
-          component: () => import('../views/erp/ErpPurchaseOrderForm.vue'),
-          meta: { title: 'ERP采购单新增', permission: 'erp-purchase:add', titleKey: 'page.erpPurchaseOrderCreate' }
+          redirect: '/erp/purchase-orders/draft/create'
         },
         {
           path: 'erp/purchase-orders/:id/edit',
-          name: 'erp-purchase-edit',
-          component: () => import('../views/erp/ErpPurchaseOrderForm.vue'),
-          meta: { title: 'ERP采购单编辑', permission: 'erp-purchase:view', titleKey: 'page.erpPurchaseOrderEdit' }
+          redirect: to => ({
+            path: `/erp/purchase-orders/draft/${to.params.id}/edit`,
+            query: to.query
+          })
         },
         {
           path: 'erp/purchase-orders/approved',
           name: 'erp-purchase-approved',
           component: () => import('../views/erp/ErpPurchaseOrderApproved.vue'),
-          meta: { title: 'ERP采购单（已审核）', permission: 'erp-purchase:view', titleKey: 'page.erpPurchaseOrderApproved' }
+          meta: { title: 'ERP采购单（已审核）', permission: 'erp-purchase-approved:view', titleKey: 'page.erpPurchaseOrderApproved' }
+        },
+        {
+          path: 'erp/purchase-orders/approved/:id',
+          name: 'erp-purchase-approved-detail',
+          component: () => import('../views/erp/ErpPurchaseOrderApprovedForm.vue'),
+          meta: { title: 'ERP采购单查看', permission: 'erp-purchase-approved:view', titleKey: 'page.erpPurchaseOrder' }
         },
         {
           path: 'erp/purchase-returns',
@@ -289,27 +325,44 @@ const routes: Array<RouteRecordRaw> = [
         },
         {
           path: 'erp/purchase-returns/create',
-          name: 'erp-purchase-returns-create',
-          component: () => import('../views/erp/ErpPurchaseReturnForm.vue'),
-          meta: { title: '新增采购退货单', permission: 'erp-purchase-return:add', titleKey: 'page.erpPurchaseReturnCreate' }
+          redirect: '/erp/purchase-returns/draft/create'
         },
         {
           path: 'erp/purchase-returns/:id/edit',
-          name: 'erp-purchase-returns-edit',
-          component: () => import('../views/erp/ErpPurchaseReturnForm.vue'),
-          meta: { title: '编辑采购退货单', permission: 'erp-purchase-return:view', titleKey: 'page.erpPurchaseReturnEdit' }
+          redirect: to => ({
+            path: `/erp/purchase-returns/draft/${to.params.id}/edit`,
+            query: to.query
+          })
+        },
+        {
+          path: 'erp/purchase-returns/draft/create',
+          name: 'erp-purchase-returns-draft-create',
+          component: () => import('../views/erp/ErpPurchaseReturnDraftForm.vue'),
+          meta: { title: '新增采购退货草稿', permission: 'erp-purchase-return-draft:add', titleKey: 'page.erpPurchaseReturnCreate' }
+        },
+        {
+          path: 'erp/purchase-returns/draft/:id/edit',
+          name: 'erp-purchase-returns-draft-edit',
+          component: () => import('../views/erp/ErpPurchaseReturnDraftForm.vue'),
+          meta: { title: '编辑采购退货草稿', permission: 'erp-purchase-return-draft:edit', titleKey: 'page.erpPurchaseReturnEdit' }
         },
         {
           path: 'erp/purchase-returns/draft',
           name: 'erp-purchase-returns-draft',
-          component: () => import('../views/erp/ErpPurchaseReturnManagement.vue'),
-          meta: { title: '采购退货（草稿）', permission: 'erp-purchase-return:view', titleKey: 'page.erpPurchaseReturnDraft', defaultStatus: 'DRAFT', lockStatus: true }
+          component: () => import('../views/erp/ErpPurchaseReturnDraft.vue'),
+          meta: { title: '采购退货（草稿）', permission: 'erp-purchase-return-draft:view', titleKey: 'page.erpPurchaseReturnDraft', defaultStatus: 'DRAFT', lockStatus: true }
         },
         {
           path: 'erp/purchase-returns/approved',
           name: 'erp-purchase-returns-approved',
-          component: () => import('../views/erp/ErpPurchaseReturnManagement.vue'),
-          meta: { title: '采购退货（已审核）', permission: 'erp-purchase-return:view', titleKey: 'page.erpPurchaseReturnApproved', defaultStatus: 'APPROVED', lockStatus: true }
+          component: () => import('../views/erp/ErpPurchaseReturnApproved.vue'),
+          meta: { title: '采购退货（已审核）', permission: 'erp-purchase-return-approved:view', titleKey: 'page.erpPurchaseReturnApproved', defaultStatus: 'APPROVED', lockStatus: true }
+        },
+        {
+          path: 'erp/purchase-returns/approved/:id',
+          name: 'erp-purchase-returns-approved-detail',
+          component: () => import('../views/erp/ErpPurchaseReturnApprovedForm.vue'),
+          meta: { title: '采购退货已审核详情', permission: 'erp-purchase-return-approved:view', titleKey: 'page.erpPurchaseReturnEdit' }
         },
       {
         path: 'erp/sale-orders',
@@ -317,9 +370,7 @@ const routes: Array<RouteRecordRaw> = [
       },
       {
         path: 'erp/sale-orders/create',
-        name: 'erp-sale-orders-create',
-        component: () => import('../views/erp/ErpSaleOrderForm.vue'),
-        meta: { title: '新增销售单', permission: 'erp-sale:add', titleKey: 'page.erpSaleOrderCreate' }
+        redirect: '/erp/sale-orders/draft/create'
       },
       {
         path: 'erp/sale-orders/create-preview',
@@ -341,21 +392,52 @@ const routes: Array<RouteRecordRaw> = [
       },
       {
         path: 'erp/sale-orders/:id/edit',
-        name: 'erp-sale-orders-edit',
-        component: () => import('../views/erp/ErpSaleOrderForm.vue'),
-        meta: { title: '编辑销售单', permission: 'erp-sale:edit', titleKey: 'page.erpSaleOrderEdit' }
+        redirect: to => ({
+          path: `/erp/sale-orders/draft/${to.params.id}/edit`,
+          query: to.query
+        })
       },
       {
         path: 'erp/sale-orders/draft',
         name: 'erp-sale-orders-draft',
-        component: () => import('../views/erp/ErpSaleOrderManagement.vue'),
-        meta: { title: '销售单（草稿）', permission: 'erp-sale:view', titleKey: 'page.erpSaleOrderDraft', defaultStatus: 'DRAFT', lockStatus: true }
+        component: () => import('../views/erp/ErpSaleOrderDraft.vue'),
+        meta: { title: '销售单（草稿）', permission: 'erp-sale-draft:view', titleKey: 'page.erpSaleOrderDraft', defaultStatus: 'DRAFT', lockStatus: true }
+      },
+      {
+        path: 'erp/sale-orders/draft/create',
+        name: 'erp-sale-orders-draft-create',
+        component: () => import('../views/erp/ErpSaleOrderDraftForm.vue'),
+        meta: { title: '新增销售单草稿', permission: 'erp-sale-draft:add', titleKey: 'page.erpSaleOrderCreate' }
+      },
+      {
+        path: 'erp/sale-orders/draft/:id/edit',
+        name: 'erp-sale-orders-draft-edit',
+        component: () => import('../views/erp/ErpSaleOrderDraftForm.vue'),
+        meta: { title: '编辑销售单草稿', permission: 'erp-sale-draft:edit', titleKey: 'page.erpSaleOrderEdit' }
+      },
+      {
+        path: 'erp/sale-orders/draft/:id/print',
+        name: 'erp-sale-orders-draft-print',
+        component: () => import('../views/erp/ErpSaleOrderDraftPrint.vue'),
+        meta: { title: '销售单草稿打印', permission: 'erp-sale-draft:print', titleKey: 'page.erpSaleOrderPrint' }
       },
       {
         path: 'erp/sale-orders/approved',
         name: 'erp-sale-orders-approved',
-        component: () => import('../views/erp/ErpSaleOrderManagement.vue'),
-        meta: { title: '销售单（已审核）', permission: 'erp-sale:view', titleKey: 'page.erpSaleOrderApproved', defaultStatus: 'APPROVED', lockStatus: true }
+        component: () => import('../views/erp/ErpSaleOrderApproved.vue'),
+        meta: { title: '销售单（已审核）', permission: 'erp-sale-approved:view', titleKey: 'page.erpSaleOrderApproved', defaultStatus: 'APPROVED', lockStatus: true }
+      },
+      {
+        path: 'erp/sale-orders/approved/:id',
+        name: 'erp-sale-orders-approved-detail',
+        component: () => import('../views/erp/ErpSaleOrderApprovedForm.vue'),
+        meta: { title: '查看已审核销售单', permission: 'erp-sale-approved:view', titleKey: 'page.erpSaleOrder' }
+      },
+      {
+        path: 'erp/sale-orders/approved/:id/print',
+        name: 'erp-sale-orders-approved-print',
+        component: () => import('../views/erp/ErpSaleOrderApprovedPrint.vue'),
+        meta: { title: '已审核销售单打印', permission: 'erp-sale-approved:print', titleKey: 'page.erpSaleOrderPrint' }
       },
       {
         path: 'erp/sale-returns',
@@ -363,27 +445,44 @@ const routes: Array<RouteRecordRaw> = [
       },
       {
         path: 'erp/sale-returns/create',
-        name: 'erp-sale-returns-create',
-        component: () => import('../views/erp/ErpSaleReturnForm.vue'),
-        meta: { title: '新增销售退货单', permission: 'erp-sale-return:add', titleKey: 'page.erpSaleReturnCreate' }
+        redirect: '/erp/sale-returns/draft/create'
       },
       {
         path: 'erp/sale-returns/:id/edit',
-        name: 'erp-sale-returns-edit',
-        component: () => import('../views/erp/ErpSaleReturnForm.vue'),
-        meta: { title: '编辑销售退货单', permission: 'erp-sale-return:view', titleKey: 'page.erpSaleReturnEdit' }
+        redirect: to => ({
+          path: `/erp/sale-returns/draft/${to.params.id}/edit`,
+          query: to.query
+        })
+      },
+      {
+        path: 'erp/sale-returns/draft/create',
+        name: 'erp-sale-returns-draft-create',
+        component: () => import('../views/erp/ErpSaleReturnDraftForm.vue'),
+        meta: { title: '新增销售退货草稿', permission: 'erp-sale-return-draft:add', titleKey: 'page.erpSaleReturnCreate', workspace: 'draft' }
+      },
+      {
+        path: 'erp/sale-returns/draft/:id/edit',
+        name: 'erp-sale-returns-draft-edit',
+        component: () => import('../views/erp/ErpSaleReturnDraftForm.vue'),
+        meta: { title: '编辑销售退货草稿', permission: 'erp-sale-return-draft:edit', titleKey: 'page.erpSaleReturnEdit', workspace: 'draft' }
       },
       {
         path: 'erp/sale-returns/draft',
         name: 'erp-sale-returns-draft',
-        component: () => import('../views/erp/ErpSaleReturnManagement.vue'),
-        meta: { title: '销售退货（草稿）', permission: 'erp-sale-return:view', titleKey: 'page.erpSaleReturnDraft', defaultStatus: 'DRAFT', lockStatus: true }
+        component: () => import('../views/erp/ErpSaleReturnDraft.vue'),
+        meta: { title: '销售退货（草稿）', permission: 'erp-sale-return-draft:view', titleKey: 'page.erpSaleReturnDraft', defaultStatus: 'DRAFT', lockStatus: true, workspace: 'draft' }
       },
       {
         path: 'erp/sale-returns/approved',
         name: 'erp-sale-returns-approved',
-        component: () => import('../views/erp/ErpSaleReturnManagement.vue'),
-        meta: { title: '销售退货（已审核）', permission: 'erp-sale-return:view', titleKey: 'page.erpSaleReturnApproved', defaultStatus: 'APPROVED', lockStatus: true }
+        component: () => import('../views/erp/ErpSaleReturnApproved.vue'),
+        meta: { title: '销售退货（已审核）', permission: 'erp-sale-return-approved:view', titleKey: 'page.erpSaleReturnApproved', defaultStatus: 'APPROVED', lockStatus: true, workspace: 'approved' }
+      },
+      {
+        path: 'erp/sale-returns/approved/:id',
+        name: 'erp-sale-returns-approved-detail',
+        component: () => import('../views/erp/ErpSaleReturnApprovedForm.vue'),
+        meta: { title: '销售退货已审核详情', permission: 'erp-sale-return-approved:view', titleKey: 'page.erpSaleReturnEdit', workspace: 'approved' }
       },
       {
         path: 'erp/stocks',

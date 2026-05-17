@@ -107,12 +107,18 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
     }
 
     private String resolveDocNo(Long tenantId, String docType, Long docId) {
-        if ("SALE_ORDER".equals(docType)) {
+        if ("SALE_ORDER".equals(docType) || "SALE_ORDER_DRAFT".equals(docType) || "SALE_ORDER_APPROVED".equals(docType)) {
             ErpSaleOrder order = erpSaleOrderMapper.selectOne(new QueryWrapper<ErpSaleOrder>()
                 .eq("tenant_id", tenantId)
                 .eq("id", docId));
             if (order == null) {
                 throw new IllegalArgumentException("销售单不存在");
+            }
+            if ("SALE_ORDER_DRAFT".equals(docType) && !"DRAFT".equals(order.getStatus())) {
+                throw new IllegalArgumentException("草稿打印不能记录已审核销售单");
+            }
+            if ("SALE_ORDER_APPROVED".equals(docType) && "DRAFT".equals(order.getStatus())) {
+                throw new IllegalArgumentException("已审核打印不能记录草稿销售单");
             }
             bumpPrintCount(tenantId, "erp_sale_order", docId);
             return order.getOrderNo();
@@ -127,22 +133,34 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
             bumpPrintCount(tenantId, "erp_purchase_order", docId);
             return order.getOrderNo();
         }
-        if ("SALE_RETURN".equals(docType)) {
+        if ("SALE_RETURN".equals(docType) || "SALE_RETURN_DRAFT".equals(docType) || "SALE_RETURN_APPROVED".equals(docType)) {
             ErpSaleReturn order = erpSaleReturnMapper.selectOne(new QueryWrapper<ErpSaleReturn>()
                 .eq("tenant_id", tenantId)
                 .eq("id", docId));
             if (order == null) {
                 throw new IllegalArgumentException("销售退货单不存在");
             }
+            if ("SALE_RETURN_DRAFT".equals(docType) && !"DRAFT".equals(order.getStatus())) {
+                throw new IllegalArgumentException("草稿打印不能记录已审核销售退货单");
+            }
+            if ("SALE_RETURN_APPROVED".equals(docType) && "DRAFT".equals(order.getStatus())) {
+                throw new IllegalArgumentException("已审核打印不能记录草稿销售退货单");
+            }
             bumpPrintCount(tenantId, "erp_sale_return", docId);
             return order.getOrderNo();
         }
-        if ("PURCHASE_RETURN".equals(docType)) {
+        if ("PURCHASE_RETURN".equals(docType) || "PURCHASE_RETURN_DRAFT".equals(docType) || "PURCHASE_RETURN_APPROVED".equals(docType)) {
             ErpPurchaseReturn order = erpPurchaseReturnMapper.selectOne(new QueryWrapper<ErpPurchaseReturn>()
                 .eq("tenant_id", tenantId)
                 .eq("id", docId));
             if (order == null) {
                 throw new IllegalArgumentException("采购退货单不存在");
+            }
+            if ("PURCHASE_RETURN_DRAFT".equals(docType) && !"DRAFT".equals(order.getStatus())) {
+                throw new IllegalArgumentException("草稿打印不能记录已审核采购退货单");
+            }
+            if ("PURCHASE_RETURN_APPROVED".equals(docType) && "DRAFT".equals(order.getStatus())) {
+                throw new IllegalArgumentException("已审核打印不能记录草稿采购退货单");
             }
             bumpPrintCount(tenantId, "erp_purchase_return", docId);
             return order.getOrderNo();
@@ -307,9 +325,15 @@ public class ErpPrintLogServiceImpl implements ErpPrintLogService {
         String normalized = docType.trim().toUpperCase();
         return switch (normalized) {
             case "SALE_ORDER",
+                "SALE_ORDER_DRAFT",
+                "SALE_ORDER_APPROVED",
                 "PURCHASE_ORDER",
                 "SALE_RETURN",
+                "SALE_RETURN_DRAFT",
+                "SALE_RETURN_APPROVED",
                 "PURCHASE_RETURN",
+                "PURCHASE_RETURN_DRAFT",
+                "PURCHASE_RETURN_APPROVED",
                 "RECEIPT",
                 "PAYMENT",
                 "ACCOUNTS_RECEIVABLE",

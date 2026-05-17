@@ -16,7 +16,15 @@ public interface ErpPurchaseReturnService {
 
     PageResponse<ErpPurchaseReturn> page(long page, long size, String keyword, String status, Long supplierId, Instant startAt, Instant endAt);
 
+    PageResponse<ErpPurchaseReturn> draftPage(long page, long size, String keyword, Long supplierId, Instant startAt, Instant endAt);
+
+    PageResponse<ErpPurchaseReturn> approvedPage(long page, long size, String keyword, Long supplierId, Instant startAt, Instant endAt);
+
     ErpPurchaseReturnDetail getDetail(Long id);
+
+    ErpPurchaseReturnDetail getDraftDetail(Long id);
+
+    ErpPurchaseReturnDetail getApprovedDetail(Long id);
 
     ErpPurchaseReturnRefundSummary getPurchaseOrderRefundSummary(Long purchaseOrderId);
 
@@ -29,6 +37,8 @@ public interface ErpPurchaseReturnService {
     void delete(Long id);
 
     void approve(Long id);
+
+    ErpPurchaseReturnDetail copyApproved(Long id);
 
     void cancel(Long id, String reason);
 }

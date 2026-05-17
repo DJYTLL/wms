@@ -30,6 +30,16 @@
           {{ $t('action.print') }}
         </el-button>
         <el-button
+          v-if="shouldShowCancelButton"
+          type="warning"
+          plain
+          class="action-button action-button--danger"
+          :disabled="isInitializing || !canCancel"
+          @click="handleCancel"
+        >
+          {{ $t('action.cancel') }}
+        </el-button>
+        <el-button
           v-if="shouldShowRedFlushButton"
           type="danger"
           plain
@@ -116,7 +126,11 @@
                   @change="handleReturnSourceChange"
                 >
                   <el-option :label="$t('returnSource.byProduct')" value="BY_PRODUCT" />
-                  <el-option :label="$t('returnSource.bySaleOrder')" value="BY_SALE_ORDER" />
+                  <el-option
+                    v-if="canViewSaleOrders"
+                    :label="$t('returnSource.bySaleOrder')"
+                    value="BY_SALE_ORDER"
+                  />
                 </el-select>
               </el-form-item>
             </div>
@@ -215,7 +229,7 @@
                       <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                     </el-select>
                     <el-button
-                      v-if="!isReadOnly && formData.returnSource === 'BY_PRODUCT'"
+                      v-if="!isReadOnly && formData.returnSource === 'BY_PRODUCT' && canViewSaleOrders"
                       class="detail-source-button"
                       size="small"
                       plain
@@ -602,7 +616,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="SALE_RETURN"
+      :doc-type="printDocType"
       :doc-id="printDocId"
       :title="$t('page.erpSaleReturnPrint')"
     />
@@ -821,8 +835,19 @@ const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 };
 
+const isApprovedWorkspace = computed(() => route.meta.workspace === 'approved' || route.path.includes('/erp/sale-returns/approved/'));
+const printDocType = computed(() => isApprovedWorkspace.value || formData.status !== 'DRAFT' ? 'SALE_RETURN_APPROVED' : 'SALE_RETURN_DRAFT');
+const detailEndpoint = (id: string | number) => isApprovedWorkspace.value
+  ? `/erp/sale-returns/approved/${id}`
+  : `/erp/sale-returns/draft/${id}`;
+const draftEndpoint = (id?: string | number) => id == null
+  ? '/erp/sale-returns/draft'
+  : `/erp/sale-returns/draft/${id}`;
+
+const canViewSaleOrders = computed(() => hasPermission('erp-sale-approved:view'));
+
 const canApprove = computed(() => {
-  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale-return:approve');
+  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale-return-draft:approve');
 });
 
 const hasDraftSaleReturnOccupancy = computed(() =>
@@ -845,13 +870,14 @@ const shouldShowApproveButton = computed(() => {
   if (canApprove.value) return true;
   if (!isInitializing.value) return false;
   if (route.query.mode === 'view') return false;
-  return hasPermission('erp-sale-return:approve');
+  return hasPermission('erp-sale-return-draft:approve');
 });
 
 const canCopy = computed(() => {
   return isReadOnly.value
     && ['APPROVED', 'RED_FLUSHED'].includes(formData.status)
-    && hasPermission('erp-sale-return:add');
+    && hasPermission('erp-sale-return-approved:copy')
+    && hasPermission('erp-sale-return-draft:add');
 });
 
 const shouldShowCopyButton = computed(() => {
@@ -859,17 +885,36 @@ const shouldShowCopyButton = computed(() => {
   return isInitializing.value
     && isEditing.value
     && (route.query.mode === 'view' || route.query.from === 'approved')
-    && hasPermission('erp-sale-return:add');
+    && hasPermission('erp-sale-return-approved:copy')
+    && hasPermission('erp-sale-return-draft:add');
 });
 
 const canPrint = computed(() => {
-  return isEditing.value && hasPermission('erp-sale-return:view');
+  return isEditing.value && (
+    formData.status === 'DRAFT'
+      ? hasPermission('erp-sale-return-draft:print')
+      : hasPermission('erp-sale-return-approved:print')
+  );
 });
 
 const canRedFlush = computed(() => {
   return isReadOnly.value
     && formData.status === 'APPROVED'
-    && hasPermission('erp-sale-return:redflush');
+    && hasPermission('erp-sale-return-approved:redflush');
+});
+
+const canCancel = computed(() => {
+  return isReadOnly.value
+    && formData.status === 'APPROVED'
+    && hasPermission('erp-sale-return-approved:cancel');
+});
+
+const shouldShowCancelButton = computed(() => {
+  if (canCancel.value) return true;
+  return isInitializing.value
+    && isEditing.value
+    && (route.query.mode === 'view' || route.query.from === 'approved')
+    && hasPermission('erp-sale-return-approved:cancel');
 });
 
 const shouldShowRedFlushButton = computed(() => {
@@ -877,11 +922,11 @@ const shouldShowRedFlushButton = computed(() => {
   return isInitializing.value
     && isEditing.value
     && (route.query.mode === 'view' || route.query.from === 'approved')
-    && hasPermission('erp-sale-return:redflush');
+    && hasPermission('erp-sale-return-approved:redflush');
 });
 
 const canApproveSavedOrder = computed(() => {
-  return Boolean(saveSuccessOrderId.value) && hasPermission('erp-sale-return:approve');
+  return Boolean(saveSuccessOrderId.value) && hasPermission('erp-sale-return-draft:approve');
 });
 
 const successDialogTitle = computed(() => {
@@ -917,7 +962,9 @@ const productSelectPlaceholder = computed(() => {
 });
 const resolvedSaleOrderNo = computed(() => {
   if (!formData.saleOrderId) return '';
-  return saleOrderOptions.value.find(item => Number(item.id) === Number(formData.saleOrderId))?.orderNo || '';
+  return saleOrderOptions.value.find(item => Number(item.id) === Number(formData.saleOrderId))?.orderNo
+    || saleOrderRefundSummary.value?.saleOrderNo
+    || '';
 });
 const currentCustomerName = computed(() => {
   if (!formData.customerId) return '-';
@@ -969,6 +1016,8 @@ const handleKeydown = (event: KeyboardEvent) => {
   if (!canViewProfit.value) return;
   if (isTypingTarget(event.target)) return;
   if (event.key && event.key.toLowerCase() === 'u') {
+    if (event.repeat) return;
+    event.preventDefault();
     showProfitColumn.value = !showProfitColumn.value;
   }
 };
@@ -1066,10 +1115,10 @@ const handleApprove = async () => {
 
   try {
     const savedOrderNo = formData.orderNo;
-    await request.post(`/erp/sale-returns/${savedId}/approve`);
+    await request.post(`/erp/sale-returns/draft/${savedId}/approve`);
     formData.status = 'APPROVED';
     await router.replace({
-      path: `/erp/sale-returns/${savedId}/edit`,
+      path: `/erp/sale-returns/approved/${savedId}`,
       query: { mode: 'view', from: 'approved', returnTo: '/erp/sale-returns/approved' }
     });
     await nextTick();
@@ -1100,7 +1149,7 @@ const handleRedFlush = async () => {
     if (!value || !String(value).trim()) {
       return;
     }
-    await request.post(`/erp/sale-returns/${route.params.id}/red-flush`, null, {
+    await request.post(`/erp/sale-returns/approved/${route.params.id}/red-flush`, null, {
       params: { reason: String(value).trim() }
     });
     notifySuccess();
@@ -1116,6 +1165,34 @@ const handleRedFlush = async () => {
 const handleSave = async () => {
   if (isSaving.value) return;
   await saveData({ closeOnSuccess: false, showPostSaveDialog: true });
+};
+
+const handleCancel = async () => {
+  if (!isEditing.value) return;
+  try {
+    const { value } = await ElMessageBox.prompt(
+      t('message.confirmCancel'),
+      t('action.cancel'),
+      {
+        inputPlaceholder: t('placeholder.required'),
+        confirmButtonText: t('action.confirm'),
+        cancelButtonText: t('action.cancel')
+      }
+    );
+    if (!value || !String(value).trim()) {
+      return;
+    }
+    await request.post(`/erp/sale-returns/approved/${route.params.id}/cancel`, null, {
+      params: { reason: String(value).trim() }
+    });
+    notifySuccess();
+    closePage();
+    await router.push('/erp/sale-returns/approved');
+  } catch (error) {
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
+  }
 };
 
 const openSaveSuccessDialog = (savedId: number | null, savedOrderNo?: string, mode: 'save' | 'approve' = 'save') => {
@@ -1144,7 +1221,7 @@ const handleSaveSuccessDialogClosed = async () => {
 const handleContinueCreate = async () => {
   closeSaveSuccessDialog();
   const createRoute = {
-    path: '/erp/sale-returns/create',
+    path: '/erp/sale-returns/draft/create',
     query: { from: 'draft', returnTo: '/erp/sale-returns/draft' }
   };
   const targetFullPath = router.resolve(createRoute).fullPath;
@@ -1165,7 +1242,7 @@ const handleStayOnCurrentOrder = async () => {
   if (!savedId) return;
   if (dialogMode === 'approve') return;
   await router.replace({
-    path: `/erp/sale-returns/${savedId}/edit`,
+    path: `/erp/sale-returns/draft/${savedId}/edit`,
     query: { from: 'draft', returnTo: '/erp/sale-returns/draft' }
   });
 };
@@ -1188,10 +1265,10 @@ const handleApproveSavedOrder = async () => {
   const sourcePath = route.path;
   try {
     const savedOrderNo = saveSuccessOrderNo.value;
-    await request.post(`/erp/sale-returns/${savedId}/approve`);
+    await request.post(`/erp/sale-returns/draft/${savedId}/approve`);
     closeSaveSuccessDialog();
     await router.replace({
-      path: `/erp/sale-returns/${savedId}/edit`,
+      path: `/erp/sale-returns/approved/${savedId}`,
       query: { mode: 'view', from: 'approved', returnTo: '/erp/sale-returns/approved' }
     });
     await nextTick();
@@ -1253,43 +1330,14 @@ const handleApproveSavedOrder = async () => {
     return;
   }
     try {
-      const orderNoRes: any = await request.get('/erp/sale-returns/next-no');
-      const orderNo = orderNoRes.data?.data || '';
-      const items = formData.items
-        .filter(item => item.productId)
-        .map((item, index) => {
-          ensureStockBinding(item);
-          return {
-            productId: item.productId,
-            warehouseId: item.warehouseId,
-            locationId: item.locationId,
-            qty: parseDecimal(item.qty, 4),
-            price: parseDecimal(item.price, 4),
-            taxRate: item.taxRate,
-            remark: item.remark,
-            sortNo: index + 1
-          };
-        });
-    const payload = {
-      orderNo,
-      orderAt: formatDateTime(new Date()),
-      returnType: formData.returnType || 'RESTOCK',
-      customerId: formData.customerId,
-      saleOrderId: formData.saleOrderId || undefined,
-      settlementMethod: formData.settlementMethod,
-      paidAmount: parseAmount(formData.paidAmount),
-      discountAmount: parseAmount(formData.discountAmount),
-      remark: formData.remark,
-      items
-    };
-    const res: any = await request.post('/erp/sale-returns', payload);
+    const res: any = await request.post(`/erp/sale-returns/approved/${route.params.id}/copy`);
     if (res.data.code === 200) {
       const data = res.data.data || {};
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
         await router.push({
-          path: `/erp/sale-returns/${newId}/edit`,
+          path: `/erp/sale-returns/draft/${newId}/edit`,
           query: { from: 'draft', returnTo: '/erp/sale-returns/draft' }
         });
         await loadDetail();
@@ -1642,6 +1690,10 @@ const fetchRecentSaleItems = async (
   size = recentSaleDialogSize.value
 ) => {
   if (!productId || !formData.customerId) return [];
+  if (!canViewSaleOrders.value) {
+    recentSaleDialogTotal.value = 0;
+    return [];
+  }
   try {
     const res: any = await request.get('/erp/sale-orders/recent-items/page', {
       params: {
@@ -1760,6 +1812,10 @@ const bindRecentSaleOrder = async (row: SaleReturnItem, sale: RecentSaleItem) =>
 
 const openRecentSaleDialog = async (row: SaleReturnItem) => {
   if (isReadOnly.value || formData.returnSource !== 'BY_PRODUCT') return;
+  if (!canViewSaleOrders.value) {
+    notifyWarning('当前角色缺少销售单查看权限，不能选择来源销售单');
+    return;
+  }
   if (!row.productId) {
     notifyWarning(t('message.selectProductFirst'));
     return;
@@ -1853,6 +1909,11 @@ const handleCustomerChange = (value: number | null) => {
 
 const handleReturnSourceChange = () => {
   resetRecentSaleDialogState();
+  if (formData.returnSource === 'BY_SALE_ORDER' && !canViewSaleOrders.value) {
+    formData.returnSource = 'BY_PRODUCT';
+    notifyWarning('当前角色缺少销售单查看权限，不能按销售单退货');
+    return;
+  }
   if (formData.returnSource === 'BY_SALE_ORDER') {
     saleOrderDetailItems.value = [];
     selectedSaleOrderItems.value = [];
@@ -1882,12 +1943,16 @@ const handleSaleOrderChange = (value: number | null) => {
 
 const openSaleOrderDetail = async (orderId: number) => {
   if (!orderId) return;
+  if (!canViewSaleOrders.value) {
+    notifyWarning('当前角色缺少销售单查看权限，不能查看来源销售单明细');
+    return;
+  }
   try {
     saleOrderRefundSummaryLoading.value = true;
     const [res, returnUsage, refundSummaryRes] = await Promise.all([
-      request.get(`/erp/sale-orders/${orderId}`),
+      request.get(`/erp/sale-orders/approved/${orderId}`),
       fetchSaleReturnUsage(orderId),
-      request.get(`/erp/sale-returns/sale-order/${orderId}/refund-summary`)
+      request.get(`/erp/sale-returns/sale-order/${orderId}/refund-summary/split`)
     ]);
     const data = res.data.data || {};
     saleOrderRefundSummary.value = refundSummaryRes.data.data || null;
@@ -1940,7 +2005,7 @@ const fetchSaleOrderRefundSummary = async (orderId?: number | null) => {
   }
   try {
     saleOrderRefundSummaryLoading.value = true;
-    const res: any = await request.get(`/erp/sale-returns/sale-order/${orderId}/refund-summary`);
+    const res: any = await request.get(`/erp/sale-returns/sale-order/${orderId}/refund-summary/split`);
     saleOrderRefundSummary.value = res.data.data || null;
   } catch (error) {
     saleOrderRefundSummary.value = null;
@@ -1953,6 +2018,10 @@ const fetchSaleOrderRefundSummary = async (orderId?: number | null) => {
 const openSelectedSaleOrderPreview = () => {
   const saleOrderId = saleOrderRefundSummary.value?.saleOrderId || formData.saleOrderId;
   if (!saleOrderId) return;
+  if (!canViewSaleOrders.value) {
+    notifyWarning('当前角色缺少销售单查看权限，不能查看来源销售单');
+    return;
+  }
   const saleOrderNo = saleOrderRefundSummary.value?.saleOrderNo || resolvedSaleOrderNo.value || '';
   const resolved = router.resolve({
     path: `/erp/sale-orders/${saleOrderId}/edit`,
@@ -1979,7 +2048,9 @@ const fetchSaleReturnUsage = async (saleOrderId: number): Promise<SaleReturnUsag
       status: item.status || ''
     }));
   await Promise.all(returns.map(async (item: SaleReturnSummary) => {
-    const detailRes: any = await request.get(`/erp/sale-returns/${item.id}`);
+    const detailRes: any = await request.get(item.status === 'DRAFT'
+      ? `/erp/sale-returns/draft/${item.id}`
+      : `/erp/sale-returns/approved/${item.id}`);
     const detail = detailRes.data.data || {};
     const detailItems = Array.isArray(detail.items) ? detail.items : [];
     detailItems.forEach((detailItem: any) => {
@@ -2011,7 +2082,9 @@ const openReturnedSaleReturn = async (item: SaleReturnSummary) => {
   showSaleOrderReturnedDialog.value = false;
   const isDraft = item.status === 'DRAFT';
   await router.push({
-    path: `/erp/sale-returns/${item.id}/edit`,
+    path: isDraft
+      ? `/erp/sale-returns/draft/${item.id}/edit`
+      : `/erp/sale-returns/approved/${item.id}`,
     query: isDraft
       ? { from: 'draft', returnTo: '/erp/sale-returns/draft' }
       : { mode: 'view', from: 'approved', returnTo: '/erp/sale-returns/approved' }
@@ -2083,15 +2156,22 @@ const fetchCustomers = async () => {
 };
 
 const fetchSaleOrders = async (customerId?: number | null) => {
+  if (!canViewSaleOrders.value) {
+    saleOrderOptions.value = [];
+    if (formData.returnSource === 'BY_SALE_ORDER' && !isReadOnly.value) {
+      formData.returnSource = 'BY_PRODUCT';
+    }
+    return;
+  }
   try {
     const targetCustomerId = customerId ?? formData.customerId;
     if (!targetCustomerId) {
       saleOrderOptions.value = [];
       return;
     }
-    const params: Record<string, any> = { status: 'APPROVED', customerId: targetCustomerId };
-    const res: any = await request.get('/erp/sale-orders', { params });
-    const items = res.data.data || [];
+    const params: Record<string, any> = { page: 1, size: 1000, customerId: targetCustomerId };
+    const res: any = await request.get('/erp/sale-orders/approved/page', { params });
+    const items = res.data.data?.items || [];
     saleOrderOptions.value = items.map((item: any) => ({
       id: item.id,
       orderNo: item.orderNo,
@@ -2230,7 +2310,7 @@ const loadDetail = async () => {
   }
   try {
     const id = route.params.id;
-    const res: any = await request.get(`/erp/sale-returns/${id}`);
+    const res: any = await request.get(detailEndpoint(id as string | number));
     if (res.data.code === 200) {
       const data = res.data.data || {};
       formData.orderNo = data.order?.orderNo || data.orderNo || '';
@@ -2267,7 +2347,9 @@ const loadDetail = async () => {
         await fetchStockOptions(item.productId);
         syncStockKey(item);
       }
-      await fetchSaleOrders(formData.customerId);
+      if (canViewSaleOrders.value) {
+        await fetchSaleOrders(formData.customerId);
+      }
       await fetchSaleOrderRefundSummary(formData.saleOrderId);
       if (!formData.items.length) addItem();
       lastCustomerId.value = formData.customerId;
@@ -2374,7 +2456,7 @@ const applyDefaultMethods = () => {
 
 const fetchNextOrderNo = async () => {
   try {
-    const res: any = await request.get('/erp/sale-returns/next-no');
+    const res: any = await request.get('/erp/sale-returns/draft/next-no');
     if (res.data.code === 200) {
       formData.orderNo = res.data.data || '';
     }
@@ -2468,8 +2550,8 @@ const fetchNextOrderNo = async () => {
   isSaving.value = true;
   try {
     const res: any = isEditing.value
-      ? await request.put(`/erp/sale-returns/${route.params.id}`, payload)
-      : await request.post('/erp/sale-returns', payload);
+      ? await request.put(draftEndpoint(route.params.id as string), payload)
+      : await request.post('/erp/sale-returns/draft', payload);
 
     if (res.data.code === 200) {
       const data = res.data.data || {};
@@ -2480,7 +2562,7 @@ const fetchNextOrderNo = async () => {
       }
       if (!isEditing.value && savedId && options.reloadAfterCreate) {
         await router.replace({
-          path: `/erp/sale-returns/${savedId}/edit`,
+          path: `/erp/sale-returns/draft/${savedId}/edit`,
           query: { from: 'draft', returnTo: '/erp/sale-returns/draft' }
         });
         await loadDetail();

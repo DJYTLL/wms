@@ -92,11 +92,26 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         Role role = loadRole(roleId);
         ensurePermissionMutableRole(role);
         ensureCurrentRolePermissionsWithinActorScope(role);
-        validatePermissions(role, permissionIds);
+        List<Permission> requestedPermissions = validateAndLoadPermissions(role, permissionIds);
+        List<Permission> assignablePermissions = requestedPermissions.stream()
+            .filter(permission -> !isConcreteColumnPermission(permission.getCode()))
+            .toList();
         Long tenantId = TenantContext.requireTenantId();
-        // 先清空，再重建
+        List<Long> retainedColumnPermissionIds = rolePermissionMapper.findPermissionsByRoleId(tenantId, roleId).stream()
+            .filter(permission -> isConcreteColumnPermission(permission.getCode()))
+            .map(Permission::getId)
+            .toList();
+        List<Long> nextPermissionIds = java.util.stream.Stream.concat(
+                assignablePermissions.stream().map(Permission::getId),
+                retainedColumnPermissionIds.stream()
+            )
+            .filter(id -> id != null)
+            .distinct()
+            .toList();
+
+        // 普通角色权限保存只替换功能权限；具体列权限由列权限配置页维护。
         rolePermissionMapper.deleteByRoleId(tenantId, roleId);
-        for (Long permissionId : permissionIds) {
+        for (Long permissionId : nextPermissionIds) {
             rolePermissionMapper.insertIgnore(tenantId, roleId, permissionId);
         }
         // 角色权限变更，刷新用户权限版本
@@ -196,6 +211,10 @@ public class RolePermissionServiceImpl implements RolePermissionService {
 
     // 校验权限列表存在
     private void validatePermissions(Role role, List<Long> permissionIds) {
+        validateAndLoadPermissions(role, permissionIds);
+    }
+
+    private List<Permission> validateAndLoadPermissions(Role role, List<Long> permissionIds) {
         if (permissionIds == null || permissionIds.isEmpty()) {
             throw new IllegalArgumentException("权限列表不能为空");
         }
@@ -215,6 +234,14 @@ public class RolePermissionServiceImpl implements RolePermissionService {
             }
         }
         ensurePermissionsWithinActorScope(permissions);
+        return permissions;
+    }
+
+    private boolean isConcreteColumnPermission(String code) {
+        return code != null
+            && code.startsWith("column:")
+            && !"column:edit".equals(code)
+            && !"column:role:manage".equals(code);
     }
 
     private boolean isSuperAdmin(Role role) {

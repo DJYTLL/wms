@@ -1,10 +1,5 @@
 const legacyMenuKeyMap: Record<string, string> = {
   dashboard: 'nav.dashboard',
-  warehouse: 'nav.warehouse',
-  inbound: 'nav.inbound',
-  outbound: 'nav.outbound',
-  'out-normal': 'nav.outboundNormal',
-  'out-urgent': 'nav.outboundUrgent',
   system: 'nav.system',
   users: 'nav.users',
   roles: 'nav.roles',
@@ -19,7 +14,6 @@ const legacyMenuKeyMap: Record<string, string> = {
   'user-management': 'nav.users',
   'role-management': 'nav.roles',
   'permission-management': 'nav.permissions',
-  'inbound-management': 'nav.inbound',
   erp: 'nav.erp',
   'erp-basic': 'nav.erpBasic',
   'erp-product': 'nav.erpProduct',

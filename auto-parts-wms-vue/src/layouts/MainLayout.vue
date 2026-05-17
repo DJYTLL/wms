@@ -241,28 +241,10 @@ const decorateMenus = (items: MenuItem[]): MenuItem[] => {
   }));
 };
 
-const flattenRedundantRootMenus = (items: MenuItem[]): MenuItem[] => {
-  return items.flatMap((item) => {
-    const children = item.children || [];
-    const shouldFlattenWarehouseRoot = item.key === 'warehouse' && !item.path && children.length > 0;
-
-    if (!shouldFlattenWarehouseRoot) {
-      return item.key === 'outbound' ? [] : [item];
-    }
-
-    return children
-      .filter(child => child.key !== 'outbound')
-      .map((child) => ({
-        ...child,
-        icon: child.icon || item.icon,
-      }));
-  });
-};
-
 const refreshMenus = async (force = false) => {
   try {
     await menuStore.fetchMenus(force);
-    menuData.value = flattenRedundantRootMenus(decorateMenus(menuStore.menus));
+    menuData.value = decorateMenus(menuStore.menus);
     findAndExpand(menuData.value);
   } catch (error) {
     notifyError(error);

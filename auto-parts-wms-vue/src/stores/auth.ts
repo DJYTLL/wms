@@ -31,7 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
   // 已认证用户对象的响应式状态。
   const user = ref<any>(null);
   
-  // 用户权限列表的响应式状态 (例如：['warehouse:view', 'product:add'])。
+  // 用户权限列表的响应式状态 (例如：['erp-warehouse:view', 'erp-product:add'])。
   const permissions = ref<string[]>([]);
   const tenantId = ref<number | null>(null);
   const tenantCode = ref<string | null>(null);
@@ -219,7 +219,7 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * 检查已认证用户是否拥有特定权限。
    * 
-   * @param permission 要检查的权限字符串 (例如：'product:add')。
+   * @param permission 要检查的权限字符串 (例如：'erp-product:add')。
    * @returns {boolean} 如果用户拥有该权限，则返回 true。
    */
   const hasPermission = (permission: string) => {

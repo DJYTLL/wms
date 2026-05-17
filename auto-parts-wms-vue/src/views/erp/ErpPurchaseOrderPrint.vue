@@ -89,6 +89,14 @@ const paymentMethods = ref<any[]>([]);
 const orderId = computed(() => Number(route.params.id));
 const isPreview = computed(() => route.query.preview === '1' || route.query.preview === 'true');
 const shouldAutoPrint = computed(() => route.query.auto === '1' || route.query.auto === 'true');
+const isDraftPrint = computed(() => route.path.includes('/purchase-orders/draft/'));
+const isApprovedPrint = computed(() => route.path.includes('/purchase-orders/approved/'));
+const purchaseDocType = computed(() => isDraftPrint.value ? 'PURCHASE_ORDER_DRAFT' : 'PURCHASE_ORDER_APPROVED');
+const purchaseDetailUrl = computed(() => {
+  if (isDraftPrint.value) return `/erp/purchase-orders/draft/${orderId.value}/print`;
+  if (isApprovedPrint.value) return `/erp/purchase-orders/approved/${orderId.value}/print`;
+  return `/erp/purchase-orders/${orderId.value}`;
+});
 
 const headerTitle = computed(() => template.value?.headerTitle || t('print.purchaseTitle'));
 const subTitle = computed(() => template.value?.subTitle || '');
@@ -274,7 +282,7 @@ const fetchTemplate = async () => {
       applyTemplate(template.value);
       return;
     }
-    template.value = await fetchPrintTemplate('PURCHASE_ORDER', resolveTemplateId(route.query.templateId));
+    template.value = await fetchPrintTemplate(purchaseDocType.value, resolveTemplateId(route.query.templateId));
     applyTemplate(template.value);
   } catch {
     template.value = null;
@@ -283,7 +291,7 @@ const fetchTemplate = async () => {
 };
 
 const fetchDetail = async () => {
-  const res: any = await request.get(`/erp/purchase-orders/${orderId.value}`);
+  const res: any = await request.get(purchaseDetailUrl.value);
   const data = res.data.data || {};
   order.value = data.order || null;
   items.value = data.items || [];
@@ -292,7 +300,7 @@ const fetchDetail = async () => {
 const recordPrint = async () => {
   try {
     await request.post('/erp/print/logs', {
-      docType: 'PURCHASE_ORDER',
+      docType: purchaseDocType.value,
       docId: orderId.value,
       templateId: template.value?.id || null
     });

@@ -73,18 +73,28 @@
           <el-table-column :label="$t('table.actions')" width="220" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="openViewPage(row)">{{ $t('action.view') }}</el-button>
-              <el-button link type="primary" size="small" v-permission="'erp-purchase:view'" @click="openPrintPage(row)">
+              <el-button link type="primary" size="small" v-permission="'erp-purchase-approved:print'" @click="openPrintPage(row)">
                 {{ $t('action.print') }}
               </el-button>
-              <el-button link type="primary" size="small" v-permission="'erp-purchase:add'" @click="handleCopy(row)">
+              <el-button link type="primary" size="small" v-permission="'erp-purchase-approved:copy'" @click="handleCopy(row)">
                 {{ $t('action.copy') }}
+              </el-button>
+              <el-button
+                v-if="row.status === 'APPROVED'"
+                link
+                type="warning"
+                size="small"
+                v-permission="'erp-purchase-approved:unapprove'"
+                @click="handleUnapprove(row)"
+              >
+                {{ $t('action.unapprove') }}
               </el-button>
               <el-button
                 v-if="row.status === 'APPROVED'"
                 link
                 type="danger"
                 size="small"
-                v-permission="'erp-purchase:cancel'"
+                v-permission="'erp-purchase-approved:cancel'"
                 @click="handleCancel(row)"
               >
                 {{ $t('action.redFlush') }}
@@ -109,7 +119,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="PURCHASE_ORDER"
+      doc-type="PURCHASE_ORDER_APPROVED"
       :doc-id="printDocId"
       :title="$t('page.erpPurchaseOrderPrint')"
     />
@@ -215,7 +225,7 @@ const fetchList = async () => {
       params.startAt = Number(dateRange.value[0]);
       params.endAt = Number(dateRange.value[1]);
     }
-    const res: any = await request.get('/erp/purchase-orders/page', { params });
+    const res: any = await request.get('/erp/purchase-orders/approved/page', { params });
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -245,7 +255,7 @@ const handleSizeChange = (newSize: number) => {
 
 const openViewPage = (row: PurchaseOrder) => {
   router.push({
-    path: `/erp/purchase-orders/${row.id}/edit`,
+    path: `/erp/purchase-orders/approved/${row.id}`,
     query: {
       mode: 'view',
       returnTo: '/erp/purchase-orders/approved',
@@ -271,7 +281,7 @@ const handleCancel = async (row: PurchaseOrder) => {
       }
     );
     if (!value || !String(value).trim()) return;
-    await request.post(`/erp/purchase-orders/${row.id}/cancel`, { reason: String(value).trim() });
+    await request.post(`/erp/purchase-orders/approved/${row.id}/cancel`, { reason: String(value).trim() });
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -297,42 +307,14 @@ const handleCopy = async (row: PurchaseOrder) => {
   }
 
   try {
-    const detailRes: any = await request.get(`/erp/purchase-orders/${row.id}`);
-    const detail = detailRes.data?.data;
-    if (!detail?.order) {
-      notifyWarning(t('message.noItems'));
-      return;
-    }
-    const order = detail.order;
-    const items = (detail.items || []).map((item: any, index: number) => ({
-      productId: item.productId,
-      warehouseId: item.warehouseId,
-      locationId: item.locationId,
-      qty: item.qty,
-      price: item.price,
-      taxRate: item.taxRate,
-      remark: item.remark,
-      sortNo: index + 1
-    }));
-    const orderNoRes: any = await request.get('/erp/purchase-orders/next-order-no');
-    const orderNo = orderNoRes.data?.data || '';
-    const createRes: any = await request.post('/erp/purchase-orders', {
-      orderNo,
-      orderAt: order.orderAt,
-      supplierId: order.supplierId,
-      paymentMethodCode: order.paymentMethodCode || undefined,
-      paidAmount: order.paidAmount,
-      discountAmount: order.discountAmount,
-      remark: order.remark,
-      items
-    });
+    const createRes: any = await request.post(`/erp/purchase-orders/approved/${row.id}/copy`);
     if (createRes.data.code === 200) {
       const data = createRes.data.data || {};
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
         await router.push({
-          path: `/erp/purchase-orders/${newId}/edit`,
+          path: `/erp/purchase-orders/draft/${newId}/edit`,
           query: {
             from: 'draft',
             returnTo: '/erp/purchase-orders/draft'
@@ -342,6 +324,33 @@ const handleCopy = async (row: PurchaseOrder) => {
     }
   } catch (error) {
     notifyError(error);
+  }
+};
+
+const handleUnapprove = async (row: PurchaseOrder) => {
+  try {
+    await ElMessageBox.confirm(
+      t('message.confirmUnapprove'),
+      t('action.confirm'),
+      {
+        confirmButtonText: t('action.unapprove'),
+        cancelButtonText: t('action.cancel'),
+        type: 'warning'
+      }
+    );
+    await request.post(`/erp/purchase-orders/approved/${row.id}/unapprove`);
+    notifySuccess();
+    await router.push({
+      path: `/erp/purchase-orders/draft/${row.id}/edit`,
+      query: {
+        from: 'draft',
+        returnTo: '/erp/purchase-orders/draft'
+      }
+    });
+  } catch (error) {
+    if (error && error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
   }
 };
 

@@ -11,12 +11,6 @@ public final class MenuSeedProvider {
         return List.of(
             new MenuSeed("dashboard", null, "仪表盘", "dashboard", "/", ICON_DASHBOARD, null, 10),
 
-            new MenuSeed("warehouse", null, "仓库管理", "warehouse", null, ICON_WAREHOUSE, "warehouse:view", 20),
-            new MenuSeed("inbound", "warehouse", "入库管理", "inbound", "/inbound", null, "inbound:view", 10),
-            new MenuSeed("outbound", "warehouse", "出库管理", "outbound", null, null, "outbound:view", 20),
-            new MenuSeed("out-normal", "outbound", "普通出库", "out-normal", "/outbound/normal", null, "outbound:view", 10),
-            new MenuSeed("out-urgent", "outbound", "加急出库", "out-urgent", "/outbound/urgent", null, "outbound:view", 20),
-
             new MenuSeed("erp", null, "进销存", "erp", null, ICON_WAREHOUSE, null, 35),
             new MenuSeed("erp-basic", "erp", "基础资料", "erp-basic", null, ICON_BASIC, null, 10),
             new MenuSeed("erp-product", "erp-basic", "商品管理", "erp-product", "/erp/products", null, "erp-product:view", 10),
@@ -35,16 +29,16 @@ public final class MenuSeedProvider {
             new MenuSeed("erp-print-template", "erp-basic", "打印模板", "erp-print-template", "/erp/print-templates", null, "erp-print-template:view", 100),
 
             new MenuSeed("erp-purchase", "erp", "采购管理", "erp-purchase", null, null, null, 20),
-            new MenuSeed("erp-purchase-draft", "erp-purchase", "采购单（草稿）", "erp-purchase-draft", "/erp/purchase-orders/draft", null, "erp-purchase:view", 10),
-            new MenuSeed("erp-purchase-approved", "erp-purchase", "采购单（已审核）", "erp-purchase-approved", "/erp/purchase-orders/approved", null, "erp-purchase:view", 20),
-            new MenuSeed("erp-purchase-return-draft", "erp-purchase", "采购退货（草稿）", "erp-purchase-return-draft", "/erp/purchase-returns/draft", null, "erp-purchase-return:view", 30),
-            new MenuSeed("erp-purchase-return-approved", "erp-purchase", "采购退货（已审核）", "erp-purchase-return-approved", "/erp/purchase-returns/approved", null, "erp-purchase-return:view", 40),
+            new MenuSeed("erp-purchase-draft", "erp-purchase", "采购单（草稿）", "erp-purchase-draft", "/erp/purchase-orders/draft", null, "erp-purchase-draft:view", 10),
+            new MenuSeed("erp-purchase-approved", "erp-purchase", "采购单（已审核）", "erp-purchase-approved", "/erp/purchase-orders/approved", null, "erp-purchase-approved:view", 20),
+            new MenuSeed("erp-purchase-return-draft", "erp-purchase", "采购退货（草稿）", "erp-purchase-return-draft", "/erp/purchase-returns/draft", null, "erp-purchase-return-draft:view", 30),
+            new MenuSeed("erp-purchase-return-approved", "erp-purchase", "采购退货（已审核）", "erp-purchase-return-approved", "/erp/purchase-returns/approved", null, "erp-purchase-return-approved:view", 40),
 
             new MenuSeed("erp-sale", "erp", "销售管理", "erp-sale", null, null, null, 30),
-            new MenuSeed("erp-sale-draft", "erp-sale", "销售单（草稿）", "erp-sale-draft", "/erp/sale-orders/draft", null, "erp-sale:view", 10),
-            new MenuSeed("erp-sale-approved", "erp-sale", "销售单（已审核）", "erp-sale-approved", "/erp/sale-orders/approved", null, "erp-sale:view", 20),
-            new MenuSeed("erp-sale-return-draft", "erp-sale", "销售退货（草稿）", "erp-sale-return-draft", "/erp/sale-returns/draft", null, "erp-sale-return:view", 30),
-            new MenuSeed("erp-sale-return-approved", "erp-sale", "销售退货（已审核）", "erp-sale-return-approved", "/erp/sale-returns/approved", null, "erp-sale-return:view", 40),
+            new MenuSeed("erp-sale-draft", "erp-sale", "销售单（草稿）", "erp-sale-draft", "/erp/sale-orders/draft", null, "erp-sale-draft:view", 10),
+            new MenuSeed("erp-sale-approved", "erp-sale", "销售单（已审核）", "erp-sale-approved", "/erp/sale-orders/approved", null, "erp-sale-approved:view", 20),
+            new MenuSeed("erp-sale-return-draft", "erp-sale", "销售退货（草稿）", "erp-sale-return-draft", "/erp/sale-returns/draft", null, "erp-sale-return-draft:view", 30),
+            new MenuSeed("erp-sale-return-approved", "erp-sale", "销售退货（已审核）", "erp-sale-return-approved", "/erp/sale-returns/approved", null, "erp-sale-return-approved:view", 40),
 
             new MenuSeed("erp-warehouse-module", "erp", "仓库管理", "erp-warehouse-module", null, null, null, 40),
             new MenuSeed("erp-stock", "erp-warehouse-module", "库存台账", "erp-stock", "/erp/stocks", null, "erp-stock:view", 10),

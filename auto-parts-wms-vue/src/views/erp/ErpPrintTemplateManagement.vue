@@ -316,9 +316,17 @@ interface PrintFieldConfig {
 
 type PrintDocType =
   | 'SALE_ORDER'
+  | 'SALE_ORDER_DRAFT'
+  | 'SALE_ORDER_APPROVED'
   | 'PURCHASE_ORDER'
+  | 'PURCHASE_ORDER_DRAFT'
+  | 'PURCHASE_ORDER_APPROVED'
   | 'SALE_RETURN'
+  | 'SALE_RETURN_DRAFT'
+  | 'SALE_RETURN_APPROVED'
   | 'PURCHASE_RETURN'
+  | 'PURCHASE_RETURN_DRAFT'
+  | 'PURCHASE_RETURN_APPROVED'
   | 'RECEIPT'
   | 'PAYMENT'
   | 'ACCOUNTS_RECEIVABLE'
@@ -365,9 +373,17 @@ let previewSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
 const docTypeOptions = computed<{ value: PrintDocType; label: string }[]>(() => [
   { value: 'SALE_ORDER', label: t('print.docTypeSale') },
+  { value: 'SALE_ORDER_DRAFT', label: '销售单草稿' },
+  { value: 'SALE_ORDER_APPROVED', label: '销售单已审核' },
   { value: 'PURCHASE_ORDER', label: t('print.docTypePurchase') },
+  { value: 'PURCHASE_ORDER_DRAFT', label: '采购单草稿' },
+  { value: 'PURCHASE_ORDER_APPROVED', label: '采购单已审核' },
   { value: 'SALE_RETURN', label: t('print.docTypeSaleReturn') },
+  { value: 'SALE_RETURN_DRAFT', label: t('print.docTypeSaleReturnDraft') },
+  { value: 'SALE_RETURN_APPROVED', label: t('print.docTypeSaleReturnApproved') },
   { value: 'PURCHASE_RETURN', label: t('print.docTypePurchaseReturn') },
+  { value: 'PURCHASE_RETURN_DRAFT', label: t('print.docTypePurchaseReturnDraft') },
+  { value: 'PURCHASE_RETURN_APPROVED', label: t('print.docTypePurchaseReturnApproved') },
   { value: 'RECEIPT', label: t('print.docTypeReceipt') },
   { value: 'PAYMENT', label: t('print.docTypePayment') },
   { value: 'ACCOUNTS_RECEIVABLE', label: t('print.docTypeAccountsReceivable') },
@@ -396,9 +412,17 @@ const formData = reactive({
 
 const previewSourceMap: Record<PrintDocType, { endpoint: string; preferredStatus?: string }> = {
   SALE_ORDER: { endpoint: '/erp/sale-orders/page', preferredStatus: 'APPROVED' },
+  SALE_ORDER_DRAFT: { endpoint: '/erp/sale-orders/draft/page' },
+  SALE_ORDER_APPROVED: { endpoint: '/erp/sale-orders/approved/page' },
   PURCHASE_ORDER: { endpoint: '/erp/purchase-orders/page', preferredStatus: 'APPROVED' },
+  PURCHASE_ORDER_DRAFT: { endpoint: '/erp/purchase-orders/draft/page' },
+  PURCHASE_ORDER_APPROVED: { endpoint: '/erp/purchase-orders/approved/page', preferredStatus: 'APPROVED' },
   SALE_RETURN: { endpoint: '/erp/sale-returns/page', preferredStatus: 'APPROVED' },
+  SALE_RETURN_DRAFT: { endpoint: '/erp/sale-returns/draft/page' },
+  SALE_RETURN_APPROVED: { endpoint: '/erp/sale-returns/approved/page', preferredStatus: 'APPROVED' },
   PURCHASE_RETURN: { endpoint: '/erp/purchase-returns/page', preferredStatus: 'APPROVED' },
+  PURCHASE_RETURN_DRAFT: { endpoint: '/erp/purchase-returns/draft/page' },
+  PURCHASE_RETURN_APPROVED: { endpoint: '/erp/purchase-returns/approved/page' },
   RECEIPT: { endpoint: '/erp/receipts/page' },
   PAYMENT: { endpoint: '/erp/payments/page' },
   ACCOUNTS_RECEIVABLE: { endpoint: '/erp/ar/page' },
@@ -410,9 +434,17 @@ const previewSourceMap: Record<PrintDocType, { endpoint: string; preferredStatus
 
 const printPathMap: Record<PrintDocType, string> = {
   SALE_ORDER: 'sale-orders',
+  SALE_ORDER_DRAFT: 'sale-orders/draft',
+  SALE_ORDER_APPROVED: 'sale-orders/approved',
   PURCHASE_ORDER: 'purchase-orders',
+  PURCHASE_ORDER_DRAFT: 'purchase-orders/draft',
+  PURCHASE_ORDER_APPROVED: 'purchase-orders/approved',
   SALE_RETURN: 'sale-returns',
+  SALE_RETURN_DRAFT: 'sale-returns/draft',
+  SALE_RETURN_APPROVED: 'sale-returns/approved',
   PURCHASE_RETURN: 'purchase-returns',
+  PURCHASE_RETURN_DRAFT: 'purchase-returns/draft',
+  PURCHASE_RETURN_APPROVED: 'purchase-returns/approved',
   RECEIPT: 'receipts',
   PAYMENT: 'payments',
   ACCOUNTS_RECEIVABLE: 'ar',
@@ -461,7 +493,24 @@ const previewFrameUrl = computed(() => {
 const buildFieldOptions = (docType: string, isHeader: boolean): FieldOption[] => {
   if (isHeader) {
     switch (docType) {
+      case 'SALE_ORDER':
+      case 'SALE_ORDER_DRAFT':
+      case 'SALE_ORDER_APPROVED':
+        return [
+          { key: 'orderNo', label: t('field.orderNo') },
+          { key: 'orderAt', label: t('field.orderTime') },
+          { key: 'customerName', label: t('field.customer') },
+          { key: 'settlementMethod', label: t('field.settlementMethod') },
+          { key: 'deliveryMethod', label: t('field.deliveryMethod') },
+          { key: 'paidAmount', label: t('field.paidAmount') },
+          { key: 'discountAmount', label: t('field.discountAmount') },
+          { key: 'printCount', label: t('field.printCount') },
+          { key: 'lastPrintedAt', label: t('field.lastPrintedAt') },
+          { key: 'remark', label: t('field.remark') }
+        ];
       case 'PURCHASE_ORDER':
+      case 'PURCHASE_ORDER_DRAFT':
+      case 'PURCHASE_ORDER_APPROVED':
         return [
           { key: 'orderNo', label: t('field.orderNo') },
           { key: 'orderAt', label: t('field.orderTime') },
@@ -474,6 +523,8 @@ const buildFieldOptions = (docType: string, isHeader: boolean): FieldOption[] =>
           { key: 'remark', label: t('field.remark') }
         ];
       case 'SALE_RETURN':
+      case 'SALE_RETURN_DRAFT':
+      case 'SALE_RETURN_APPROVED':
         return [
           { key: 'orderNo', label: t('field.orderNo') },
           { key: 'orderAt', label: t('field.orderTime') },
@@ -486,6 +537,8 @@ const buildFieldOptions = (docType: string, isHeader: boolean): FieldOption[] =>
           { key: 'remark', label: t('field.remark') }
         ];
       case 'PURCHASE_RETURN':
+      case 'PURCHASE_RETURN_DRAFT':
+      case 'PURCHASE_RETURN_APPROVED':
         return [
           { key: 'orderNo', label: t('field.orderNo') },
           { key: 'orderAt', label: t('field.orderTime') },
@@ -596,6 +649,21 @@ const buildFieldOptions = (docType: string, isHeader: boolean): FieldOption[] =>
   }
 
   switch (docType) {
+    case 'SALE_ORDER':
+    case 'SALE_ORDER_DRAFT':
+    case 'SALE_ORDER_APPROVED':
+      return [
+        { key: 'productCode', label: t('field.code') },
+        { key: 'productName', label: t('field.product') },
+        { key: 'warehouse', label: t('field.warehouse') },
+        { key: 'location', label: t('field.location') },
+        { key: 'qty', label: t('field.quantity') },
+        { key: 'price', label: t('field.price') },
+        { key: 'amount', label: t('field.lineTotal') },
+        { key: 'taxRate', label: t('field.taxRate') },
+        { key: 'amountInclTax', label: t('field.totalAmount') },
+        { key: 'remark', label: t('field.remark') }
+      ];
     case 'RECEIPT':
     case 'PAYMENT':
       return [
@@ -675,9 +743,17 @@ const docTypeLabel = (value?: string) => {
 const buildPreviewLabel = (docType: PrintDocType, row: Record<string, any>) => {
   const codeFieldMap: Record<PrintDocType, string> = {
     SALE_ORDER: 'orderNo',
+    SALE_ORDER_DRAFT: 'orderNo',
+    SALE_ORDER_APPROVED: 'orderNo',
     PURCHASE_ORDER: 'orderNo',
+    PURCHASE_ORDER_DRAFT: 'orderNo',
+    PURCHASE_ORDER_APPROVED: 'orderNo',
     SALE_RETURN: 'orderNo',
+    SALE_RETURN_DRAFT: 'orderNo',
+    SALE_RETURN_APPROVED: 'orderNo',
     PURCHASE_RETURN: 'orderNo',
+    PURCHASE_RETURN_DRAFT: 'orderNo',
+    PURCHASE_RETURN_APPROVED: 'orderNo',
     RECEIPT: 'receiptNo',
     PAYMENT: 'paymentNo',
     ACCOUNTS_RECEIVABLE: 'receivableNo',
@@ -793,6 +869,8 @@ const getDocTypeDefaults = (docType: string): PrintFieldConfig => {
   const columnWidths = buildDefaultColumnWidths(docType);
   switch (docType) {
     case 'PURCHASE_ORDER':
+    case 'PURCHASE_ORDER_DRAFT':
+    case 'PURCHASE_ORDER_APPROVED':
       return {
         headerFields: ['orderNo', 'orderAt', 'supplierName', 'paymentMethod', 'paidAmount', 'discountAmount', 'printCount', 'lastPrintedAt', 'remark'],
         detailColumns: ['productCode', 'productName', 'warehouse', 'location', 'qty', 'price', 'amount', 'taxRate', 'amountInclTax', 'remark'],
@@ -800,6 +878,8 @@ const getDocTypeDefaults = (docType: string): PrintFieldConfig => {
         columnWidths
       };
     case 'SALE_RETURN':
+    case 'SALE_RETURN_DRAFT':
+    case 'SALE_RETURN_APPROVED':
       return {
         headerFields: ['orderNo', 'orderAt', 'customerName', 'returnSource', 'returnType', 'saleOrderNo', 'printCount', 'lastPrintedAt', 'remark'],
         detailColumns: ['productCode', 'productName', 'warehouse', 'location', 'qty', 'price', 'amount', 'taxRate', 'amountInclTax', 'remark'],
@@ -807,6 +887,8 @@ const getDocTypeDefaults = (docType: string): PrintFieldConfig => {
         columnWidths
       };
     case 'PURCHASE_RETURN':
+    case 'PURCHASE_RETURN_DRAFT':
+    case 'PURCHASE_RETURN_APPROVED':
       return {
         headerFields: ['orderNo', 'orderAt', 'supplierName', 'returnSource', 'returnType', 'purchaseOrderNo', 'printCount', 'lastPrintedAt', 'remark'],
         detailColumns: ['productCode', 'productName', 'warehouse', 'location', 'qty', 'price', 'amount', 'taxRate', 'amountInclTax', 'remark'],

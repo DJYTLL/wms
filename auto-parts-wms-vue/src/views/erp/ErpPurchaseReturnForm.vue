@@ -116,7 +116,11 @@
                   @change="handleReturnSourceChange"
                 >
                   <el-option :label="$t('returnSource.byProduct')" value="BY_PRODUCT" />
-                  <el-option :label="$t('returnSource.byPurchaseOrder')" value="BY_PURCHASE_ORDER" />
+                  <el-option
+                    v-if="canViewPurchaseOrders"
+                    :label="$t('returnSource.byPurchaseOrder')"
+                    value="BY_PURCHASE_ORDER"
+                  />
                 </el-select>
               </el-form-item>
               </div>
@@ -185,7 +189,7 @@
                       <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                     </el-select>
                     <el-button
-                      v-if="!isReadOnly && formData.returnSource === 'BY_PRODUCT'"
+                      v-if="!isReadOnly && formData.returnSource === 'BY_PRODUCT' && canViewPurchaseOrders"
                       class="detail-source-button"
                       size="small"
                       plain
@@ -503,7 +507,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="PURCHASE_RETURN"
+      :doc-type="purchaseReturnPrintDocType"
       :doc-id="printDocId"
       :title="$t('page.erpPurchaseReturnPrint')"
     />
@@ -631,18 +635,27 @@ const { requiredFieldMessage, positiveRowFieldMessage, invalidRowFieldMessage } 
 const authStore = useAuthStore();
 
 const isEditing = computed(() => Boolean(route.params.id));
+const isApprovedWorkspace = computed(() => route.path.includes('/erp/purchase-returns/approved/'));
+const isDraftWorkspace = computed(() => !isApprovedWorkspace.value);
 const isReadOnly = computed(() => {
+  if (isApprovedWorkspace.value) return true;
   if (route.query.mode === 'view') return true;
   if (!formData.status) return false;
   return formData.status !== 'DRAFT';
 });
 
 const canCopy = computed(() => {
-  return isReadOnly.value && ['APPROVED', 'RED_FLUSHED'].includes(formData.status) && hasPermission('erp-purchase-return:add');
+  return isApprovedWorkspace.value
+    && ['APPROVED', 'RED_FLUSHED'].includes(formData.status)
+    && hasPermission('erp-purchase-return-approved:copy')
+    && hasPermission('erp-purchase-return-draft:add');
 });
 
 const canPrint = computed(() => {
-  return isEditing.value && hasPermission('erp-purchase-return:view');
+  if (!isEditing.value) return false;
+  return isApprovedWorkspace.value
+    ? hasPermission('erp-purchase-return-approved:print')
+    : hasPermission('erp-purchase-return-draft:print');
 });
 
 const pageTitle = computed(() => (isEditing.value ? t('page.erpPurchaseReturnEdit') : t('page.erpPurchaseReturnCreate')));
@@ -712,39 +725,49 @@ const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 };
 
+const purchaseReturnEndpoint = computed(() => isApprovedWorkspace.value ? '/erp/purchase-returns/approved' : '/erp/purchase-returns/draft');
+const purchaseReturnSummaryEndpoint = computed(() => isApprovedWorkspace.value ? '/erp/purchase-returns/approved/summary' : '/erp/purchase-returns/draft/summary');
+const purchaseReturnPrintDocType = computed<'PURCHASE_RETURN_APPROVED' | 'PURCHASE_RETURN_DRAFT'>(() => isApprovedWorkspace.value ? 'PURCHASE_RETURN_APPROVED' : 'PURCHASE_RETURN_DRAFT');
+const canViewPurchaseOrders = computed(() => hasPermission('erp-purchase-approved:view'));
+const getDefaultReturnSource = () => (canViewPurchaseOrders.value ? 'BY_PURCHASE_ORDER' : 'BY_PRODUCT');
+
 const canApprove = computed(() => {
-  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-purchase-return:approve');
+  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-purchase-return-draft:approve');
 });
 
 const shouldShowApproveButton = computed(() => {
+  if (!isDraftWorkspace.value) return false;
   if (canApprove.value) return true;
   if (!isInitializing.value) return false;
   if (route.query.mode === 'view') return false;
-  return hasPermission('erp-purchase-return:approve');
+  return hasPermission('erp-purchase-return-draft:approve');
 });
 
 const canRedFlush = computed(() => {
-  return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-purchase-return:cancel');
+  return isApprovedWorkspace.value && formData.status === 'APPROVED' && hasPermission('erp-purchase-return-approved:cancel');
 });
 
 const shouldShowCopyButton = computed(() => {
+  if (!isApprovedWorkspace.value) return false;
   if (canCopy.value) return true;
   return isInitializing.value
     && isEditing.value
     && (route.query.mode === 'view' || route.query.from === 'approved')
-    && hasPermission('erp-purchase-return:add');
+    && hasPermission('erp-purchase-return-approved:copy')
+    && hasPermission('erp-purchase-return-draft:add');
 });
 
 const shouldShowRedFlushButton = computed(() => {
+  if (!isApprovedWorkspace.value) return false;
   if (canRedFlush.value) return true;
   return isInitializing.value
     && isEditing.value
     && (route.query.mode === 'view' || route.query.from === 'approved')
-    && hasPermission('erp-purchase-return:cancel');
+    && hasPermission('erp-purchase-return-approved:cancel');
 });
 
 const canApproveSavedOrder = computed(() => {
-  return Boolean(saveSuccessOrderId.value) && hasPermission('erp-purchase-return:approve');
+  return Boolean(saveSuccessOrderId.value) && hasPermission('erp-purchase-return-draft:approve');
 });
 
 const successDialogTitle = computed(() => {
@@ -763,7 +786,9 @@ const canShowProfit = computed(() => false);
 const canShowDiscountAllocated = computed(() => false);
 const resolvedPurchaseOrderNo = computed(() => {
   if (!formData.purchaseOrderId) return '';
-  return purchaseOrderOptions.value.find(item => Number(item.id) === Number(formData.purchaseOrderId))?.orderNo || '';
+  return purchaseOrderOptions.value.find(item => Number(item.id) === Number(formData.purchaseOrderId))?.orderNo
+    || purchaseOrderRefundSummary.value?.purchaseOrderNo
+    || '';
 });
 const mustSelectPurchaseOrderBeforeProduct = computed(() => {
   return formData.returnSource === 'BY_PURCHASE_ORDER' && !formData.purchaseOrderId;
@@ -894,10 +919,10 @@ const handleApprove = async () => {
 
   try {
     const savedOrderNo = formData.orderNo;
-    await request.post(`/erp/purchase-returns/${savedId}/approve`);
+    await request.post(`/erp/purchase-returns/draft/${savedId}/approve`);
     formData.status = 'APPROVED';
     await router.replace({
-      path: `/erp/purchase-returns/${savedId}/edit`,
+      path: `/erp/purchase-returns/approved/${savedId}`,
       query: { mode: 'view', from: 'approved', returnTo: '/erp/purchase-returns/approved' }
     });
     await nextTick();
@@ -944,7 +969,7 @@ const handleSaveSuccessDialogClosed = async () => {
 const handleContinueCreate = async () => {
   closeSaveSuccessDialog();
   const createRoute = {
-    path: '/erp/purchase-returns/create',
+    path: '/erp/purchase-returns/draft/create',
     query: { from: 'draft', returnTo: '/erp/purchase-returns/draft' }
   };
   const targetFullPath = router.resolve(createRoute).fullPath;
@@ -965,7 +990,7 @@ const handleStayOnCurrentOrder = async () => {
   if (!savedId) return;
   if (dialogMode === 'approve') return;
   await router.replace({
-    path: `/erp/purchase-returns/${savedId}/edit`,
+    path: `/erp/purchase-returns/draft/${savedId}/edit`,
     query: { from: 'draft', returnTo: '/erp/purchase-returns/draft' }
   });
 };
@@ -988,10 +1013,10 @@ const handleApproveSavedOrder = async () => {
   const sourcePath = route.path;
   try {
     const savedOrderNo = saveSuccessOrderNo.value;
-    await request.post(`/erp/purchase-returns/${savedId}/approve`);
+    await request.post(`/erp/purchase-returns/draft/${savedId}/approve`);
     closeSaveSuccessDialog();
     await router.replace({
-      path: `/erp/purchase-returns/${savedId}/edit`,
+      path: `/erp/purchase-returns/approved/${savedId}`,
       query: { mode: 'view', from: 'approved', returnTo: '/erp/purchase-returns/approved' }
     });
     await nextTick();
@@ -1053,42 +1078,13 @@ const handleApproveSavedOrder = async () => {
     return;
   }
     try {
-      const orderNoRes: any = await request.get('/erp/purchase-returns/next-no');
-      const orderNo = orderNoRes.data?.data || '';
-      const items = formData.items
-        .filter(item => item.productId)
-        .map((item, index) => {
-          ensureStockBinding(item);
-          return {
-            productId: item.productId,
-            warehouseId: item.warehouseId,
-            locationId: item.locationId,
-            qty: parseDecimal(item.qty, 4),
-            price: parseDecimal(item.price, 4),
-            taxRate: item.taxRate,
-            remark: item.remark,
-            sortNo: index + 1
-          };
-        });
-    const payload = {
-      orderNo,
-      orderAt: formatDateTime(new Date()),
-      returnType: formData.returnType || 'RETURN',
-      supplierId: formData.supplierId,
-      purchaseOrderId: formData.purchaseOrderId || undefined,
-      settlementMethod: formData.settlementMethod,
-      paidAmount: parseAmount(formData.paidAmount),
-      discountAmount: parseAmount(formData.discountAmount),
-      remark: formData.remark,
-      items
-    };
-    const res: any = await request.post('/erp/purchase-returns', payload);
+    const res: any = await request.post(`/erp/purchase-returns/approved/${route.params.id}/copy`);
     if (res.data.code === 200) {
       const data = res.data.data || {};
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
-        await router.push({ path: `/erp/purchase-returns/${newId}/edit`, query: { from: 'draft' } });
+        await router.push({ path: `/erp/purchase-returns/draft/${newId}/edit`, query: { from: 'draft' } });
         await loadDetail();
       }
     }
@@ -1248,7 +1244,7 @@ const handleRedFlush = async () => {
         type: 'warning'
       }
     );
-    await request.post(`/erp/purchase-returns/${route.params.id}/cancel`, { reason: value });
+    await request.post(`/erp/purchase-returns/approved/${route.params.id}/cancel`, { reason: value });
     notifySuccess();
     closePage();
     await router.push('/erp/purchase-returns/approved');
@@ -1460,6 +1456,12 @@ const fetchRecentPurchaseItems = async (
   page?: number,
   size?: number
 ) => {
+  if (!canViewPurchaseOrders.value) {
+    if (page != null && size != null) {
+      recentPurchaseDialogTotal.value = 0;
+    }
+    return [];
+  }
   if (!productId || !formData.supplierId) return [];
   try {
     if (page != null && size != null) {
@@ -1604,6 +1606,10 @@ const bindRecentPurchaseOrder = async (row: PurchaseReturnItem, purchase: Recent
 
 const openRecentPurchaseDialog = async (row: PurchaseReturnItem) => {
   if (isReadOnly.value || formData.returnSource !== 'BY_PRODUCT') return;
+  if (!canViewPurchaseOrders.value) {
+    notifyWarning('当前角色缺少采购单查看权限，不能选择来源采购单');
+    return;
+  }
   if (!row.productId) {
     notifyWarning(t('message.selectProductFirst'));
     return;
@@ -1686,6 +1692,11 @@ const handleSupplierChange = (value: number | null) => {
 
 const handleReturnSourceChange = () => {
   resetRecentPurchaseDialogState();
+  if (formData.returnSource === 'BY_PURCHASE_ORDER' && !canViewPurchaseOrders.value) {
+    formData.returnSource = 'BY_PRODUCT';
+    notifyWarning('当前角色缺少采购单查看权限，不能按采购单退货');
+    return;
+  }
   if (formData.returnSource === 'BY_PURCHASE_ORDER') {
     formData.items = [];
     addItem();
@@ -1702,6 +1713,11 @@ const handleReturnSourceChange = () => {
 
 const handlePurchaseOrderChange = (value: number | null) => {
   if (isReadOnly.value) return;
+  if (!canViewPurchaseOrders.value) {
+    formData.purchaseOrderId = null;
+    notifyWarning('当前角色缺少采购单查看权限，不能查看来源采购单明细');
+    return;
+  }
   if (!value) {
     purchaseOrderRefundSummary.value = null;
     return;
@@ -1723,11 +1739,15 @@ const handlePurchaseOrderChange = (value: number | null) => {
 
 const openPurchaseOrderDetail = async (orderId: number) => {
   if (!orderId) return;
+  if (!canViewPurchaseOrders.value) {
+    notifyWarning('当前角色缺少采购单查看权限，不能查看来源采购单明细');
+    return;
+  }
   try {
     purchaseOrderRefundSummaryLoading.value = true;
     const [res, refundSummaryRes] = await Promise.all([
       request.get(`/erp/purchase-orders/${orderId}`),
-      request.get(`/erp/purchase-returns/purchase-order/${orderId}/refund-summary`)
+      request.get(purchaseReturnSummaryEndpoint.value, { params: { purchaseOrderId: orderId } })
     ]);
     const data = res.data.data || {};
     purchaseOrderRefundSummary.value = refundSummaryRes.data.data || null;
@@ -1769,7 +1789,7 @@ const fetchPurchaseOrderRefundSummary = async (orderId?: number | null) => {
   }
   try {
     purchaseOrderRefundSummaryLoading.value = true;
-    const res: any = await request.get(`/erp/purchase-returns/purchase-order/${orderId}/refund-summary`);
+    const res: any = await request.get(purchaseReturnSummaryEndpoint.value, { params: { purchaseOrderId: orderId } });
     purchaseOrderRefundSummary.value = res.data.data || null;
   } catch (error) {
     purchaseOrderRefundSummary.value = null;
@@ -1782,6 +1802,10 @@ const fetchPurchaseOrderRefundSummary = async (orderId?: number | null) => {
 const openSelectedPurchaseOrderPreview = () => {
   const purchaseOrderId = purchaseOrderRefundSummary.value?.purchaseOrderId || formData.purchaseOrderId;
   if (!purchaseOrderId) return;
+  if (!canViewPurchaseOrders.value) {
+    notifyWarning('当前角色缺少采购单查看权限，不能查看来源采购单');
+    return;
+  }
   const purchaseOrderNo = purchaseOrderRefundSummary.value?.purchaseOrderNo || resolvedPurchaseOrderNo.value || '';
   const resolved = router.resolve({
     path: `/erp/purchase-orders/${purchaseOrderId}/edit`,
@@ -1797,16 +1821,17 @@ const fetchReturnedQtyMap = async (purchaseOrderId: number) => {
   if (!purchaseOrderId || !formData.supplierId) {
     return qtyMap;
   }
-  const res: any = await request.get('/erp/purchase-returns', {
+  const res: any = await request.get('/erp/purchase-returns/approved/page', {
     params: {
-      status: 'APPROVED',
-      supplierId: formData.supplierId
+      supplierId: formData.supplierId,
+      page: 1,
+      size: 200
     }
   });
-  const returns = Array.isArray(res.data.data) ? res.data.data : [];
+  const returns = res.data.data?.items || [];
   const relatedReturns = returns.filter((item: any) => Number(item.purchaseOrderId) === Number(purchaseOrderId));
   await Promise.all(relatedReturns.map(async (item: any) => {
-    const detailRes: any = await request.get(`/erp/purchase-returns/${item.id}`);
+    const detailRes: any = await request.get(`/erp/purchase-returns/approved/${item.id}`);
     const detail = detailRes.data.data || {};
     const detailItems = Array.isArray(detail.items) ? detail.items : [];
     detailItems.forEach((detailItem: any) => {
@@ -1882,6 +1907,13 @@ const fetchSuppliers = async () => {
 };
 
 const fetchPurchaseOrders = async () => {
+  if (!canViewPurchaseOrders.value) {
+    purchaseOrderOptions.value = [];
+    if (formData.returnSource === 'BY_PURCHASE_ORDER' && !isReadOnly.value) {
+      formData.returnSource = 'BY_PRODUCT';
+    }
+    return;
+  }
   try {
     const params: Record<string, any> = { status: 'APPROVED', page: 1, size: 200 };
     if (formData.supplierId) {
@@ -2019,7 +2051,7 @@ const loadDetail = async () => {
   }
   try {
     const id = route.params.id;
-    const res: any = await request.get(`/erp/purchase-returns/${id}`);
+    const res: any = await request.get(`${purchaseReturnEndpoint.value}/${id}`);
     if (res.data.code === 200) {
       const data = res.data.data || {};
       formData.orderNo = data.order?.orderNo || data.orderNo || '';
@@ -2088,7 +2120,7 @@ const resetForm = () => {
   formData.orderAt = '';
   formData.status = '';
   formData.returnType = 'RETURN';
-  formData.returnSource = 'BY_PURCHASE_ORDER';
+  formData.returnSource = getDefaultReturnSource();
   formData.supplierId = null;
   formData.purchaseOrderId = null;
   formData.settlementMethod = '';
@@ -2144,12 +2176,12 @@ const applyDefaultMethods = () => {
   if (!formData.returnType) {
     formData.returnType = 'RETURN';
   }
-  formData.returnSource = 'BY_PURCHASE_ORDER';
+  formData.returnSource = getDefaultReturnSource();
 };
 
 const fetchNextOrderNo = async () => {
   try {
-    const res: any = await request.get('/erp/purchase-returns/next-no');
+    const res: any = await request.get('/erp/purchase-returns/draft/next-no');
     if (res.data.code === 200) {
       formData.orderNo = res.data.data || '';
     }
@@ -2243,8 +2275,8 @@ const fetchNextOrderNo = async () => {
   isSaving.value = true;
   try {
     const res: any = isEditing.value
-      ? await request.put(`/erp/purchase-returns/${route.params.id}`, payload)
-      : await request.post('/erp/purchase-returns', payload);
+      ? await request.put(`/erp/purchase-returns/draft/${route.params.id}`, payload)
+      : await request.post('/erp/purchase-returns/draft', payload);
 
     if (res.data.code === 200) {
       const data = res.data.data || {};
@@ -2255,7 +2287,7 @@ const fetchNextOrderNo = async () => {
       }
       if (!isEditing.value && savedId && options.reloadAfterCreate) {
         await router.replace({
-          path: `/erp/purchase-returns/${savedId}/edit`,
+          path: `/erp/purchase-returns/draft/${savedId}/edit`,
           query: { from: 'draft', returnTo: '/erp/purchase-returns/draft' }
         });
         await loadDetail();

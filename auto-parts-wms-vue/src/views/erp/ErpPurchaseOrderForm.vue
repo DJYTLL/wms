@@ -323,7 +323,7 @@
 
     <PrintPreviewDialog
       v-model="printDialogVisible"
-      doc-type="PURCHASE_ORDER"
+      :doc-type="printDocType"
       :doc-id="printDocId"
       :title="$t('page.erpPurchaseOrderPrint')"
     />
@@ -559,7 +559,16 @@ const formData = reactive({
 });
 
 const isEditing = computed(() => Boolean(route.params.id));
+const isApprovedWorkspace = computed(() => route.path.includes('/erp/purchase-orders/approved/'));
+const isDraftWorkspace = computed(() => route.path.includes('/erp/purchase-orders/draft/') || !isApprovedWorkspace.value);
+const draftBasePath = '/erp/purchase-orders/draft';
+const approvedBasePath = '/erp/purchase-orders/approved';
+const draftApiBase = '/erp/purchase-orders/draft';
+const approvedApiBase = '/erp/purchase-orders/approved';
+const detailApiBase = computed(() => isApprovedWorkspace.value ? approvedApiBase : draftApiBase);
+const printDocType = computed(() => isApprovedWorkspace.value ? 'PURCHASE_ORDER_APPROVED' : 'PURCHASE_ORDER_DRAFT');
 const isReadOnly = computed(() => {
+  if (isApprovedWorkspace.value) return true;
   if (route.query.mode === 'view') return true;
   if (!formData.status) return false;
   return formData.status !== 'DRAFT';
@@ -667,11 +676,11 @@ const isCreditSettlement = computed(() => {
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 
 const canApprove = computed(() => {
-  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-purchase:approve');
+  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-purchase-draft:approve');
 });
 
 const shouldShowApproveButton = computed(() => {
-  if (!hasPermission('erp-purchase:approve') || isReadOnly.value) return false;
+  if (!hasPermission('erp-purchase-draft:approve') || isReadOnly.value) return false;
   if (canApprove.value) return true;
   return isInitializing.value || !isEditing.value || route.query.from === 'draft';
 });
@@ -679,25 +688,26 @@ const shouldShowApproveButton = computed(() => {
 const canCopy = computed(() => {
   return isReadOnly.value
     && (formData.status === 'APPROVED' || formData.status === 'CANCELLED')
-    && hasPermission('erp-purchase:add');
+    && hasPermission('erp-purchase-approved:copy')
+    && hasPermission('erp-purchase-draft:add');
 });
 
 const shouldShowCopyButton = computed(() => {
-  if (!hasPermission('erp-purchase:add') || !isEditing.value) return false;
+  if (!hasPermission('erp-purchase-approved:copy') || !hasPermission('erp-purchase-draft:add') || !isEditing.value) return false;
   if (canCopy.value) return true;
   return isInitializing.value && (route.query.mode === 'view' || route.query.from === 'approved');
 });
 
 const canPrint = computed(() => {
-  return isEditing.value && hasPermission('erp-purchase:view');
+  return isEditing.value && hasPermission(isApprovedWorkspace.value ? 'erp-purchase-approved:print' : 'erp-purchase-draft:print');
 });
 
 const canRedFlush = computed(() => {
-  return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-purchase:cancel');
+  return isApprovedWorkspace.value && isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-purchase-approved:cancel');
 });
 
 const shouldShowRedFlushButton = computed(() => {
-  if (!hasPermission('erp-purchase:cancel') || !isEditing.value) return false;
+  if (!hasPermission('erp-purchase-approved:cancel') || !isEditing.value) return false;
   if (canRedFlush.value) return true;
   return isInitializing.value && (route.query.mode === 'view' || route.query.from === 'approved');
 });
@@ -721,14 +731,14 @@ const closeTagByPath = (path: string) => {
 const getReturnPath = () => {
   const returnTo = typeof route.query.returnTo === 'string' ? route.query.returnTo.trim() : '';
   if (returnTo) return returnTo;
-  if (route.query.from === 'draft') return '/erp/purchase-orders/draft';
-  if (route.query.from === 'approved' || route.query.mode === 'view' || formData.status === 'APPROVED' || formData.status === 'CANCELLED') {
-    return '/erp/purchase-orders/approved';
+  if (route.query.from === 'draft') return draftBasePath;
+  if (route.query.from === 'approved' || isApprovedWorkspace.value || route.query.mode === 'view' || formData.status === 'APPROVED' || formData.status === 'CANCELLED') {
+    return approvedBasePath;
   }
-  return '/erp/purchase-orders/draft';
+  return draftBasePath;
 };
 
-const getApprovedReturnPath = () => '/erp/purchase-orders/approved';
+const getApprovedReturnPath = () => approvedBasePath;
 
 const formatDateTime = (date: Date) => {
   const pad = (num: number) => String(num).padStart(2, '0');
@@ -1165,7 +1175,7 @@ const ensureLocationOption = async (locationId?: number | null) => {
 
 const fetchNextOrderNo = async () => {
   try {
-    const res: any = await request.get('/erp/purchase-orders/next-order-no');
+    const res: any = await request.get(`${draftApiBase}/next-order-no`);
     if (res.data.code === 200) {
       formData.orderNo = res.data.data || '';
     }
@@ -1191,7 +1201,7 @@ const loadDetail = async () => {
       return;
     }
 
-    const res: any = await request.get(`/erp/purchase-orders/${route.params.id}`);
+    const res: any = await request.get(`${detailApiBase.value}/${route.params.id}`);
     if (!isLatestDetailLoad(currentSeq)) return;
     if (res.data.code === 200) {
       const data = res.data.data || {};
@@ -1437,7 +1447,7 @@ const handleHistoryDialogSizeChange = (payload: { tabName: string; size: number 
 const openPurchaseOrderHistory = (row: PurchaseHistoryItem) => {
   if (!row?.orderId) return;
   router.push({
-    path: `/erp/purchase-orders/${row.orderId}/edit`,
+    path: `${approvedBasePath}/${row.orderId}`,
     query: { mode: 'view', from: 'approved' }
   });
   historyDialogVisible.value = false;
@@ -1495,11 +1505,11 @@ const isLatestDetailLoad = (seq: number) => detailLoadSeq.value === seq;
 
 const navigateToApprovedView = async (savedId: number) => {
   await router.replace({
-    path: `/erp/purchase-orders/${savedId}/edit`,
+    path: `${approvedBasePath}/${savedId}`,
     query: {
       mode: 'view',
       from: 'approved',
-      returnTo: '/erp/purchase-orders/approved'
+      returnTo: approvedBasePath
     }
   });
 };
@@ -1580,8 +1590,8 @@ const saveData = async (
   try {
     isSaving.value = true;
     const res: any = isEditing.value
-      ? await request.put(`/erp/purchase-orders/${route.params.id}`, payload)
-      : await request.post('/erp/purchase-orders', payload);
+      ? await request.put(`${draftApiBase}/${route.params.id}`, payload)
+      : await request.post(draftApiBase, payload);
 
     if (res.data.code === 200) {
       const data = res.data.data || {};
@@ -1589,7 +1599,7 @@ const saveData = async (
       const savedOrderNo = data.order?.orderNo || data.orderNo || formData.orderNo || '';
       if (!isEditing.value && savedId && options.reloadAfterCreate) {
         await router.replace({
-          path: `/erp/purchase-orders/${savedId}/edit`,
+          path: `${draftBasePath}/${savedId}/edit`,
           query: { returnTo: getReturnPath(), from: 'draft' }
         });
       }
@@ -1617,7 +1627,7 @@ const approveSavedOrder = async (savedId: number, savedOrderNo?: string) => {
   const sourcePath = route.path;
   try {
     isSaving.value = true;
-    await request.post(`/erp/purchase-orders/${savedId}/approve`);
+    await request.post(`${draftApiBase}/${savedId}/approve`);
     formData.status = 'APPROVED';
     notifySuccess(t('message.approveSuccess'));
     await navigateToApprovedView(savedId);
@@ -1687,7 +1697,7 @@ const handleRedFlush = async () => {
       }
     );
     if (!value || !String(value).trim()) return;
-    await request.post(`/erp/purchase-orders/${route.params.id}/cancel`, { reason: String(value).trim() });
+    await request.post(`${approvedApiBase}/${route.params.id}/cancel`, { reason: String(value).trim() });
     notifySuccess();
     await loadDetail();
   } catch (error) {
@@ -1714,45 +1724,17 @@ const handleCopy = async () => {
   }
 
   try {
-    const detailRes: any = await request.get(`/erp/purchase-orders/${route.params.id}`);
-    const detail = detailRes.data?.data;
-    if (!detail?.order) {
-      notifyWarning(t('message.noItems'));
-      return;
-    }
-    const order = detail.order;
-    const items = (detail.items || []).map((item: any, index: number) => ({
-      productId: item.productId,
-      warehouseId: item.warehouseId,
-      locationId: item.locationId,
-      qty: item.qty,
-      price: item.price,
-      taxRate: item.taxRate,
-      remark: item.remark,
-      sortNo: index + 1
-    }));
-    const orderNoRes: any = await request.get('/erp/purchase-orders/next-order-no');
-    const orderNo = orderNoRes.data?.data || '';
-    const createRes: any = await request.post('/erp/purchase-orders', {
-      orderNo,
-      orderAt: formatDateTime(new Date()),
-      supplierId: order.supplierId,
-      paymentMethodCode: order.paymentMethodCode || undefined,
-      paidAmount: order.paidAmount,
-      discountAmount: order.discountAmount,
-      remark: order.remark,
-      items
-    });
+    const createRes: any = await request.post(`${approvedApiBase}/${route.params.id}/copy`);
     if (createRes.data.code === 200) {
       const data = createRes.data.data || {};
       const newId = data.order?.id || data.id;
       notifySuccess();
       if (newId) {
         await router.push({
-          path: `/erp/purchase-orders/${newId}/edit`,
+          path: `${draftBasePath}/${newId}/edit`,
           query: {
             from: 'draft',
-            returnTo: '/erp/purchase-orders/draft'
+            returnTo: draftBasePath
           }
         });
       }
@@ -1815,10 +1797,10 @@ const handleSaveSuccessDialogClosed = async () => {
 
   if (action === 'continue') {
     const createRoute = {
-      path: '/erp/purchase-orders/create',
+      path: `${draftBasePath}/create`,
       query: {
         from: 'draft',
-        returnTo: '/erp/purchase-orders/draft'
+        returnTo: draftBasePath
       }
     };
     const targetFullPath = router.resolve(createRoute).fullPath;

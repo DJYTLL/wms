@@ -138,6 +138,27 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     }
 
     @Override
+    public PageResponse<ErpPurchaseOrder> pageDraft(long page, long size, String keyword, Long supplierId, Instant startAt, Instant endAt) {
+        return page(page, size, keyword, STATUS_DRAFT, supplierId, startAt, endAt);
+    }
+
+    @Override
+    public PageResponse<ErpPurchaseOrder> pageApproved(long page, long size, String keyword, String status, Long supplierId, Instant startAt, Instant endAt) {
+        String finalStatus = normalizeApprovedStatusFilter(status);
+        return page(page, size, keyword, finalStatus, supplierId, startAt, endAt);
+    }
+
+    @Override
+    public Map<String, Object> summaryDraft(String keyword, Long supplierId, Instant startAt, Instant endAt) {
+        return buildSummary(baseWrapper(keyword, STATUS_DRAFT, supplierId, startAt, endAt));
+    }
+
+    @Override
+    public Map<String, Object> summaryApproved(String keyword, String status, Long supplierId, Instant startAt, Instant endAt) {
+        return buildSummary(baseWrapper(keyword, normalizeApprovedStatusFilter(status), supplierId, startAt, endAt));
+    }
+
+    @Override
     public ErpPurchaseOrderDetail getDetail(Long id) {
         Long tenantId = TenantContext.requireTenantId();
         ErpPurchaseOrder order = erpPurchaseOrderMapper.selectOne(new QueryWrapper<ErpPurchaseOrder>()
@@ -148,6 +169,24 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         }
         List<ErpPurchaseOrderItem> items = erpPurchaseOrderItemMapper.findByOrderId(tenantId, id);
         return new ErpPurchaseOrderDetail(order, items);
+    }
+
+    @Override
+    public ErpPurchaseOrderDetail getDraftDetail(Long id) {
+        ErpPurchaseOrderDetail detail = getDetail(id);
+        if (!STATUS_DRAFT.equals(detail.order().getStatus())) {
+            throw new IllegalArgumentException("草稿接口只能访问草稿采购单");
+        }
+        return detail;
+    }
+
+    @Override
+    public ErpPurchaseOrderDetail getApprovedDetail(Long id) {
+        ErpPurchaseOrderDetail detail = getDetail(id);
+        if (STATUS_DRAFT.equals(detail.order().getStatus())) {
+            throw new IllegalArgumentException("已审核接口不能访问草稿采购单");
+        }
+        return detail;
     }
 
     @Override
@@ -271,6 +310,42 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
 
     @Override
     @Transactional
+    @AuditLog(action = "ERP_PURCHASE_COPY_APPROVED", entityType = "erp_purchase_order", entityId = "{arg0}")
+    public ErpPurchaseOrderDetail copyApprovedToDraft(Long id) {
+        ErpPurchaseOrderDetail source = getApprovedDetail(id);
+        ErpPurchaseOrder sourceOrder = source.order();
+        if (!STATUS_APPROVED.equals(sourceOrder.getStatus()) && !STATUS_CANCELLED.equals(sourceOrder.getStatus())) {
+            throw new IllegalArgumentException("仅已审核或已作废采购单可复制");
+        }
+        List<ErpPurchaseOrderItemRequest> itemRequests = source.items().stream()
+            .map(item -> new ErpPurchaseOrderItemRequest(
+                item.getProductId(),
+                item.getWarehouseId(),
+                item.getLocationId(),
+                item.getQty(),
+                item.getPrice(),
+                item.getPriceInclTax(),
+                item.getTaxRate(),
+                item.getSortNo(),
+                item.getRemark()
+            ))
+            .toList();
+        ErpPurchaseOrderCreateRequest request = new ErpPurchaseOrderCreateRequest(
+            nextOrderNo(),
+            null,
+            sourceOrder.getSupplierId(),
+            sourceOrder.getSettlementMethod(),
+            sourceOrder.getPaymentMethodCode(),
+            sourceOrder.getPaidAmount(),
+            sourceOrder.getDiscountAmount(),
+            itemRequests,
+            sourceOrder.getRemark()
+        );
+        return create(request);
+    }
+
+    @Override
+    @Transactional
     @AuditLog(action = "ERP_PURCHASE_UPDATE", entityType = "erp_purchase_order", entityId = "{arg0}", detail = "orderNo={arg1.orderNo}")
     public ErpPurchaseOrderDetail update(Long id, ErpPurchaseOrderUpdateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
@@ -360,7 +435,34 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     @Transactional
     @AuditLog(action = "ERP_PURCHASE_UNAPPROVE", entityType = "erp_purchase_order", entityId = "{arg0}")
     public void unapprove(Long id) {
-        throw new IllegalArgumentException("采购单仅支持红冲，不支持反审核");
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPurchaseOrder order = loadForUpdate(tenantId, id);
+        if (!STATUS_APPROVED.equals(order.getStatus())) {
+            throw new IllegalArgumentException("仅已审核采购单可反审核");
+        }
+        ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseOrderId(tenantId, order.getId());
+        if (payable != null && hasApprovedPaymentAllocation(tenantId, payable.getId())) {
+            throw new IllegalArgumentException("请先红冲付款单");
+        }
+        List<ErpPurchaseReturn> approvedReturns = erpPurchaseReturnMapper.findApprovedByPurchaseOrderId(tenantId, order.getId());
+        if (approvedReturns != null && !approvedReturns.isEmpty()) {
+            throw new IllegalArgumentException("请先红冲采购退货单");
+        }
+        List<ErpPurchaseOrderItem> items = erpPurchaseOrderItemMapper.findByOrderId(tenantId, id);
+        reverseInboundCosts(tenantId, items);
+        for (ErpPurchaseOrderItem item : items) {
+            applyStockDelta(tenantId, item, item.getQty().negate(), "PURCHASE_UNAPPROVE", id);
+        }
+        if (payable != null) {
+            erpAccountsPayableMapper.deleteById(payable.getId());
+        }
+        String operator = resolveCurrentUsername();
+        order.setStatus(STATUS_DRAFT);
+        order.setApprovedBy(null);
+        order.setApprovedAt(null);
+        order.setUpdatedAt(Instant.now());
+        order.setUpdatedBy(operator);
+        updateWithVersion(tenantId, order);
     }
 
     @Override
@@ -439,6 +541,35 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             wrapper.le("order_at", endAt);
         }
         return wrapper;
+    }
+
+    private String normalizeApprovedStatusFilter(String status) {
+        if (status == null || status.isBlank()) {
+            return STATUS_APPROVED + "," + STATUS_CANCELLED;
+        }
+        List<String> statuses = java.util.Arrays.stream(status.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .filter(s -> !STATUS_DRAFT.equals(s))
+            .toList();
+        if (statuses.isEmpty()) {
+            throw new IllegalArgumentException("已审核接口不能查询草稿采购单");
+        }
+        return String.join(",", statuses);
+    }
+
+    private Map<String, Object> buildSummary(QueryWrapper<ErpPurchaseOrder> wrapper) {
+        List<ErpPurchaseOrder> orders = erpPurchaseOrderMapper.selectList(wrapper);
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (ErpPurchaseOrder order : orders) {
+            if (order.getTotalAmount() != null) {
+                totalAmount = totalAmount.add(order.getTotalAmount());
+            }
+        }
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("count", orders.size());
+        summary.put("totalAmount", totalAmount);
+        return summary;
     }
 
     private List<ErpPurchaseOrderItem> buildItems(Long tenantId,

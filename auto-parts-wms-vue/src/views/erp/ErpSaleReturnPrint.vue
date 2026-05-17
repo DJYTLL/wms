@@ -79,6 +79,16 @@ const locations = ref<any[]>([]);
 const saleOrderNo = ref<string>('');
 
 const orderId = computed(() => Number(route.params.id));
+const printDocType = computed(() => {
+  if (route.path.includes('/sale-returns/approved/')) return 'SALE_RETURN_APPROVED';
+  if (route.path.includes('/sale-returns/draft/')) return 'SALE_RETURN_DRAFT';
+  return order.value?.status && order.value.status !== 'DRAFT' ? 'SALE_RETURN_APPROVED' : 'SALE_RETURN_DRAFT';
+});
+const detailEndpoint = computed(() => {
+  if (route.path.includes('/sale-returns/approved/')) return `/erp/sale-returns/approved/${orderId.value}/print`;
+  if (route.path.includes('/sale-returns/draft/')) return `/erp/sale-returns/draft/${orderId.value}/print`;
+  return `/erp/sale-returns/${orderId.value}`;
+});
 const isPreview = computed(() => route.query.preview === '1' || route.query.preview === 'true');
 const shouldAutoPrint = computed(() => route.query.auto === '1' || route.query.auto === 'true');
 
@@ -282,7 +292,7 @@ const fetchTemplate = async () => {
       applyTemplate(template.value);
       return;
     }
-    template.value = await fetchPrintTemplate('SALE_RETURN', resolveTemplateId(route.query.templateId));
+    template.value = await fetchPrintTemplate(printDocType.value, resolveTemplateId(route.query.templateId));
     applyTemplate(template.value);
   } catch {
     template.value = null;
@@ -291,7 +301,7 @@ const fetchTemplate = async () => {
 };
 
 const fetchDetail = async () => {
-  const res: any = await request.get(`/erp/sale-returns/${orderId.value}`);
+  const res: any = await request.get(detailEndpoint.value);
   const data = res.data.data || {};
   order.value = data.order || null;
   items.value = data.items || [];
@@ -304,7 +314,7 @@ const fetchDetail = async () => {
 const recordPrint = async () => {
   try {
     await request.post('/erp/print/logs', {
-      docType: 'SALE_RETURN',
+      docType: printDocType.value,
       docId: orderId.value,
       templateId: template.value?.id || null
     });
@@ -327,7 +337,8 @@ const closeWindow = () => {
 const init = async () => {
   loading.value = true;
   try {
-    await Promise.all([fetchDetail(), fetchOptions(), fetchTemplate()]);
+    await Promise.all([fetchDetail(), fetchOptions()]);
+    await fetchTemplate();
   } catch (error) {
     notifyError(error);
   } finally {

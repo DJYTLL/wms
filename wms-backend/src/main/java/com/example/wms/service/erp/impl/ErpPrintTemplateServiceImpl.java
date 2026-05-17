@@ -26,9 +26,15 @@ public class ErpPrintTemplateServiceImpl implements ErpPrintTemplateService {
 
     private static final Set<String> DOC_TYPES = Set.of(
         "SALE_ORDER",
+        "SALE_ORDER_DRAFT",
+        "SALE_ORDER_APPROVED",
         "PURCHASE_ORDER",
         "SALE_RETURN",
+        "SALE_RETURN_DRAFT",
+        "SALE_RETURN_APPROVED",
         "PURCHASE_RETURN",
+        "PURCHASE_RETURN_DRAFT",
+        "PURCHASE_RETURN_APPROVED",
         "RECEIPT",
         "PAYMENT",
         "ACCOUNTS_RECEIVABLE",

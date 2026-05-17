@@ -10,6 +10,7 @@ import com.example.wms.entity.erp.ErpPurchaseOrder;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 // 采购单服务接口（ERP进销存）
 public interface ErpPurchaseOrderService {
@@ -19,14 +20,28 @@ public interface ErpPurchaseOrderService {
     // 分页查询采购单
     PageResponse<ErpPurchaseOrder> page(long page, long size, String keyword, String status, Long supplierId, Instant startAt, Instant endAt);
 
+    PageResponse<ErpPurchaseOrder> pageDraft(long page, long size, String keyword, Long supplierId, Instant startAt, Instant endAt);
+
+    PageResponse<ErpPurchaseOrder> pageApproved(long page, long size, String keyword, String status, Long supplierId, Instant startAt, Instant endAt);
+
+    Map<String, Object> summaryDraft(String keyword, Long supplierId, Instant startAt, Instant endAt);
+
+    Map<String, Object> summaryApproved(String keyword, String status, Long supplierId, Instant startAt, Instant endAt);
+
     // 查询采购单详情
     ErpPurchaseOrderDetail getDetail(Long id);
+
+    ErpPurchaseOrderDetail getDraftDetail(Long id);
+
+    ErpPurchaseOrderDetail getApprovedDetail(Long id);
 
     // 预生成采购单号
     String nextOrderNo();
 
     // 新增采购单
     ErpPurchaseOrderDetail create(ErpPurchaseOrderCreateRequest request);
+
+    ErpPurchaseOrderDetail copyApprovedToDraft(Long id);
 
     // 更新采购单
     ErpPurchaseOrderDetail update(Long id, ErpPurchaseOrderUpdateRequest request);

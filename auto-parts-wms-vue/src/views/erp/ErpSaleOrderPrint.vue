@@ -74,6 +74,9 @@ import { directPrintWindow } from '@/utils/directPrint';
 
 const { t } = useI18n();
 const route = useRoute();
+const props = defineProps<{
+  workspace?: 'draft' | 'approved';
+}>();
 const { notifyError } = useApiError();
 
 const loading = ref(true);
@@ -95,6 +98,9 @@ const deliveryMethods = ref<any[]>([]);
 const orderId = computed(() => Number(route.params.id));
 const isPreview = computed(() => route.query.preview === '1' || route.query.preview === 'true');
 const shouldAutoPrint = computed(() => route.query.auto === '1' || route.query.auto === 'true');
+const isApprovedPrint = computed(() => props.workspace === 'approved' || route.path.startsWith('/erp/sale-orders/approved'));
+const printDocType = computed(() => (isApprovedPrint.value ? 'SALE_ORDER_APPROVED' : 'SALE_ORDER_DRAFT'));
+const detailApiBase = computed(() => (isApprovedPrint.value ? '/erp/sale-orders/approved' : '/erp/sale-orders/draft'));
 
 const headerTitle = computed(() => template.value?.headerTitle || t('print.saleTitle'));
 const subTitle = computed(() => template.value?.subTitle || '');
@@ -287,7 +293,7 @@ const fetchTemplate = async () => {
       applyTemplate(template.value);
       return;
     }
-    template.value = await fetchPrintTemplate('SALE_ORDER', resolveTemplateId(route.query.templateId));
+    template.value = await fetchPrintTemplate(printDocType.value, resolveTemplateId(route.query.templateId));
     applyTemplate(template.value);
   } catch {
     template.value = null;
@@ -296,7 +302,7 @@ const fetchTemplate = async () => {
 };
 
 const fetchDetail = async () => {
-  const res: any = await request.get(`/erp/sale-orders/${orderId.value}`);
+  const res: any = await request.get(`${detailApiBase.value}/${orderId.value}/print`);
   const data = res.data.data || {};
   order.value = data.order || null;
   if (order.value) {
@@ -308,7 +314,7 @@ const fetchDetail = async () => {
 const recordPrint = async () => {
   try {
     await request.post('/erp/print/logs', {
-      docType: 'SALE_ORDER',
+      docType: printDocType.value,
       docId: orderId.value,
       templateId: template.value?.id || null
     });
