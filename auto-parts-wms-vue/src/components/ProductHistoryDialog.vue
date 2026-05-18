@@ -65,12 +65,13 @@
 <script setup lang="ts">
 import { computed, defineComponent, h } from 'vue';
 import type { PropType } from 'vue';
-import { ElButton, ElDatePicker, ElInput, ElPagination, ElTable, ElTableColumn } from 'element-plus';
+import { ElButton, ElDatePicker, ElInput, ElPagination } from 'element-plus';
+import ErpDataTable from './ErpDataTable.vue';
+import ErpDataTableColumn from './ErpDataTableColumn.vue';
 import 'element-plus/es/components/button/style/css';
 import 'element-plus/es/components/date-picker/style/css';
 import 'element-plus/es/components/input/style/css';
 import 'element-plus/es/components/pagination/style/css';
-import 'element-plus/es/components/table/style/css';
 
 interface HistoryHeaderItem {
   label: string;
@@ -239,9 +240,10 @@ const HistoryTabPanel = defineComponent({
 
       const columns = tab.columns.map(column =>
         h(
-          ElTableColumn,
+          ErpDataTableColumn,
           {
             key: `${tab.name}-${column.label}-${column.prop || 'custom'}`,
+            columnKey: column.prop || `${tab.name}-custom`,
             prop: column.prop,
             label: column.label,
             width: column.width,
@@ -297,12 +299,13 @@ const HistoryTabPanel = defineComponent({
             ])
           : null,
         h(
-          ElTable,
+          ErpDataTable,
           {
             data: tab.data,
             stripe: true,
             emptyText: panelProps.emptyText,
-            height: tab.height || 260
+            height: tab.height || 260,
+            tableKey: `product-history-${tab.name}`
           },
           () => columns
         ),

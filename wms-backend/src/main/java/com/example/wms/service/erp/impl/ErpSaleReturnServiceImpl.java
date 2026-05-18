@@ -4,10 +4,15 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
 import com.example.wms.dto.erp.ErpSaleReturnCreateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnDetail;
 import com.example.wms.dto.erp.ErpSaleReturnItemRequest;
+import com.example.wms.dto.erp.ErpSaleReturnRelatedOrder;
 import com.example.wms.dto.erp.ErpSaleReturnRefundSummary;
+import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderDetail;
+import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderItem;
+import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderOption;
 import com.example.wms.dto.erp.ErpSaleReturnUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsReceivable;
@@ -175,6 +180,51 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     }
 
     @Override
+    public PageResponse<ErpSaleReturnSourceSaleOrderOption> sourceSaleOrderPage(long page, long size, String keyword, Long customerId) {
+        Long tenantId = TenantContext.requireTenantId();
+        long finalPage = page <= 0 ? 1 : page;
+        long finalSize = size <= 0 ? 20 : Math.min(size, 100);
+        QueryWrapper<ErpSaleOrder> wrapper = new QueryWrapper<ErpSaleOrder>()
+            .eq("tenant_id", tenantId)
+            .eq("status", STATUS_APPROVED)
+            .isNull("deleted_at");
+        if (customerId != null) {
+            wrapper.eq("customer_id", customerId);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String trimmed = keyword.trim();
+            wrapper.and(qw -> qw.like("order_no", trimmed));
+        }
+        wrapper.orderByDesc("order_at").orderByDesc("id");
+        Page<ErpSaleOrder> result = erpSaleOrderMapper.selectPage(Page.of(finalPage, finalSize), wrapper);
+        List<ErpSaleReturnSourceSaleOrderOption> items = result.getRecords().stream()
+            .map(order -> new ErpSaleReturnSourceSaleOrderOption(
+                order.getId(),
+                order.getOrderNo(),
+                order.getCustomerId(),
+                order.getOrderAt()
+            ))
+            .toList();
+        return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), items);
+    }
+
+    @Override
+    public PageResponse<ErpSaleOrderRecentItem> sourceRecentSaleItems(long page, long size, Long customerId, Long productId) {
+        Long tenantId = TenantContext.requireTenantId();
+        long finalPage = page <= 0 ? 1 : page;
+        long finalSize = size <= 0 ? 10 : Math.min(size, 100);
+        if (customerId == null || productId == null) {
+            return new PageResponse<>(0, finalPage, finalSize, List.of());
+        }
+        long total = erpSaleOrderItemMapper.countRecentItems(tenantId, customerId, productId);
+        long offset = (finalPage - 1) * finalSize;
+        List<ErpSaleOrderRecentItem> items = total == 0
+            ? List.of()
+            : erpSaleOrderItemMapper.findRecentItemsPage(tenantId, customerId, productId, (int) finalSize, offset);
+        return new PageResponse<>(total, finalPage, finalSize, items);
+    }
+
+    @Override
     public List<ErpSaleReturn> listBySaleOrderId(Long saleOrderId, boolean includeDraft) {
         Long tenantId = TenantContext.requireTenantId();
         if (saleOrderId == null) {
@@ -225,6 +275,26 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             throw new IllegalArgumentException("销售退货已审核单不存在");
         }
         return detail;
+    }
+
+    @Override
+    public ErpSaleReturnSourceSaleOrderDetail getSourceSaleOrderDetail(Long saleOrderId) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpSaleOrder saleOrder = loadApprovedSaleOrder(tenantId, saleOrderId);
+        List<ErpSaleReturnSourceSaleOrderItem> items = buildSourceSaleOrderItems(tenantId, saleOrderId);
+        ErpSaleReturnRefundSummary refundSummary = buildSaleOrderRefundSummary(tenantId, saleOrder, null);
+        List<ErpSaleReturnRelatedOrder> relatedReturns = listBySaleOrderId(saleOrderId, true).stream()
+            .map(item -> new ErpSaleReturnRelatedOrder(item.getId(), item.getOrderNo(), item.getStatus()))
+            .toList();
+        return new ErpSaleReturnSourceSaleOrderDetail(
+            saleOrder.getId(),
+            saleOrder.getOrderNo(),
+            saleOrder.getCustomerId(),
+            saleOrder.getOrderAt(),
+            items,
+            refundSummary,
+            relatedReturns
+        );
     }
 
     @Override
@@ -832,6 +902,37 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             throw new IllegalArgumentException("原销售单未审核，不能创建销售退货");
         }
         return saleOrder;
+    }
+
+    private List<ErpSaleReturnSourceSaleOrderItem> buildSourceSaleOrderItems(Long tenantId, Long saleOrderId) {
+        List<ErpSaleOrderItem> saleItems = erpSaleOrderItemMapper.findByOrderId(tenantId, saleOrderId);
+        Map<Long, BigDecimal> remainingReturnedQtyByProduct = new HashMap<>(loadApprovedReturnQtyByProduct(tenantId, saleOrderId, null));
+        List<ErpSaleReturnSourceSaleOrderItem> items = new ArrayList<>();
+        for (ErpSaleOrderItem item : saleItems) {
+            Long productId = item.getProductId();
+            BigDecimal originalQty = item.getQty() == null ? BigDecimal.ZERO : item.getQty();
+            BigDecimal returnedQty = productId == null
+                ? BigDecimal.ZERO
+                : remainingReturnedQtyByProduct.getOrDefault(productId, BigDecimal.ZERO);
+            BigDecimal allocatedReturnedQty = originalQty.min(returnedQty);
+            if (productId != null) {
+                remainingReturnedQtyByProduct.put(productId, returnedQty.subtract(allocatedReturnedQty).max(BigDecimal.ZERO));
+            }
+            BigDecimal remainingQty = originalQty.subtract(allocatedReturnedQty).max(BigDecimal.ZERO);
+            items.add(new ErpSaleReturnSourceSaleOrderItem(
+                item.getId(),
+                item.getProductId(),
+                item.getProductCode(),
+                item.getProductName(),
+                item.getWarehouseId(),
+                item.getLocationId(),
+                item.getQty(),
+                remainingQty,
+                item.getPrice(),
+                item.getTaxRate()
+            ));
+        }
+        return items;
     }
 
     private Map<Long, BigDecimal> aggregateRequestedQty(List<ErpSaleReturnItemRequest> requests) {

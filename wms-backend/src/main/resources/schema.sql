@@ -190,6 +190,18 @@ CREATE INDEX IF NOT EXISTS idx_app_menu_parent ON app_menu(parent_id);
 CREATE INDEX IF NOT EXISTS idx_app_tenant_menu_tenant ON app_tenant_menu(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_app_tenant_column_tenant ON app_tenant_column_setting(tenant_id);
 
+CREATE TABLE IF NOT EXISTS app_user_table_setting (
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    page_key VARCHAR(120) NOT NULL,
+    config_json JSONB NOT NULL,
+    updated_by VARCHAR(100),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (tenant_id, user_id, page_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_user_table_setting_tenant_user ON app_user_table_setting(tenant_id, user_id);
+
 -- 现有数据库兼容调整
 ALTER TABLE app_tenant ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE app_user DROP CONSTRAINT IF EXISTS uq_app_user_tenant_username;

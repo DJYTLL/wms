@@ -24,6 +24,19 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/erp/purchase-orders")
 public class ErpPurchaseOrderController {
+    private static final String PURCHASE_ORDER_READ_OR_RETURN_SOURCE_ACCESS =
+        "hasAuthority('PERM_erp-purchase:view')"
+            + " or hasAuthority('PERM_erp-purchase-approved:view')"
+            + " or hasAuthority('PERM_erp-purchase-return-draft:view')"
+            + " or hasAuthority('PERM_erp-purchase-return-draft:add')"
+            + " or hasAuthority('PERM_erp-purchase-return-draft:edit')"
+            + " or hasAuthority('PERM_erp-purchase-return-draft:approve')"
+            + " or hasAuthority('PERM_erp-purchase-return-draft:print')"
+            + " or hasAuthority('PERM_erp-purchase-return-approved:view')"
+            + " or hasAuthority('PERM_erp-purchase-return-approved:copy')"
+            + " or hasAuthority('PERM_erp-purchase-return-approved:cancel')"
+            + " or hasAuthority('PERM_erp-purchase-return-approved:print')";
+
     private final ErpPurchaseOrderService erpPurchaseOrderService;
 
     public ErpPurchaseOrderController(ErpPurchaseOrderService erpPurchaseOrderService) {
@@ -32,7 +45,7 @@ public class ErpPurchaseOrderController {
 
     // 查询采购单列表
     @GetMapping
-    @PreAuthorize("hasAuthority('PERM_erp-purchase:view') or hasAuthority('PERM_erp-purchase-approved:view')")
+    @PreAuthorize(PURCHASE_ORDER_READ_OR_RETURN_SOURCE_ACCESS)
     public ResponseEntity<ApiResponse<List<ErpPurchaseOrder>>> list(@RequestParam(required = false) String keyword,
                                                                     @RequestParam(required = false) String status,
                                                                     @RequestParam(required = false) Long supplierId,
@@ -45,7 +58,7 @@ public class ErpPurchaseOrderController {
 
     // 分页查询采购单
     @GetMapping("/page")
-    @PreAuthorize("hasAuthority('PERM_erp-purchase:view') or hasAuthority('PERM_erp-purchase-approved:view')")
+    @PreAuthorize(PURCHASE_ORDER_READ_OR_RETURN_SOURCE_ACCESS)
     public ResponseEntity<ApiResponse<PageResponse<ErpPurchaseOrder>>> page(@RequestParam(defaultValue = "1") long page,
                                                                             @RequestParam(defaultValue = "20") long size,
                                                                             @RequestParam(required = false) String keyword,
@@ -184,14 +197,14 @@ public class ErpPurchaseOrderController {
 
     // 查询采购单详情
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_erp-purchase:view') or hasAuthority('PERM_erp-purchase-approved:view')")
+    @PreAuthorize(PURCHASE_ORDER_READ_OR_RETURN_SOURCE_ACCESS)
     public ResponseEntity<ApiResponse<ErpPurchaseOrderDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseOrderService.getDetail(id)));
     }
 
     // 最近包含指定商品的采购单明细（退货参考）
     @GetMapping("/recent-items")
-    @PreAuthorize("hasAuthority('PERM_erp-purchase:view') or hasAuthority('PERM_erp-purchase-approved:view')")
+    @PreAuthorize(PURCHASE_ORDER_READ_OR_RETURN_SOURCE_ACCESS)
     public ResponseEntity<ApiResponse<List<ErpPurchaseOrderRecentItem>>> recentItems(@RequestParam Long supplierId,
                                                                                      @RequestParam Long productId,
                                                                                      @RequestParam(defaultValue = "10") int limit) {
@@ -200,7 +213,7 @@ public class ErpPurchaseOrderController {
 
     // 分页查询包含指定商品的采购单明细（商品退货选择来源单）
     @GetMapping("/recent-items/page")
-    @PreAuthorize("hasAuthority('PERM_erp-purchase:view') or hasAuthority('PERM_erp-purchase-approved:view')")
+    @PreAuthorize(PURCHASE_ORDER_READ_OR_RETURN_SOURCE_ACCESS)
     public ResponseEntity<ApiResponse<PageResponse<ErpPurchaseOrderRecentItem>>> recentItemsPage(@RequestParam Long supplierId,
                                                                                                   @RequestParam Long productId,
                                                                                                   @RequestParam(defaultValue = "1") long page,

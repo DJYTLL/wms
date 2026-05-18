@@ -172,8 +172,8 @@
             <h4>{{ $t('section.saleDetailInfo') }}</h4>
           </div>
           <div class="detail-table-wrapper">
-            <el-table :data="formData.items" style="width: 100%" border stripe>
-              <el-table-column :label="$t('field.product')" min-width="200">
+            <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-purchase-return-form">
+              <ErpDataTableColumn :label="$t('field.product')" min-width="200" column-key="product">
                 <template #default="{ row }">
                   <div class="product-cell">
                     <el-select
@@ -200,8 +200,8 @@
                     </el-button>
                   </div>
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.warehouseLocation')" min-width="220">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('field.warehouseLocation')" min-width="220" column-key="warehouseLocation">
                 <template #header>
                   <span class="required-table-label">{{ $t('field.warehouseLocation') }}</span>
                 </template>
@@ -221,44 +221,44 @@
                     @selection-change="(payload) => handleStockSelectionChange(row, payload)"
                   />
                 </template>
-              </el-table-column>
-            <el-table-column :label="$t('field.quantity')" width="140">
+              </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.quantity')" width="140" column-key="quantity">
               <template #default="{ row }">
                 <DecimalInput v-model="row.qty" :scale="4" :disabled="isReadOnly" />
               </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.price')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-4">
               <template #default="{ row }">
                 <DecimalInput v-model="row.price" :scale="4" :disabled="isReadOnly" />
               </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.lineTotal')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
               <template #default="{ row }">
                 {{ formatMoney(calcLineAmount(row)) }}
               </template>
-            </el-table-column>
-            <el-table-column v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-6">
               <template #default="{ row }">
                 {{ formatMoney(calcLineDiscount(row)) }}
               </template>
-            </el-table-column>
-            <el-table-column v-if="canShowProfit" :label="$t('field.profit')" min-width="160">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="custom-7">
               <template #default="{ row }">
                 {{ formatProfitCell(row) }}
               </template>
-            </el-table-column>
+            </ErpDataTableColumn>
 
-              <el-table-column :label="$t('field.remark')" min-width="160">
+              <ErpDataTableColumn :label="$t('field.remark')" min-width="160" column-key="remark">
                 <template #default="{ row }">
                   <el-input v-model="row.remark" :disabled="isReadOnly" />
                 </template>
-              </el-table-column>
-              <el-table-column label="" width="80" align="center">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn label="" width="80" align="center" column-key="actions">
                 <template #default="{ $index }">
                   <el-button type="danger" circle size="small" :disabled="isReadOnly" @click="removeItem($index)">x</el-button>
                 </template>
-            </el-table-column>
-          </el-table>
+            </ErpDataTableColumn>
+          </ErpDataTable>
           </div>
           <div class="detail-actions">
             <el-button class="paper-add-item-button" type="primary" plain size="small" :disabled="isReadOnly || isPurchaseOrderBoundMode" @click="addItem">
@@ -358,7 +358,35 @@
       class="history-order-dialog"
       append-to-body
     >
-      <iframe v-if="purchaseOrderPreviewDialogUrl" :src="purchaseOrderPreviewDialogUrl" class="history-order-frame" />
+      <div v-if="purchaseOrderPreviewDetail" class="history-order-dialog__content">
+        <el-descriptions :column="3" border>
+          <el-descriptions-item :label="$t('field.orderNo')">{{ purchaseOrderPreviewDetail.orderNo || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('field.supplier')">{{ resolveSupplierLabel(purchaseOrderPreviewDetail.supplierId) }}</el-descriptions-item>
+          <el-descriptions-item :label="$t('field.orderTime')">{{ purchaseOrderPreviewDetail.orderAt || '-' }}</el-descriptions-item>
+        </el-descriptions>
+        <ErpDataTable :data="purchaseOrderPreviewDetail.items || []" border stripe style="width: 100%; margin-top: 16px" table-key="erp-purchase-return-form-11">
+          <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
+            <template #default="{ row }">
+              {{ row.productName || row.productCode }}
+            </template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
+            <template #default="{ row }">{{ row.qty }}</template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="custom-12">
+            <template #default="{ row }">{{ row.remainingQty }}</template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-13">
+            <template #default="{ row }">{{ row.price }}</template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
+            <template #default="{ row }">{{ resolveWarehouseLabel(row.warehouseId) }}</template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
+            <template #default="{ row }">{{ resolveLocationLabel(row.locationId) }}</template>
+          </ErpDataTableColumn>
+        </ErpDataTable>
+      </div>
     </el-dialog>
 
     <el-dialog
@@ -368,38 +396,38 @@
       :close-on-click-modal="false"
       :close-on-press-escape="false"
     >
-      <el-table
+      <ErpDataTable
         :data="purchaseOrderDetailItems"
         style="width: 100%"
         border
         @selection-change="handlePurchaseOrderSelectionChange"
-      >
-        <el-table-column type="selection" width="50" />
-        <el-table-column :label="$t('field.product')" min-width="180">
+       table-key="erp-purchase-return-form-18">
+        <ErpDataTableColumn type="selection" width="50" />
+        <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
           <template #default="{ row }">
             {{ row.productName || row.productCode }}
           </template>
-        </el-table-column>
-        <el-table-column :label="$t('field.quantity')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
           <template #default="{ row }">{{ row.qty }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.remainingQty')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="custom-19">
           <template #default="{ row }">{{ row.remainingQty }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.price')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-20">
           <template #default="{ row }">{{ row.price }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.warehouse')" min-width="140">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
           <template #default="{ row }">
             {{ resolveWarehouseLabel(row.warehouseId) }}
           </template>
-        </el-table-column>
-        <el-table-column :label="$t('field.location')" min-width="140">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
           <template #default="{ row }">
             {{ resolveLocationLabel(row.locationId) }}
           </template>
-        </el-table-column>
-      </el-table>
+        </ErpDataTableColumn>
+      </ErpDataTable>
       <template #footer>
         <el-button @click="showPurchaseOrderDialog = false">{{ $t('action.cancel') }}</el-button>
         <el-button type="primary" @click="applyPurchaseOrderSelection">{{ $t('action.confirm') }}</el-button>
@@ -412,30 +440,30 @@
       width="960px"
       :close-on-click-modal="false"
     >
-      <el-table
+      <ErpDataTable
         v-loading="recentPurchaseDialogLoading"
         :data="recentPurchaseDialogItems"
         style="width: 100%"
         max-height="420"
         border
         @row-dblclick="applyRecentPurchaseSelection"
-      >
-        <el-table-column :label="$t('field.purchaseOrderNo')" min-width="220">
+       table-key="erp-purchase-return-form-26">
+        <ErpDataTableColumn :label="$t('field.purchaseOrderNo')" min-width="220" column-key="custom-23">
           <template #default="{ row }">{{ row.orderNo }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.orderTime')" width="180">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.orderTime')" width="180" column-key="custom-24">
           <template #default="{ row }">{{ formatDisplayDateTime(row.orderAt) }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.quantity')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
           <template #default="{ row }">{{ row.qty }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.remainingQty')" width="130">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.remainingQty')" width="130" column-key="custom-26">
           <template #default="{ row }">{{ row.remainingQty }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.price')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-27">
           <template #default="{ row }">{{ row.price }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('table.actions')" width="110" align="center">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('table.actions')" width="110" align="center" column-key="actions">
           <template #default="{ row }">
             <el-button
               size="small"
@@ -447,8 +475,8 @@
               {{ $t('action.select') }}
             </el-button>
           </template>
-        </el-table-column>
-      </el-table>
+        </ErpDataTableColumn>
+      </ErpDataTable>
       <div class="recent-sale-pagination">
         <el-pagination
           background
@@ -586,6 +614,15 @@ interface PurchaseOrderRefundSummary {
   refundableCash?: number | string;
 }
 
+interface SourcePurchaseOrderDetail {
+  id: number;
+  orderNo: string;
+  supplierId?: number;
+  orderAt?: string;
+  items?: PurchaseOrderDetailItem[];
+  refundSummary?: PurchaseOrderRefundSummary | null;
+}
+
 interface PageResponse<T> {
   items: T[];
   total: number;
@@ -676,7 +713,7 @@ const purchaseOrderRefundSummary = ref<PurchaseOrderRefundSummary | null>(null);
 const purchaseOrderRefundSummaryLoading = ref(false);
 const purchaseOrderPreviewDialogVisible = ref(false);
 const purchaseOrderPreviewDialogTitle = ref('');
-const purchaseOrderPreviewDialogUrl = ref('');
+const purchaseOrderPreviewDetail = ref<SourcePurchaseOrderDetail | null>(null);
 const showPurchaseOrderDialog = ref(false);
 const showRecentPurchaseDialog = ref(false);
 
@@ -728,7 +765,10 @@ const hasPermission = (code: string) => {
 const purchaseReturnEndpoint = computed(() => isApprovedWorkspace.value ? '/erp/purchase-returns/approved' : '/erp/purchase-returns/draft');
 const purchaseReturnSummaryEndpoint = computed(() => isApprovedWorkspace.value ? '/erp/purchase-returns/approved/summary' : '/erp/purchase-returns/draft/summary');
 const purchaseReturnPrintDocType = computed<'PURCHASE_RETURN_APPROVED' | 'PURCHASE_RETURN_DRAFT'>(() => isApprovedWorkspace.value ? 'PURCHASE_RETURN_APPROVED' : 'PURCHASE_RETURN_DRAFT');
-const canViewPurchaseOrders = computed(() => hasPermission('erp-purchase-approved:view'));
+const canViewPurchaseOrders = computed(() => (
+  hasPermission('erp-purchase-return-draft:source-view')
+  || hasPermission('erp-purchase-approved:view')
+));
 const getDefaultReturnSource = () => (canViewPurchaseOrders.value ? 'BY_PURCHASE_ORDER' : 'BY_PRODUCT');
 
 const canApprove = computed(() => {
@@ -1406,6 +1446,11 @@ const resolveWarehouseLabel = (id?: number) => {
   return warehouseOptions.value.find(item => item.id === id)?.name || '-';
 };
 
+const resolveSupplierLabel = (id?: number) => {
+  if (!id) return '-';
+  return supplierOptions.value.find(item => item.id === id)?.name || '-';
+};
+
 const resolveLocationLabel = (id?: number) => {
   if (!id) return '-';
   return locationOptions.value.find(item => item.id === id)?.name || '-';
@@ -1465,7 +1510,7 @@ const fetchRecentPurchaseItems = async (
   if (!productId || !formData.supplierId) return [];
   try {
     if (page != null && size != null) {
-      const res: any = await request.get('/erp/purchase-orders/recent-items/page', {
+      const res: any = await request.get('/erp/purchase-returns/source-purchase-orders/recent-items/page', {
         params: {
           supplierId: formData.supplierId,
           productId,
@@ -1482,14 +1527,15 @@ const fetchRecentPurchaseItems = async (
       return items;
     }
     if (productRecentPurchaseMap.value[productId]) return productRecentPurchaseMap.value[productId];
-    const res: any = await request.get('/erp/purchase-orders/recent-items', {
+    const res: any = await request.get('/erp/purchase-returns/source-purchase-orders/recent-items/page', {
       params: {
         supplierId: formData.supplierId,
         productId,
-        limit: 10
+        page: 1,
+        size: 10
       }
     });
-    const items = res.data.data || [];
+    const items = res.data.data?.items || [];
     productRecentPurchaseMap.value[productId] = items;
     mergeRecentPurchaseOrderOptions(items);
     return items;
@@ -1607,7 +1653,7 @@ const bindRecentPurchaseOrder = async (row: PurchaseReturnItem, purchase: Recent
 const openRecentPurchaseDialog = async (row: PurchaseReturnItem) => {
   if (isReadOnly.value || formData.returnSource !== 'BY_PRODUCT') return;
   if (!canViewPurchaseOrders.value) {
-    notifyWarning('当前角色缺少采购单查看权限，不能选择来源采购单');
+    notifyWarning('当前角色缺少来源采购单引用权限，不能选择来源采购单');
     return;
   }
   if (!row.productId) {
@@ -1694,7 +1740,7 @@ const handleReturnSourceChange = () => {
   resetRecentPurchaseDialogState();
   if (formData.returnSource === 'BY_PURCHASE_ORDER' && !canViewPurchaseOrders.value) {
     formData.returnSource = 'BY_PRODUCT';
-    notifyWarning('当前角色缺少采购单查看权限，不能按采购单退货');
+    notifyWarning('当前角色缺少来源采购单引用权限，不能按采购单退货');
     return;
   }
   if (formData.returnSource === 'BY_PURCHASE_ORDER') {
@@ -1715,7 +1761,7 @@ const handlePurchaseOrderChange = (value: number | null) => {
   if (isReadOnly.value) return;
   if (!canViewPurchaseOrders.value) {
     formData.purchaseOrderId = null;
-    notifyWarning('当前角色缺少采购单查看权限，不能查看来源采购单明细');
+    notifyWarning('当前角色缺少来源采购单引用权限，不能查看来源采购单明细');
     return;
   }
   if (!value) {
@@ -1740,35 +1786,26 @@ const handlePurchaseOrderChange = (value: number | null) => {
 const openPurchaseOrderDetail = async (orderId: number) => {
   if (!orderId) return;
   if (!canViewPurchaseOrders.value) {
-    notifyWarning('当前角色缺少采购单查看权限，不能查看来源采购单明细');
+    notifyWarning('当前角色缺少来源采购单引用权限，不能查看来源采购单明细');
     return;
   }
   try {
     purchaseOrderRefundSummaryLoading.value = true;
-    const [res, refundSummaryRes] = await Promise.all([
-      request.get(`/erp/purchase-orders/${orderId}`),
-      request.get(purchaseReturnSummaryEndpoint.value, { params: { purchaseOrderId: orderId } })
-    ]);
+    const res: any = await request.get(`/erp/purchase-returns/source-purchase-orders/${orderId}`);
     const data = res.data.data || {};
-    purchaseOrderRefundSummary.value = refundSummaryRes.data.data || null;
-    const returnedQtyMap = await fetchReturnedQtyMap(orderId);
-    purchaseOrderDetailItems.value = (data.items || []).map((item: any) => {
-      const originalQty = Number(item.qty || 0);
-      const returnedQty = returnedQtyMap.get(Number(item.productId)) || 0;
-      const remainingQty = Math.max(0, originalQty - returnedQty);
-      return {
+    purchaseOrderRefundSummary.value = data.refundSummary || null;
+    purchaseOrderDetailItems.value = (data.items || []).map((item: any) => ({
       id: item.id,
       productId: item.productId,
       productCode: item.productCode,
       productName: item.productName,
       warehouseId: item.warehouseId,
       locationId: item.locationId,
-      qty: originalQty,
-      remainingQty,
+      qty: Number(item.qty || 0),
+      remainingQty: Number(item.remainingQty || 0),
       price: Number(item.price || 0),
       taxRate: Number(item.taxRate || 0)
-      };
-    }).filter((item: PurchaseOrderDetailItem) => Number(item.remainingQty || 0) > 0);
+    })).filter((item: PurchaseOrderDetailItem) => Number(item.remainingQty || 0) > 0);
     if (!purchaseOrderDetailItems.value.length) {
       notifyWarning(t('message.noItems'));
       return;
@@ -1803,44 +1840,17 @@ const openSelectedPurchaseOrderPreview = () => {
   const purchaseOrderId = purchaseOrderRefundSummary.value?.purchaseOrderId || formData.purchaseOrderId;
   if (!purchaseOrderId) return;
   if (!canViewPurchaseOrders.value) {
-    notifyWarning('当前角色缺少采购单查看权限，不能查看来源采购单');
+    notifyWarning('当前角色缺少来源采购单引用权限，不能查看来源采购单');
     return;
   }
   const purchaseOrderNo = purchaseOrderRefundSummary.value?.purchaseOrderNo || resolvedPurchaseOrderNo.value || '';
-  const resolved = router.resolve({
-    path: `/erp/purchase-orders/${purchaseOrderId}/edit`,
-    query: { mode: 'view', embed: '1' }
+  request.get(`/erp/purchase-returns/source-purchase-orders/${purchaseOrderId}`).then((res: any) => {
+    purchaseOrderPreviewDetail.value = res.data.data || null;
+    purchaseOrderPreviewDialogTitle.value = `${t('page.erpPurchaseOrder')} · ${purchaseOrderNo || purchaseOrderId}`;
+    purchaseOrderPreviewDialogVisible.value = true;
+  }).catch((error) => {
+    notifyError(error);
   });
-  purchaseOrderPreviewDialogTitle.value = `${t('page.erpPurchaseOrder')} · ${purchaseOrderNo || purchaseOrderId}`;
-  purchaseOrderPreviewDialogUrl.value = resolved.href;
-  purchaseOrderPreviewDialogVisible.value = true;
-};
-
-const fetchReturnedQtyMap = async (purchaseOrderId: number) => {
-  const qtyMap = new Map<number, number>();
-  if (!purchaseOrderId || !formData.supplierId) {
-    return qtyMap;
-  }
-  const res: any = await request.get('/erp/purchase-returns/approved/page', {
-    params: {
-      supplierId: formData.supplierId,
-      page: 1,
-      size: 200
-    }
-  });
-  const returns = res.data.data?.items || [];
-  const relatedReturns = returns.filter((item: any) => Number(item.purchaseOrderId) === Number(purchaseOrderId));
-  await Promise.all(relatedReturns.map(async (item: any) => {
-    const detailRes: any = await request.get(`/erp/purchase-returns/approved/${item.id}`);
-    const detail = detailRes.data.data || {};
-    const detailItems = Array.isArray(detail.items) ? detail.items : [];
-    detailItems.forEach((detailItem: any) => {
-      const productId = Number(detailItem.productId);
-      if (!productId) return;
-      qtyMap.set(productId, (qtyMap.get(productId) || 0) + Number(detailItem.qty || 0));
-    });
-  }));
-  return qtyMap;
 };
 
 const handlePurchaseOrderSelectionChange = (rows: PurchaseOrderDetailItem[]) => {
@@ -1919,7 +1929,7 @@ const fetchPurchaseOrders = async () => {
     if (formData.supplierId) {
       params.supplierId = formData.supplierId;
     }
-    const res: any = await request.get('/erp/purchase-orders/page', { params });
+    const res: any = await request.get('/erp/purchase-returns/source-purchase-orders/page', { params });
     const items = res.data.data?.items || [];
     purchaseOrderOptions.value = items.map((item: any) => ({
       id: item.id,
@@ -2132,6 +2142,7 @@ const resetForm = () => {
   formData.items = [];
   purchaseOrderRefundSummary.value = null;
   purchaseOrderRefundSummaryLoading.value = false;
+  purchaseOrderPreviewDetail.value = null;
   themeMode.value = 'default';
   productRecentPurchaseMap.value = {};
   purchaseOrderDetailItems.value = [];

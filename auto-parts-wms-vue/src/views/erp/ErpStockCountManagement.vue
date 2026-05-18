@@ -34,21 +34,21 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table
+        <ErpDataTable
           :data="tableData"
           style="width: 100%"
           stripe
           v-loading="loading"
           :empty-text="$t('table.empty')"
           :row-class-name="rowClassName"
-        >
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('countNo')" prop="countNo" :label="countNoLabel" min-width="150">
+         table-key="erp-stock-count-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('countNo')" prop="countNo" :label="countNoLabel" min-width="150">
             <template #default="{ row }">
               <el-button link type="primary" @click="openViewModal(row)">{{ row.countNo }}</el-button>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag
                 :type="row.status === 'APPROVED' ? 'success' : row.status === 'CANCELLED' ? 'danger' : row.status === 'RED_FLUSHED' ? 'info' : 'warning'"
@@ -57,24 +57,24 @@
                 {{ statusLabel(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('countAt')" prop="countAt" :label="$t('field.countAt')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('countAt')" prop="countAt" :label="$t('field.countAt')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.countAt) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="countType === 'COUNT' && canShow('adjustmentReason')" prop="adjustmentReason" :label="$t('field.adjustmentReason')" min-width="140">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="countType === 'COUNT' && canShow('adjustmentReason')" prop="adjustmentReason" :label="$t('field.adjustmentReason')" min-width="140">
             <template #default="{ row }">
               {{ adjustmentReasonLabel(row.adjustmentReason) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('remark')" prop="remark" :label="$t('field.remark')" min-width="200" />
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdAt')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('remark')" prop="remark" :label="$t('field.remark')" min-width="200" />
+          <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdAt')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="280" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="280" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button
                 link
@@ -127,8 +127,8 @@
                 {{ $t('action.cancel') }}
               </el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination
@@ -236,9 +236,9 @@
               <h4>{{ $t('section.saleDetailInfo') }}</h4>
             </div>
             <div class="detail-table-wrapper">
-              <el-table :data="formData.items" style="width: 100%" border stripe>
-                <el-table-column type="index" :label="$t('table.index')" width="64" align="center" />
-                <el-table-column :label="$t('field.product')" min-width="180">
+              <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-stock-count-management-10">
+                <ErpDataTableColumn type="index" :label="$t('table.index')" width="64" align="center" />
+                <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ resolveProductLabel(row.productId) }}</div>
                     <el-select
@@ -252,8 +252,8 @@
                       <el-option v-for="p in getSelectableProductOptions(row.productId)" :key="p.id" :label="p.name" :value="p.id" />
                     </el-select>
                   </template>
-                </el-table-column>
-                <el-table-column :label="$t('field.warehouseLocation')" min-width="220">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn :label="$t('field.warehouseLocation')" min-width="220" column-key="warehouseLocation">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ resolveWarehouseLocation(row.warehouseId, row.locationId) }}</div>
                     <ProductStockSelect
@@ -269,48 +269,48 @@
                       @selection-change="(payload) => handleStockSelectionChange(row, payload)"
                     />
                   </template>
-                </el-table-column>
-                <el-table-column :label="$t('field.systemQty')" min-width="120">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn :label="$t('field.systemQty')" min-width="120" column-key="custom-12">
                   <template #default="{ row }">
                     <div class="readonly-cell">{{ row.systemQty || '0' }}</div>
                   </template>
-                </el-table-column>
-                <el-table-column :label="$t('field.countedQty')" min-width="120">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn :label="$t('field.countedQty')" min-width="120" column-key="custom-13">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ row.countedQty || '-' }}</div>
                     <DecimalInput v-else v-model="row.countedQty" :scale="4" input-mode="decimal" />
                   </template>
-                </el-table-column>
-                <el-table-column v-if="countType === 'INIT'" :label="$t('field.initUnitCost')" min-width="120">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn v-if="countType === 'INIT'" :label="$t('field.initUnitCost')" min-width="120" column-key="custom-14">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ row.initUnitCost || '-' }}</div>
                     <DecimalInput v-else v-model="row.initUnitCost" :scale="4" input-mode="decimal" />
                   </template>
-                </el-table-column>
-                <el-table-column v-if="countType === 'INIT'" :label="$t('field.initTotalAmount')" min-width="140">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn v-if="countType === 'INIT'" :label="$t('field.initTotalAmount')" min-width="140" column-key="custom-15">
                   <template #default="{ row }">
                     <div class="readonly-cell">{{ calcInitTotal(row) }}</div>
                   </template>
-                </el-table-column>
-                <el-table-column :label="$t('field.diffQty')" min-width="120">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn :label="$t('field.diffQty')" min-width="120" column-key="custom-16">
                   <template #default="{ row }">
                     <div class="readonly-cell">{{ calcDiff(row) }}</div>
                   </template>
-                </el-table-column>
-                <el-table-column :label="$t('field.remark')" min-width="160">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn :label="$t('field.remark')" min-width="160" column-key="remark">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ row.remark || '-' }}</div>
                     <el-input v-else v-model="row.remark" />
                   </template>
-                </el-table-column>
-                <el-table-column v-if="!viewMode" label="" width="80" align="center">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn v-if="!viewMode" label="" width="80" align="center" column-key="actions">
                   <template #default="{ $index }">
                     <el-button type="danger" circle size="small" @click="removeItem($index)">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </el-button>
                   </template>
-                </el-table-column>
-              </el-table>
+                </ErpDataTableColumn>
+              </ErpDataTable>
             </div>
             <div v-if="!viewMode" class="detail-actions">
               <el-button type="primary" @click="addItem">

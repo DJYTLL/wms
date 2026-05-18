@@ -51,42 +51,42 @@
 
     <div class="table-card" :class="{ 'sale-approved-card': isApprovedPage }">
       <div class="table-body">
-        <el-table
+        <ErpDataTable
           :data="tableData"
           style="width: 100%"
           stripe
           v-loading="loading"
           :empty-text="$t('table.empty')"
           :row-class-name="rowClassName"
-        >
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
-          <el-table-column v-if="canShow('customer')" :label="$t('field.customer')" min-width="160">
+         table-key="erp-sale-return-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
+          <ErpDataTableColumn v-if="canShow('customer')" :label="$t('field.customer')" min-width="160" column-key="customer">
             <template #default="{ row }">
               {{ getCustomerName(row.customerId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ formatStatus(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <el-table-column v-if="canShow('refundStatus')" :label="$t('field.refundStatus')" min-width="150">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('refundStatus')" :label="$t('field.refundStatus')" min-width="150" column-key="custom-6">
             <template #default="{ row }">
               <el-tag :type="financeStatusTagType(row.refundStatus)" size="small">
                 {{ formatFinanceStatus(row.refundStatus, row.refundUnpaidAmount) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="300" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="300" fixed="right" column-key="actions">
             <template #default="{ row }">
               <template v-if="isApprovedPage">
                 <el-button
@@ -178,8 +178,8 @@
                 </el-button>
               </template>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination
@@ -270,11 +270,10 @@ const productOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 
+const isSaleReturnRoute = computed(() => route.path.startsWith('/erp/sale-returns'));
 const currentWorkspace = computed<'draft' | 'approved'>(() => {
   if (route.path.includes('/erp/sale-returns/draft')) return 'draft';
   if (route.path.includes('/erp/sale-returns/approved')) return 'approved';
-  if (route.meta.workspace === 'draft' || route.meta.defaultStatus === 'DRAFT') return 'draft';
-  if (route.meta.workspace === 'approved' || route.meta.defaultStatus === 'APPROVED') return 'approved';
   return 'draft';
 });
 const isDraftPage = computed(() => currentWorkspace.value === 'draft');
@@ -427,6 +426,10 @@ const fetchLocations = async () => {
 };
 
 const fetchList = async () => {
+  if (!isSaleReturnRoute.value) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   try {
     const params: Record<string, any> = {
@@ -457,6 +460,11 @@ const fetchList = async () => {
 };
 
 const applyRouteStatus = () => {
+  if (!isSaleReturnRoute.value) {
+    statusLocked.value = false;
+    statusFilter.value = '';
+    return;
+  }
   const defaultStatus = route.meta.defaultStatus as string | undefined;
   const lockStatus = route.meta.lockStatus === true;
   statusLocked.value = lockStatus;
@@ -638,6 +646,7 @@ const rowClassName = ({ row }: { row: SaleReturn }) => {
 };
 
 onMounted(() => {
+  if (!isSaleReturnRoute.value) return;
   applyRouteStatus();
   fetchCustomers();
   fetchProducts();
@@ -649,6 +658,7 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  if (!isSaleReturnRoute.value) return;
   applyRouteStatus();
   tableData.value = [];
   total.value = 0;
@@ -663,6 +673,9 @@ onActivated(() => {
 watch(
   () => route.fullPath,
   () => {
+    if (!isSaleReturnRoute.value) {
+      return;
+    }
     applyRouteStatus();
     fetchCurrentTenantKeys();
     handleSearch();

@@ -44,29 +44,29 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')" :row-class-name="paymentRowClass">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('paymentNo')" prop="paymentNo" :label="$t('field.paymentNo')" min-width="160">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')" :row-class-name="paymentRowClass" table-key="erp-payment-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('paymentNo')" prop="paymentNo" :label="$t('field.paymentNo')" min-width="160">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">{{ row.paymentNo }}</el-button>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('supplierName')" prop="supplierName" :label="$t('field.supplier')" min-width="160" />
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('supplierName')" prop="supplierName" :label="$t('field.supplier')" min-width="160" />
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ statusLabel(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('amount')" prop="amount" :label="$t('field.paymentAmount')" min-width="140" />
-          <el-table-column v-if="canShow('discountAmount')" prop="discountAmount" :label="$t('field.discountAmount')" min-width="140" />
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('amount')" prop="amount" :label="$t('field.paymentAmount')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('discountAmount')" prop="discountAmount" :label="$t('field.discountAmount')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="260">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="260" column-key="actions">
             <template #default="{ row }">
               <el-button
                 v-permission="'erp-payment:view'"
@@ -95,8 +95,8 @@
                 {{ $t('action.redFlush') }}
               </el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

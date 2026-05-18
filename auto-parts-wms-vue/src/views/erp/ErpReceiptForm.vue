@@ -38,7 +38,7 @@
                     :placeholder="$t('placeholder.selectReceivable')"
                     disabled
                   />
-                  <el-button @click="openReceivableDialog">{{ $t('action.select') }}</el-button>
+                  <el-button :disabled="!canViewSourceReceivables" @click="openReceivableDialog">{{ $t('action.select') }}</el-button>
                 </div>
               </el-form-item>
             </div>
@@ -85,16 +85,17 @@
           <div class="receivable-table">
             <div class="section-title">{{ $t('page.erpAccountsReceivableManagement') }}</div>
             <div class="receivable-table__body">
-              <el-table :data="selectedReceivables" height="240" style="width: 100%" stripe :empty-text="$t('table.empty')">
-                <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="160">
+              <ErpDataTable :data="selectedReceivables" height="240" style="width: 100%" stripe :empty-text="$t('table.empty')" table-key="erp-receipt-form">
+                <ErpDataTableColumn prop="orderNo" :label="$t('field.orderNo')" min-width="160">
                   <template #default="{ row }">
-                    <el-button link type="primary" @click="openSaleOrderByNo(row)">{{ row.orderNo }}</el-button>
+                    <el-button v-if="canViewSourceReceivables" link type="primary" @click="openReceivablePreview(row)">{{ row.orderNo }}</el-button>
+                    <span v-else>{{ row.orderNo }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-                <el-table-column prop="paidAmount" :label="$t('field.paidAmount')" min-width="140" />
-                <el-table-column prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
-                  <el-table-column :label="$t('field.receiptAmount')" min-width="140">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+                <ErpDataTableColumn prop="paidAmount" :label="$t('field.paidAmount')" min-width="140" />
+                <ErpDataTableColumn prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
+                  <ErpDataTableColumn :label="$t('field.receiptAmount')" min-width="140" column-key="custom-5">
                     <template #default="{ row }">
                       <DecimalInput
                         v-model="getAllocation(row.id).amount"
@@ -103,8 +104,8 @@
                         :allow-negative="isReturnReceivable(row.id)"
                       />
                     </template>
-                  </el-table-column>
-                  <el-table-column :label="$t('field.discountAmount')" min-width="140">
+                  </ErpDataTableColumn>
+                  <ErpDataTableColumn :label="$t('field.discountAmount')" min-width="140" column-key="custom-6">
                     <template #default="{ row }">
                       <DecimalInput
                         v-model="getAllocation(row.id).discount"
@@ -113,8 +114,8 @@
                         :allow-negative="isReturnReceivable(row.id)"
                       />
                     </template>
-                  </el-table-column>
-              </el-table>
+                  </ErpDataTableColumn>
+              </ErpDataTable>
             </div>
           </div>
         </el-form>
@@ -142,7 +143,7 @@
         />
         <el-button type="primary" @click="fetchReceivableCandidates">{{ $t('action.search') }}</el-button>
       </div>
-      <el-table
+      <ErpDataTable
         ref="receivableTableRef"
         :data="receivableCandidates"
         height="360"
@@ -152,33 +153,46 @@
         :empty-text="$t('table.empty')"
         row-key="id"
         @selection-change="handleReceivableSelectionChange"
-      >
-        <el-table-column type="selection" width="55" />
-        <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="160">
+       table-key="erp-receipt-form-8">
+        <ErpDataTableColumn type="selection" width="55" />
+        <ErpDataTableColumn prop="orderNo" :label="$t('field.orderNo')" min-width="160">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openSaleOrderByNo(row)">{{ row.orderNo }}</el-button>
+            <el-button v-if="canViewSourceReceivables" link type="primary" @click="openReceivablePreview(row)">{{ row.orderNo }}</el-button>
+            <span v-else>{{ row.orderNo }}</span>
           </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn prop="createdAt" :label="$t('field.createdTime')" min-width="180">
           <template #default="{ row }">
             {{ formatDateTimeDisplay(row.createdAt) }}
           </template>
-        </el-table-column>
-        <el-table-column prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-        <el-table-column prop="paidAmount" :label="$t('field.paidAmount')" min-width="140" />
-        <el-table-column prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
-        <el-table-column prop="status" :label="$t('field.status')" min-width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+        <ErpDataTableColumn prop="paidAmount" :label="$t('field.paidAmount')" min-width="140" />
+        <ErpDataTableColumn prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
+        <ErpDataTableColumn prop="status" :label="$t('field.status')" min-width="120">
           <template #default="{ row }">
             <el-tag size="small" :type="arStatusTagType(row.status)">
               {{ arStatusLabel(row.status) }}
             </el-tag>
           </template>
-        </el-table-column>
-      </el-table>
+        </ErpDataTableColumn>
+      </ErpDataTable>
       <template #footer>
         <el-button @click="receivableDialogVisible = false">{{ $t('action.cancel') }}</el-button>
         <el-button type="primary" @click="confirmReceivableSelection">{{ $t('action.confirm') }}</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="receivablePreviewDialogVisible" :title="receivablePreviewTitle" width="720px">
+      <el-descriptions v-if="receivablePreviewDetail" :column="2" border>
+        <el-descriptions-item :label="$t('field.orderNo')">{{ receivablePreviewDetail.orderNo || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.customer')">{{ receivablePreviewDetail.customerName || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.totalAmount')">{{ receivablePreviewDetail.totalAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.paidAmount')">{{ receivablePreviewDetail.paidAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.unpaidAmount')">{{ receivablePreviewDetail.unpaidAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.status')">{{ receivablePreviewDetail.status || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.remark')" :span="2">{{ receivablePreviewDetail.remark || '-' }}</el-descriptions-item>
+      </el-descriptions>
     </el-dialog>
   </div>
 </template>
@@ -191,6 +205,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import { useAuthStore } from '@/stores/auth';
 
 interface OptionItem {
   id: number;
@@ -214,12 +229,22 @@ interface ReceivableOption {
   paidAmount?: number;
   unpaidAmount: number;
   status?: string;
+  createdAt?: string;
+  sourceType?: string;
+  sourceId?: number;
+}
+
+interface ReceivableSourceDetail extends ReceivableOption {
+  customerName?: string;
+  settlementMethod?: string;
+  remark?: string;
 }
 
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
+const authStore = useAuthStore();
 
 const formData = ref({
   receiptNo: '',
@@ -244,6 +269,8 @@ const receivableRange = ref<[string, string] | []>([]);
 const receivableKeyword = ref('');
 const receivableSelection = ref<ReceivableOption[]>([]);
 const receivableTableRef = ref();
+const receivablePreviewDialogVisible = ref(false);
+const receivablePreviewDetail = ref<ReceivableSourceDetail | null>(null);
 const saving = ref(false);
 const pagePath = ref(route.path);
 const createdReceiptId = ref<number | null>(null);
@@ -340,6 +367,12 @@ const receiptId = computed(() => {
 });
 const isReceiptRoute = computed(() => route.path.startsWith('/erp/receipts'));
 const isEditing = computed(() => Boolean(receiptId.value));
+const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
+const canViewSourceReceivables = computed(() => hasPermission('erp-receipt:source-view') || hasPermission('erp-ar:view'));
+const receivablePreviewTitle = computed(() => {
+  if (!receivablePreviewDetail.value?.orderNo) return t('page.erpAccountsReceivableManagement');
+  return `${t('page.erpAccountsReceivableManagement')} · ${receivablePreviewDetail.value.orderNo}`;
+});
 
 const normalizeNumber = (value: unknown) => {
   const num = Number(value ?? 0);
@@ -694,21 +727,27 @@ const fetchReceiptMethods = async () => {
 };
 
 const fetchReceivables = async (customerId: number | null) => {
+  if (!canViewSourceReceivables.value) {
+    receivableOptions.value = [];
+    return [];
+  }
   try {
-    const res: any = await request.get('/erp/ar', {
+    const res: any = await request.get('/erp/receipts/source-receivables/page', {
       params: {
         customerId: customerId ?? undefined,
-        status: 'OPEN'
+        status: 'OPEN',
+        page: 1,
+        size: 200
       }
     });
-      if (res.data.code === 200) {
-        const items: ReceivableOption[] = res.data.data || [];
-        receivableOptions.value = items.filter((item) => {
-          if (item.status === 'RED_FLUSHED') return false;
-          if (typeof item.unpaidAmount === 'number' && item.unpaidAmount === 0) return false;
-          return true;
-        });
-      }
+    if (res.data.code === 200) {
+      const items: ReceivableOption[] = res.data.data?.items || [];
+      receivableOptions.value = items.filter((item) => {
+        if (item.status === 'RED_FLUSHED') return false;
+        if (typeof item.unpaidAmount === 'number' && item.unpaidAmount === 0) return false;
+        return true;
+      });
+    }
     return receivableOptions.value;
   } catch (error) {
     notifyError(error);
@@ -804,6 +843,10 @@ const handleReceivableSelectionChange = (rows: ReceivableOption[]) => {
 };
 
 const openReceivableDialog = async () => {
+  if (!canViewSourceReceivables.value) {
+    notifyWarning('当前角色缺少来源应收单引用权限，不能选择来源应收单');
+    return;
+  }
   if (!formData.value.customerId) {
     notifyWarning(t('message.required'));
     return;
@@ -835,6 +878,10 @@ const syncReceivableSelection = async () => {
 };
 
 const fetchReceivableCandidates = async () => {
+  if (!canViewSourceReceivables.value) {
+    receivableCandidates.value = [];
+    return;
+  }
   if (!formData.value.customerId) return;
   receivableLoading.value = true;
   try {
@@ -842,17 +889,19 @@ const fetchReceivableCandidates = async () => {
       receivableRange.value = buildDefaultRange();
     }
     const range = buildRangeParams(receivableRange.value);
-    const res: any = await request.get('/erp/ar', {
+    const res: any = await request.get('/erp/receipts/source-receivables/page', {
       params: {
         customerId: formData.value.customerId,
         status: 'OPEN',
         keyword: receivableKeyword.value || undefined,
         startAt: range.startAt,
-        endAt: range.endAt
+        endAt: range.endAt,
+        page: 1,
+        size: 200
       }
     });
     if (res.data.code === 200) {
-      const items: ReceivableOption[] = res.data.data || [];
+      const items: ReceivableOption[] = res.data.data?.items || [];
       receivableCandidates.value = items.filter((item) => {
         if (item.status === 'RED_FLUSHED') return false;
         if (typeof item.unpaidAmount === 'number' && item.unpaidAmount === 0) return false;
@@ -875,57 +924,18 @@ const confirmReceivableSelection = () => {
   handleReceivableChange(formData.value.receivableIds);
 };
 
-const openSaleOrderByNo = async (row?: ReceivableOption) => {
-  const orderNo = row?.orderNo;
-  if (!orderNo) return;
-  if (orderNo.startsWith('AR')) {
-    if (!row?.id) {
-      notifyWarning(t('message.saleReturnNotFound'));
-      return;
-    }
-    try {
-      const detailRes: any = await request.get(`/erp/ar/${row.id}`);
-      if (detailRes.data.code !== 200) {
-        notifyWarning(t('message.saleReturnNotFound'));
-        return;
-      }
-      const remark: string = detailRes.data.data?.receivable?.remark || '';
-      const match = remark.match(/销售退货单号:([^\\s|]+)/);
-      const returnNo = match ? match[1] : '';
-      if (!returnNo) {
-        notifyWarning(t('message.saleReturnNotFound'));
-        return;
-      }
-      const returnRes: any = await request.get('/erp/sale-returns', {
-        params: { keyword: returnNo }
-      });
-      if (returnRes.data.code === 200 && Array.isArray(returnRes.data.data) && returnRes.data.data.length > 0) {
-        const target = returnRes.data.data[0];
-        if (target?.id) {
-          router.push(`/erp/sale-returns/${target.id}/edit?mode=view`);
-          return;
-        }
-      }
-      notifyWarning(t('message.saleReturnNotFound'));
-    } catch (error) {
-      notifyError(error);
-    }
+const openReceivablePreview = async (row?: ReceivableOption) => {
+  if (!canViewSourceReceivables.value) {
+    notifyWarning('当前角色缺少来源应收单引用权限，不能预览来源应收单');
     return;
   }
+  if (!row?.id) return;
   try {
-    const res: any = await request.get('/erp/sale-orders', {
-      params: {
-        keyword: orderNo
-      }
-    });
-    if (res.data.code === 200 && Array.isArray(res.data.data) && res.data.data.length > 0) {
-      const target = res.data.data[0];
-      if (target?.id) {
-        router.push(`/erp/sale-orders/${target.id}/edit?mode=view`);
-        return;
-      }
+    const res: any = await request.get(`/erp/receipts/source-receivables/${row.id}`);
+    if (res.data.code === 200) {
+      receivablePreviewDetail.value = res.data.data || null;
+      receivablePreviewDialogVisible.value = true;
     }
-    notifyWarning(t('message.saleOrderNotFound'));
   } catch (error) {
     notifyError(error);
   }

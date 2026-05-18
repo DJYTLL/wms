@@ -223,17 +223,16 @@
 
     <div class="config-card preview-card">
       <div class="preview-table-wrapper">
-        <el-table :data="previewRows" height="100%" stripe>
-          <el-table-column type="index" width="64" :label="t('table.index')" />
-          <el-table-column
+        <ErpDataTable :data="previewRows" height="100%" stripe table-key="column-permission-management">
+          <ErpDataTableColumn type="index" width="64" :label="t('table.index')" />
+          <ErpDataTableColumn
             v-for="column in previewColumns"
             :key="column.key"
             :prop="column.key"
             :label="column.label"
             min-width="140"
-            show-overflow-tooltip
-          />
-        </el-table>
+            show-overflow-tooltip />
+        </ErpDataTable>
       </div>
 
       <div v-if="previewColumns.length === 0" class="empty-tip">
@@ -479,7 +478,12 @@ const resolveTreeNodeOpen = (nodeId: string, defaultOpen: boolean): boolean => {
   return stored === undefined ? defaultOpen : stored
 }
 
-const buildPageLeafNodes = (parentId: string, label: string, mappedKeys: string[]): PageTreeNode[] => {
+const buildPageLeafNodes = (
+  parentId: string,
+  label: string,
+  mappedKeys: string[],
+  collapseSingleLeaf = true,
+): PageTreeNode[] => {
   const matched = mappedKeys
     .map((mappedKey) => pageOptionsMap.value.get(mappedKey))
     .filter((item): item is PageOption => Boolean(item))
@@ -488,7 +492,7 @@ const buildPageLeafNodes = (parentId: string, label: string, mappedKeys: string[
     return []
   }
 
-  if (matched.length === 1) {
+  if (matched.length === 1 && collapseSingleLeaf) {
     const single = matched[0]
     if (!single) {
       return []
@@ -542,7 +546,13 @@ const buildExtraPageLeafNodes = (parentId: string, menuKey: string): PageTreeNod
 const buildTreeNode = (item: MenuItem, parentId: string): PageTreeNode | null => {
   const menuKey = item.key || ''
   const nodeId = `${parentId}:${menuKey || item.id}`
-  const mappedNodes = buildPageLeafNodes(nodeId, item.title || '', menuPageKeyMap[menuKey] || [])
+  const mappedPageKeys = menuPageKeyMap[menuKey] || []
+  const mappedNodes = buildPageLeafNodes(
+    nodeId,
+    item.title || '',
+    mappedPageKeys,
+    mappedPageKeys.length <= 1,
+  )
   const extraNodes = buildExtraPageLeafNodes(nodeId, menuKey)
   const childNodes = (item.children || [])
     .map((child) => buildTreeNode(child, nodeId))

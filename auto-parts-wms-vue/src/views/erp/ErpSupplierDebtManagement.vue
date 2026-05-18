@@ -20,15 +20,15 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('supplierName')" prop="supplierName" :label="$t('field.supplier')" min-width="180" />
-          <el-table-column v-if="canShow('totalDebt')" prop="totalDebt" :label="$t('field.supplierDebtTotal')" min-width="160">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')" table-key="erp-supplier-debt-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('supplierName')" prop="supplierName" :label="$t('field.supplier')" min-width="180" />
+          <ErpDataTableColumn v-if="canShow('totalDebt')" prop="totalDebt" :label="$t('field.supplierDebtTotal')" min-width="160">
             <template #default="{ row }">
               {{ formatAmount(row.totalDebt) }}
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
     </div>
   </div>

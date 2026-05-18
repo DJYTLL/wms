@@ -145,34 +145,33 @@
       </div>
 
       <div v-else class="table-body">
-        <el-table
+        <ErpDataTable
           v-loading="loading"
           :data="filteredPermissions"
           style="width: 100%"
           height="100%"
           :empty-text="$t('table.empty')"
-        >
-          <el-table-column v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="220" />
-          <el-table-column v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="220">
+         table-key="permission-management">
+          <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="220" />
+          <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="220">
             <template #default="{ row }">
               <code class="code-badge">{{ row.code }}</code>
             </template>
-          </el-table-column>
-          <el-table-column
+          </ErpDataTableColumn>
+          <ErpDataTableColumn
             v-if="canShow('description')"
             prop="description"
             :label="$t('field.description')"
             min-width="240"
-            show-overflow-tooltip
-          />
-          <el-table-column v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="120" align="center">
+            show-overflow-tooltip />
+          <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="120" align="center">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                 {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="160" fixed="right" align="center">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" align="center" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="openEditModal(row)">
                 {{ $t('action.edit') }}
@@ -181,8 +180,8 @@
                 {{ $t('action.delete') }}
               </el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
     </div>
 

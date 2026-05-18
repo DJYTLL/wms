@@ -22,30 +22,30 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('product')" :label="$t('field.product')" min-width="180">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="erp-stock-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('product')" :label="$t('field.product')" min-width="180" column-key="product">
             <template #default="{ row }">
               {{ getProductName(row.productId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
             <template #default="{ row }">
               {{ getWarehouseName(row.warehouseId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('location')" :label="$t('field.location')" min-width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('location')" :label="$t('field.location')" min-width="160" column-key="warehouseLocation">
             <template #default="{ row }">
               {{ getLocationName(row.locationId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('qty')" prop="qtyOnHand" :label="$t('field.qtyOnHand')" min-width="120" />
-          <el-table-column v-if="canShow('updatedAt')" prop="updatedAt" :label="$t('field.updatedTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('qty')" prop="qtyOnHand" :label="$t('field.qtyOnHand')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('updatedAt')" prop="updatedAt" :label="$t('field.updatedTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.updatedAt) }}
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

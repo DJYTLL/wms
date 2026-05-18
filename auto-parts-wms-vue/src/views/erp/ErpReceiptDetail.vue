@@ -47,25 +47,28 @@
           <el-descriptions-item :label="$t('field.orderNo')">{{ detail.orderNo || '-' }}</el-descriptions-item>
           <el-descriptions-item :label="$t('field.receivableNo')">
             <div v-if="detail.receivables.length" class="receivable-links">
-              <el-button
-                v-for="item in detail.receivables"
-                :key="item.receivableId"
-                link
-                type="primary"
-                @click="openReceivable(item.receivableId)"
-              >
-                {{ item.orderNo || '-' }}
-              </el-button>
+              <template v-if="canViewSourceReceivables">
+                <el-button
+                  v-for="item in detail.receivables"
+                  :key="item.receivableId"
+                  link
+                  type="primary"
+                  @click="openReceivable(item.receivableId)"
+                >
+                  {{ item.orderNo || '-' }}
+                </el-button>
+              </template>
+              <span v-else>{{ detail.receivables.map(item => item.orderNo || '-').join('、') }}</span>
             </div>
             <el-button
-              v-else-if="detail.receipt.receivableId && detail.receivableNo"
+              v-else-if="canViewSourceReceivables && detail.receipt.receivableId && detail.receivableNo"
               link
               type="primary"
               @click="openReceivable(detail.receipt.receivableId)"
             >
               {{ detail.receivableNo }}
             </el-button>
-            <span v-else>-</span>
+            <span v-else>{{ detail.receivableNo || '-' }}</span>
           </el-descriptions-item>
           <el-descriptions-item :label="$t('field.customer')">{{ detail.customerName }}</el-descriptions-item>
           <el-descriptions-item :label="$t('field.receiptAmount')">{{ detail.receipt.amount }}</el-descriptions-item>
@@ -92,6 +95,18 @@
       :doc-id="printDocId"
       :title="$t('page.erpReceiptPrint')"
     />
+
+    <el-dialog v-model="sourcePreviewVisible" :title="sourcePreviewTitle" width="720px">
+      <el-descriptions v-if="sourcePreview" :column="2" border>
+        <el-descriptions-item :label="$t('field.orderNo')">{{ sourcePreview.orderNo || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.customer')">{{ sourcePreview.customerName || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.totalAmount')">{{ sourcePreview.totalAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.paidAmount')">{{ sourcePreview.paidAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.unpaidAmount')">{{ sourcePreview.unpaidAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.status')">{{ sourcePreview.status || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.remark')" :span="2">{{ sourcePreview.remark || '-' }}</el-descriptions-item>
+      </el-descriptions>
+    </el-dialog>
   </div>
 </template>
 
@@ -107,7 +122,7 @@ import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
-const { notifyError } = useApiError();
+const { notifyError, notifyWarning } = useApiError();
 const authStore = useAuthStore();
 const { t } = useI18n();
 
@@ -130,12 +145,19 @@ const detail = reactive({
 
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const sourcePreviewVisible = ref(false);
+const sourcePreview = ref<any>(null);
 
 const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 };
 
 const canPrint = computed(() => hasPermission('erp-receipt:view'));
+const canViewSourceReceivables = computed(() => hasPermission('erp-receipt:source-view') || hasPermission('erp-ar:view'));
+const sourcePreviewTitle = computed(() => {
+  if (!sourcePreview.value?.orderNo) return t('page.erpAccountsReceivableManagement');
+  return `${t('page.erpAccountsReceivableManagement')} · ${sourcePreview.value.orderNo}`;
+});
 
 const canApprove = computed(() => {
   return detail.receipt.status === 'DRAFT' && hasPermission('erp-receipt:approve');
@@ -195,7 +217,16 @@ const extractRedFlushReason = (remark?: string) => {
 };
 
 const openReceivable = (id: number) => {
-  router.push(`/erp/ar/${id}`);
+  if (!canViewSourceReceivables.value) {
+    notifyWarning('当前角色缺少来源应收单引用权限');
+    return;
+  }
+  request.get(`/erp/receipts/source-receivables/${id}`).then((res: any) => {
+    sourcePreview.value = res.data.data || null;
+    sourcePreviewVisible.value = true;
+  }).catch((error) => {
+    notifyError(error);
+  });
 };
 
 const fetchDetail = async () => {

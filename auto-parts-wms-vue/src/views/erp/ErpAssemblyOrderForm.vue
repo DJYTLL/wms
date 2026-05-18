@@ -152,8 +152,8 @@
             </el-button>
           </div>
           <div class="detail-table-wrapper">
-            <el-table :data="formData.items" style="width: 100%" border stripe :empty-text="$t('table.empty')">
-              <el-table-column v-if="canShow('product')" :label="$t('field.product')" min-width="220">
+            <ErpDataTable :data="formData.items" style="width: 100%" border stripe :empty-text="$t('table.empty')" table-key="erp-assembly-order-form">
+              <ErpDataTableColumn v-if="canShow('product')" :label="$t('field.product')" min-width="220" column-key="product">
                 <template #default="{ row }">
                   <FuzzyProductSelect
                     v-model="row.productId"
@@ -164,8 +164,8 @@
                     @change="() => handleProductChange(row)"
                   />
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShow('warehouseLocation')" :label="$t('field.warehouseLocation')" min-width="240">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShow('warehouseLocation')" :label="$t('field.warehouseLocation')" min-width="240" column-key="warehouseLocation">
                 <template #default="{ row }">
                   <ProductStockSelect
                     v-model="row.stockKey"
@@ -180,35 +180,35 @@
                     @selection-change="(payload) => handleRowStockSelectionChange(row, payload)"
                   />
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShow('qty')" :label="$t('field.quantity')" width="140">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShow('qty')" :label="$t('field.quantity')" width="140" column-key="quantity">
                 <template #default="{ row }">
                   <DecimalInput v-model="row.qty" :disabled="isReadOnly" @update:modelValue="() => updateItemAmount(row)" />
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShow('unitCost')" :label="$t('field.unitCost')" width="140">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShow('unitCost')" :label="$t('field.unitCost')" width="140" column-key="custom-4">
                 <template #default="{ row }">
                   {{ formatAmount(row.unitCost) }}
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShow('amount')" :label="$t('field.lineTotal')" width="140">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShow('amount')" :label="$t('field.lineTotal')" width="140" column-key="amount">
                 <template #default="{ row }">
                   {{ formatAmount(row.amount) }}
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShow('remark')" :label="$t('field.remark')" min-width="180">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShow('remark')" :label="$t('field.remark')" min-width="180" column-key="remark">
                 <template #default="{ row }">
                   <el-input v-model="row.remark" :disabled="isReadOnly" />
                 </template>
-              </el-table-column>
-              <el-table-column v-if="!isReadOnly" label="" width="80" align="center">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="!isReadOnly" label="" width="80" align="center" column-key="actions">
                 <template #default="{ $index }">
                   <el-button type="danger" circle size="small" @click="removeItem($index)">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                   </el-button>
                 </template>
-              </el-table-column>
-            </el-table>
+              </ErpDataTableColumn>
+            </ErpDataTable>
           </div>
         </div>
       </div>

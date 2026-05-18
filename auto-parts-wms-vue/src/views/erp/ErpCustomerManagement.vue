@@ -47,32 +47,32 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
-          <el-table-column v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
-          <el-table-column v-if="canShow('category')" :label="$t('field.customerCategory')" min-width="140">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="erp-customer-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('category')" :label="$t('field.customerCategory')" min-width="140" column-key="customer">
             <template #default="{ row }">
               {{ getCategoryName(row.categoryId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('contact')" prop="contact" :label="$t('field.contactPerson')" min-width="120" />
-          <el-table-column v-if="canShow('phone')" prop="phone" :label="$t('field.phone')" min-width="130" />
-          <el-table-column v-if="canShow('email')" prop="email" :label="$t('field.email')" min-width="180" />
-          <el-table-column v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('contact')" prop="contact" :label="$t('field.contactPerson')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('phone')" prop="phone" :label="$t('field.phone')" min-width="130" />
+          <ErpDataTableColumn v-if="canShow('email')" prop="email" :label="$t('field.email')" min-width="180" />
+          <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                 {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="160" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" v-permission="'erp-customer:edit'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
               <el-button link type="danger" size="small" v-permission="'erp-customer:delete'" @click="handleDelete(row)">{{ $t('action.delete') }}</el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination
@@ -119,38 +119,38 @@
         <el-divider class="span-2">{{ $t('field.contacts') }}</el-divider>
         <el-form-item label="" label-width="0px" class="span-2 no-label">
           <div class="contact-table">
-            <el-table
+            <ErpDataTable
               :data="formData.contacts"
               border
               size="small"
               :empty-text="$t('table.empty')"
-            >
-              <el-table-column :label="$t('field.contactPerson')" min-width="120">
+             table-key="erp-customer-management-11">
+              <ErpDataTableColumn :label="$t('field.contactPerson')" min-width="120" column-key="custom-10">
                 <template #default="{ row }">
                   <el-input v-model="row.name" :placeholder="$t('field.contactPerson')" />
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.phone')" min-width="120">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('field.phone')" min-width="120" column-key="custom-11">
                 <template #default="{ row }">
                   <el-input v-model="row.phone" :placeholder="$t('field.phone')" />
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.mobile')" min-width="120">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('field.mobile')" min-width="120" column-key="custom-12">
                 <template #default="{ row }">
                   <el-input v-model="row.mobile" :placeholder="$t('field.mobile')" />
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.email')" min-width="180">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('field.email')" min-width="180" column-key="custom-13">
                 <template #default="{ row }">
                   <el-input v-model="row.email" :placeholder="$t('field.email')" />
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('table.actions')" width="90" align="center">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('table.actions')" width="90" align="center" column-key="actions">
                 <template #default="{ $index }">
                   <el-button link type="danger" @click="removeContact($index)">{{ $t('action.delete') }}</el-button>
                 </template>
-              </el-table-column>
-            </el-table>
+              </ErpDataTableColumn>
+            </ErpDataTable>
             <div class="contact-table__actions">
               <el-button type="primary" plain size="small" @click="addContact">
                 {{ $t('action.addContact') }}

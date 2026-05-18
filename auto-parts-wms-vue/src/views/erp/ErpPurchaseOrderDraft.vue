@@ -42,30 +42,30 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="170" />
-          <el-table-column v-if="canShow('supplier')" :label="$t('field.supplier')" min-width="170" show-overflow-tooltip>
+        <ErpDataTable :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="erp-purchase-order-draft">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="170" />
+          <ErpDataTableColumn v-if="canShow('supplier')" :label="$t('field.supplier')" min-width="170" show-overflow-tooltip column-key="supplier">
             <template #default="{ row }">
               {{ getSupplierName(row.supplierId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.orderTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.orderTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="130" align="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="130" align="right">
             <template #default="{ row }">
               <span class="amount-text">{{ formatAmount(row.totalAmount) }}</span>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="100" align="center">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="100" align="center">
             <template #default="{ row }">
               <el-tag type="info" size="small">{{ formatStatus(row.status) }}</el-tag>
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="220" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="220" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" v-permission="'erp-purchase-draft:edit'" @click="openEditPage(row)">
                 {{ $t('action.edit') }}
@@ -80,8 +80,8 @@
                 {{ $t('action.delete') }}
               </el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

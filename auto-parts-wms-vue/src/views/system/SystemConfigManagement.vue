@@ -23,32 +23,32 @@
 
     <div class="table-card">
       <div class="table-body" v-loading="loading">
-        <el-table :data="filteredItems">
-          <el-table-column v-if="canShow('key')" prop="key" :label="t('field.code')" min-width="180" />
-          <el-table-column v-if="canShow('value')" prop="value" :label="t('field.value')" min-width="200" />
-          <el-table-column v-if="canShow('type')" prop="valueType" :label="t('field.type')" min-width="120" />
-          <el-table-column v-if="canShow('description')" prop="description" :label="t('field.description')" min-width="220" />
-          <el-table-column v-if="canShow('public')" prop="isPublic" :label="t('field.public')" min-width="120">
+        <ErpDataTable :data="filteredItems" table-key="system-config-management">
+          <ErpDataTableColumn v-if="canShow('key')" prop="key" :label="t('field.code')" min-width="180" />
+          <ErpDataTableColumn v-if="canShow('value')" prop="value" :label="t('field.value')" min-width="200" />
+          <ErpDataTableColumn v-if="canShow('type')" prop="valueType" :label="t('field.type')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('description')" prop="description" :label="t('field.description')" min-width="220" />
+          <ErpDataTableColumn v-if="canShow('public')" prop="isPublic" :label="t('field.public')" min-width="120">
             <template #default="{ row }">
               {{ row.isPublic ? t('status.active') : t('status.inactive') }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('updatedAt')" prop="updatedAt" :label="t('field.updatedTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('updatedAt')" prop="updatedAt" :label="t('field.updatedTime')" min-width="180">
             <template #default="{ row }">
               {{ formatTime(row.updatedAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="t('table.actions')" width="140" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="t('table.actions')" width="140" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" @click="openEdit(row)">
                 {{ t('action.edit') }}
               </el-button>
             </template>
-          </el-table-column>
+          </ErpDataTableColumn>
           <template #empty>
             <div class="table-empty">{{ t('table.empty') }}</div>
           </template>
-        </el-table>
+        </ErpDataTable>
       </div>
     </div>
 

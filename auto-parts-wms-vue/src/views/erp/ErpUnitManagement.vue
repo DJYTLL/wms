@@ -28,26 +28,26 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
-          <el-table-column v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
-          <el-table-column v-if="canShow('symbol')" prop="symbol" :label="$t('field.symbol')" min-width="120" />
-          <el-table-column v-if="canShow('precision')" prop="precision" :label="$t('field.precision')" min-width="120" />
-          <el-table-column v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
-            <template #default="{ row }">
-              <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
-                {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="160" fixed="right">
-            <template #default="{ row }">
-              <el-button link type="primary" size="small" v-permission="'erp-unit:edit'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
-              <el-button link type="danger" size="small" v-permission="'erp-unit:delete'" @click="handleDelete(row)">{{ $t('action.delete') }}</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <ErpDataTable
+          :rows="tableData"
+          :columns="visibleUnitColumns"
+          table-key="erp-unit"
+          :loading="loading"
+          :empty-text="$t('table.empty')"
+        >
+          <template #cell-index="{ index }">
+            {{ index + 1 }}
+          </template>
+          <template #cell-status="{ row }">
+            <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
+              {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
+            </el-tag>
+          </template>
+          <template #cell-actions="{ row }">
+            <el-button link type="primary" size="small" v-permission="'erp-unit:edit'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
+            <el-button link type="danger" size="small" v-permission="'erp-unit:delete'" @click="handleDelete(row)">{{ $t('action.delete') }}</el-button>
+          </template>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination
@@ -93,12 +93,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated } from 'vue';
+import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import ErpDataTable, { type ErpDataTableColumn } from '@/components/ErpDataTable.vue';
 
 interface ErpUnit {
   id: number;
@@ -138,6 +139,20 @@ const formData = reactive({
 });
 
 const canShow = (key: string) => isVisible(key);
+
+const unitColumns = computed<ErpDataTableColumn[]>(() => [
+  { key: 'index', label: t('table.index'), width: 70, minWidth: 56, resizable: false, configurable: false },
+  { key: 'code', label: t('field.code'), prop: 'code', width: 120, minWidth: 48 },
+  { key: 'name', label: t('field.name'), prop: 'name', width: 140, minWidth: 48 },
+  { key: 'symbol', label: t('field.symbol'), prop: 'symbol', width: 120, minWidth: 48 },
+  { key: 'precision', label: t('field.precision'), prop: 'precision', width: 120, minWidth: 48 },
+  { key: 'status', label: t('field.status'), width: 110, minWidth: 56 },
+  { key: 'actions', label: t('table.actions'), width: 160, minWidth: 140, stickyRight: true, resizable: false, configurable: false }
+]);
+
+const visibleUnitColumns = computed(() => unitColumns.value.filter((column) => (
+  column.key === 'index' || column.key === 'actions' || canShow(column.key)
+)));
 
 const fetchList = async () => {
   loading.value = true;

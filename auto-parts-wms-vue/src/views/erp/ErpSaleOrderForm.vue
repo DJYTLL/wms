@@ -161,17 +161,17 @@
             </div>
           </div>
           <div class="detail-table-wrapper">
-            <el-table
+            <ErpDataTable
               :data="formData.items"
               style="width: 100%"
               border
               @row-click="handleRowClick"
               @selection-change="handleItemSelectionChange"
               :header-cell-style="{ textAlign: 'center' }"
-            >
-              <el-table-column v-if="!isReadOnly" type="selection" width="52" align="center" />
-              <el-table-column type="index" :label="$t('table.index')" width="72" align="center" />
-              <el-table-column :label="$t('field.product')" min-width="240">
+             table-key="erp-sale-order-form">
+              <ErpDataTableColumn v-if="!isReadOnly" type="selection" width="52" align="center" />
+              <ErpDataTableColumn type="index" :label="$t('table.index')" width="72" align="center" />
+              <ErpDataTableColumn :label="$t('field.product')" min-width="240" column-key="product">
                 <template #header>
                   <span class="required-table-label">{{ $t('field.product') }}</span>
                 </template>
@@ -216,8 +216,8 @@
                     </el-tooltip>
                   </div>
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.warehouseLocation')" min-width="220">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('field.warehouseLocation')" min-width="220" column-key="warehouseLocation">
                 <template #header>
                   <span class="required-table-label">{{ $t('field.warehouseLocation') }}</span>
                 </template>
@@ -252,8 +252,8 @@
                     </el-option>
                   </el-select>
                 </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.quantity')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.quantity')" width="140" column-key="quantity">
               <template #header>
                 <span class="required-table-label">{{ $t('field.quantity') }}</span>
               </template>
@@ -261,8 +261,8 @@
                 <span v-if="isReadOnly" class="readonly-cell">{{ formatPlainNumber(row.qty) }}</span>
                 <DecimalInput v-else v-model="row.qty" :scale="4" />
               </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.price')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-6">
               <template #header>
                 <span class="required-table-label">{{ $t('field.price') }}</span>
               </template>
@@ -270,38 +270,38 @@
                 <span v-if="isReadOnly" class="readonly-cell">{{ formatMoney(row.price) }}</span>
                 <DecimalInput v-else v-model="row.price" :scale="4" />
               </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.lineTotal')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
               <template #default="{ row }">
                 {{ formatMoney(calcLineAmount(row)) }}
               </template>
-            </el-table-column>
-            <el-table-column v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-8">
               <template #default="{ row }">
                 {{ formatMoney(calcLineDiscount(row)) }}
               </template>
-            </el-table-column>
-            <el-table-column v-if="canShowProfit" :label="$t('field.profit')" min-width="160">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="custom-9">
               <template #default="{ row }">
                 {{ formatProfitCell(row) }}
               </template>
-            </el-table-column>
+            </ErpDataTableColumn>
 
-              <el-table-column :label="$t('field.remark')" min-width="180">
+              <ErpDataTableColumn :label="$t('field.remark')" min-width="180" column-key="remark">
                 <template #default="{ row }">
                   <span v-if="isReadOnly" class="readonly-cell">{{ row.remark || '-' }}</span>
                   <el-input v-else v-model="row.remark" :placeholder="$t('field.remark')" />
                 </template>
-              </el-table-column>
-              <el-table-column v-if="!isReadOnly" :label="$t('table.actions')" width="88" align="center" fixed="right">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="!isReadOnly" :label="$t('table.actions')" width="88" align="center" fixed="right" column-key="actions">
                 <template #default="{ $index }">
                   <el-button class="row-delete-button" link type="danger" @click.stop="removeItem($index)">
                     <el-icon><Delete /></el-icon>
                   </el-button>
                 </template>
-              </el-table-column>
+              </ErpDataTableColumn>
 
-          </el-table>
+          </ErpDataTable>
           </div>
           <div class="detail-footer">
             <div v-if="!isReadOnly" class="detail-actions">
@@ -523,18 +523,18 @@
           </el-form-item>
         </el-form>
 
-        <el-table
+        <ErpDataTable
           :data="assemblyQuickForm.items"
           border
           stripe
           class="assembly-quick__items"
           :empty-text="$t('table.empty')"
-        >
-          <el-table-column type="index" :label="$t('table.index')" width="64" align="center" />
-          <el-table-column label="物料商品" min-width="200">
+         table-key="erp-sale-order-form-13">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="64" align="center" />
+          <ErpDataTableColumn label="物料商品" min-width="200" column-key="product">
             <template #default="{ row }">{{ resolveAssemblyItemProductLabel(row) }}</template>
-          </el-table-column>
-          <el-table-column :label="$t('field.warehouseLocation')" min-width="240">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.warehouseLocation')" min-width="240" column-key="warehouseLocation">
             <template #default="{ row }">
               <ProductStockSelect
                 v-model="row.stockKey"
@@ -547,18 +547,18 @@
                 @selection-change="(payload) => handleAssemblyItemStockChange(row, payload)"
               />
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('field.quantity')" width="150">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.quantity')" width="150" column-key="quantity">
             <template #default="{ row }">
               <DecimalInput v-model="row.qty" :scale="4" />
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('field.remark')" min-width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.remark')" min-width="160" column-key="remark">
             <template #default="{ row }">
               <el-input v-model="row.remark" />
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <template #footer>
         <el-button :disabled="assemblyQuickSaving" @click="assemblyQuickDialogVisible = false">{{ $t('action.cancel') }}</el-button>

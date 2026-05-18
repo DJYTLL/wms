@@ -33,11 +33,11 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="filteredData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-        <el-table-column type="index" :label="$t('table.index')" width="60" />
+        <ErpDataTable :data="filteredData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="user-management">
+        <ErpDataTableColumn type="index" :label="$t('table.index')" width="60" />
         
         <!-- 头像列 -->
-        <el-table-column v-if="canShow('avatar')" :label="$t('field.avatar')" width="70" align="center">
+        <ErpDataTableColumn v-if="canShow('avatar')" :label="$t('field.avatar')" width="70" align="center" column-key="custom-2">
           <template #default="{ row }">
             <img 
               :src="row.avatarUrl || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
@@ -45,13 +45,13 @@
               alt="avatar"
             />
           </template>
-        </el-table-column>
+        </ErpDataTableColumn>
 
-        <el-table-column v-if="canShow('username')" prop="username" :label="$t('field.username')" min-width="120" show-overflow-tooltip />
-        <el-table-column v-if="canShow('displayName')" prop="displayName" :label="$t('field.name')" min-width="120" show-overflow-tooltip />
+        <ErpDataTableColumn v-if="canShow('username')" prop="username" :label="$t('field.username')" min-width="120" show-overflow-tooltip />
+        <ErpDataTableColumn v-if="canShow('displayName')" prop="displayName" :label="$t('field.name')" min-width="120" show-overflow-tooltip />
         
         <!-- 角色列 -->
-        <el-table-column v-if="canShow('roles')" :label="$t('field.roles')" min-width="150">
+        <ErpDataTableColumn v-if="canShow('roles')" :label="$t('field.roles')" min-width="150" column-key="custom-5">
           <template #default="{ row }">
             <div class="role-tags">
               <el-tag 
@@ -64,10 +64,10 @@
               </el-tag>
             </div>
           </template>
-        </el-table-column>
+        </ErpDataTableColumn>
 
         <!-- 联系方式列 -->
-        <el-table-column v-if="canShow('contact')" :label="$t('field.contact')" min-width="180">
+        <ErpDataTableColumn v-if="canShow('contact')" :label="$t('field.contact')" min-width="180" column-key="custom-6">
           <template #default="{ row }">
             <div v-if="row.email" class="contact-item">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
@@ -78,10 +78,10 @@
               {{ row.phone }}
             </div>
           </template>
-        </el-table-column>
+        </ErpDataTableColumn>
 
         <!-- 状态列：包含 Enabled 和安全状态 -->
-        <el-table-column v-if="canShow('status')" :label="$t('field.status')" width="140">
+        <ErpDataTableColumn v-if="canShow('status')" :label="$t('field.status')" width="140" column-key="status">
           <template #default="{ row }">
             <div class="status-column">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
@@ -99,10 +99,10 @@
               </el-tooltip>
             </div>
           </template>
-        </el-table-column>
+        </ErpDataTableColumn>
 
         <!-- 时间信息 -->
-        <el-table-column v-if="canShow('loginTime')" :label="$t('field.loginTime')" width="160" show-overflow-tooltip>
+        <ErpDataTableColumn v-if="canShow('loginTime')" :label="$t('field.loginTime')" width="160" show-overflow-tooltip column-key="custom-8">
           <template #default="{ row }">
             <div class="time-info">
               <div v-if="row.lastLoginAt"><small>{{ formatDate(row.lastLoginAt) }}</small></div>
@@ -110,9 +110,9 @@
               <div style="color: #999;"><small>{{ $t('field.createdTime') }}: {{ formatDate(row.createdAt) }}</small></div>
             </div>
           </template>
-        </el-table-column>
+        </ErpDataTableColumn>
         
-        <el-table-column :label="$t('table.actions')" width="200" fixed="right">
+        <ErpDataTableColumn :label="$t('table.actions')" width="200" fixed="right" column-key="actions">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openEditModal(row)">
               {{ $t('action.edit') }}
@@ -124,8 +124,8 @@
               {{ $t('action.delete') }}
             </el-button>
           </template>
-        </el-table-column>
-        </el-table>
+        </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

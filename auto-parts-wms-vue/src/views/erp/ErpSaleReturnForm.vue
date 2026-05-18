@@ -199,17 +199,17 @@
             </div>
           </div>
           <div class="detail-table-wrapper">
-            <el-table
+            <ErpDataTable
               :data="formData.items"
               :row-key="getItemRowKey"
               style="width: 100%"
               border
               :header-cell-style="{ textAlign: 'center' }"
               @selection-change="handleItemSelectionChange"
-            >
-              <el-table-column v-if="!isReadOnly" type="selection" width="52" align="center" />
-              <el-table-column type="index" :label="$t('table.index')" width="72" align="center" />
-              <el-table-column :label="$t('field.product')" min-width="280">
+             table-key="erp-sale-return-form">
+              <ErpDataTableColumn v-if="!isReadOnly" type="selection" width="52" align="center" />
+              <ErpDataTableColumn type="index" :label="$t('table.index')" width="72" align="center" />
+              <ErpDataTableColumn :label="$t('field.product')" min-width="280" column-key="product">
                 <template #header>
                   <span class="required-table-label">{{ $t('field.product') }}</span>
                 </template>
@@ -240,8 +240,8 @@
                     </el-button>
                   </div>
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.warehouseLocation')" min-width="220">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('field.warehouseLocation')" min-width="220" column-key="warehouseLocation">
                 <template #header>
                   <span class="required-table-label">{{ $t('field.warehouseLocation') }}</span>
                 </template>
@@ -277,8 +277,8 @@
                     </el-option>
                   </el-select>
                 </template>
-              </el-table-column>
-            <el-table-column :label="$t('field.quantity')" width="140">
+              </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.quantity')" width="140" column-key="quantity">
               <template #header>
                 <span class="required-table-label">{{ $t('field.quantity') }}</span>
               </template>
@@ -286,8 +286,8 @@
                 <span v-if="isReadOnly" class="readonly-cell">{{ formatPlainNumber(row.qty) }}</span>
                 <DecimalInput v-else v-model="row.qty" :scale="4" />
               </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.price')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-6">
               <template #header>
                 <span class="required-table-label">{{ $t('field.price') }}</span>
               </template>
@@ -295,37 +295,37 @@
                 <span v-if="isReadOnly" class="readonly-cell">{{ formatMoney(row.price) }}</span>
                 <DecimalInput v-else v-model="row.price" :scale="4" />
               </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.lineTotal')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
               <template #default="{ row }">
                 {{ formatMoney(calcLineAmount(row)) }}
               </template>
-            </el-table-column>
-            <el-table-column v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-8">
               <template #default="{ row }">
                 {{ formatMoney(calcLineDiscount(row)) }}
               </template>
-            </el-table-column>
-            <el-table-column v-if="canShowProfit" :label="$t('field.profit')" min-width="160">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="custom-9">
               <template #default="{ row }">
                 {{ formatProfitCell(row) }}
               </template>
-            </el-table-column>
+            </ErpDataTableColumn>
 
-              <el-table-column :label="$t('field.remark')" min-width="160">
+              <ErpDataTableColumn :label="$t('field.remark')" min-width="160" column-key="remark">
                 <template #default="{ row }">
                   <span v-if="isReadOnly" class="readonly-cell">{{ row.remark || '-' }}</span>
                   <el-input v-else v-model="row.remark" :placeholder="$t('field.remark')" />
                 </template>
-              </el-table-column>
-              <el-table-column v-if="!isReadOnly" :label="$t('table.actions')" width="88" align="center" fixed="right">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="!isReadOnly" :label="$t('table.actions')" width="88" align="center" fixed="right" column-key="actions">
                 <template #default="{ $index }">
                   <el-button class="row-delete-button" link type="danger" @click.stop="removeItem($index)">
                     <el-icon><Delete /></el-icon>
                   </el-button>
                 </template>
-            </el-table-column>
-          </el-table>
+            </ErpDataTableColumn>
+          </ErpDataTable>
           </div>
           <div class="detail-footer">
             <div v-if="!isReadOnly" class="detail-actions">
@@ -433,11 +433,62 @@
     <el-dialog
       v-model="saleOrderPreviewDialogVisible"
       :title="saleOrderPreviewDialogTitle"
-      width="92vw"
+      width="960px"
       class="history-order-dialog"
       append-to-body
     >
-      <iframe v-if="saleOrderPreviewDialogUrl" :src="saleOrderPreviewDialogUrl" class="history-order-frame" />
+      <div v-loading="saleOrderPreviewDialogLoading" class="source-sale-order-preview">
+        <template v-if="saleOrderPreviewDetail">
+          <div class="source-sale-order-preview__meta">
+            <span>{{ $t('field.saleOrderNo') }}: {{ saleOrderPreviewDetail.orderNo || '-' }}</span>
+            <span>{{ $t('field.orderTime') }}: {{ formatDisplayDateTime(saleOrderPreviewDetail.orderAt) }}</span>
+          </div>
+          <div class="sale-order-refund-summary sale-order-refund-summary--preview">
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.originalCollectedAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderPreviewDetail.refundSummary?.collectedCash) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.discountAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderPreviewDetail.refundSummary?.discountAmount) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item">
+              <span class="sale-order-refund-summary__label">{{ $t('field.refundedAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderPreviewDetail.refundSummary?.refundedCash) }}</strong>
+            </div>
+            <div class="sale-order-refund-summary__item sale-order-refund-summary__item--highlight">
+              <span class="sale-order-refund-summary__label">{{ $t('field.refundableCashAmount') }}</span>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderPreviewDetail.refundSummary?.refundableCash) }}</strong>
+            </div>
+          </div>
+          <ErpDataTable :data="saleOrderPreviewDetail.items" style="width: 100%" border max-height="460" table-key="erp-sale-return-form-13">
+            <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
+              <template #default="{ row }">
+                {{ row.productName || row.productCode }}
+              </template>
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
+              <template #default="{ row }">{{ row.qty }}</template>
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="custom-14">
+              <template #default="{ row }">{{ row.remainingQty }}</template>
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-15">
+              <template #default="{ row }">{{ row.price }}</template>
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
+              <template #default="{ row }">
+                {{ resolveWarehouseLabel(row.warehouseId) }}
+              </template>
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
+              <template #default="{ row }">
+                {{ resolveLocationLabel(row.locationId) }}
+              </template>
+            </ErpDataTableColumn>
+          </ErpDataTable>
+        </template>
+      </div>
     </el-dialog>
 
     <el-dialog
@@ -447,39 +498,39 @@
       :close-on-click-modal="false"
       :close-on-press-escape="false"
     >
-      <el-table
+      <ErpDataTable
         :data="saleOrderDetailItems"
         :row-key="getSaleOrderDetailRowKey"
         style="width: 100%"
         border
         @selection-change="handleSaleOrderSelectionChange"
-      >
-        <el-table-column type="selection" width="50" />
-        <el-table-column :label="$t('field.product')" min-width="180">
+       table-key="erp-sale-return-form-20">
+        <ErpDataTableColumn type="selection" width="50" />
+        <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
           <template #default="{ row }">
             {{ row.productName || row.productCode }}
           </template>
-        </el-table-column>
-        <el-table-column :label="$t('field.quantity')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
           <template #default="{ row }">{{ row.qty }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.remainingQty')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="custom-21">
           <template #default="{ row }">{{ row.remainingQty }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.price')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-22">
           <template #default="{ row }">{{ row.price }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.warehouse')" min-width="140">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
           <template #default="{ row }">
             {{ resolveWarehouseLabel(row.warehouseId) }}
           </template>
-        </el-table-column>
-        <el-table-column :label="$t('field.location')" min-width="140">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
           <template #default="{ row }">
             {{ resolveLocationLabel(row.locationId) }}
           </template>
-        </el-table-column>
-      </el-table>
+        </ErpDataTableColumn>
+      </ErpDataTable>
       <template #footer>
         <el-button @click="showSaleOrderDialog = false">{{ $t('action.cancel') }}</el-button>
         <el-button type="primary" @click="applySaleOrderSelection">{{ $t('action.confirm') }}</el-button>
@@ -521,30 +572,30 @@
       width="960px"
       :close-on-click-modal="false"
     >
-      <el-table
+      <ErpDataTable
         v-loading="recentSaleDialogLoading"
         :data="recentSaleDialogItems"
         style="width: 100%"
         max-height="420"
         border
         @row-dblclick="applyRecentSaleSelection"
-      >
-        <el-table-column :label="$t('field.saleOrderNo')" min-width="220">
+       table-key="erp-sale-return-form-28">
+        <ErpDataTableColumn :label="$t('field.saleOrderNo')" min-width="220" column-key="custom-25">
           <template #default="{ row }">{{ row.orderNo }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.orderTime')" width="180">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.orderTime')" width="180" column-key="custom-26">
           <template #default="{ row }">{{ formatDisplayDateTime(row.orderAt) }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.quantity')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
           <template #default="{ row }">{{ row.qty }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.remainingQty')" width="130">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.remainingQty')" width="130" column-key="custom-28">
           <template #default="{ row }">{{ row.remainingQty }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('field.price')" width="120">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-29">
           <template #default="{ row }">{{ row.price }}</template>
-        </el-table-column>
-        <el-table-column :label="$t('table.actions')" width="110" align="center">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('table.actions')" width="110" align="center" column-key="actions">
           <template #default="{ row }">
             <el-button
               size="small"
@@ -556,8 +607,8 @@
               {{ $t('action.select') }}
             </el-button>
           </template>
-        </el-table-column>
-      </el-table>
+        </ErpDataTableColumn>
+      </ErpDataTable>
       <div class="recent-sale-pagination">
         <el-pagination
           background
@@ -651,6 +702,7 @@ interface SaleOrderOption {
   id: number;
   orderNo: string;
   customerId?: number;
+  orderAt?: string;
 }
 
 interface SaleOrderDetailItem {
@@ -692,11 +744,6 @@ interface SaleReturnSummary {
   status?: string;
 }
 
-interface SaleReturnUsage {
-  returnedQtyByProduct: Map<number, number>;
-  returns: SaleReturnSummary[];
-}
-
 interface SaleOrderRefundSummary {
   saleOrderId?: number;
   saleOrderNo?: string;
@@ -704,6 +751,16 @@ interface SaleOrderRefundSummary {
   collectedCash?: number | string;
   refundedCash?: number | string;
   refundableCash?: number | string;
+}
+
+interface SourceSaleOrderDetail {
+  id: number;
+  orderNo: string;
+  customerId?: number;
+  orderAt?: string;
+  items: SaleOrderDetailItem[];
+  refundSummary?: SaleOrderRefundSummary | null;
+  relatedReturns?: SaleReturnSummary[];
 }
 
 interface PageResponse<T> {
@@ -782,7 +839,8 @@ const saleOrderRefundSummary = ref<SaleOrderRefundSummary | null>(null);
 const saleOrderRefundSummaryLoading = ref(false);
 const saleOrderPreviewDialogVisible = ref(false);
 const saleOrderPreviewDialogTitle = ref('');
-const saleOrderPreviewDialogUrl = ref('');
+const saleOrderPreviewDialogLoading = ref(false);
+const saleOrderPreviewDetail = ref<SourceSaleOrderDetail | null>(null);
 const selectedItems = ref<SaleReturnItem[]>([]);
 const showSaleOrderDialog = ref(false);
 const showSaleOrderReturnedDialog = ref(false);
@@ -844,7 +902,27 @@ const draftEndpoint = (id?: string | number) => id == null
   ? '/erp/sale-returns/draft'
   : `/erp/sale-returns/draft/${id}`;
 
-const canViewSaleOrders = computed(() => hasPermission('erp-sale-approved:view'));
+const canViewSaleOrders = computed(() => (
+  hasPermission('erp-sale-return-draft:source-view')
+  || hasPermission('erp-sale-approved:view')
+));
+
+const isPermissionDeniedError = (error: unknown) => {
+  const status = (error as any)?.response?.status;
+  const message = (error as any)?.response?.data?.message || (error as any)?.message;
+  return status === 403 || message === '无权限';
+};
+
+const degradeSaleOrderAccess = () => {
+  saleOrderOptions.value = [];
+  saleOrderRefundSummary.value = null;
+  saleOrderDetailItems.value = [];
+  selectedSaleOrderItems.value = [];
+  recentSaleDialogTotal.value = 0;
+  if (formData.returnSource === 'BY_SALE_ORDER' && !isReadOnly.value) {
+    formData.returnSource = 'BY_PRODUCT';
+  }
+};
 
 const canApprove = computed(() => {
   return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale-return-draft:approve');
@@ -1684,6 +1762,40 @@ const mergeRecentSaleOrderOptions = (items: RecentSaleItem[]) => {
   });
 };
 
+const normalizeSourceSaleOrderDetail = (payload: any): SourceSaleOrderDetail => ({
+  id: Number(payload?.id || 0),
+  orderNo: payload?.orderNo || '',
+  customerId: payload?.customerId || undefined,
+  orderAt: payload?.orderAt || '',
+  refundSummary: payload?.refundSummary || null,
+  relatedReturns: Array.isArray(payload?.relatedReturns)
+    ? payload.relatedReturns.map((item: any) => ({
+        id: Number(item?.id || 0),
+        orderNo: item?.orderNo || '',
+        status: item?.status || ''
+      }))
+    : [],
+  items: Array.isArray(payload?.items)
+    ? payload.items.map((item: any) => ({
+        id: item?.id,
+        productId: item?.productId,
+        productCode: item?.productCode,
+        productName: item?.productName,
+        warehouseId: item?.warehouseId,
+        locationId: item?.locationId,
+        qty: Number(item?.qty || 0),
+        remainingQty: Number(item?.remainingQty || 0),
+        price: Number(item?.price || 0),
+        taxRate: Number(item?.taxRate || 0)
+      }))
+    : []
+});
+
+const fetchSourceSaleOrderDetail = async (orderId: number) => {
+  const res: any = await request.get(`/erp/sale-returns/source-sale-orders/${orderId}`);
+  return normalizeSourceSaleOrderDetail(res.data.data || {});
+};
+
 const fetchRecentSaleItems = async (
   productId?: number,
   page = recentSaleDialogPage.value,
@@ -1695,7 +1807,7 @@ const fetchRecentSaleItems = async (
     return [];
   }
   try {
-    const res: any = await request.get('/erp/sale-orders/recent-items/page', {
+    const res: any = await request.get('/erp/sale-returns/source-sale-orders/recent-items/page', {
       params: {
         customerId: formData.customerId,
         productId,
@@ -1711,6 +1823,10 @@ const fetchRecentSaleItems = async (
     mergeRecentSaleOrderOptions(items);
     return items;
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      recentSaleDialogTotal.value = 0;
+      return [];
+    }
     notifyError(error);
     recentSaleDialogTotal.value = 0;
     return [];
@@ -1949,41 +2065,12 @@ const openSaleOrderDetail = async (orderId: number) => {
   }
   try {
     saleOrderRefundSummaryLoading.value = true;
-    const [res, returnUsage, refundSummaryRes] = await Promise.all([
-      request.get(`/erp/sale-orders/approved/${orderId}`),
-      fetchSaleReturnUsage(orderId),
-      request.get(`/erp/sale-returns/sale-order/${orderId}/refund-summary/split`)
-    ]);
-    const data = res.data.data || {};
-    saleOrderRefundSummary.value = refundSummaryRes.data.data || null;
-    const remainingReturnedQtyByProduct = new Map(returnUsage.returnedQtyByProduct);
-    const selectedOrderNo = saleOrderOptions.value.find(item => Number(item.id) === Number(orderId))?.orderNo;
-    const saleOrderNo = selectedOrderNo || data.order?.orderNo || data.orderNo || '';
-    saleOrderDetailItems.value = (data.items || []).map((item: any) => {
-      const productId = Number(item.productId);
-      const originalQty = Number(item.qty || 0);
-      const returnedQty = productId ? remainingReturnedQtyByProduct.get(productId) || 0 : 0;
-      const allocatedReturnedQty = Math.min(originalQty, returnedQty);
-      if (productId) {
-        remainingReturnedQtyByProduct.set(productId, Math.max(0, returnedQty - allocatedReturnedQty));
-      }
-      const remainingQty = Math.max(0, originalQty - allocatedReturnedQty);
-      return {
-        id: item.id,
-        productId: item.productId,
-        productCode: item.productCode,
-        productName: item.productName,
-        warehouseId: item.warehouseId,
-        locationId: item.locationId,
-        qty: originalQty,
-        remainingQty,
-        price: Number(item.price || 0),
-        taxRate: Number(item.taxRate || 0)
-      };
-    }).filter((item: SaleOrderDetailItem) => Number(item.remainingQty || 0) > 0);
+    const detail = await fetchSourceSaleOrderDetail(orderId);
+    saleOrderRefundSummary.value = detail.refundSummary || null;
+    saleOrderDetailItems.value = detail.items.filter((item: SaleOrderDetailItem) => Number(item.remainingQty || 0) > 0);
     if (!saleOrderDetailItems.value.length) {
-      if (returnUsage.returns.length) {
-        openSaleOrderReturnedDialog(saleOrderNo, returnUsage.returns);
+      if ((detail.relatedReturns || []).length) {
+        openSaleOrderReturnedDialog(detail.orderNo || '', detail.relatedReturns || []);
         return;
       }
       notifyWarning(t('message.noItems'));
@@ -1992,6 +2079,11 @@ const openSaleOrderDetail = async (orderId: number) => {
     selectedSaleOrderItems.value = [...saleOrderDetailItems.value];
     showSaleOrderDialog.value = true;
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      degradeSaleOrderAccess();
+      notifyWarning('当前角色缺少来源销售单查看权限，只能按商品退货');
+      return;
+    }
     notifyError(error);
   } finally {
     saleOrderRefundSummaryLoading.value = false;
@@ -2008,6 +2100,10 @@ const fetchSaleOrderRefundSummary = async (orderId?: number | null) => {
     const res: any = await request.get(`/erp/sale-returns/sale-order/${orderId}/refund-summary/split`);
     saleOrderRefundSummary.value = res.data.data || null;
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      saleOrderRefundSummary.value = null;
+      return;
+    }
     saleOrderRefundSummary.value = null;
     notifyError(error);
   } finally {
@@ -2022,44 +2118,25 @@ const openSelectedSaleOrderPreview = () => {
     notifyWarning('当前角色缺少销售单查看权限，不能查看来源销售单');
     return;
   }
-  const saleOrderNo = saleOrderRefundSummary.value?.saleOrderNo || resolvedSaleOrderNo.value || '';
-  const resolved = router.resolve({
-    path: `/erp/sale-orders/${saleOrderId}/edit`,
-    query: { mode: 'view', embed: '1' }
-  });
-  saleOrderPreviewDialogTitle.value = `${t('page.erpSaleOrder')} · ${saleOrderNo || saleOrderId}`;
-  saleOrderPreviewDialogUrl.value = resolved.href;
+  saleOrderPreviewDialogTitle.value = `${t('page.erpSaleOrder')} · ${saleOrderRefundSummary.value?.saleOrderNo || resolvedSaleOrderNo.value || saleOrderId}`;
+  saleOrderPreviewDialogLoading.value = true;
+  saleOrderPreviewDetail.value = null;
   saleOrderPreviewDialogVisible.value = true;
-};
-
-const fetchSaleReturnUsage = async (saleOrderId: number): Promise<SaleReturnUsage> => {
-  const qtyMap = new Map<number, number>();
-  if (!saleOrderId) {
-    return { returnedQtyByProduct: qtyMap, returns: [] };
-  }
-  const res: any = await request.get(`/erp/sale-returns/sale-order/${saleOrderId}`, {
-    params: { includeDraft: true }
-  });
-  const returns = (Array.isArray(res.data.data) ? res.data.data : [])
-    .filter((item: any) => item?.id)
-    .map((item: any) => ({
-      id: Number(item.id),
-      orderNo: item.orderNo || '',
-      status: item.status || ''
-    }));
-  await Promise.all(returns.map(async (item: SaleReturnSummary) => {
-    const detailRes: any = await request.get(item.status === 'DRAFT'
-      ? `/erp/sale-returns/draft/${item.id}`
-      : `/erp/sale-returns/approved/${item.id}`);
-    const detail = detailRes.data.data || {};
-    const detailItems = Array.isArray(detail.items) ? detail.items : [];
-    detailItems.forEach((detailItem: any) => {
-      const productId = Number(detailItem.productId);
-      if (!productId) return;
-      qtyMap.set(productId, (qtyMap.get(productId) || 0) + Number(detailItem.qty || 0));
+  fetchSourceSaleOrderDetail(Number(saleOrderId))
+    .then((detail) => {
+      saleOrderPreviewDetail.value = detail;
+    })
+    .catch((error) => {
+      saleOrderPreviewDialogVisible.value = false;
+      if (isPermissionDeniedError(error)) {
+        notifyWarning('当前角色缺少来源销售单查看权限，不能查看来源销售单');
+        return;
+      }
+      notifyError(error);
+    })
+    .finally(() => {
+      saleOrderPreviewDialogLoading.value = false;
     });
-  }));
-  return { returnedQtyByProduct: qtyMap, returns };
 };
 
 const openSaleOrderReturnedDialog = (saleOrderNo: string, returns: SaleReturnSummary[]) => {
@@ -2090,6 +2167,13 @@ const openReturnedSaleReturn = async (item: SaleReturnSummary) => {
       : { mode: 'view', from: 'approved', returnTo: '/erp/sale-returns/approved' }
   });
 };
+
+watch(saleOrderPreviewDialogVisible, (visible) => {
+  if (!visible) {
+    saleOrderPreviewDialogLoading.value = false;
+    saleOrderPreviewDetail.value = null;
+  }
+});
 
 const handleSaleOrderSelectionChange = (rows: SaleOrderDetailItem[]) => {
   selectedSaleOrderItems.value = rows;
@@ -2170,14 +2254,19 @@ const fetchSaleOrders = async (customerId?: number | null) => {
       return;
     }
     const params: Record<string, any> = { page: 1, size: 1000, customerId: targetCustomerId };
-    const res: any = await request.get('/erp/sale-orders/approved/page', { params });
+    const res: any = await request.get('/erp/sale-returns/source-sale-orders/page', { params });
     const items = res.data.data?.items || [];
     saleOrderOptions.value = items.map((item: any) => ({
       id: item.id,
       orderNo: item.orderNo,
-      customerId: item.customerId
+      customerId: item.customerId,
+      orderAt: item.orderAt
     }));
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      degradeSaleOrderAccess();
+      return;
+    }
     notifyError(error);
   }
 };

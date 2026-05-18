@@ -7,6 +7,8 @@ import com.example.wms.dto.erp.ErpReceiptAllocationRequest;
 import com.example.wms.dto.erp.ErpReceiptCreateRequest;
 import com.example.wms.dto.erp.ErpReceiptDetail;
 import com.example.wms.dto.erp.ErpReceiptReceivableView;
+import com.example.wms.dto.erp.ErpReceiptSourceReceivableDetail;
+import com.example.wms.dto.erp.ErpReceiptSourceReceivableOption;
 import com.example.wms.dto.erp.ErpReceiptView;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsReceivable;
@@ -104,6 +106,49 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
     }
 
     @Override
+    public PageResponse<ErpReceiptSourceReceivableOption> sourceReceivablePage(long page, long size, String keyword, Long customerId, String status, Instant startAt, Instant endAt) {
+        Long tenantId = TenantContext.requireTenantId();
+        long finalPage = page <= 0 ? 1 : page;
+        long finalSize = size <= 0 ? 20 : Math.min(size, 200);
+        QueryWrapper<ErpAccountsReceivable> wrapper = new QueryWrapper<ErpAccountsReceivable>()
+            .eq("tenant_id", tenantId)
+            .isNull("deleted_at");
+        if (customerId != null) {
+            wrapper.eq("customer_id", customerId);
+        }
+        if (status != null && !status.isBlank()) {
+            wrapper.eq("status", status.trim());
+        }
+        if (startAt != null) {
+            wrapper.ge("created_at", startAt);
+        }
+        if (endAt != null) {
+            wrapper.le("created_at", endAt);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String trimmed = keyword.trim();
+            wrapper.and(qw -> qw.like("order_no", trimmed));
+        }
+        wrapper.orderByDesc("created_at").orderByDesc("id");
+        Page<ErpAccountsReceivable> result = erpAccountsReceivableMapper.selectPage(Page.of(finalPage, finalSize), wrapper);
+        List<ErpReceiptSourceReceivableOption> items = result.getRecords().stream()
+            .map(item -> new ErpReceiptSourceReceivableOption(
+                item.getId(),
+                item.getOrderNo(),
+                item.getCustomerId(),
+                item.getTotalAmount(),
+                item.getPaidAmount(),
+                item.getUnpaidAmount(),
+                item.getStatus(),
+                item.getCreatedAt(),
+                item.getSourceType(),
+                item.getSourceId()
+            ))
+            .toList();
+        return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), items);
+    }
+
+    @Override
     public ErpReceiptDetail getDetail(Long id) {
         Long tenantId = TenantContext.requireTenantId();
         ErpReceipt receipt = erpReceiptMapper.selectOne(new QueryWrapper<ErpReceipt>()
@@ -113,6 +158,37 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
             throw new IllegalArgumentException("收款单不存在");
         }
         return buildDetail(tenantId, receipt);
+    }
+
+    @Override
+    public ErpReceiptSourceReceivableDetail getSourceReceivableDetail(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpAccountsReceivable receivable = erpAccountsReceivableMapper.selectOne(new QueryWrapper<ErpAccountsReceivable>()
+            .eq("tenant_id", tenantId)
+            .eq("id", id));
+        if (receivable == null) {
+            throw new IllegalArgumentException("应收单不存在");
+        }
+        String customerName = "";
+        if (receivable.getCustomerId() != null) {
+            ErpCustomer customer = erpCustomerMapper.selectById(receivable.getCustomerId());
+            customerName = customer == null ? "" : customer.getName();
+        }
+        return new ErpReceiptSourceReceivableDetail(
+            receivable.getId(),
+            receivable.getOrderNo(),
+            receivable.getCustomerId(),
+            customerName,
+            receivable.getTotalAmount(),
+            receivable.getPaidAmount(),
+            receivable.getUnpaidAmount(),
+            receivable.getStatus(),
+            receivable.getSettlementMethod(),
+            receivable.getSourceType(),
+            receivable.getSourceId(),
+            receivable.getRemark(),
+            receivable.getCreatedAt()
+        );
     }
 
     @Override

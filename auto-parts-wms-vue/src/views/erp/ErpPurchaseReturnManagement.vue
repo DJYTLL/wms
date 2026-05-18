@@ -50,34 +50,34 @@
 
     <div class="table-card" :class="{ 'sale-approved-card': isApprovedPage }">
       <div class="table-body">
-        <el-table
+        <ErpDataTable
           :data="tableData"
           style="width: 100%"
           stripe
           v-loading="loading"
           :empty-text="$t('table.empty')"
-        >
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
-          <el-table-column v-if="canShow('supplier')" :label="$t('field.supplier')" min-width="160">
+         table-key="erp-purchase-return-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
+          <ErpDataTableColumn v-if="canShow('supplier')" :label="$t('field.supplier')" min-width="160" column-key="supplier">
             <template #default="{ row }">
               {{ getSupplierName(row.supplierId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ formatStatus(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="300" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="300" fixed="right" column-key="actions">
             <template #default="{ row }">
               <template v-if="isApprovedPage">
                 <el-button
@@ -155,8 +155,8 @@
                 </el-button>
               </template>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination
@@ -232,6 +232,7 @@ const printDocId = ref<number | null>(null);
 
 const supplierOptions = ref<OptionItem[]>([]);
 
+const isPurchaseReturnRoute = computed(() => route.path.startsWith('/erp/purchase-returns'));
 const isDraftPage = computed(() => route.meta.defaultStatus === 'DRAFT');
 const isApprovedPage = computed(() => route.meta.defaultStatus === 'APPROVED');
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
@@ -321,6 +322,10 @@ const fetchSuppliers = async () => {
 };
 
 const fetchList = async () => {
+  if (!isPurchaseReturnRoute.value) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   try {
     const params: Record<string, any> = {
@@ -349,6 +354,11 @@ const fetchList = async () => {
 };
 
 const applyRouteStatus = () => {
+  if (!isPurchaseReturnRoute.value) {
+    statusLocked.value = false;
+    statusFilter.value = '';
+    return;
+  }
   const defaultStatus = route.meta.defaultStatus as string | undefined;
   const lockStatus = route.meta.lockStatus === true;
   statusLocked.value = lockStatus;
@@ -483,6 +493,7 @@ const openPrintPage = (row: PurchaseReturn) => {
 
 
 onMounted(() => {
+  if (!isPurchaseReturnRoute.value) return;
   applyRouteStatus();
   fetchSuppliers();
   fetchList();
@@ -491,6 +502,7 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  if (!isPurchaseReturnRoute.value) return;
   applyRouteStatus();
   tableData.value = [];
   total.value = 0;
@@ -502,6 +514,9 @@ onActivated(() => {
 watch(
   () => route.fullPath,
   () => {
+    if (!isPurchaseReturnRoute.value) {
+      return;
+    }
     applyRouteStatus();
     fetchCurrentTenantKeys();
     handleSearch();

@@ -133,53 +133,50 @@
 
     <div class="table-card">
       <div class="table-body" v-loading="loading">
-        <el-table :data="items">
-          <el-table-column type="index" width="60" :label="t('table.index')" />
-          <el-table-column
+        <ErpDataTable :data="items" table-key="audit-log-management">
+          <ErpDataTableColumn type="index" width="60" :label="t('table.index')" />
+          <ErpDataTableColumn
             v-if="isSuperAdmin && canShow('tenant')"
             prop="tenantCode"
             :label="t('field.tenant')"
-            min-width="140"
-          />
-          <el-table-column v-if="canShow('actor')" prop="actorUsername" :label="t('field.actor')" min-width="140" />
-          <el-table-column
+            min-width="140" />
+          <ErpDataTableColumn v-if="canShow('actor')" prop="actorUsername" :label="t('field.actor')" min-width="140" />
+          <ErpDataTableColumn
             v-if="canShow('action')"
             prop="action"
             :label="t('field.action')"
             min-width="160"
-            :formatter="formatAction"
-          />
-          <el-table-column v-if="canShow('entityType')" prop="entityType" :label="t('field.entityType')" min-width="120" />
-          <el-table-column v-if="canShow('entityId')" prop="entityId" :label="t('field.entityId')" min-width="120" />
-          <el-table-column v-if="canShow('detail')" prop="detail" :label="t('field.detail')" min-width="220" show-overflow-tooltip />
-          <el-table-column v-if="canShow('deleteReason')" prop="deleteReason" :label="t('field.deleteReason')" min-width="180" show-overflow-tooltip />
-          <el-table-column v-if="canShow('status')" prop="status" :label="t('field.result')" min-width="100">
+            :formatter="formatAction" />
+          <ErpDataTableColumn v-if="canShow('entityType')" prop="entityType" :label="t('field.entityType')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('entityId')" prop="entityId" :label="t('field.entityId')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('detail')" prop="detail" :label="t('field.detail')" min-width="220" show-overflow-tooltip />
+          <ErpDataTableColumn v-if="canShow('deleteReason')" prop="deleteReason" :label="t('field.deleteReason')" min-width="180" show-overflow-tooltip />
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="t('field.result')" min-width="100">
             <template #default="{ row }">
               <el-tag :type="row.status === 'FAIL' ? 'danger' : 'success'" size="small">
                 {{ row.status === 'FAIL' ? t('status.fail') : t('status.success') }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('requestId')" prop="requestId" :label="t('field.requestId')" min-width="180" show-overflow-tooltip />
-          <el-table-column v-if="canShow('clientIp')" prop="clientIp" :label="t('field.clientIp')" min-width="140" />
-          <el-table-column v-if="canShow('userAgent')" prop="userAgent" :label="t('field.userAgent')" min-width="200" show-overflow-tooltip />
-          <el-table-column v-if="canShow('method')" prop="method" :label="t('field.method')" min-width="100" />
-          <el-table-column v-if="canShow('path')" prop="path" :label="t('field.path')" min-width="200" show-overflow-tooltip />
-          <el-table-column v-if="canShow('httpStatus')" prop="httpStatus" :label="t('field.httpStatus')" min-width="120" />
-          <el-table-column v-if="canShow('errorCode')" prop="errorCode" :label="t('field.errorCode')" min-width="120" />
-          <el-table-column v-if="canShow('errorMessage')" prop="errorMessage" :label="t('field.errorMessage')" min-width="200" show-overflow-tooltip />
-          <el-table-column v-if="canShow('durationMs')" prop="durationMs" :label="t('field.durationMs')" min-width="120" />
-          <el-table-column
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('requestId')" prop="requestId" :label="t('field.requestId')" min-width="180" show-overflow-tooltip />
+          <ErpDataTableColumn v-if="canShow('clientIp')" prop="clientIp" :label="t('field.clientIp')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('userAgent')" prop="userAgent" :label="t('field.userAgent')" min-width="200" show-overflow-tooltip />
+          <ErpDataTableColumn v-if="canShow('method')" prop="method" :label="t('field.method')" min-width="100" />
+          <ErpDataTableColumn v-if="canShow('path')" prop="path" :label="t('field.path')" min-width="200" show-overflow-tooltip />
+          <ErpDataTableColumn v-if="canShow('httpStatus')" prop="httpStatus" :label="t('field.httpStatus')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('errorCode')" prop="errorCode" :label="t('field.errorCode')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('errorMessage')" prop="errorMessage" :label="t('field.errorMessage')" min-width="200" show-overflow-tooltip />
+          <ErpDataTableColumn v-if="canShow('durationMs')" prop="durationMs" :label="t('field.durationMs')" min-width="120" />
+          <ErpDataTableColumn
             v-if="canShow('createdAt')"
             prop="createdAt"
             :label="t('field.createdTime')"
             min-width="180"
-            :formatter="formatTime"
-          />
+            :formatter="formatTime" />
           <template #empty>
             <div class="table-empty">{{ t('table.empty') }}</div>
           </template>
-        </el-table>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

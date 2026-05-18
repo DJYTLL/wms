@@ -4,9 +4,12 @@ import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpPurchaseOrderRecentItem;
 import com.example.wms.dto.erp.ErpPurchaseReturnCreateRequest;
 import com.example.wms.dto.erp.ErpPurchaseReturnDetail;
 import com.example.wms.dto.erp.ErpPurchaseReturnRefundSummary;
+import com.example.wms.dto.erp.ErpPurchaseReturnSourcePurchaseOrderDetail;
+import com.example.wms.dto.erp.ErpPurchaseReturnSourcePurchaseOrderOption;
 import com.example.wms.dto.erp.ErpPurchaseReturnUpdateRequest;
 import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.service.erp.ErpPurchaseReturnService;
@@ -108,6 +111,34 @@ public class ErpPurchaseReturnController {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.approvedPage(page, size, keyword, supplierId, start, end)));
     }
 
+    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:source-view','PERM_erp-purchase-approved:view')")
+    @GetMapping("/source-purchase-orders/page")
+    public ResponseEntity<ApiResponse<PageResponse<ErpPurchaseReturnSourcePurchaseOrderOption>>> sourcePurchaseOrderPage(
+        @RequestParam(defaultValue = "1") long page,
+        @RequestParam(defaultValue = "20") long size,
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Long supplierId
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.sourcePurchaseOrderPage(page, size, keyword, supplierId)));
+    }
+
+    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:source-view','PERM_erp-purchase-approved:view')")
+    @GetMapping("/source-purchase-orders/recent-items/page")
+    public ResponseEntity<ApiResponse<PageResponse<ErpPurchaseOrderRecentItem>>> sourceRecentPurchaseItems(
+        @RequestParam Long supplierId,
+        @RequestParam Long productId,
+        @RequestParam(defaultValue = "1") long page,
+        @RequestParam(defaultValue = "10") long size
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.sourceRecentPurchaseItems(page, size, supplierId, productId)));
+    }
+
+    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:source-view','PERM_erp-purchase-approved:view')")
+    @GetMapping("/source-purchase-orders/{purchaseOrderId}")
+    public ResponseEntity<ApiResponse<ErpPurchaseReturnSourcePurchaseOrderDetail>> getSourcePurchaseOrderDetail(@PathVariable Long purchaseOrderId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getSourcePurchaseOrderDetail(purchaseOrderId)));
+    }
+
     @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:view') or hasAuthority('PERM_erp-purchase-return-approved:view')")
     @GetMapping("/approved/summary")
     public ResponseEntity<ApiResponse<ErpPurchaseReturnRefundSummary>> approvedRefundSummary(@RequestParam Long purchaseOrderId) {
@@ -141,7 +172,7 @@ public class ErpPurchaseReturnController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return:view','PERM_erp-purchase-return-draft:view','PERM_erp-purchase-return-approved:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:view','PERM_erp-purchase-return-approved:view')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<ErpPurchaseReturn>>> list(@RequestParam(required = false) String keyword,
                                                                      @RequestParam(required = false) String status,
@@ -153,7 +184,7 @@ public class ErpPurchaseReturnController {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.listAll(keyword, status, supplierId, start, end)));
     }
 
-    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return:view','PERM_erp-purchase-return-draft:view','PERM_erp-purchase-return-approved:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:view','PERM_erp-purchase-return-approved:view')")
     @GetMapping("/page")
     public ResponseEntity<ApiResponse<PageResponse<ErpPurchaseReturn>>> page(@RequestParam(defaultValue = "1") long page,
                                                                              @RequestParam(defaultValue = "20") long size,
@@ -167,38 +198,38 @@ public class ErpPurchaseReturnController {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.page(page, size, keyword, status, supplierId, start, end)));
     }
 
-    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return:view','PERM_erp-purchase-return-draft:view','PERM_erp-purchase-return-approved:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:view','PERM_erp-purchase-return-approved:view')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpPurchaseReturnDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getDetail(id)));
     }
 
-    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return:view','PERM_erp-purchase-return-draft:view','PERM_erp-purchase-return-approved:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:view','PERM_erp-purchase-return-approved:view')")
     @GetMapping("/purchase-order/{purchaseOrderId}/refund-summary")
     public ResponseEntity<ApiResponse<ErpPurchaseReturnRefundSummary>> getPurchaseOrderRefundSummary(@PathVariable Long purchaseOrderId) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getPurchaseOrderRefundSummary(purchaseOrderId)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-purchase-return:add')")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:add')")
     @GetMapping("/next-no")
     public ResponseEntity<ApiResponse<String>> nextNo() {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.nextOrderNo()));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-purchase-return:add')")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:add')")
     @PostMapping
     public ResponseEntity<ApiResponse<ErpPurchaseReturnDetail>> create(@Valid @RequestBody ErpPurchaseReturnCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.create(request)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-purchase-return:edit')")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:edit')")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpPurchaseReturnDetail>> update(@PathVariable Long id,
                                                                        @Valid @RequestBody ErpPurchaseReturnUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.update(id, request)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-purchase-return:edit')")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:delete')")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
                                                     @Valid @RequestBody DeleteRequest request) {
@@ -208,14 +239,14 @@ public class ErpPurchaseReturnController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-purchase-return:approve')")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:approve')")
     @PostMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<Void>> approve(@PathVariable Long id) {
         erpPurchaseReturnService.approve(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-purchase-return:cancel')")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return-approved:cancel')")
     @PostMapping("/{id}/cancel")
     public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id,
                                                     @RequestBody(required = false) RedFlushRequest request) {

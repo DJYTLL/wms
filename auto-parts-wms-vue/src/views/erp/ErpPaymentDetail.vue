@@ -47,25 +47,28 @@
           <el-descriptions-item :label="$t('field.orderNo')">{{ detail.orderNo || '-' }}</el-descriptions-item>
           <el-descriptions-item :label="$t('field.payableNo')">
             <div v-if="detail.payables.length" class="payable-links">
-              <el-button
-                v-for="item in detail.payables"
-                :key="item.payableId"
-                link
-                type="primary"
-                @click="openPayable(item.payableId)"
-              >
-                {{ item.orderNo || '-' }}
-              </el-button>
+              <template v-if="canViewSourcePayables">
+                <el-button
+                  v-for="item in detail.payables"
+                  :key="item.payableId"
+                  link
+                  type="primary"
+                  @click="openPayable(item.payableId)"
+                >
+                  {{ item.orderNo || '-' }}
+                </el-button>
+              </template>
+              <span v-else>{{ detail.payables.map(item => item.orderNo || '-').join('、') }}</span>
             </div>
             <el-button
-              v-else-if="detail.payment.payableId && detail.payableNo"
+              v-else-if="canViewSourcePayables && detail.payment.payableId && detail.payableNo"
               link
               type="primary"
               @click="openPayable(detail.payment.payableId)"
             >
               {{ detail.payableNo }}
             </el-button>
-            <span v-else>-</span>
+            <span v-else>{{ detail.payableNo || '-' }}</span>
           </el-descriptions-item>
           <el-descriptions-item :label="$t('field.supplier')">{{ detail.supplierName }}</el-descriptions-item>
           <el-descriptions-item :label="$t('field.paymentAmount')">{{ detail.payment.amount }}</el-descriptions-item>
@@ -92,6 +95,19 @@
       :doc-id="printDocId"
       :title="$t('page.erpPaymentPrint')"
     />
+
+    <el-dialog v-model="sourcePreviewVisible" :title="sourcePreviewTitle" width="720px">
+      <el-descriptions v-if="sourcePreview" :column="2" border>
+        <el-descriptions-item :label="$t('field.orderNo')">{{ sourcePreview.orderNo || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.supplier')">{{ sourcePreview.supplierName || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.totalAmount')">{{ sourcePreview.totalAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.paidAmount')">{{ sourcePreview.paidAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.discountAmount')">{{ sourcePreview.discountAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.unpaidAmount')">{{ sourcePreview.unpaidAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.status')">{{ sourcePreview.status || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.remark')" :span="2">{{ sourcePreview.remark || '-' }}</el-descriptions-item>
+      </el-descriptions>
+    </el-dialog>
   </div>
 </template>
 
@@ -130,12 +146,19 @@ const detail = reactive({
 
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const sourcePreviewVisible = ref(false);
+const sourcePreview = ref<any>(null);
 
 const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 };
 
 const canPrint = computed(() => hasPermission('erp-payment:view'));
+const canViewSourcePayables = computed(() => hasPermission('erp-payment:source-view') || hasPermission('erp-ap:view'));
+const sourcePreviewTitle = computed(() => {
+  if (!sourcePreview.value?.orderNo) return t('page.erpAccountsPayableManagement');
+  return `${t('page.erpAccountsPayableManagement')} · ${sourcePreview.value.orderNo}`;
+});
 
 const canApprove = computed(() => {
   return detail.payment.status === 'DRAFT' && hasPermission('erp-payment:approve');
@@ -195,7 +218,16 @@ const extractRedFlushReason = (remark?: string) => {
 };
 
 const openPayable = (id: number) => {
-  router.push(`/erp/ap/${id}`);
+  if (!canViewSourcePayables.value) {
+    notifyWarning('当前角色缺少来源应付单引用权限');
+    return;
+  }
+  request.get(`/erp/payments/source-payables/${id}`).then((res: any) => {
+    sourcePreview.value = res.data.data || null;
+    sourcePreviewVisible.value = true;
+  }).catch((error) => {
+    notifyError(error);
+  });
 };
 
 const fetchDetail = async () => {

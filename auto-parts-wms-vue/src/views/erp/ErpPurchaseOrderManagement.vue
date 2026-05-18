@@ -40,35 +40,35 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
-          <el-table-column v-if="canShow('supplier')" :label="$t('field.supplier')" min-width="160">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="erp-purchase-order-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
+          <ErpDataTableColumn v-if="canShow('supplier')" :label="$t('field.supplier')" min-width="160" column-key="supplier">
             <template #default="{ row }">
               {{ getSupplierName(row.supplierId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ formatStatus(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="240" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="240" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" v-permission="'erp-purchase:edit'" :disabled="row.status !== 'DRAFT'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
               <el-button link type="success" size="small" v-permission="'erp-purchase:approve'" :disabled="row.status !== 'DRAFT'" @click="handleApprove(row)">{{ $t('action.approve') }}</el-button>
               <el-button link type="danger" size="small" v-permission="'erp-purchase:cancel'" :disabled="row.status === 'CANCELLED'" @click="handleCancel(row)">{{ $t('action.cancel') }}</el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination
@@ -107,54 +107,54 @@
           <h4>{{ $t('field.items') }}</h4>
           <el-button type="primary" plain size="small" @click="addItem">+ {{ $t('action.addItem') }}</el-button>
         </div>
-        <el-table :data="formData.items" style="width: 100%" border stripe>
-          <el-table-column :label="$t('field.product')" min-width="200">
+        <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-purchase-order-management-9">
+          <ErpDataTableColumn :label="$t('field.product')" min-width="200" column-key="product">
             <template #default="{ row }">
               <el-select v-model="row.productId" filterable clearable style="width: 100%" :placeholder="$t('placeholder.selectProduct')">
                 <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('field.warehouse')" min-width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
             <template #default="{ row }">
               <el-select v-model="row.warehouseId" filterable clearable style="width: 100%" :placeholder="$t('placeholder.selectWarehouse')">
                 <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('field.location')" min-width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.location')" min-width="160" column-key="warehouseLocation">
             <template #default="{ row }">
               <el-select v-model="row.locationId" filterable clearable style="width: 100%" :placeholder="$t('placeholder.selectLocation')">
                 <el-option v-for="item in getLocationOptions(row.warehouseId)" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('field.quantity')" width="140">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.quantity')" width="140" column-key="quantity">
             <template #default="{ row }">
               <el-input-number v-model="row.qty" :min="0" style="width: 100%" />
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('field.price')" width="140">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-12">
             <template #default="{ row }">
               <el-input-number v-model="row.price" :min="0" :step="0.01" style="width: 100%" />
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('field.taxRate')" width="140">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.taxRate')" width="140" column-key="custom-13">
             <template #default="{ row }">
               <el-input-number v-model="row.taxRate" :min="0" :max="1" :step="0.01" style="width: 100%" />
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('field.remark')" min-width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('field.remark')" min-width="160" column-key="remark">
             <template #default="{ row }">
               <el-input v-model="row.remark" />
             </template>
-          </el-table-column>
-          <el-table-column label="" width="80" align="center">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn label="" width="80" align="center" column-key="actions">
             <template #default="{ $index }">
               <el-button type="danger" circle size="small" @click="removeItem($index)">x</el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
 
       <template #footer>

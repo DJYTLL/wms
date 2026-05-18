@@ -31,32 +31,32 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
-          <el-table-column v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
-          <el-table-column v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="erp-location-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
             <template #default="{ row }">
               {{ getWarehouseName(row.warehouseId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('aisle')" prop="aisle" :label="$t('field.aisle')" min-width="100" />
-          <el-table-column v-if="canShow('rack')" prop="rack" :label="$t('field.rack')" min-width="100" />
-          <el-table-column v-if="canShow('bin')" prop="bin" :label="$t('field.bin')" min-width="100" />
-          <el-table-column v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('aisle')" prop="aisle" :label="$t('field.aisle')" min-width="100" />
+          <ErpDataTableColumn v-if="canShow('rack')" prop="rack" :label="$t('field.rack')" min-width="100" />
+          <ErpDataTableColumn v-if="canShow('bin')" prop="bin" :label="$t('field.bin')" min-width="100" />
+          <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                 {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="160" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" v-permission="'erp-location:edit'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
               <el-button link type="danger" size="small" v-permission="'erp-location:delete'" @click="handleDelete(row)">{{ $t('action.delete') }}</el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

@@ -271,9 +271,9 @@ const fetchOptions = async () => {
 const fetchPurchaseOrderNo = async (id?: number) => {
   if (!id) return;
   try {
-    const res: any = await request.get(`/erp/purchase-orders/${id}`);
+    const res: any = await request.get(`/erp/purchase-returns/source-purchase-orders/${id}`);
     const data = res.data.data || {};
-    purchaseOrderNo.value = data.order?.orderNo || data.orderNo || '';
+    purchaseOrderNo.value = data.orderNo || data.order?.orderNo || '';
   } catch {
     purchaseOrderNo.value = '';
   }

@@ -49,46 +49,46 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" fixed="left" />
-          <el-table-column v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" fixed="left" />
-          <el-table-column v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="160" fixed="left" />
-          <el-table-column v-if="canShow('contact')" prop="contact" :label="$t('field.contactPerson')" min-width="120" />
-          <el-table-column v-if="canShow('phone')" prop="phone" :label="$t('field.phone')" min-width="130" />
-          <el-table-column v-if="canShow('mobile')" prop="mobile" :label="$t('field.mobile')" min-width="130" />
-          <el-table-column v-if="canShow('email')" prop="email" :label="$t('field.email')" min-width="180" />
-          <el-table-column v-if="canShow('taxNo')" prop="taxNo" :label="$t('field.taxNo')" min-width="180" />
-          <el-table-column v-if="canShow('address')" prop="address" :label="$t('field.openingAddress')" min-width="220" />
-          <el-table-column v-if="canShow('bankAccount')" prop="bankAccount" :label="$t('field.bankAccount')" min-width="180" />
-          <el-table-column v-if="canShow('status')" :label="$t('field.status')" width="120">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="erp-supplier-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" fixed="left" />
+          <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" fixed="left" />
+          <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="160" fixed="left" />
+          <ErpDataTableColumn v-if="canShow('contact')" prop="contact" :label="$t('field.contactPerson')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('phone')" prop="phone" :label="$t('field.phone')" min-width="130" />
+          <ErpDataTableColumn v-if="canShow('mobile')" prop="mobile" :label="$t('field.mobile')" min-width="130" />
+          <ErpDataTableColumn v-if="canShow('email')" prop="email" :label="$t('field.email')" min-width="180" />
+          <ErpDataTableColumn v-if="canShow('taxNo')" prop="taxNo" :label="$t('field.taxNo')" min-width="180" />
+          <ErpDataTableColumn v-if="canShow('address')" prop="address" :label="$t('field.openingAddress')" min-width="220" />
+          <ErpDataTableColumn v-if="canShow('bankAccount')" prop="bankAccount" :label="$t('field.bankAccount')" min-width="180" />
+          <ErpDataTableColumn v-if="canShow('status')" :label="$t('field.status')" width="120" column-key="status">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row)" size="small">
                 {{ formatStatus(row) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('recentTransactionAt')" prop="recentTransactionAt" :label="$t('field.recentTransactionTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('recentTransactionAt')" prop="recentTransactionAt" :label="$t('field.recentTransactionTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.recentTransactionAt) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('updatedAt')" prop="updatedAt" :label="$t('field.updatedTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('updatedAt')" prop="updatedAt" :label="$t('field.updatedTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.updatedAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="160" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" v-permission="'erp-supplier:edit'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
               <el-button link type="danger" size="small" v-permission="'erp-supplier:delete'" @click="handleDelete(row)">{{ $t('action.delete') }}</el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

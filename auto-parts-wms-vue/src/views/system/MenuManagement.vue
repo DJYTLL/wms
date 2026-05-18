@@ -54,7 +54,7 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table
+        <ErpDataTable
           ref="tableRef"
           v-loading="loading"
           :data="filteredMenuData"
@@ -63,20 +63,20 @@
           :expand-row-keys="expandedRowKeys"
           height="100%"
           :empty-text="$t('table.empty')"
-        >
-        <el-table-column v-if="canShow('title')" prop="title" :label="$t('menu.title')" min-width="200" />
-        <el-table-column v-if="canShow('code')" prop="code" :label="$t('menu.code')" min-width="160" />
-        <el-table-column v-if="canShow('path')" prop="path" :label="$t('menu.path')" min-width="200" />
-        <el-table-column v-if="canShow('permissionCode')" prop="permissionCode" :label="$t('menu.permission')" min-width="200" />
-        <el-table-column v-if="canShow('sort')" prop="sort" :label="$t('menu.sort')" width="100" />
-        <el-table-column v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="120">
+         table-key="menu-management">
+        <ErpDataTableColumn v-if="canShow('title')" prop="title" :label="$t('menu.title')" min-width="200" />
+        <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('menu.code')" min-width="160" />
+        <ErpDataTableColumn v-if="canShow('path')" prop="path" :label="$t('menu.path')" min-width="200" />
+        <ErpDataTableColumn v-if="canShow('permissionCode')" prop="permissionCode" :label="$t('menu.permission')" min-width="200" />
+        <ErpDataTableColumn v-if="canShow('sort')" prop="sort" :label="$t('menu.sort')" width="100" />
+        <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="120">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
               {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
             </el-tag>
           </template>
-        </el-table-column>
-        <el-table-column :label="$t('table.actions')" width="220" fixed="right">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('table.actions')" width="220" fixed="right" column-key="actions">
           <template #default="{ row }">
             <el-button link size="small" @click.stop="openCreateChild(row)">
               {{ $t('menu.addChild') }}
@@ -88,8 +88,8 @@
               {{ $t('action.delete') }}
             </el-button>
           </template>
-        </el-table-column>
-        </el-table>
+        </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
     </div>
 

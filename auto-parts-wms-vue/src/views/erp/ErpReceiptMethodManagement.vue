@@ -28,32 +28,32 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
-          <el-table-column v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="160">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="erp-receipt-method-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="160">
             <template #default="{ row }">
               <span>{{ row.name }}</span>
               <el-tag v-if="row.isDefault" size="small" type="warning" style="margin-left: 6px">
                 {{ $t('field.isDefault') }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('sort')" prop="sortNo" :label="$t('field.sortNo')" min-width="120" />
-          <el-table-column v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('sort')" prop="sortNo" :label="$t('field.sortNo')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                 {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="160" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" v-permission="'erp-receipt-method:edit'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
               <el-button link type="danger" size="small" v-permission="'erp-receipt-method:delete'" @click="handleDelete(row)">{{ $t('action.delete') }}</el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

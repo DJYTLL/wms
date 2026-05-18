@@ -41,43 +41,43 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('supplierName')" prop="supplierName" :label="$t('field.supplier')" min-width="160" />
-          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160">
+        <ErpDataTable :data="tableData" style="width: 100%" stripe :empty-text="$t('table.empty')" table-key="erp-accounts-payable-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('supplierName')" prop="supplierName" :label="$t('field.supplier')" min-width="160" />
+          <ErpDataTableColumn v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160">
             <template #default="{ row }">
               <el-button link type="primary" @click="openDetail(row)">{{ row.orderNo }}</el-button>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ statusLabel(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <el-table-column v-if="canShow('paidAmount')" :label="$t('field.paidAmount')" min-width="140">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('paidAmount')" :label="$t('field.paidAmount')" min-width="140" column-key="custom-6">
             <template #default="{ row }">
               {{ formatAmount(toAmount(row.paidAmount)) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('discountAmount')" :label="$t('field.discountAmount')" min-width="140">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('discountAmount')" :label="$t('field.discountAmount')" min-width="140" column-key="custom-7">
             <template #default="{ row }">
               {{ formatAmount(toAmount(row.discountAmount)) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('unpaidAmount')" :label="$t('field.unpaidAmount')" min-width="140">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('unpaidAmount')" :label="$t('field.unpaidAmount')" min-width="140" column-key="custom-8">
             <template #default="{ row }">
               {{ formatAmount(toAmount(row.unpaidAmount)) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="160" column-key="actions">
             <template #default="{ row }">
               <el-button
                 v-permission="'erp-ap:view'"
@@ -88,8 +88,8 @@
                 {{ $t('action.print') }}
               </el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

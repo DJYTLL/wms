@@ -94,8 +94,8 @@
             <h4>{{ $t('field.items') }}</h4>
           </div>
           <div class="detail-table-wrapper">
-            <el-table :data="formData.items" style="width: 100%" border stripe>
-              <el-table-column :label="$t('field.product')" min-width="200">
+            <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-sale-order-form-preview-paper">
+              <ErpDataTableColumn :label="$t('field.product')" min-width="200" column-key="product">
                 <template #default="{ row }">
                   <el-select
                     v-model="row.productId"
@@ -109,8 +109,8 @@
                     <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
                   </el-select>
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.warehouse')" min-width="160">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
                 <template #default="{ row }">
                   <el-select
                     v-model="row.warehouseId"
@@ -124,8 +124,8 @@
                     <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
                   </el-select>
                 </template>
-              </el-table-column>
-              <el-table-column :label="$t('field.location')" min-width="160">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn :label="$t('field.location')" min-width="160" column-key="warehouseLocation">
                 <template #default="{ row }">
                   <el-select
                     v-model="row.stockKey"
@@ -154,44 +154,44 @@
                     </el-option>
                   </el-select>
                 </template>
-              </el-table-column>
-            <el-table-column :label="$t('field.quantity')" width="140">
+              </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.quantity')" width="140" column-key="quantity">
               <template #default="{ row }">
                 <DecimalInput v-model="row.qty" :scale="4" :disabled="isReadOnly" />
               </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.price')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-5">
               <template #default="{ row }">
                 <DecimalInput v-model="row.price" :scale="4" :disabled="isReadOnly" />
               </template>
-            </el-table-column>
-            <el-table-column :label="$t('field.lineTotal')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
               <template #default="{ row }">
                 {{ formatMoney(calcLineAmount(row)) }}
               </template>
-            </el-table-column>
-            <el-table-column v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-7">
               <template #default="{ row }">
                 {{ formatMoney(calcLineDiscount(row)) }}
               </template>
-            </el-table-column>
-            <el-table-column v-if="canShowProfit" :label="$t('field.profit')" min-width="160">
+            </ErpDataTableColumn>
+            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="custom-8">
               <template #default="{ row }">
                 {{ formatProfitCell(row) }}
               </template>
-            </el-table-column>
+            </ErpDataTableColumn>
 
-              <el-table-column :label="$t('field.remark')" min-width="160">
+              <ErpDataTableColumn :label="$t('field.remark')" min-width="160" column-key="remark">
                 <template #default="{ row }">
                   <el-input v-model="row.remark" :disabled="isReadOnly" />
                 </template>
-              </el-table-column>
-              <el-table-column label="" width="80" align="center">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn label="" width="80" align="center" column-key="actions">
                 <template #default="{ $index }">
                   <el-button type="danger" circle size="small" :disabled="isReadOnly" @click="removeItem($index)">x</el-button>
                 </template>
-            </el-table-column>
-          </el-table>
+            </ErpDataTableColumn>
+          </ErpDataTable>
           </div>
           <div class="detail-actions">
             <el-button type="primary" plain size="small" :disabled="isReadOnly" @click="addItem">+ {{ $t('action.addItem') }}</el-button>

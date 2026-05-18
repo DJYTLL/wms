@@ -21,10 +21,10 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table :data="filteredTenants" style="width: 100%" height="100%" v-loading="loading" :empty-text="$t('table.empty')">
-        <el-table-column v-if="canShow('code')" prop="code" :label="$t('field.tenantCode')" min-width="160" />
-        <el-table-column v-if="canShow('name')" prop="name" :label="$t('field.tenantName')" min-width="200" />
-        <el-table-column v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="120">
+        <ErpDataTable :data="filteredTenants" style="width: 100%" height="100%" v-loading="loading" :empty-text="$t('table.empty')" table-key="tenant-management">
+        <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.tenantCode')" min-width="160" />
+        <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.tenantName')" min-width="200" />
+        <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="120">
           <template #default="{ row }">
             <div class="status-tags">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
@@ -35,13 +35,13 @@
               </el-tag>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn v-if="canShow('createdAt')" prop="createdAt" :label="$t('field.createdTime')" min-width="180">
           <template #default="{ row }">
             <span>{{ formatTime(row.createdAt) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column :label="$t('table.actions')" width="340" fixed="right">
+        </ErpDataTableColumn>
+        <ErpDataTableColumn :label="$t('table.actions')" width="340" fixed="right" column-key="actions">
           <template #default="{ row }">
             <el-button
               v-if="canSwitch"
@@ -79,8 +79,8 @@
               {{ $t('action.delete') }}
             </el-button>
           </template>
-        </el-table-column>
-        </el-table>
+        </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
     </div>
 

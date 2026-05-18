@@ -4,6 +4,8 @@ import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPaymentCreateRequest;
 import com.example.wms.dto.erp.ErpPaymentDetail;
+import com.example.wms.dto.erp.ErpPaymentSourcePayableDetail;
+import com.example.wms.dto.erp.ErpPaymentSourcePayableOption;
 import com.example.wms.dto.erp.ErpPaymentView;
 import com.example.wms.service.erp.ErpPaymentService;
 import jakarta.validation.Valid;
@@ -56,10 +58,34 @@ public class ErpPaymentController {
         ));
     }
 
+    @GetMapping("/source-payables/page")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-payment:source-view','PERM_erp-ap:view')")
+    public ResponseEntity<ApiResponse<PageResponse<ErpPaymentSourcePayableOption>>> sourcePayablePage(
+        @RequestParam(defaultValue = "1") long page,
+        @RequestParam(defaultValue = "20") long size,
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Long supplierId,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) Long startAt,
+        @RequestParam(required = false) Long endAt
+    ) {
+        Instant start = startAt == null ? null : Instant.ofEpochMilli(startAt);
+        Instant end = endAt == null ? null : Instant.ofEpochMilli(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(
+            erpPaymentService.sourcePayablePage(page, size, keyword, supplierId, status, start, end)
+        ));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-payment:view')")
     public ResponseEntity<ApiResponse<ErpPaymentDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpPaymentService.getDetail(id)));
+    }
+
+    @GetMapping("/source-payables/{id}")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-payment:source-view','PERM_erp-ap:view')")
+    public ResponseEntity<ApiResponse<ErpPaymentSourcePayableDetail>> getSourcePayable(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpPaymentService.getSourcePayableDetail(id)));
     }
 
     @GetMapping("/next-payment-no")

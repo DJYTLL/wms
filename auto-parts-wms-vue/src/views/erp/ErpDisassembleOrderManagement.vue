@@ -44,40 +44,40 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table
+        <ErpDataTable
           :data="tableData"
           style="width: 100%"
           stripe
           v-loading="loading"
           :empty-text="$t('table.empty')"
-        >
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
-          <el-table-column v-if="canShow('orderType')" prop="orderType" :label="$t('field.orderType')" width="140">
+         table-key="erp-disassemble-order-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('orderNo')" prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
+          <ErpDataTableColumn v-if="canShow('orderType')" prop="orderType" :label="$t('field.orderType')" width="140">
             <template #default="{ row }">
               {{ formatOrderType(row.orderType) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('finishedProduct')" :label="$t('field.finishedProduct')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('finishedProduct')" :label="$t('field.finishedProduct')" min-width="180" column-key="custom-4">
             <template #default="{ row }">
               {{ getProductName(row.finishedProductId) }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('finishedQty')" prop="finishedQty" :label="$t('field.finishedQty')" min-width="140" />
-          <el-table-column v-if="canShow('totalCost')" prop="totalCost" :label="$t('field.totalCost')" min-width="140" />
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('finishedQty')" prop="finishedQty" :label="$t('field.finishedQty')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('totalCost')" prop="totalCost" :label="$t('field.totalCost')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ formatStatus(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('orderAt')" prop="orderAt" :label="$t('field.orderTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('orderAt')" prop="orderAt" :label="$t('field.orderTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.orderAt) }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="240" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="240" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button
                 link
@@ -118,8 +118,8 @@
                 {{ $t('action.delete') }}
               </el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

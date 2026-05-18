@@ -57,34 +57,34 @@
     <div class="table-card receipts-card">
       <div class="table-body">
         <div class="section-title">{{ $t('page.erpReceiptManagement') }}</div>
-        <el-table :data="detail.receipts" style="width: 100%" stripe :empty-text="$t('table.empty')" :row-class-name="receiptRowClass">
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column prop="receiptNo" :label="$t('field.receiptNo')" min-width="160">
+        <ErpDataTable :data="detail.receipts" style="width: 100%" stripe :empty-text="$t('table.empty')" :row-class-name="receiptRowClass" table-key="erp-accounts-receivable-detail">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn prop="receiptNo" :label="$t('field.receiptNo')" min-width="160">
             <template #default="{ row }">
               <el-button link type="primary" @click="openReceipt(row)">{{ row.receiptNo }}</el-button>
             </template>
-          </el-table-column>
-          <el-table-column prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="receiptStatusTagType(row.status)" size="small">
                 {{ receiptStatusLabel(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column prop="amount" :label="$t('field.receiptAmount')" min-width="140" />
-          <el-table-column prop="discountAmount" :label="$t('field.discountAmount')" min-width="140" />
-          <el-table-column :label="$t('field.redFlushReason')" min-width="200">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn prop="amount" :label="$t('field.receiptAmount')" min-width="140" />
+          <ErpDataTableColumn prop="discountAmount" :label="$t('field.discountAmount')" min-width="140" />
+          <ErpDataTableColumn :label="$t('field.redFlushReason')" min-width="200" column-key="custom-6">
             <template #default="{ row }">
               <span v-if="row.status === 'RED_FLUSHED'">{{ extractRedFlushReason(row.remark) }}</span>
               <span v-else>-</span>
             </template>
-          </el-table-column>
-          <el-table-column prop="createdAt" :label="$t('field.createdTime')" min-width="180">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn prop="createdAt" :label="$t('field.createdTime')" min-width="180">
             <template #default="{ row }">
               {{ formatDateTime(row.createdAt) }}
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
     </div>
 

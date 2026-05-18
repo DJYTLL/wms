@@ -4,6 +4,8 @@ import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpReceiptCreateRequest;
 import com.example.wms.dto.erp.ErpReceiptDetail;
+import com.example.wms.dto.erp.ErpReceiptSourceReceivableDetail;
+import com.example.wms.dto.erp.ErpReceiptSourceReceivableOption;
 import com.example.wms.dto.erp.ErpReceiptView;
 import com.example.wms.service.erp.ErpReceiptService;
 import jakarta.validation.Valid;
@@ -56,10 +58,34 @@ public class ErpReceiptController {
         ));
     }
 
+    @GetMapping("/source-receivables/page")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-receipt:source-view','PERM_erp-ar:view')")
+    public ResponseEntity<ApiResponse<PageResponse<ErpReceiptSourceReceivableOption>>> sourceReceivablePage(
+        @RequestParam(defaultValue = "1") long page,
+        @RequestParam(defaultValue = "20") long size,
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Long customerId,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) Long startAt,
+        @RequestParam(required = false) Long endAt
+    ) {
+        Instant start = startAt == null ? null : Instant.ofEpochMilli(startAt);
+        Instant end = endAt == null ? null : Instant.ofEpochMilli(endAt);
+        return ResponseEntity.ok(ApiResponse.ok(
+            erpReceiptService.sourceReceivablePage(page, size, keyword, customerId, status, start, end)
+        ));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-receipt:view')")
     public ResponseEntity<ApiResponse<ErpReceiptDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpReceiptService.getDetail(id)));
+    }
+
+    @GetMapping("/source-receivables/{id}")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-receipt:source-view','PERM_erp-ar:view')")
+    public ResponseEntity<ApiResponse<ErpReceiptSourceReceivableDetail>> getSourceReceivable(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpReceiptService.getSourceReceivableDetail(id)));
     }
 
     @GetMapping("/next-receipt-no")

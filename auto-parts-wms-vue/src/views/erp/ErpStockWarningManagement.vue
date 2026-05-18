@@ -20,47 +20,47 @@
 
     <div class="table-card">
       <div class="table-body">
-        <el-table
+        <ErpDataTable
           :data="tableData"
           style="width: 100%"
           stripe
           v-loading="loading"
           :empty-text="$t('table.empty')"
           :row-class-name="warningRowClass"
-        >
-          <el-table-column type="index" :label="$t('table.index')" width="70" />
-          <el-table-column v-if="canShow('productCode')" prop="productCode" :label="$t('field.code')" min-width="140" />
-          <el-table-column v-if="canShow('productName')" prop="productName" :label="$t('field.product')" min-width="180">
+         table-key="erp-stock-warning-management">
+          <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+          <ErpDataTableColumn v-if="canShow('productCode')" prop="productCode" :label="$t('field.code')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('productName')" prop="productName" :label="$t('field.product')" min-width="180">
             <template #default="{ row }">
               <el-button v-if="canEditProduct" link type="primary" @click="handleAction('editProduct', row)">
                 {{ row.productName || '-' }}
               </el-button>
               <span v-else>{{ row.productName || '-' }}</span>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('categoryName')" prop="categoryName" :label="$t('field.category')" min-width="140" />
-          <el-table-column v-if="canShow('unitName')" prop="unitName" :label="$t('field.unit')" min-width="120" />
-          <el-table-column v-if="canShow('totalQty')" prop="totalQty" :label="$t('field.qtyOnHand')" min-width="140" />
-          <el-table-column v-if="canShow('minStock')" prop="minStock" :label="$t('field.minStock')" min-width="140" />
-          <el-table-column v-if="canShow('maxStock')" prop="maxStock" :label="$t('field.maxStock')" min-width="140" />
-          <el-table-column v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('categoryName')" prop="categoryName" :label="$t('field.category')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('unitName')" prop="unitName" :label="$t('field.unit')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('totalQty')" prop="totalQty" :label="$t('field.qtyOnHand')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('minStock')" prop="minStock" :label="$t('field.minStock')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('maxStock')" prop="maxStock" :label="$t('field.maxStock')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" size="small">
                 {{ statusLabel(row.status) }}
               </el-tag>
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('defaultWarehouse')" prop="defaultWarehouseName" :label="$t('field.defaultWarehouse')" min-width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('defaultWarehouse')" prop="defaultWarehouseName" :label="$t('field.defaultWarehouse')" min-width="160">
             <template #default="{ row }">
               {{ row.defaultWarehouseName || '-' }}
             </template>
-          </el-table-column>
-          <el-table-column v-if="canShow('defaultLocation')" prop="defaultLocationName" :label="$t('field.defaultLocation')" min-width="160">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('defaultLocation')" prop="defaultLocationName" :label="$t('field.defaultLocation')" min-width="160">
             <template #default="{ row }">
               {{ row.defaultLocationName || $t('field.unassignedLocation') }}
             </template>
-          </el-table-column>
-          <el-table-column :label="$t('table.actions')" width="190" fixed="right">
+          </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="190" fixed="right" column-key="actions">
             <template #default="{ row }">
               <el-button link type="primary" size="small" v-permission="'erp-product:edit'" @click="handleAction('editProduct', row)">
                 {{ $t('action.editProduct') }}
@@ -69,8 +69,8 @@
                 {{ $t('action.replenish') }}
               </el-button>
             </template>
-          </el-table-column>
-        </el-table>
+          </ErpDataTableColumn>
+        </ErpDataTable>
       </div>
       <div class="table-pagination">
         <el-pagination

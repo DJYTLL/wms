@@ -3,6 +3,8 @@ package com.example.wms.service.erp;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpReceiptCreateRequest;
 import com.example.wms.dto.erp.ErpReceiptDetail;
+import com.example.wms.dto.erp.ErpReceiptSourceReceivableDetail;
+import com.example.wms.dto.erp.ErpReceiptSourceReceivableOption;
 import com.example.wms.dto.erp.ErpReceiptView;
 
 import java.time.Instant;
@@ -14,7 +16,11 @@ public interface ErpReceiptService {
 
     PageResponse<ErpReceiptView> page(long page, long size, String keyword, String status, Long customerId, Long receivableId, Instant startAt, Instant endAt);
 
+    PageResponse<ErpReceiptSourceReceivableOption> sourceReceivablePage(long page, long size, String keyword, Long customerId, String status, Instant startAt, Instant endAt);
+
     ErpReceiptDetail getDetail(Long id);
+
+    ErpReceiptSourceReceivableDetail getSourceReceivableDetail(Long id);
 
     String nextReceiptNo();
 

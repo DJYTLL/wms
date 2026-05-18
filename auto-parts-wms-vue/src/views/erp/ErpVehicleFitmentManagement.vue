@@ -30,19 +30,19 @@
 
         <div class="table-card">
           <div class="table-body">
-            <el-table :data="brandTable" style="width: 100%" stripe v-loading="brandLoading" :empty-text="$t('table.empty')">
-              <el-table-column type="index" :label="$t('table.index')" width="70" />
-              <el-table-column v-if="canShowBrand('code')" prop="code" :label="$t('field.code')" min-width="120" />
-              <el-table-column v-if="canShowBrand('name')" prop="name" :label="$t('field.name')" min-width="160" />
-              <el-table-column v-if="canShowBrand('enabled')" prop="enabled" :label="$t('field.status')" width="110">
+            <ErpDataTable :data="brandTable" style="width: 100%" stripe v-loading="brandLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-management">
+              <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+              <ErpDataTableColumn v-if="canShowBrand('code')" prop="code" :label="$t('field.code')" min-width="120" />
+              <ErpDataTableColumn v-if="canShowBrand('name')" prop="name" :label="$t('field.name')" min-width="160" />
+              <ErpDataTableColumn v-if="canShowBrand('enabled')" prop="enabled" :label="$t('field.status')" width="110">
                 <template #default="{ row }">
                   <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                     {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
                   </el-tag>
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowBrand('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
-              <el-table-column :label="$t('table.actions')" width="160" fixed="right">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowBrand('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
+              <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
                 <template #default="{ row }">
                   <el-button link type="primary" size="small" v-permission="'erp-vehicle-brand:edit'" @click="openBrandEdit(row)">
                     {{ $t('action.edit') }}
@@ -51,8 +51,8 @@
                     {{ $t('action.delete') }}
                   </el-button>
                 </template>
-              </el-table-column>
-            </el-table>
+              </ErpDataTableColumn>
+            </ErpDataTable>
           </div>
           <div class="table-pagination">
             <el-pagination
@@ -97,24 +97,24 @@
 
         <div class="table-card">
           <div class="table-body">
-            <el-table :data="seriesTable" style="width: 100%" stripe v-loading="seriesLoading" :empty-text="$t('table.empty')">
-              <el-table-column type="index" :label="$t('table.index')" width="70" />
-              <el-table-column v-if="canShowSeries('code')" prop="code" :label="$t('field.code')" min-width="120" />
-              <el-table-column v-if="canShowSeries('brand')" :label="$t('field.vehicleBrand')" min-width="160">
+            <ErpDataTable :data="seriesTable" style="width: 100%" stripe v-loading="seriesLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-management-8">
+              <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+              <ErpDataTableColumn v-if="canShowSeries('code')" prop="code" :label="$t('field.code')" min-width="120" />
+              <ErpDataTableColumn v-if="canShowSeries('brand')" :label="$t('field.vehicleBrand')" min-width="160" column-key="custom-9">
                 <template #default="{ row }">
                   {{ getBrandName(row.brandId) }}
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowSeries('name')" prop="name" :label="$t('field.name')" min-width="160" />
-              <el-table-column v-if="canShowSeries('enabled')" prop="enabled" :label="$t('field.status')" width="110">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowSeries('name')" prop="name" :label="$t('field.name')" min-width="160" />
+              <ErpDataTableColumn v-if="canShowSeries('enabled')" prop="enabled" :label="$t('field.status')" width="110">
                 <template #default="{ row }">
                   <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                     {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
                   </el-tag>
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowSeries('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
-              <el-table-column :label="$t('table.actions')" width="160" fixed="right">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowSeries('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
+              <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
                 <template #default="{ row }">
                   <el-button link type="primary" size="small" v-permission="'erp-vehicle-series:edit'" @click="openSeriesEdit(row)">
                     {{ $t('action.edit') }}
@@ -123,8 +123,8 @@
                     {{ $t('action.delete') }}
                   </el-button>
                 </template>
-              </el-table-column>
-            </el-table>
+              </ErpDataTableColumn>
+            </ErpDataTable>
           </div>
           <div class="table-pagination">
             <el-pagination
@@ -174,36 +174,36 @@
 
         <div class="table-card">
           <div class="table-body">
-            <el-table :data="modelTable" style="width: 100%" stripe v-loading="modelLoading" :empty-text="$t('table.empty')">
-              <el-table-column type="index" :label="$t('table.index')" width="70" />
-              <el-table-column v-if="canShowModel('code')" prop="code" :label="$t('field.code')" min-width="120" />
-              <el-table-column v-if="canShowModel('series')" :label="$t('field.vehicleSeries')" min-width="180">
+            <ErpDataTable :data="modelTable" style="width: 100%" stripe v-loading="modelLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-management-16">
+              <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+              <ErpDataTableColumn v-if="canShowModel('code')" prop="code" :label="$t('field.code')" min-width="120" />
+              <ErpDataTableColumn v-if="canShowModel('series')" :label="$t('field.vehicleSeries')" min-width="180" column-key="custom-16">
                 <template #default="{ row }">
                   {{ getSeriesLabel(row.seriesId) }}
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowModel('name')" prop="name" :label="$t('field.name')" min-width="160" />
-              <el-table-column v-if="canShowModel('yearFrom')" :label="$t('field.yearFrom')" width="100">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowModel('name')" prop="name" :label="$t('field.name')" min-width="160" />
+              <ErpDataTableColumn v-if="canShowModel('yearFrom')" :label="$t('field.yearFrom')" width="100" column-key="custom-18">
                 <template #default="{ row }">
                   {{ row.yearFrom || '-' }}
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowModel('yearTo')" :label="$t('field.yearTo')" width="100">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowModel('yearTo')" :label="$t('field.yearTo')" width="100" column-key="custom-19">
                 <template #default="{ row }">
                   {{ row.yearTo || '-' }}
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowModel('displacement')" prop="displacement" :label="$t('field.displacement')" min-width="120" />
-              <el-table-column v-if="canShowModel('engine')" prop="engine" :label="$t('field.engine')" min-width="140" />
-              <el-table-column v-if="canShowModel('enabled')" prop="enabled" :label="$t('field.status')" width="110">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowModel('displacement')" prop="displacement" :label="$t('field.displacement')" min-width="120" />
+              <ErpDataTableColumn v-if="canShowModel('engine')" prop="engine" :label="$t('field.engine')" min-width="140" />
+              <ErpDataTableColumn v-if="canShowModel('enabled')" prop="enabled" :label="$t('field.status')" width="110">
                 <template #default="{ row }">
                   <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
                     {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
                   </el-tag>
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowModel('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
-              <el-table-column :label="$t('table.actions')" width="160" fixed="right">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowModel('remark')" prop="remark" :label="$t('field.remark')" min-width="160" show-overflow-tooltip />
+              <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
                 <template #default="{ row }">
                   <el-button link type="primary" size="small" v-permission="'erp-vehicle-model:edit'" @click="openModelEdit(row)">
                     {{ $t('action.edit') }}
@@ -212,8 +212,8 @@
                     {{ $t('action.delete') }}
                   </el-button>
                 </template>
-              </el-table-column>
-            </el-table>
+              </ErpDataTableColumn>
+            </ErpDataTable>
           </div>
           <div class="table-pagination">
             <el-pagination
@@ -258,20 +258,20 @@
 
         <div class="table-card">
           <div class="table-body">
-            <el-table :data="fitmentTable" style="width: 100%" stripe v-loading="fitmentLoading" :empty-text="$t('table.empty')">
-              <el-table-column type="index" :label="$t('table.index')" width="70" />
-              <el-table-column v-if="canShowFitment('product')" :label="$t('field.product')" min-width="200">
+            <ErpDataTable :data="fitmentTable" style="width: 100%" stripe v-loading="fitmentLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-management-28">
+              <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
+              <ErpDataTableColumn v-if="canShowFitment('product')" :label="$t('field.product')" min-width="200" column-key="product">
                 <template #default="{ row }">
                   {{ getProductLabel(row.productId) }}
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowFitment('vehicleModel')" :label="$t('field.vehicleModel')" min-width="240">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowFitment('vehicleModel')" :label="$t('field.vehicleModel')" min-width="240" column-key="custom-27">
                 <template #default="{ row }">
                   {{ getModelLabel(row.modelId) }}
                 </template>
-              </el-table-column>
-              <el-table-column v-if="canShowFitment('remark')" prop="remark" :label="$t('field.remark')" min-width="200" show-overflow-tooltip />
-              <el-table-column :label="$t('table.actions')" width="160" fixed="right">
+              </ErpDataTableColumn>
+              <ErpDataTableColumn v-if="canShowFitment('remark')" prop="remark" :label="$t('field.remark')" min-width="200" show-overflow-tooltip />
+              <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
                 <template #default="{ row }">
                   <el-button link type="primary" size="small" v-permission="'erp-product-fitment:edit'" @click="openFitmentEdit(row)">
                     {{ $t('action.edit') }}
@@ -280,8 +280,8 @@
                     {{ $t('action.delete') }}
                   </el-button>
                 </template>
-              </el-table-column>
-            </el-table>
+              </ErpDataTableColumn>
+            </ErpDataTable>
           </div>
         </div>
           </el-tab-pane>

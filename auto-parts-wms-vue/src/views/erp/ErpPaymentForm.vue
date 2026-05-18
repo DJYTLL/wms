@@ -39,6 +39,7 @@
                   multiple
                   collapse-tags
                   collapse-tags-tooltip
+                  :disabled="!canViewSourcePayables"
                   @change="handlePayableChange"
                   style="width: 100%"
                 >
@@ -94,27 +95,45 @@
           <div class="payable-table">
             <div class="section-title">{{ $t('page.erpAccountsPayableManagement') }}</div>
             <div class="payable-table__body">
-              <el-table :data="selectedPayables" height="240" style="width: 100%" stripe :empty-text="$t('table.empty')">
-                <el-table-column prop="orderNo" :label="$t('field.orderNo')" min-width="160" />
-                <el-table-column prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-                <el-table-column prop="paidAmount" :label="$t('field.paidAmount')" min-width="140" />
-                <el-table-column prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
-                <el-table-column :label="$t('field.paymentAmount')" min-width="140">
+              <ErpDataTable :data="selectedPayables" height="240" style="width: 100%" stripe :empty-text="$t('table.empty')" table-key="erp-payment-form">
+                <ErpDataTableColumn prop="orderNo" :label="$t('field.orderNo')" min-width="160">
+                  <template #default="{ row }">
+                    <el-button v-if="canViewSourcePayables" link type="primary" @click="openPayablePreview(row)">{{ row.orderNo }}</el-button>
+                    <span v-else>{{ row.orderNo }}</span>
+                  </template>
+                </ErpDataTableColumn>
+                <ErpDataTableColumn prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
+                <ErpDataTableColumn prop="paidAmount" :label="$t('field.paidAmount')" min-width="140" />
+                <ErpDataTableColumn prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
+                <ErpDataTableColumn :label="$t('field.paymentAmount')" min-width="140" column-key="custom-5">
                   <template #default="{ row }">
                     <DecimalInput v-model="getAllocation(row.id).amount" input-mode="decimal" :scale="2" :allow-negative="isReturnPayable(row.id)" />
                   </template>
-                </el-table-column>
-                <el-table-column :label="$t('field.discountAmount')" min-width="140">
+                </ErpDataTableColumn>
+                <ErpDataTableColumn :label="$t('field.discountAmount')" min-width="140" column-key="custom-6">
                   <template #default="{ row }">
                     <DecimalInput v-model="getAllocation(row.id).discount" input-mode="decimal" :scale="2" :allow-negative="isReturnPayable(row.id)" />
                   </template>
-                </el-table-column>
-              </el-table>
+                </ErpDataTableColumn>
+              </ErpDataTable>
             </div>
           </div>
         </el-form>
       </div>
     </div>
+
+    <el-dialog v-model="payablePreviewDialogVisible" :title="payablePreviewTitle" width="720px">
+      <el-descriptions v-if="payablePreviewDetail" :column="2" border>
+        <el-descriptions-item :label="$t('field.orderNo')">{{ payablePreviewDetail.orderNo || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.supplier')">{{ payablePreviewDetail.supplierName || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.totalAmount')">{{ payablePreviewDetail.totalAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.paidAmount')">{{ payablePreviewDetail.paidAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.discountAmount')">{{ payablePreviewDetail.discountAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.unpaidAmount')">{{ payablePreviewDetail.unpaidAmount ?? '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.status')">{{ payablePreviewDetail.status || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('field.remark')" :span="2">{{ payablePreviewDetail.remark || '-' }}</el-descriptions-item>
+      </el-descriptions>
+    </el-dialog>
   </div>
 </template>
 
@@ -126,6 +145,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import { useAuthStore } from '@/stores/auth';
 
 interface OptionItem {
   id: number;
@@ -147,14 +167,25 @@ interface PayableOption {
   supplierId?: number;
   totalAmount?: number;
   paidAmount?: number;
+  discountAmount?: number;
   unpaidAmount: number;
   status?: string;
+  createdAt?: string;
+  purchaseOrderId?: number;
+  purchaseReturnId?: number;
+}
+
+interface PayableSourceDetail extends PayableOption {
+  supplierName?: string;
+  settlementMethod?: string;
+  remark?: string;
 }
 
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
+const authStore = useAuthStore();
 
 const formData = ref({
   paymentNo: '',
@@ -172,6 +203,8 @@ const supplierOptions = ref<OptionItem[]>([]);
 const settlementOptions = ref<SettlementOption[]>([]);
 const paymentMethodOptions = ref<SettlementOption[]>([]);
 const payableOptions = ref<PayableOption[]>([]);
+const payablePreviewDialogVisible = ref(false);
+const payablePreviewDetail = ref<PayableSourceDetail | null>(null);
 const saving = ref(false);
 const pagePath = ref(route.path);
 const createdPaymentId = ref<number | null>(null);
@@ -245,6 +278,12 @@ const paymentId = computed(() => {
 });
 const isPaymentRoute = computed(() => route.path.startsWith('/erp/payments'));
 const isEditing = computed(() => Boolean(paymentId.value));
+const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
+const canViewSourcePayables = computed(() => hasPermission('erp-payment:source-view') || hasPermission('erp-ap:view'));
+const payablePreviewTitle = computed(() => {
+  if (!payablePreviewDetail.value?.orderNo) return t('page.erpAccountsPayableManagement');
+  return `${t('page.erpAccountsPayableManagement')} · ${payablePreviewDetail.value.orderNo}`;
+});
 
 const normalizeNumber = (value: unknown) => {
   const num = Number(value ?? 0);
@@ -545,15 +584,21 @@ const fetchPaymentMethods = async () => {
 };
 
 const fetchPayables = async (supplierId: number | null) => {
+  if (!canViewSourcePayables.value) {
+    payableOptions.value = [];
+    return [];
+  }
   try {
-    const res: any = await request.get('/erp/ap', {
+    const res: any = await request.get('/erp/payments/source-payables/page', {
       params: {
         supplierId: supplierId ?? undefined,
-        status: 'OPEN'
+        status: 'OPEN',
+        page: 1,
+        size: 200
       }
     });
     if (res.data.code === 200) {
-      const items: PayableOption[] = res.data.data || [];
+      const items: PayableOption[] = res.data.data?.items || [];
       payableOptions.value = items.filter((item) => {
         if (item.status === 'RED_FLUSHED') return false;
         if (Number(item.unpaidAmount ?? 0) === 0) return false;
@@ -565,6 +610,23 @@ const fetchPayables = async (supplierId: number | null) => {
     notifyError(error);
   }
   return [];
+};
+
+const openPayablePreview = async (row?: PayableOption) => {
+  if (!canViewSourcePayables.value) {
+    notifyWarning('当前角色缺少来源应付单引用权限，不能预览来源应付单');
+    return;
+  }
+  if (!row?.id) return;
+  try {
+    const res: any = await request.get(`/erp/payments/source-payables/${row.id}`);
+    if (res.data.code === 200) {
+      payablePreviewDetail.value = res.data.data || null;
+      payablePreviewDialogVisible.value = true;
+    }
+  } catch (error) {
+    notifyError(error);
+  }
 };
 
 const handleSupplierChange = (value: number | null) => {

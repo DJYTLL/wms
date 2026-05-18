@@ -7,6 +7,8 @@ import com.example.wms.dto.erp.ErpPaymentAllocationRequest;
 import com.example.wms.dto.erp.ErpPaymentCreateRequest;
 import com.example.wms.dto.erp.ErpPaymentDetail;
 import com.example.wms.dto.erp.ErpPaymentPayableView;
+import com.example.wms.dto.erp.ErpPaymentSourcePayableDetail;
+import com.example.wms.dto.erp.ErpPaymentSourcePayableOption;
 import com.example.wms.dto.erp.ErpPaymentView;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsPayable;
@@ -102,6 +104,50 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         Page<ErpPayment> result = erpPaymentMapper.selectPage(pageReq, wrapper);
         List<ErpPaymentView> views = mapViews(result.getRecords());
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), views);
+    }
+
+    @Override
+    public PageResponse<ErpPaymentSourcePayableOption> sourcePayablePage(long page, long size, String keyword, Long supplierId, String status, Instant startAt, Instant endAt) {
+        Long tenantId = TenantContext.requireTenantId();
+        long finalPage = page <= 0 ? 1 : page;
+        long finalSize = size <= 0 ? 20 : Math.min(size, 200);
+        QueryWrapper<ErpAccountsPayable> wrapper = new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .isNull("deleted_at");
+        if (supplierId != null) {
+            wrapper.eq("supplier_id", supplierId);
+        }
+        if (status != null && !status.isBlank()) {
+            wrapper.eq("status", status.trim());
+        }
+        if (startAt != null) {
+            wrapper.ge("created_at", startAt);
+        }
+        if (endAt != null) {
+            wrapper.le("created_at", endAt);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String trimmed = keyword.trim();
+            wrapper.and(qw -> qw.like("order_no", trimmed));
+        }
+        wrapper.orderByDesc("created_at").orderByDesc("id");
+        Page<ErpAccountsPayable> result = erpAccountsPayableMapper.selectPage(Page.of(finalPage, finalSize), wrapper);
+        List<ErpPaymentSourcePayableOption> items = result.getRecords().stream()
+            .map(item -> new ErpPaymentSourcePayableOption(
+                item.getId(),
+                item.getOrderNo(),
+                item.getSupplierId(),
+                item.getTotalAmount(),
+                item.getPaidAmount(),
+                item.getDiscountAmount(),
+                item.getUnpaidAmount(),
+                item.getStatus(),
+                item.getCreatedAt(),
+                item.getPurchaseOrderId(),
+                item.getPurchaseReturnId()
+            ))
+            .toList();
+        return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), items);
     }
 
     @Override
@@ -541,6 +587,38 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             applyPayablePaidAmount(tenantId, receipt.getPayableId(), amountDelta, discountDelta);
         }
         return buildDetail(tenantId, receipt);
+    }
+
+    @Override
+    public ErpPaymentSourcePayableDetail getSourcePayableDetail(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpAccountsPayable payable = erpAccountsPayableMapper.selectOne(new QueryWrapper<ErpAccountsPayable>()
+            .eq("tenant_id", tenantId)
+            .eq("id", id));
+        if (payable == null) {
+            throw new IllegalArgumentException("应付单不存在");
+        }
+        String supplierName = "";
+        if (payable.getSupplierId() != null) {
+            ErpSupplier supplier = erpSupplierMapper.selectById(payable.getSupplierId());
+            supplierName = supplier == null ? "" : supplier.getName();
+        }
+        return new ErpPaymentSourcePayableDetail(
+            payable.getId(),
+            payable.getOrderNo(),
+            payable.getSupplierId(),
+            supplierName,
+            payable.getTotalAmount(),
+            payable.getPaidAmount(),
+            payable.getDiscountAmount(),
+            payable.getUnpaidAmount(),
+            payable.getStatus(),
+            payable.getSettlementMethod(),
+            payable.getPurchaseOrderId(),
+            payable.getPurchaseReturnId(),
+            payable.getRemark(),
+            payable.getCreatedAt()
+        );
     }
 
     @Override

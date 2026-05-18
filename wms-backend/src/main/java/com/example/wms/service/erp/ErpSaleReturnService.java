@@ -3,7 +3,10 @@ package com.example.wms.service.erp;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSaleReturnCreateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnDetail;
+import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
 import com.example.wms.dto.erp.ErpSaleReturnRefundSummary;
+import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderDetail;
+import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderOption;
 import com.example.wms.dto.erp.ErpSaleReturnUpdateRequest;
 import com.example.wms.entity.erp.ErpSaleReturn;
 
@@ -19,6 +22,10 @@ public interface ErpSaleReturnService {
 
     PageResponse<ErpSaleReturn> approvedPage(long page, long size, String keyword, String status, Long customerId, Instant startAt, Instant endAt);
 
+    PageResponse<ErpSaleReturnSourceSaleOrderOption> sourceSaleOrderPage(long page, long size, String keyword, Long customerId);
+
+    PageResponse<ErpSaleOrderRecentItem> sourceRecentSaleItems(long page, long size, Long customerId, Long productId);
+
     List<ErpSaleReturn> listBySaleOrderId(Long saleOrderId, boolean includeDraft);
 
     ErpSaleReturnDetail getDetail(Long id);
@@ -26,6 +33,8 @@ public interface ErpSaleReturnService {
     ErpSaleReturnDetail getDraftDetail(Long id);
 
     ErpSaleReturnDetail getApprovedDetail(Long id);
+
+    ErpSaleReturnSourceSaleOrderDetail getSourceSaleOrderDetail(Long saleOrderId);
 
     ErpSaleReturnRefundSummary getSaleOrderRefundSummary(Long saleOrderId);
 
