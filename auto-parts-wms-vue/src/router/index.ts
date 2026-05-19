@@ -157,7 +157,7 @@ const routes: Array<RouteRecordRaw> = [
         path: 'permissions',
         name: 'permissions',
         component: () => import('../views/system/PermissionManagement.vue'),
-        meta: { title: '权限管理', permission: 'role:view', role: 'super_admin' } // 权限定义仅超级管理员可用
+        meta: { title: '权限管理', permission: 'permission:view', role: 'super_admin' } // 权限定义仅超级管理员可用
       },
       {
         path: 'audit-logs',
@@ -175,7 +175,7 @@ const routes: Array<RouteRecordRaw> = [
         path: 'menus',
         name: 'menus',
         component: () => import('../views/system/MenuManagement.vue'),
-        meta: { title: '菜单管理', permission: 'tenant:view', role: 'super_admin' }
+        meta: { title: '菜单管理', permission: 'menu:view', role: 'super_admin' }
       },
       {
         path: 'system-config',

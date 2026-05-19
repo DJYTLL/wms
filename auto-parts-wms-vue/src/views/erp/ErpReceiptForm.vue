@@ -95,7 +95,7 @@
                 <ErpDataTableColumn prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
                 <ErpDataTableColumn prop="paidAmount" :label="$t('field.paidAmount')" min-width="140" />
                 <ErpDataTableColumn prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
-                  <ErpDataTableColumn :label="$t('field.receiptAmount')" min-width="140" column-key="custom-5">
+                  <ErpDataTableColumn :label="$t('field.receiptAmount')" min-width="140" column-key="receiptAmount">
                     <template #default="{ row }">
                       <DecimalInput
                         v-model="getAllocation(row.id).amount"
@@ -105,7 +105,7 @@
                       />
                     </template>
                   </ErpDataTableColumn>
-                  <ErpDataTableColumn :label="$t('field.discountAmount')" min-width="140" column-key="custom-6">
+                  <ErpDataTableColumn :label="$t('field.discountAmount')" min-width="140" column-key="discountAmount">
                     <template #default="{ row }">
                       <DecimalInput
                         v-model="getAllocation(row.id).discount"
@@ -153,7 +153,7 @@
         :empty-text="$t('table.empty')"
         row-key="id"
         @selection-change="handleReceivableSelectionChange"
-       table-key="erp-receipt-form-8">
+       table-key="erp-receipt-source-receivables">
         <ErpDataTableColumn type="selection" width="55" />
         <ErpDataTableColumn prop="orderNo" :label="$t('field.orderNo')" min-width="160">
           <template #default="{ row }">

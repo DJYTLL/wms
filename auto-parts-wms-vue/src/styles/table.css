@@ -208,6 +208,15 @@
   grid-template-columns: 220px 140px 140px 380px;
 }
 
+.finance-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: nowrap;
+  margin-left: 0;
+}
+
 .finance-field--wide {
   width: 220px;
   max-width: 100%;
@@ -254,15 +263,23 @@
 }
 
 .erp-basic-filters--3 {
-  grid-template-columns: 220px 140px 140px;
+  grid-template-columns: repeat(3, 140px);
 }
 
 .erp-basic-filters--4 {
-  grid-template-columns: 220px 140px 140px 140px;
+  grid-template-columns: repeat(4, 140px);
 }
 
 .erp-basic-filters--5 {
-  grid-template-columns: 220px 140px 140px 140px 140px;
+  grid-template-columns: repeat(5, 140px);
+}
+
+.erp-basic-filters--6 {
+  grid-template-columns: 140px 140px 140px 140px 140px 140px;
+}
+
+.erp-basic-filters--7 {
+  grid-template-columns: 140px 140px 140px 140px 140px 140px 140px;
 }
 
 .erp-basic-actions {
@@ -362,15 +379,23 @@
   }
 
   .erp-basic-filters--3 {
-    grid-template-columns: 200px 140px 140px;
+    grid-template-columns: repeat(3, 140px);
   }
 
   .erp-basic-filters--4 {
-    grid-template-columns: 200px 140px 140px 140px;
+    grid-template-columns: repeat(4, 140px);
   }
 
   .erp-basic-filters--5 {
-    grid-template-columns: 200px 140px 140px 140px 140px;
+    grid-template-columns: repeat(5, 140px);
+  }
+
+  .erp-basic-filters--6 {
+    grid-template-columns: repeat(6, 140px);
+  }
+
+  .erp-basic-filters--7 {
+    grid-template-columns: repeat(7, 140px);
   }
 
   .erp-basic-actions {
@@ -426,6 +451,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .finance-actions {
+    justify-content: flex-start;
+  }
+
   .finance-filters--summary {
     grid-template-columns: 200px;
   }
@@ -473,7 +502,9 @@
   .erp-basic-filters--2,
   .erp-basic-filters--3,
   .erp-basic-filters--4,
-  .erp-basic-filters--5 {
+  .erp-basic-filters--5,
+  .erp-basic-filters--6,
+  .erp-basic-filters--7 {
     grid-template-columns: 1fr;
   }
 
@@ -499,6 +530,11 @@
   .finance-filters--summary,
   .finance-filters--management {
     grid-template-columns: 1fr;
+  }
+
+  .finance-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .finance-field--wide,

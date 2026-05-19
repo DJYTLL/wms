@@ -4,11 +4,43 @@
       <div class="page-title">{{ $t('page.erpLocationManagement') }}</div>
       <div class="page-toolbar-card">
         <div class="erp-basic-toolbar">
-          <div class="erp-basic-filters erp-basic-filters--3">
+          <div class="erp-basic-filters erp-basic-filters--7">
           <el-input
-            v-model="searchQuery"
-            :placeholder="$t('action.search')"
-            class="table-search erp-basic-field--wide"
+            v-model="nameQuery"
+            placeholder="名称"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="codeQuery"
+            placeholder="编码"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="aisleQuery"
+            placeholder="巷"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="rackQuery"
+            placeholder="架"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="binQuery"
+            placeholder="位"
+            class="table-search erp-basic-field--narrow"
             clearable
             @clear="handleSearch"
             @keyup.enter="handleSearch"
@@ -23,6 +55,7 @@
           </el-select>
           </div>
           <div class="erp-basic-actions">
+            <el-button type="primary" @click="handleSearch">{{ $t('action.search') }}</el-button>
             <el-button type="primary" v-permission="'erp-location:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
           </div>
         </div>
@@ -35,7 +68,7 @@
           <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
           <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
-          <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
+          <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouse">
             <template #default="{ row }">
               {{ getWarehouseName(row.warehouseId) }}
             </template>
@@ -117,6 +150,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 import { MASTER_DATA_CODE_HINT, isValidMasterCode, normalizeMasterCode } from '@/utils/erpMasterData';
 
 interface OptionItem {
@@ -140,7 +174,11 @@ const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 
-const searchQuery = ref('');
+const nameQuery = ref('');
+const codeQuery = ref('');
+const aisleQuery = ref('');
+const rackQuery = ref('');
+const binQuery = ref('');
 const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all');
 const warehouseFilter = ref<number | null>(null);
 const loading = ref(false);
@@ -148,6 +186,7 @@ const page = ref(1);
 const size = ref(20);
 const total = ref(0);
 const tableData = ref<ErpLocation[]>([]);
+const allTableData = ref<ErpLocation[]>([]);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
@@ -192,21 +231,27 @@ const fetchNextLocationCode = async () => {
   }
 };
 
+const applySearch = () => {
+  let filtered = allTableData.value.slice();
+  if (warehouseFilter.value) filtered = filtered.filter(row => row.warehouseId === warehouseFilter.value);
+  if (statusFilter.value !== 'all') filtered = filtered.filter(row => row.enabled === (statusFilter.value === 'enabled'));
+  filtered = filterByFuzzyKeyword(filtered, nameQuery.value, row => [row.name]);
+  filtered = filterByFuzzyKeyword(filtered, codeQuery.value, row => [row.code]);
+  filtered = filterByFuzzyKeyword(filtered, aisleQuery.value, row => [row.aisle]);
+  filtered = filterByFuzzyKeyword(filtered, rackQuery.value, row => [row.rack]);
+  filtered = filterByFuzzyKeyword(filtered, binQuery.value, row => [row.bin]);
+  total.value = filtered.length;
+  const start = (page.value - 1) * size.value;
+  tableData.value = filtered.slice(start, start + size.value);
+};
+
 const fetchList = async () => {
   loading.value = true;
   try {
-    const params: Record<string, any> = {
-      page: page.value,
-      size: size.value
-    };
-    if (searchQuery.value) params.keyword = searchQuery.value.trim();
-    if (warehouseFilter.value) params.warehouseId = warehouseFilter.value;
-    if (statusFilter.value !== 'all') params.enabled = statusFilter.value === 'enabled';
-
-    const res: any = await request.get('/erp/locations/page', { params });
+    const res: any = await request.get('/erp/locations');
     if (res.data.code === 200) {
-      tableData.value = res.data.data.items || [];
-      total.value = res.data.data.total || 0;
+      allTableData.value = res.data.data || [];
+      applySearch();
     }
   } catch (error) {
     notifyError(error);
@@ -222,13 +267,13 @@ const handleSearch = () => {
 
 const handlePageChange = (newPage: number) => {
   page.value = newPage;
-  fetchList();
+  applySearch();
 };
 
 const handleSizeChange = (newSize: number) => {
   size.value = newSize;
   page.value = 1;
-  fetchList();
+  applySearch();
 };
 
 const openAddModal = () => {

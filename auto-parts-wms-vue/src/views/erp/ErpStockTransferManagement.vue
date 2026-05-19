@@ -219,7 +219,7 @@
               <h4>{{ $t('section.saleDetailInfo') }}</h4>
             </div>
             <div class="detail-table-wrapper">
-              <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-stock-transfer-management-10">
+              <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-stock-transfer-items">
                 <ErpDataTableColumn type="index" :label="$t('table.index')" width="64" align="center" />
                 <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
                   <template #default="{ row }">
@@ -234,7 +234,7 @@
                     />
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="sourceWarehouseLocationLabel" min-width="220" column-key="custom-11">
+                <ErpDataTableColumn :label="sourceWarehouseLocationLabel" min-width="220" column-key="sourceWarehouseLocation">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ resolveWarehouseLocation(row.fromWarehouseId, row.fromLocationId) }}</div>
                     <ProductStockSelect
@@ -251,12 +251,12 @@
                     />
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="$t('field.sourceQtyAvailable')" width="130" column-key="custom-12">
+                <ErpDataTableColumn :label="$t('field.sourceQtyAvailable')" width="130" column-key="sourceQtyAvailable">
                   <template #default="{ row }">
                     {{ row.sourceQtyAvailable }}
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="targetWarehouseLocationLabel" min-width="220" column-key="custom-13">
+                <ErpDataTableColumn :label="targetWarehouseLocationLabel" min-width="220" column-key="targetWarehouseLocation">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ resolveWarehouseLocation(row.toWarehouseId, row.toLocationId) }}</div>
                     <ProductStockSelect
@@ -273,7 +273,7 @@
                     />
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="targetQtyAvailableLabel" width="130" column-key="custom-14">
+                <ErpDataTableColumn :label="targetQtyAvailableLabel" width="130" column-key="targetQtyAvailable">
                   <template #default="{ row }">
                     {{ row.targetQtyAvailable }}
                   </template>

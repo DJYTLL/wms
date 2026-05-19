@@ -28,12 +28,20 @@ export const useUserTableSettings = (pageKey: string | Ref<string>) => {
   const currentPageKey = computed(() => unref(pageKey))
 
   const fetchConfig = async () => {
+    if (!currentPageKey.value) {
+      config.value = {}
+      loaded.value = true
+      return
+    }
+    loaded.value = false
     try {
       const res: any = await request.get(`/user-table-settings/${currentPageKey.value}`)
       config.value = toSafeConfig(res.data.data?.config)
-      loaded.value = true
     } catch (error) {
       notifyError(error)
+      config.value = {}
+    } finally {
+      loaded.value = true
     }
   }
 
@@ -45,6 +53,12 @@ export const useUserTableSettings = (pageKey: string | Ref<string>) => {
     } catch (error) {
       notifyError(error)
     }
+  }
+
+  const resetConfig = async () => {
+    config.value = {}
+    loaded.value = true
+    await saveConfig()
   }
 
   const getColumnWidth = (columnKey: string, fallback: number) => {
@@ -103,6 +117,7 @@ export const useUserTableSettings = (pageKey: string | Ref<string>) => {
     loaded,
     fetchConfig,
     saveConfig,
+    resetConfig,
     getColumnLayout,
     getColumnWidth,
     setColumnWidth,

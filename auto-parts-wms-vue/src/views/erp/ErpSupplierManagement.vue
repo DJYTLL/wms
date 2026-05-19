@@ -4,11 +4,27 @@
       <div class="page-title">{{ $t('page.erpSupplierManagement') }}</div>
       <div class="page-toolbar-card">
         <div class="erp-basic-toolbar">
-          <div class="erp-basic-filters erp-basic-filters--4">
+          <div class="erp-basic-filters erp-basic-filters--6">
             <el-input
-              v-model="searchQuery"
-              :placeholder="$t('placeholder.keyword')"
-              class="table-search erp-basic-field--wide"
+              v-model="nameQuery"
+              placeholder="名称"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <el-input
+              v-model="codeQuery"
+              placeholder="编码"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <el-input
+              v-model="shortNameQuery"
+              placeholder="简称"
+              class="table-search erp-basic-field--narrow"
               clearable
               @clear="handleSearch"
               @keyup.enter="handleSearch"
@@ -18,6 +34,7 @@
               :placeholder="$t('field.contactPerson')"
               class="table-search erp-basic-field--narrow"
               clearable
+              @clear="handleSearch"
               @keyup.enter="handleSearch"
             />
             <el-input
@@ -25,6 +42,7 @@
               :placeholder="$t('field.phone')"
               class="table-search erp-basic-field--narrow"
               clearable
+              @clear="handleSearch"
               @keyup.enter="handleSearch"
             />
             <el-select
@@ -186,6 +204,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 
 type SupplierStatus = 'enabled' | 'disabled' | 'blacklisted';
 
@@ -223,7 +242,9 @@ const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 
-const searchQuery = ref('');
+const nameQuery = ref('');
+const codeQuery = ref('');
+const shortNameQuery = ref('');
 const contactQuery = ref('');
 const phoneQuery = ref('');
 const statusFilter = ref<'all' | SupplierStatus>('all');
@@ -232,6 +253,7 @@ const page = ref(1);
 const size = ref(20);
 const total = ref(0);
 const tableData = ref<ErpSupplier[]>([]);
+const allTableData = ref<ErpSupplier[]>([]);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
@@ -385,22 +407,26 @@ const fetchNextSupplierCode = async () => {
   }
 };
 
+const applySearch = () => {
+  let filtered = allTableData.value.slice();
+  if (statusFilter.value !== 'all') filtered = filtered.filter(row => resolveStatus(row) === statusFilter.value);
+  filtered = filterByFuzzyKeyword(filtered, nameQuery.value, row => [row.name]);
+  filtered = filterByFuzzyKeyword(filtered, codeQuery.value, row => [row.code]);
+  filtered = filterByFuzzyKeyword(filtered, shortNameQuery.value, row => [row.shortName]);
+  filtered = filterByFuzzyKeyword(filtered, contactQuery.value, row => [row.contact]);
+  filtered = filterByFuzzyKeyword(filtered, phoneQuery.value, row => [row.phone, row.mobile]);
+  total.value = filtered.length;
+  const start = (page.value - 1) * size.value;
+  tableData.value = filtered.slice(start, start + size.value);
+};
+
 const fetchList = async () => {
   loading.value = true;
   try {
-    const params: Record<string, any> = {
-      page: page.value,
-      size: size.value
-    };
-    if (searchQuery.value) params.keyword = searchQuery.value.trim();
-    if (contactQuery.value) params.contact = contactQuery.value.trim();
-    if (phoneQuery.value) params.phone = phoneQuery.value.trim();
-    if (statusFilter.value !== 'all') params.status = statusFilter.value;
-
-    const res: any = await request.get('/erp/suppliers/page', { params });
+    const res: any = await request.get('/erp/suppliers');
     if (res.data.code === 200) {
-      tableData.value = res.data.data.items || [];
-      total.value = res.data.data.total || 0;
+      allTableData.value = res.data.data || [];
+      applySearch();
     }
   } catch (error) {
     notifyError(error);
@@ -415,7 +441,9 @@ const handleSearch = () => {
 };
 
 const handleReset = () => {
-  searchQuery.value = '';
+  nameQuery.value = '';
+  codeQuery.value = '';
+  shortNameQuery.value = '';
   contactQuery.value = '';
   phoneQuery.value = '';
   statusFilter.value = 'all';
@@ -424,13 +452,13 @@ const handleReset = () => {
 
 const handlePageChange = (newPage: number) => {
   page.value = newPage;
-  fetchList();
+  applySearch();
 };
 
 const handleSizeChange = (newSize: number) => {
   size.value = newSize;
   page.value = 1;
-  fetchList();
+  applySearch();
 };
 
 const openAddModal = () => {

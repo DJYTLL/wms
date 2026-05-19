@@ -46,7 +46,7 @@
           <div class="table-actions">
             <el-button @click="expandAll">{{ $t('action.expandAll') }}</el-button>
             <el-button @click="collapseAll">{{ $t('action.collapseAll') }}</el-button>
-            <el-button type="primary" @click="openCreateRoot">{{ $t('menu.addRoot') }}</el-button>
+            <el-button type="primary" v-permission="'menu:add'" @click="openCreateRoot">{{ $t('menu.addRoot') }}</el-button>
           </div>
         </div>
       </div>
@@ -78,13 +78,13 @@
         </ErpDataTableColumn>
         <ErpDataTableColumn :label="$t('table.actions')" width="220" fixed="right" column-key="actions">
           <template #default="{ row }">
-            <el-button link size="small" @click.stop="openCreateChild(row)">
+            <el-button link size="small" v-permission="'menu:add'" @click.stop="openCreateChild(row)">
               {{ $t('menu.addChild') }}
             </el-button>
-            <el-button link size="small" @click.stop="openEdit(row)">
+            <el-button link size="small" v-permission="'menu:edit'" @click.stop="openEdit(row)">
               {{ $t('action.edit') }}
             </el-button>
-            <el-button link size="small" type="danger" @click.stop="handleDelete(row)">
+            <el-button link size="small" type="danger" v-permission="'menu:delete'" @click.stop="handleDelete(row)">
               {{ $t('action.delete') }}
             </el-button>
           </template>

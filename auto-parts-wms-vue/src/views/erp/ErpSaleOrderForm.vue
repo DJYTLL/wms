@@ -262,7 +262,7 @@
                 <DecimalInput v-else v-model="row.qty" :scale="4" />
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-6">
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="price">
               <template #header>
                 <span class="required-table-label">{{ $t('field.price') }}</span>
               </template>
@@ -271,17 +271,17 @@
                 <DecimalInput v-else v-model="row.price" :scale="4" />
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="lineAmount">
               <template #default="{ row }">
                 {{ formatMoney(calcLineAmount(row)) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-8">
+            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="discountAllocated">
               <template #default="{ row }">
                 {{ formatMoney(calcLineDiscount(row)) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="custom-9">
+            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="profit">
               <template #default="{ row }">
                 {{ formatProfitCell(row) }}
               </template>
@@ -529,7 +529,7 @@
           stripe
           class="assembly-quick__items"
           :empty-text="$t('table.empty')"
-         table-key="erp-sale-order-form-13">
+         table-key="erp-sale-order-quick-assembly-items">
           <ErpDataTableColumn type="index" :label="$t('table.index')" width="64" align="center" />
           <ErpDataTableColumn label="物料商品" min-width="200" column-key="product">
             <template #default="{ row }">{{ resolveAssemblyItemProductLabel(row) }}</template>

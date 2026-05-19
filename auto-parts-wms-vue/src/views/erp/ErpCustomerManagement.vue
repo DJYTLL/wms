@@ -4,13 +4,19 @@
       <div class="page-title">{{ $t('page.erpCustomerManagement') }}</div>
       <div class="page-toolbar-card">
         <div class="erp-basic-toolbar">
-          <div class="erp-basic-filters erp-basic-filters--5">
+          <div class="erp-basic-filters erp-basic-filters--6">
             <el-input
-              v-model="searchQuery"
-              :placeholder="$t('placeholder.keyword')"
-              class="table-search erp-basic-field--wide"
+              v-model="nameQuery"
+              placeholder="名称"
+              class="table-search erp-basic-field--narrow"
               clearable
-              @clear="handleSearch"
+              @keyup.enter="handleSearch"
+            />
+            <el-input
+              v-model="codeQuery"
+              placeholder="编码"
+              class="table-search erp-basic-field--narrow"
+              clearable
               @keyup.enter="handleSearch"
             />
             <el-input
@@ -51,7 +57,7 @@
           <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
           <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
-          <ErpDataTableColumn v-if="canShow('category')" :label="$t('field.customerCategory')" min-width="140" column-key="customer">
+          <ErpDataTableColumn v-if="canShow('category')" :label="$t('field.customerCategory')" min-width="140" column-key="category">
             <template #default="{ row }">
               {{ getCategoryName(row.categoryId) }}
             </template>
@@ -124,23 +130,23 @@
               border
               size="small"
               :empty-text="$t('table.empty')"
-             table-key="erp-customer-management-11">
-              <ErpDataTableColumn :label="$t('field.contactPerson')" min-width="120" column-key="custom-10">
+             table-key="erp-customer-contacts">
+              <ErpDataTableColumn :label="$t('field.contactPerson')" min-width="120" column-key="contactName">
                 <template #default="{ row }">
                   <el-input v-model="row.name" :placeholder="$t('field.contactPerson')" />
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn :label="$t('field.phone')" min-width="120" column-key="custom-11">
+              <ErpDataTableColumn :label="$t('field.phone')" min-width="120" column-key="phone">
                 <template #default="{ row }">
                   <el-input v-model="row.phone" :placeholder="$t('field.phone')" />
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn :label="$t('field.mobile')" min-width="120" column-key="custom-12">
+              <ErpDataTableColumn :label="$t('field.mobile')" min-width="120" column-key="mobile">
                 <template #default="{ row }">
                   <el-input v-model="row.mobile" :placeholder="$t('field.mobile')" />
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn :label="$t('field.email')" min-width="180" column-key="custom-13">
+              <ErpDataTableColumn :label="$t('field.email')" min-width="180" column-key="email">
                 <template #default="{ row }">
                   <el-input v-model="row.email" :placeholder="$t('field.email')" />
                 </template>
@@ -183,6 +189,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 import type { FormInstance, FormRules } from 'element-plus';
 
 interface ErpCustomer {
@@ -227,7 +234,8 @@ const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 
-const searchQuery = ref('');
+const nameQuery = ref('');
+const codeQuery = ref('');
 const contactQuery = ref('');
 const phoneQuery = ref('');
 const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all');
@@ -237,6 +245,7 @@ const page = ref(1);
 const size = ref(20);
 const total = ref(0);
 const tableData = ref<ErpCustomer[]>([]);
+const allTableData = ref<ErpCustomer[]>([]);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
@@ -349,23 +358,33 @@ const applyDefaultMethods = () => {
   }
 };
 
+const applySearch = () => {
+  let filtered = allTableData.value.slice();
+  if (statusFilter.value !== 'all') filtered = filtered.filter(row => row.enabled === (statusFilter.value === 'enabled'));
+  if (categoryFilter.value) filtered = filtered.filter(row => row.categoryId === categoryFilter.value);
+  filtered = filterByFuzzyKeyword(filtered, nameQuery.value, row => [row.name]);
+  filtered = filterByFuzzyKeyword(filtered, codeQuery.value, row => [row.code]);
+  filtered = filterByFuzzyKeyword(filtered, contactQuery.value, row => [
+    row.contact,
+    ...getCustomerContacts(row).map(item => item.name)
+  ]);
+  filtered = filterByFuzzyKeyword(filtered, phoneQuery.value, row => [
+    row.phone,
+    row.mobile,
+    ...getCustomerContacts(row).flatMap(item => [item.phone, item.mobile])
+  ]);
+  total.value = filtered.length;
+  const start = (page.value - 1) * size.value;
+  tableData.value = filtered.slice(start, start + size.value);
+};
+
 const fetchList = async () => {
   loading.value = true;
   try {
-    const params: Record<string, any> = {
-      page: page.value,
-      size: size.value
-    };
-    if (searchQuery.value) params.keyword = searchQuery.value.trim();
-    if (contactQuery.value) params.contact = contactQuery.value.trim();
-    if (phoneQuery.value) params.phone = phoneQuery.value.trim();
-    if (statusFilter.value !== 'all') params.enabled = statusFilter.value === 'enabled';
-    if (categoryFilter.value) params.categoryId = categoryFilter.value;
-
-    const res: any = await request.get('/erp/customers/page', { params });
+    const res: any = await request.get('/erp/customers');
     if (res.data.code === 200) {
-      tableData.value = res.data.data.items || [];
-      total.value = res.data.data.total || 0;
+      allTableData.value = res.data.data || [];
+      applySearch();
     }
   } catch (error) {
     notifyError(error);
@@ -380,7 +399,8 @@ const handleSearch = () => {
 };
 
 const handleReset = () => {
-  searchQuery.value = '';
+  nameQuery.value = '';
+  codeQuery.value = '';
   contactQuery.value = '';
   phoneQuery.value = '';
   statusFilter.value = 'all';
@@ -390,13 +410,13 @@ const handleReset = () => {
 
 const handlePageChange = (newPage: number) => {
   page.value = newPage;
-  fetchList();
+  applySearch();
 };
 
 const handleSizeChange = (newSize: number) => {
   size.value = newSize;
   page.value = 1;
-  fetchList();
+  applySearch();
 };
 
 const openAddModal = () => {
@@ -463,6 +483,8 @@ const parseContacts = (raw?: unknown) => {
   }
   return [];
 };
+
+const getCustomerContacts = (row: ErpCustomer) => parseContacts(row.contacts);
 
 const addContact = () => {
   formData.contacts.push({ name: '', phone: '', mobile: '', email: '' });

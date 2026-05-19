@@ -105,7 +105,7 @@
                   </el-select>
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
+              <ErpDataTableColumn :label="$t('field.warehouse')" min-width="160" column-key="warehouse">
                 <template #default="{ row }">
                   <el-select
                     v-model="row.warehouseId"
@@ -120,7 +120,7 @@
                   </el-select>
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn :label="$t('field.location')" min-width="160" column-key="warehouseLocation">
+              <ErpDataTableColumn :label="$t('field.location')" min-width="160" column-key="location">
                 <template #default="{ row }">
                   <el-select
                     v-model="row.stockKey"
@@ -155,22 +155,22 @@
                 <DecimalInput v-model="row.qty" :scale="4" :disabled="isReadOnly" />
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-5">
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="price">
               <template #default="{ row }">
                 <DecimalInput v-model="row.price" :scale="4" :disabled="isReadOnly" />
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="lineAmount">
               <template #default="{ row }">
                 {{ formatMoney(calcLineAmount(row)) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-7">
+            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="discountAllocated">
               <template #default="{ row }">
                 {{ formatMoney(calcLineDiscount(row)) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="custom-8">
+            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="profit">
               <template #default="{ row }">
                 {{ formatProfitCell(row) }}
               </template>

@@ -12,16 +12,14 @@ import com.example.wms.mapper.TenantColumnSettingMapper;
 import com.example.wms.mapper.UserAccountMapper;
 import com.example.wms.mapper.UserRoleMapper;
 import com.example.wms.service.RolePermissionService;
+import com.example.wms.service.RoleScopeService;
 import com.example.wms.aop.AuditLog;
 import com.example.wms.tenant.TenantContext;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -36,6 +34,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     private final TenantColumnSettingMapper tenantColumnSettingMapper;
     private final UserRoleMapper userRoleMapper;
     private final UserAccountMapper userAccountMapper;
+    private final RoleScopeService roleScopeService;
 
     public RolePermissionServiceImpl(RoleMapper roleMapper,
                                      PermissionMapper permissionMapper,
@@ -43,7 +42,8 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                                      RolePermissionMapper rolePermissionMapper,
                                      TenantColumnSettingMapper tenantColumnSettingMapper,
                                      UserRoleMapper userRoleMapper,
-                                     UserAccountMapper userAccountMapper) {
+                                     UserAccountMapper userAccountMapper,
+                                     RoleScopeService roleScopeService) {
         this.roleMapper = roleMapper;
         this.permissionMapper = permissionMapper;
         this.roleColumnSettingMapper = roleColumnSettingMapper;
@@ -51,6 +51,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         this.tenantColumnSettingMapper = tenantColumnSettingMapper;
         this.userRoleMapper = userRoleMapper;
         this.userAccountMapper = userAccountMapper;
+        this.roleScopeService = roleScopeService;
     }
 
     @Override
@@ -86,12 +87,39 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     }
 
     @Override
+    public boolean canManageColumnPermissions(Long roleId) {
+        return canManageRole(roleId);
+    }
+
+    @Override
+    public boolean canViewRole(Long roleId) {
+        try {
+            return roleScopeService.canViewRole(loadRawRole(roleId));
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean canManageRole(Long roleId) {
+        try {
+            return roleScopeService.canManageRole(loadRawRole(roleId));
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean isCurrentActorRole(Long roleId) {
+        return roleScopeService.isCurrentActorRole(roleId);
+    }
+
+    @Override
     @Transactional
     @AuditLog(action = "ROLE_PERMISSION_SET", entityType = "role", entityId = "{arg0}", detail = "permissionIds={arg1.permissionIds}")
     public void setPermissions(Long roleId, List<Long> permissionIds) {
         Role role = loadRole(roleId);
-        ensurePermissionMutableRole(role);
-        ensureCurrentRolePermissionsWithinActorScope(role);
+        ensureManageableRole(role);
         List<Permission> requestedPermissions = validateAndLoadPermissions(role, permissionIds);
         List<Permission> assignablePermissions = requestedPermissions.stream()
             .filter(permission -> !isConcreteColumnPermission(permission.getCode()))
@@ -123,8 +151,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @AuditLog(action = "ROLE_PERMISSION_SET", entityType = "role", entityId = "{arg0}", detail = "pageKey={arg1}, columnPermissionIds={arg2}")
     public void setColumnPermissions(Long roleId, String pageKey, List<Long> permissionIds) {
         Role role = loadRole(roleId);
-        ensurePermissionMutableRole(role);
-        ensureCurrentRolePermissionsWithinActorScope(role);
+        ensureManageableRole(role);
         String normalizedPageKey = pageKey == null ? "" : pageKey.trim();
         String prefix = normalizedPageKey.isBlank()
             ? "column:"
@@ -174,8 +201,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @AuditLog(action = "ROLE_PERMISSION_ADD", entityType = "role", entityId = "{arg0}", detail = "permissionId={arg1}")
     public void addPermission(Long roleId, Long permissionId) {
         Role role = loadRole(roleId);
-        ensurePermissionMutableRole(role);
-        ensureCurrentRolePermissionsWithinActorScope(role);
+        ensureManageableRole(role);
         validatePermissions(role, List.of(permissionId));
         Long tenantId = TenantContext.requireTenantId();
         rolePermissionMapper.insertIgnore(tenantId, roleId, permissionId);
@@ -186,8 +212,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @AuditLog(action = "ROLE_PERMISSION_REMOVE", entityType = "role", entityId = "{arg0}", detail = "permissionId={arg1}")
     public void removePermission(Long roleId, Long permissionId) {
         Role role = loadRole(roleId);
-        ensurePermissionMutableRole(role);
-        ensureCurrentRolePermissionsWithinActorScope(role);
+        ensureManageableRole(role);
         Long tenantId = TenantContext.requireTenantId();
         rolePermissionMapper.deleteByRoleIdAndPermissionId(tenantId, roleId, permissionId);
         bumpUsersByRole(roleId);
@@ -199,6 +224,14 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     }
 
     private Role loadRole(Long roleId) {
+        Role role = loadRawRole(roleId);
+        if (!roleScopeService.canViewRole(role)) {
+            throw new IllegalArgumentException("角色不存在");
+        }
+        return role;
+    }
+
+    private Role loadRawRole(Long roleId) {
         Long tenantId = TenantContext.requireTenantId();
         Role role = roleMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Role>()
             .eq("tenant_id", tenantId)
@@ -253,7 +286,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         String code = role == null || role.getCode() == null
             ? ""
             : role.getCode().trim().toLowerCase(Locale.ROOT);
-        boolean actorIsSuperAdmin = currentActorHasRole("super_admin");
+        boolean actorIsSuperAdmin = roleScopeService.currentActorHasRole("super_admin");
         if ("super_admin".equals(code) && !actorIsSuperAdmin) {
             throw new IllegalArgumentException("仅系统超级管理员可调整 super_admin 角色权限");
         }
@@ -262,21 +295,21 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         }
     }
 
-    private boolean currentActorHasRole(String roleCode) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getAuthorities() == null) {
-            return false;
+    private void ensureManageableRole(Role role) {
+        if (roleScopeService.isCurrentActorRole(role.getId())) {
+            throw new IllegalArgumentException("不能修改当前登录账号所属角色");
         }
-        String expected = "ROLE_" + roleCode.toLowerCase(Locale.ROOT);
-        return authentication.getAuthorities().stream()
-            .anyMatch(authority -> authority != null && expected.equalsIgnoreCase(authority.getAuthority()));
+        ensurePermissionMutableRole(role);
+        if (!roleScopeService.canManageRole(role)) {
+            throw new IllegalArgumentException("无权限维护该角色");
+        }
     }
 
     private void ensurePermissionsWithinActorScope(List<Permission> permissions) {
-        if (currentActorHasRole("super_admin")) {
+        if (roleScopeService.currentActorHasRole("super_admin")) {
             return;
         }
-        Set<String> actorPermissionCodes = currentActorPermissionCodes();
+        Set<String> actorPermissionCodes = roleScopeService.currentActorPermissionCodes();
         List<String> exceeded = permissions.stream()
             .map(Permission::getCode)
             .filter(code -> code != null && !code.isBlank())
@@ -285,31 +318,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         if (!exceeded.isEmpty()) {
             throw new IllegalArgumentException("存在超出当前账号范围的权限，不能分配: " + String.join("、", exceeded));
         }
-    }
-
-    private void ensureCurrentRolePermissionsWithinActorScope(Role role) {
-        if (currentActorHasRole("super_admin") || role == null || role.getId() == null) {
-            return;
-        }
-        Long tenantId = TenantContext.requireTenantId();
-        List<Permission> currentPermissions = rolePermissionMapper.findPermissionsByRoleId(tenantId, role.getId());
-        ensurePermissionsWithinActorScope(currentPermissions);
-    }
-
-    private Set<String> currentActorPermissionCodes() {
-        Set<String> permissionCodes = new HashSet<>();
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getAuthorities() == null) {
-            return permissionCodes;
-        }
-        Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
-        for (GrantedAuthority authority : authorities) {
-            String raw = authority == null ? null : authority.getAuthority();
-            if (raw != null && raw.startsWith("PERM_") && raw.length() > 5) {
-                permissionCodes.add(raw.substring(5));
-            }
-        }
-        return permissionCodes;
     }
 
     private void validateAgainstTenantColumns(Long tenantId,

@@ -73,7 +73,7 @@
           </ErpDataTableColumn>
           <ErpDataTableColumn prop="amount" :label="$t('field.paymentAmount')" min-width="140" />
           <ErpDataTableColumn prop="discountAmount" :label="$t('field.discountAmount')" min-width="140" />
-          <ErpDataTableColumn :label="$t('field.redFlushReason')" min-width="200" column-key="custom-6">
+          <ErpDataTableColumn :label="$t('field.redFlushReason')" min-width="200" column-key="redFlushReason">
             <template #default="{ row }">
               <span v-if="row.status === 'RED_FLUSHED'">{{ extractRedFlushReason(row.remark) }}</span>
               <span v-else>-</span>

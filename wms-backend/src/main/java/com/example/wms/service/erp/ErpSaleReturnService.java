@@ -22,9 +22,9 @@ public interface ErpSaleReturnService {
 
     PageResponse<ErpSaleReturn> approvedPage(long page, long size, String keyword, String status, Long customerId, Instant startAt, Instant endAt);
 
-    PageResponse<ErpSaleReturnSourceSaleOrderOption> sourceSaleOrderPage(long page, long size, String keyword, Long customerId);
+    PageResponse<ErpSaleReturnSourceSaleOrderOption> sourceSaleOrderPage(long page, long size, String keyword, Long customerId, Long currentReturnId);
 
-    PageResponse<ErpSaleOrderRecentItem> sourceRecentSaleItems(long page, long size, Long customerId, Long productId);
+    PageResponse<ErpSaleOrderRecentItem> sourceRecentSaleItems(long page, long size, Long customerId, Long productId, Long currentReturnId);
 
     List<ErpSaleReturn> listBySaleOrderId(Long saleOrderId, boolean includeDraft);
 
@@ -34,7 +34,7 @@ public interface ErpSaleReturnService {
 
     ErpSaleReturnDetail getApprovedDetail(Long id);
 
-    ErpSaleReturnSourceSaleOrderDetail getSourceSaleOrderDetail(Long saleOrderId);
+    ErpSaleReturnSourceSaleOrderDetail getSourceSaleOrderDetail(Long saleOrderId, Long currentReturnId);
 
     ErpSaleReturnRefundSummary getSaleOrderRefundSummary(Long saleOrderId);
 
@@ -49,8 +49,6 @@ public interface ErpSaleReturnService {
     void delete(Long id);
 
     void approve(Long id);
-
-    void cancel(Long id, String reason);
 
     void redFlush(Long id, String reason);
 }

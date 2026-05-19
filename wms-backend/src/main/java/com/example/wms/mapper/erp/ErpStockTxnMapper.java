@@ -41,6 +41,21 @@ public interface ErpStockTxnMapper extends BaseMapper<ErpStockTxn> {
         )
         FROM erp_stock_txn
         WHERE tenant_id = #{tenantId}
+          AND biz_type = 'SALE_APPROVE'
+          AND biz_id = #{saleOrderId}
+          AND biz_item_id = #{saleOrderItemId}
+        """)
+    BigDecimal findSaleIssueUnitCostByItem(@Param("tenantId") Long tenantId,
+                                           @Param("saleOrderId") Long saleOrderId,
+                                           @Param("saleOrderItemId") Long saleOrderItemId);
+
+    @Select("""
+        SELECT COALESCE(
+            SUM(ABS(total_cost)) / NULLIF(SUM(ABS(qty_delta)), 0),
+            0
+        )
+        FROM erp_stock_txn
+        WHERE tenant_id = #{tenantId}
           AND biz_type = 'PURCHASE_RETURN'
           AND biz_id = #{purchaseReturnId}
           AND product_id = #{productId}

@@ -48,6 +48,7 @@ public class RoleController {
     public ResponseEntity<ApiResponse<List<RoleOptionResponse>>> listOptions() {
         List<RoleOptionResponse> options = roleService.listAll().stream()
             .filter(Role::isEnabled)
+            .filter(role -> rolePermissionService.canManageColumnPermissions(role.getId()))
             .map(role -> new RoleOptionResponse(role.getId(), role.getCode(), role.getName()))
             .toList();
         return ResponseEntity.ok(ApiResponse.ok(options));

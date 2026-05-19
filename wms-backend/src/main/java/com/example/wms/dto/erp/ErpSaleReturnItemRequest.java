@@ -15,6 +15,14 @@ public record ErpSaleReturnItemRequest(
      */
     @NotNull Long productId,
     /**
+     * 表示来源销售单明细 ID。
+     */
+    Long sourceSaleOrderItemId,
+    /**
+     * 表示来源销售单 ID。
+     */
+    Long sourceSaleOrderId,
+    /**
      * 表示仓库 ID。
      */
     Long warehouseId,

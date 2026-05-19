@@ -228,7 +228,7 @@
                   <DecimalInput v-else v-model="row.qty" :scale="4" />
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-6">
+              <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="price">
                 <template #header>
                   <span class="required-table-label">{{ $t('field.price') }}</span>
                 </template>
@@ -237,12 +237,12 @@
                   <DecimalInput v-else v-model="row.price" :scale="4" />
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
+              <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="lineAmount">
                 <template #default="{ row }">
                   {{ formatMoney(calcLineAmount(row)) }}
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-8">
+              <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="discountAllocated">
                 <template #default="{ row }">
                   {{ formatMoney(calcLineDiscount(row)) }}
                 </template>

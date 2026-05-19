@@ -52,30 +52,30 @@
         <ErpDataTableColumn :label="$t('table.actions')" width="150" fixed="right" column-key="actions">
           <template #default="{ row }">
             <el-tooltip
-              :disabled="canEditRole(row.code)"
-              :content="editDisabledReason(row.code)"
+              :disabled="canEditRole(row)"
+              :content="editDisabledReason(row)"
               placement="top"
             >
               <el-button
                 link
                 type="primary"
                 size="small"
-                :disabled="!canEditRole(row.code)"
+                :disabled="!canEditRole(row)"
                 @click="openEditModal(row)"
               >
                 {{ $t('action.edit') }}
               </el-button>
             </el-tooltip>
             <el-tooltip
-              :disabled="!isReservedRole(row.code)"
-              content="保留角色不允许通过角色管理接口删除"
+              :disabled="canDeleteRole(row)"
+              :content="deleteDisabledReason(row)"
               placement="top"
             >
               <el-button
                 link
                 type="danger"
                 size="small"
-                :disabled="isReservedRole(row.code)"
+                :disabled="!canDeleteRole(row)"
                 @click="handleDelete(row)"
               >
                 {{ $t('action.delete') }}
@@ -627,10 +627,38 @@ const canManageReservedRole = (code?: string) => {
   return true;
 };
 
-const canEditRole = (code?: string) => !isReservedRole(code) || canManageReservedRole(code);
+const currentUserRoleCodes = computed(() => {
+  const roles = (authStore.user as { roles?: Array<string | { code?: string }> } | null)?.roles;
+  if (!Array.isArray(roles)) return [] as string[];
+  return roles
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      return item?.code || '';
+    })
+    .filter((item) => Boolean(item))
+    .map((item) => item.trim().toLowerCase());
+});
 
-const editDisabledReason = (code?: string) => {
-  const normalized = (code || '').trim().toLowerCase();
+const isCurrentUserRole = (role?: Role) => {
+  if (!role?.code) return false;
+  return currentUserRoleCodes.value.includes(role.code.trim().toLowerCase());
+};
+
+const canEditRole = (role?: Role) => {
+  if (isCurrentUserRole(role)) return false;
+  return !isReservedRole(role?.code) || canManageReservedRole(role?.code);
+};
+
+const canDeleteRole = (role?: Role) => {
+  if (isCurrentUserRole(role)) return false;
+  return !isReservedRole(role?.code);
+};
+
+const editDisabledReason = (role?: Role) => {
+  if (isCurrentUserRole(role)) {
+    return '不能修改当前登录账号所属角色';
+  }
+  const normalized = (role?.code || '').trim().toLowerCase();
   if (!reservedRoleCodes.has(normalized)) {
     return '';
   }
@@ -638,6 +666,16 @@ const editDisabledReason = (code?: string) => {
     return '仅系统超级管理员可维护 super_admin 角色权限';
   }
   return '仅系统超级管理员可维护 admin 角色权限';
+};
+
+const deleteDisabledReason = (role?: Role) => {
+  if (isCurrentUserRole(role)) {
+    return '不能修改当前登录账号所属角色';
+  }
+  if (isReservedRole(role?.code)) {
+    return '保留角色不允许通过角色管理接口删除';
+  }
+  return '';
 };
 
 const pageLabelMap = computed<Record<string, string>>(() => ({
@@ -777,20 +815,65 @@ const resolveSelectedPermissionPageKeys = (key: string) => {
   return visibleMappedKeys.length > 0 ? visibleMappedKeys : [key];
 };
 
-const visiblePermissionList = computed(() => {
-  const source = canUsePlatformPermissions.value
+const assignablePermissionSource = computed(() => {
+  return canUsePlatformPermissions.value
     ? permissionList.value
     : permissionList.value.filter(
       p => !p.code.startsWith('tenant:') && !p.code.startsWith('system-config:')
     );
+});
 
-  return source
+const baseVisiblePermissionList = computed(() => {
+  return assignablePermissionSource.value
     .filter((item) => !isConcreteColumnPermission(item.code))
     .flatMap((item) => resolvePermissionPageKeys(item.code).map((itemPageKey) => ({
       ...item,
       pageKey: itemPageKey,
     })));
 });
+
+const menuBoundPermissionList = computed(() => {
+  const permissionByCode = new Map(
+    assignablePermissionSource.value
+      .filter((item) => !isConcreteColumnPermission(item.code))
+      .map((item) => [item.code, item]),
+  );
+  const existingPairs = new Set(
+    baseVisiblePermissionList.value.map((item) => `${item.id}:${item.pageKey || ''}`),
+  );
+  const entries: Permission[] = [];
+
+  const walkMenus = (items: MenuItem[]) => {
+    items.forEach((item) => {
+      const menuKey = item.key || '';
+      const mappedPageKeys = menuPageKeyMap[menuKey] || [];
+      const permission = item.permissionCode ? permissionByCode.get(item.permissionCode) : undefined;
+      if (permission) {
+        mappedPageKeys.forEach((mappedPageKey) => {
+          const pairKey = `${permission.id}:${mappedPageKey}`;
+          if (!existingPairs.has(pairKey)) {
+            existingPairs.add(pairKey);
+            entries.push({
+              ...permission,
+              pageKey: mappedPageKey,
+            });
+          }
+        });
+      }
+      if (item.children && item.children.length > 0) {
+        walkMenus(item.children);
+      }
+    });
+  };
+
+  walkMenus(treeMenus.value);
+  return entries;
+});
+
+const visiblePermissionList = computed(() => [
+  ...baseVisiblePermissionList.value,
+  ...menuBoundPermissionList.value,
+]);
 
 const containsTreeSelection = (node: PageTreeNode): boolean => {
   if (node.pageKey === pageKey.value) return true;
@@ -1313,8 +1396,8 @@ const openAddModal = () => {
 };
 
 const openEditModal = async (row: Role) => {
-  if (!canEditRole(row.code)) {
-    notifyWarning(editDisabledReason(row.code));
+  if (!canEditRole(row)) {
+    notifyWarning(editDisabledReason(row));
     return;
   }
 
@@ -1408,8 +1491,8 @@ const saveData = async () => {
 };
 
 const handleDelete = (row: Role) => {
-  if (isReservedRole(row.code)) {
-    notifyWarning('保留角色不允许通过角色管理接口删除');
+  if (!canDeleteRole(row)) {
+    notifyWarning(deleteDisabledReason(row));
     return;
   }
 

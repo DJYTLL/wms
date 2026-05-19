@@ -58,7 +58,7 @@
               {{ formatOrderType(row.orderType) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('finishedProduct')" :label="$t('field.finishedProduct')" min-width="180" column-key="custom-4">
+          <ErpDataTableColumn v-if="canShow('finishedProduct')" :label="$t('field.finishedProduct')" min-width="180" column-key="finishedProduct">
             <template #default="{ row }">
               {{ getProductName(row.finishedProductId) }}
             </template>

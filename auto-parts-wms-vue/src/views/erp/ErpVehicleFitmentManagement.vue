@@ -6,11 +6,19 @@
         <el-tabs v-model="activeTab" class="vehicle-tabs">
           <el-tab-pane :label="$t('field.vehicleBrand')" name="brands">
             <div class="erp-basic-toolbar vehicle-tab-toolbar">
-              <div class="erp-basic-filters erp-basic-filters--2">
+              <div class="erp-basic-filters erp-basic-filters--3">
             <el-input
-              v-model="brandSearch"
-              :placeholder="$t('action.search')"
-              class="table-search erp-basic-field--wide"
+              v-model="brandNameQuery"
+              placeholder="名称"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @clear="handleBrandSearch"
+              @keyup.enter="handleBrandSearch"
+            />
+            <el-input
+              v-model="brandCodeQuery"
+              placeholder="编码"
+              class="table-search erp-basic-field--narrow"
               clearable
               @clear="handleBrandSearch"
               @keyup.enter="handleBrandSearch"
@@ -22,6 +30,9 @@
             </el-select>
               </div>
               <div class="erp-basic-actions">
+                <el-button type="primary" @click="handleBrandSearch">
+                  {{ $t('action.search') }}
+                </el-button>
                 <el-button type="primary" v-permission="'erp-vehicle-brand:add'" @click="openBrandAdd">
                   {{ $t('action.add') }}
                 </el-button>
@@ -30,7 +41,7 @@
 
         <div class="table-card">
           <div class="table-body">
-            <ErpDataTable :data="brandTable" style="width: 100%" stripe v-loading="brandLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-management">
+            <ErpDataTable :data="brandTable" style="width: 100%" stripe v-loading="brandLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-brands">
               <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
               <ErpDataTableColumn v-if="canShowBrand('code')" prop="code" :label="$t('field.code')" min-width="120" />
               <ErpDataTableColumn v-if="canShowBrand('name')" prop="name" :label="$t('field.name')" min-width="160" />
@@ -70,11 +81,19 @@
           </el-tab-pane>
           <el-tab-pane :label="$t('field.vehicleSeries')" name="series">
             <div class="erp-basic-toolbar vehicle-tab-toolbar">
-              <div class="erp-basic-filters erp-basic-filters--3">
+              <div class="erp-basic-filters erp-basic-filters--4">
             <el-input
-              v-model="seriesSearch"
-              :placeholder="$t('action.search')"
-              class="table-search erp-basic-field--wide"
+              v-model="seriesNameQuery"
+              placeholder="名称"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @clear="handleSeriesSearch"
+              @keyup.enter="handleSeriesSearch"
+            />
+            <el-input
+              v-model="seriesCodeQuery"
+              placeholder="编码"
+              class="table-search erp-basic-field--narrow"
               clearable
               @clear="handleSeriesSearch"
               @keyup.enter="handleSeriesSearch"
@@ -89,6 +108,9 @@
             </el-select>
               </div>
               <div class="erp-basic-actions">
+                <el-button type="primary" @click="handleSeriesSearch">
+                  {{ $t('action.search') }}
+                </el-button>
                 <el-button type="primary" v-permission="'erp-vehicle-series:add'" @click="openSeriesAdd">
                   {{ $t('action.add') }}
                 </el-button>
@@ -97,10 +119,10 @@
 
         <div class="table-card">
           <div class="table-body">
-            <ErpDataTable :data="seriesTable" style="width: 100%" stripe v-loading="seriesLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-management-8">
+            <ErpDataTable :data="seriesTable" style="width: 100%" stripe v-loading="seriesLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-series">
               <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
               <ErpDataTableColumn v-if="canShowSeries('code')" prop="code" :label="$t('field.code')" min-width="120" />
-              <ErpDataTableColumn v-if="canShowSeries('brand')" :label="$t('field.vehicleBrand')" min-width="160" column-key="custom-9">
+              <ErpDataTableColumn v-if="canShowSeries('brand')" :label="$t('field.vehicleBrand')" min-width="160" column-key="brand">
                 <template #default="{ row }">
                   {{ getBrandName(row.brandId) }}
                 </template>
@@ -142,11 +164,19 @@
           </el-tab-pane>
           <el-tab-pane :label="$t('field.vehicleModel')" name="models">
             <div class="erp-basic-toolbar vehicle-tab-toolbar">
-              <div class="erp-basic-filters erp-basic-filters--3">
+              <div class="erp-basic-filters erp-basic-filters--4">
             <el-input
-              v-model="modelSearch"
-              :placeholder="$t('action.search')"
-              class="table-search erp-basic-field--wide"
+              v-model="modelNameQuery"
+              placeholder="名称"
+              class="table-search erp-basic-field--narrow"
+              clearable
+              @clear="handleModelSearch"
+              @keyup.enter="handleModelSearch"
+            />
+            <el-input
+              v-model="modelCodeQuery"
+              placeholder="编码"
+              class="table-search erp-basic-field--narrow"
               clearable
               @clear="handleModelSearch"
               @keyup.enter="handleModelSearch"
@@ -166,6 +196,9 @@
             </el-select>
               </div>
               <div class="erp-basic-actions">
+                <el-button type="primary" @click="handleModelSearch">
+                  {{ $t('action.search') }}
+                </el-button>
                 <el-button type="primary" v-permission="'erp-vehicle-model:add'" @click="openModelAdd">
                   {{ $t('action.add') }}
                 </el-button>
@@ -174,21 +207,21 @@
 
         <div class="table-card">
           <div class="table-body">
-            <ErpDataTable :data="modelTable" style="width: 100%" stripe v-loading="modelLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-management-16">
+            <ErpDataTable :data="modelTable" style="width: 100%" stripe v-loading="modelLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-models">
               <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
               <ErpDataTableColumn v-if="canShowModel('code')" prop="code" :label="$t('field.code')" min-width="120" />
-              <ErpDataTableColumn v-if="canShowModel('series')" :label="$t('field.vehicleSeries')" min-width="180" column-key="custom-16">
+              <ErpDataTableColumn v-if="canShowModel('series')" :label="$t('field.vehicleSeries')" min-width="180" column-key="series">
                 <template #default="{ row }">
                   {{ getSeriesLabel(row.seriesId) }}
                 </template>
               </ErpDataTableColumn>
               <ErpDataTableColumn v-if="canShowModel('name')" prop="name" :label="$t('field.name')" min-width="160" />
-              <ErpDataTableColumn v-if="canShowModel('yearFrom')" :label="$t('field.yearFrom')" width="100" column-key="custom-18">
+              <ErpDataTableColumn v-if="canShowModel('yearFrom')" :label="$t('field.yearFrom')" width="100" column-key="yearFrom">
                 <template #default="{ row }">
                   {{ row.yearFrom || '-' }}
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn v-if="canShowModel('yearTo')" :label="$t('field.yearTo')" width="100" column-key="custom-19">
+              <ErpDataTableColumn v-if="canShowModel('yearTo')" :label="$t('field.yearTo')" width="100" column-key="yearTo">
                 <template #default="{ row }">
                   {{ row.yearTo || '-' }}
                 </template>
@@ -258,14 +291,14 @@
 
         <div class="table-card">
           <div class="table-body">
-            <ErpDataTable :data="fitmentTable" style="width: 100%" stripe v-loading="fitmentLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-management-28">
+            <ErpDataTable :data="fitmentTable" style="width: 100%" stripe v-loading="fitmentLoading" :empty-text="$t('table.empty')" table-key="erp-vehicle-fitment-products">
               <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
               <ErpDataTableColumn v-if="canShowFitment('product')" :label="$t('field.product')" min-width="200" column-key="product">
                 <template #default="{ row }">
                   {{ getProductLabel(row.productId) }}
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn v-if="canShowFitment('vehicleModel')" :label="$t('field.vehicleModel')" min-width="240" column-key="custom-27">
+              <ErpDataTableColumn v-if="canShowFitment('vehicleModel')" :label="$t('field.vehicleModel')" min-width="240" column-key="vehicleModel">
                 <template #default="{ row }">
                   {{ getModelLabel(row.modelId) }}
                 </template>
@@ -424,6 +457,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useSystemConfig } from '@/composables/useSystemConfig';
+import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 
 interface ProductOption {
   id: number;
@@ -493,18 +527,21 @@ const fetchColumnKeys = () => {
 
 const activeTab = ref('brands');
 
-const brandSearch = ref('');
+const brandNameQuery = ref('');
+const brandCodeQuery = ref('');
 const brandStatus = ref<'all' | 'enabled' | 'disabled'>('all');
 const brandLoading = ref(false);
 const brandPage = ref(1);
 const brandSize = ref(20);
 const brandTotal = ref(0);
 const brandTable = ref<VehicleBrand[]>([]);
+const allBrandTable = ref<VehicleBrand[]>([]);
 const showBrandModal = ref(false);
 const brandEditing = ref(false);
 const currentBrandId = ref<number | null>(null);
 
-const seriesSearch = ref('');
+const seriesNameQuery = ref('');
+const seriesCodeQuery = ref('');
 const seriesStatus = ref<'all' | 'enabled' | 'disabled'>('all');
 const seriesBrandFilter = ref<number | null>(null);
 const seriesLoading = ref(false);
@@ -512,11 +549,13 @@ const seriesPage = ref(1);
 const seriesSize = ref(20);
 const seriesTotal = ref(0);
 const seriesTable = ref<VehicleSeries[]>([]);
+const allSeriesTable = ref<VehicleSeries[]>([]);
 const showSeriesModal = ref(false);
 const seriesEditing = ref(false);
 const currentSeriesId = ref<number | null>(null);
 
-const modelSearch = ref('');
+const modelNameQuery = ref('');
+const modelCodeQuery = ref('');
 const modelStatus = ref<'all' | 'enabled' | 'disabled'>('all');
 const modelSeriesFilter = ref<number | null>(null);
 const modelLoading = ref(false);
@@ -524,6 +563,7 @@ const modelPage = ref(1);
 const modelSize = ref(20);
 const modelTotal = ref(0);
 const modelTable = ref<VehicleModel[]>([]);
+const allModelTable = ref<VehicleModel[]>([]);
 const showModelModal = ref(false);
 const modelEditing = ref(false);
 const currentModelId = ref<number | null>(null);
@@ -695,16 +735,23 @@ const fetchProductOptions = async () => {
   }
 };
 
+const applyBrandSearch = () => {
+  let filtered = allBrandTable.value.slice();
+  if (brandStatus.value !== 'all') filtered = filtered.filter(row => row.enabled === (brandStatus.value === 'enabled'));
+  filtered = filterByFuzzyKeyword(filtered, brandNameQuery.value, row => [row.name]);
+  filtered = filterByFuzzyKeyword(filtered, brandCodeQuery.value, row => [row.code]);
+  brandTotal.value = filtered.length;
+  const start = (brandPage.value - 1) * brandSize.value;
+  brandTable.value = filtered.slice(start, start + brandSize.value);
+};
+
 const fetchBrandList = async () => {
   brandLoading.value = true;
   try {
-    const params: Record<string, any> = { page: brandPage.value, size: brandSize.value };
-    if (brandSearch.value) params.keyword = brandSearch.value.trim();
-    if (brandStatus.value !== 'all') params.enabled = brandStatus.value === 'enabled';
-    const res: any = await request.get('/erp/vehicle-brands/page', { params });
+    const res: any = await request.get('/erp/vehicle-brands');
     if (res.data.code === 200) {
-      brandTable.value = res.data.data.items || [];
-      brandTotal.value = res.data.data.total || 0;
+      allBrandTable.value = res.data.data || [];
+      applyBrandSearch();
     }
   } catch (error) {
     notifyError(error);
@@ -720,13 +767,13 @@ const handleBrandSearch = () => {
 
 const handleBrandPageChange = (page: number) => {
   brandPage.value = page;
-  fetchBrandList();
+  applyBrandSearch();
 };
 
 const handleBrandSizeChange = (size: number) => {
   brandSize.value = size;
   brandPage.value = 1;
-  fetchBrandList();
+  applyBrandSearch();
 };
 
 const openBrandAdd = () => {
@@ -786,17 +833,24 @@ const handleBrandDelete = async (row: VehicleBrand) => {
   }
 };
 
+const applySeriesSearch = () => {
+  let filtered = allSeriesTable.value.slice();
+  if (seriesStatus.value !== 'all') filtered = filtered.filter(row => row.enabled === (seriesStatus.value === 'enabled'));
+  if (seriesBrandFilter.value) filtered = filtered.filter(row => row.brandId === seriesBrandFilter.value);
+  filtered = filterByFuzzyKeyword(filtered, seriesNameQuery.value, row => [row.name]);
+  filtered = filterByFuzzyKeyword(filtered, seriesCodeQuery.value, row => [row.code]);
+  seriesTotal.value = filtered.length;
+  const start = (seriesPage.value - 1) * seriesSize.value;
+  seriesTable.value = filtered.slice(start, start + seriesSize.value);
+};
+
 const fetchSeriesList = async () => {
   seriesLoading.value = true;
   try {
-    const params: Record<string, any> = { page: seriesPage.value, size: seriesSize.value };
-    if (seriesSearch.value) params.keyword = seriesSearch.value.trim();
-    if (seriesStatus.value !== 'all') params.enabled = seriesStatus.value === 'enabled';
-    if (seriesBrandFilter.value) params.brandId = seriesBrandFilter.value;
-    const res: any = await request.get('/erp/vehicle-series/page', { params });
+    const res: any = await request.get('/erp/vehicle-series');
     if (res.data.code === 200) {
-      seriesTable.value = res.data.data.items || [];
-      seriesTotal.value = res.data.data.total || 0;
+      allSeriesTable.value = res.data.data || [];
+      applySeriesSearch();
     }
   } catch (error) {
     notifyError(error);
@@ -812,13 +866,13 @@ const handleSeriesSearch = () => {
 
 const handleSeriesPageChange = (page: number) => {
   seriesPage.value = page;
-  fetchSeriesList();
+  applySeriesSearch();
 };
 
 const handleSeriesSizeChange = (size: number) => {
   seriesSize.value = size;
   seriesPage.value = 1;
-  fetchSeriesList();
+  applySeriesSearch();
 };
 const openSeriesAdd = () => {
   seriesEditing.value = false;
@@ -879,17 +933,24 @@ const handleSeriesDelete = async (row: VehicleSeries) => {
   }
 };
 
+const applyModelSearch = () => {
+  let filtered = allModelTable.value.slice();
+  if (modelStatus.value !== 'all') filtered = filtered.filter(row => row.enabled === (modelStatus.value === 'enabled'));
+  if (modelSeriesFilter.value) filtered = filtered.filter(row => row.seriesId === modelSeriesFilter.value);
+  filtered = filterByFuzzyKeyword(filtered, modelNameQuery.value, row => [row.name]);
+  filtered = filterByFuzzyKeyword(filtered, modelCodeQuery.value, row => [row.code]);
+  modelTotal.value = filtered.length;
+  const start = (modelPage.value - 1) * modelSize.value;
+  modelTable.value = filtered.slice(start, start + modelSize.value);
+};
+
 const fetchModelList = async () => {
   modelLoading.value = true;
   try {
-    const params: Record<string, any> = { page: modelPage.value, size: modelSize.value };
-    if (modelSearch.value) params.keyword = modelSearch.value.trim();
-    if (modelStatus.value !== 'all') params.enabled = modelStatus.value === 'enabled';
-    if (modelSeriesFilter.value) params.seriesId = modelSeriesFilter.value;
-    const res: any = await request.get('/erp/vehicle-models/page', { params });
+    const res: any = await request.get('/erp/vehicle-models');
     if (res.data.code === 200) {
-      modelTable.value = res.data.data.items || [];
-      modelTotal.value = res.data.data.total || 0;
+      allModelTable.value = res.data.data || [];
+      applyModelSearch();
     }
   } catch (error) {
     notifyError(error);
@@ -905,13 +966,13 @@ const handleModelSearch = () => {
 
 const handleModelPageChange = (page: number) => {
   modelPage.value = page;
-  fetchModelList();
+  applyModelSearch();
 };
 
 const handleModelSizeChange = (size: number) => {
   modelSize.value = size;
   modelPage.value = 1;
-  fetchModelList();
+  applyModelSearch();
 };
 const openModelAdd = () => {
   modelEditing.value = false;

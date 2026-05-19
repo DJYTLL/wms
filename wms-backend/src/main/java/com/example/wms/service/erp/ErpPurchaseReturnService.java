@@ -23,9 +23,9 @@ public interface ErpPurchaseReturnService {
 
     PageResponse<ErpPurchaseReturn> approvedPage(long page, long size, String keyword, Long supplierId, Instant startAt, Instant endAt);
 
-    PageResponse<ErpPurchaseReturnSourcePurchaseOrderOption> sourcePurchaseOrderPage(long page, long size, String keyword, Long supplierId);
+    PageResponse<ErpPurchaseReturnSourcePurchaseOrderOption> sourcePurchaseOrderPage(long page, long size, String keyword, Long supplierId, Long currentReturnId);
 
-    PageResponse<ErpPurchaseOrderRecentItem> sourceRecentPurchaseItems(long page, long size, Long supplierId, Long productId);
+    PageResponse<ErpPurchaseOrderRecentItem> sourceRecentPurchaseItems(long page, long size, Long supplierId, Long productId, Long currentReturnId);
 
     ErpPurchaseReturnDetail getDetail(Long id);
 
@@ -33,7 +33,7 @@ public interface ErpPurchaseReturnService {
 
     ErpPurchaseReturnDetail getApprovedDetail(Long id);
 
-    ErpPurchaseReturnSourcePurchaseOrderDetail getSourcePurchaseOrderDetail(Long purchaseOrderId);
+    ErpPurchaseReturnSourcePurchaseOrderDetail getSourcePurchaseOrderDetail(Long purchaseOrderId, Long currentReturnId);
 
     ErpPurchaseReturnRefundSummary getPurchaseOrderRefundSummary(Long purchaseOrderId);
 

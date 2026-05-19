@@ -789,6 +789,13 @@ const loadRoleOptions = async () => {
   try {
     const res: any = await request.get('/roles/options')
     roleOptions.value = res.data.data || []
+    if (selectedRoleId.value && !roleOptions.value.some((role) => role.id === selectedRoleId.value)) {
+      selectedRoleId.value = null
+      selectedRolePermissionIds.value = []
+      fullRolePermissionIds.value = []
+      roleSettingExists.value = false
+      currentRoleSetting.value = null
+    }
   } catch (error) {
     notifyError(error)
   }

@@ -84,32 +84,37 @@ public class ErpSaleReturnController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.approvedPage(page, size, keyword, status, customerId, start, end)));
     }
 
-    @PreAuthorize("hasAnyAuthority('PERM_erp-sale-return-draft:source-view','PERM_erp-sale-approved:view')")
+    @PreAuthorize("@erpSaleReturnPermissionService.canViewSourceSaleOrders()")
     @GetMapping("/source-sale-orders/page")
     public ResponseEntity<ApiResponse<PageResponse<ErpSaleReturnSourceSaleOrderOption>>> sourceSaleOrderPage(
         @RequestParam(defaultValue = "1") long page,
         @RequestParam(defaultValue = "20") long size,
         @RequestParam(required = false) String keyword,
-        @RequestParam(required = false) Long customerId
+        @RequestParam(required = false) Long customerId,
+        @RequestParam(required = false) Long currentReturnId
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.sourceSaleOrderPage(page, size, keyword, customerId)));
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.sourceSaleOrderPage(page, size, keyword, customerId, currentReturnId)));
     }
 
-    @PreAuthorize("hasAnyAuthority('PERM_erp-sale-return-draft:source-view','PERM_erp-sale-approved:view')")
+    @PreAuthorize("@erpSaleReturnPermissionService.canViewSourceSaleOrders()")
     @GetMapping("/source-sale-orders/recent-items/page")
     public ResponseEntity<ApiResponse<PageResponse<ErpSaleOrderRecentItem>>> sourceRecentSaleItems(
         @RequestParam Long customerId,
         @RequestParam Long productId,
         @RequestParam(defaultValue = "1") long page,
-        @RequestParam(defaultValue = "10") long size
+        @RequestParam(defaultValue = "10") long size,
+        @RequestParam(required = false) Long currentReturnId
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.sourceRecentSaleItems(page, size, customerId, productId)));
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.sourceRecentSaleItems(page, size, customerId, productId, currentReturnId)));
     }
 
-    @PreAuthorize("hasAnyAuthority('PERM_erp-sale-return-draft:source-view','PERM_erp-sale-approved:view')")
+    @PreAuthorize("@erpSaleReturnPermissionService.canViewSourceSaleOrders()")
     @GetMapping("/source-sale-orders/{saleOrderId}")
-    public ResponseEntity<ApiResponse<ErpSaleReturnSourceSaleOrderDetail>> getSourceSaleOrderDetail(@PathVariable Long saleOrderId) {
-        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getSourceSaleOrderDetail(saleOrderId)));
+    public ResponseEntity<ApiResponse<ErpSaleReturnSourceSaleOrderDetail>> getSourceSaleOrderDetail(
+        @PathVariable Long saleOrderId,
+        @RequestParam(required = false) Long currentReturnId
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getSourceSaleOrderDetail(saleOrderId, currentReturnId)));
     }
 
     @PreAuthorize("hasAnyAuthority('PERM_erp-sale-return-draft:view','PERM_erp-sale-return-approved:view')")
@@ -240,14 +245,6 @@ public class ErpSaleReturnController {
     @PostMapping("/approved/{id}/copy")
     public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> copyApproved(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.copyToDraft(id)));
-    }
-
-    @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:cancel')")
-    @PostMapping("/approved/{id}/cancel")
-    public ResponseEntity<ApiResponse<Void>> cancelApproved(@PathVariable Long id, @RequestParam String reason) {
-        erpSaleReturnService.getApprovedDetail(id);
-        erpSaleReturnService.cancel(id, reason);
-        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:redflush')")

@@ -16,6 +16,14 @@ public record ErpPurchaseReturnItemRequest(
      */
     @NotNull Long productId,
     /**
+     * 表示来源采购单明细 ID。
+     */
+    Long sourcePurchaseOrderItemId,
+    /**
+     * 表示来源采购单 ID。
+     */
+    Long sourcePurchaseOrderId,
+    /**
      * 表示仓库 ID。
      */
     Long warehouseId,

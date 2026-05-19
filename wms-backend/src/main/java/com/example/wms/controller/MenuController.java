@@ -41,21 +41,21 @@ public class MenuController {
 
     // 获取全部菜单（超级管理员）
     @GetMapping("/all")
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_menu:view') or hasAuthority('PERM_role:view') or hasAuthority('PERM_permission:view')")
     public ResponseEntity<ApiResponse<List<MenuManageResponse>>> listAllMenus() {
         return ResponseEntity.ok(ApiResponse.ok(menuService.listAllMenus()));
     }
 
     // 新增菜单（超级管理员）
     @PostMapping
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_menu:add')")
     public ResponseEntity<ApiResponse<MenuManageResponse>> create(@Valid @RequestBody MenuCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(menuService.createMenu(request)));
     }
 
     // 更新菜单（超级管理员）
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_menu:edit')")
     public ResponseEntity<ApiResponse<MenuManageResponse>> update(@PathVariable Long id,
                                                                   @Valid @RequestBody MenuUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(menuService.updateMenu(id, request)));
@@ -63,7 +63,7 @@ public class MenuController {
 
     // 删除菜单（超级管理员）
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_menu:delete')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
                                                     @Valid @RequestBody DeleteRequest request) {
         try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {

@@ -186,12 +186,12 @@
                   <DecimalInput v-model="row.qty" :disabled="isReadOnly" @update:modelValue="() => updateItemAmount(row)" />
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn v-if="canShow('unitCost')" :label="$t('field.unitCost')" width="140" column-key="custom-4">
+              <ErpDataTableColumn v-if="canShow('unitCost')" :label="$t('field.unitCost')" width="140" column-key="unitCost">
                 <template #default="{ row }">
                   {{ formatAmount(row.unitCost) }}
                 </template>
               </ErpDataTableColumn>
-              <ErpDataTableColumn v-if="canShow('amount')" :label="$t('field.lineTotal')" width="140" column-key="amount">
+              <ErpDataTableColumn v-if="canShow('amount')" :label="$t('field.lineTotal')" width="140" column-key="lineAmount">
                 <template #default="{ row }">
                   {{ formatAmount(row.amount) }}
                 </template>

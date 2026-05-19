@@ -29,12 +29,12 @@
               {{ getProductName(row.productId) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
+          <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouse">
             <template #default="{ row }">
               {{ getWarehouseName(row.warehouseId) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('location')" :label="$t('field.location')" min-width="160" column-key="warehouseLocation">
+          <ErpDataTableColumn v-if="canShow('location')" :label="$t('field.location')" min-width="160" column-key="location">
             <template #default="{ row }">
               {{ getLocationName(row.locationId) }}
             </template>

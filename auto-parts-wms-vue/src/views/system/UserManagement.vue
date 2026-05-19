@@ -37,7 +37,7 @@
         <ErpDataTableColumn type="index" :label="$t('table.index')" width="60" />
         
         <!-- 头像列 -->
-        <ErpDataTableColumn v-if="canShow('avatar')" :label="$t('field.avatar')" width="70" align="center" column-key="custom-2">
+        <ErpDataTableColumn v-if="canShow('avatar')" :label="$t('field.avatar')" width="70" align="center" column-key="avatar">
           <template #default="{ row }">
             <img 
               :src="row.avatarUrl || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
@@ -51,7 +51,7 @@
         <ErpDataTableColumn v-if="canShow('displayName')" prop="displayName" :label="$t('field.name')" min-width="120" show-overflow-tooltip />
         
         <!-- 角色列 -->
-        <ErpDataTableColumn v-if="canShow('roles')" :label="$t('field.roles')" min-width="150" column-key="custom-5">
+        <ErpDataTableColumn v-if="canShow('roles')" :label="$t('field.roles')" min-width="150" column-key="roles">
           <template #default="{ row }">
             <div class="role-tags">
               <el-tag 
@@ -67,7 +67,7 @@
         </ErpDataTableColumn>
 
         <!-- 联系方式列 -->
-        <ErpDataTableColumn v-if="canShow('contact')" :label="$t('field.contact')" min-width="180" column-key="custom-6">
+        <ErpDataTableColumn v-if="canShow('contact')" :label="$t('field.contact')" min-width="180" column-key="contact">
           <template #default="{ row }">
             <div v-if="row.email" class="contact-item">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
@@ -102,7 +102,7 @@
         </ErpDataTableColumn>
 
         <!-- 时间信息 -->
-        <ErpDataTableColumn v-if="canShow('loginTime')" :label="$t('field.loginTime')" width="160" show-overflow-tooltip column-key="custom-8">
+        <ErpDataTableColumn v-if="canShow('loginTime')" :label="$t('field.loginTime')" width="160" show-overflow-tooltip column-key="loginTime">
           <template #default="{ row }">
             <div class="time-info">
               <div v-if="row.lastLoginAt"><small>{{ formatDate(row.lastLoginAt) }}</small></div>
@@ -347,14 +347,19 @@ const fetchUsers = async () => {
 
     const res: any = await request.get('/users/page', { params });
     if (res.data.code === 200) {
-      userList.value = res.data.data.items || [];
+      const items: SysUser[] = res.data.data.items || [];
       total.value = res.data.data.total || 0;
-      // 并行获取角色
-      await Promise.all(userList.value.map(async (user: SysUser) => {
+      // 先把角色数据补齐，再一次性渲染表格，避免角色标签逐个回填引发表格重排。
+      userList.value = await Promise.all(items.map(async (user: SysUser) => {
         try {
           const roleRes: any = await request.get(`/users/${user.id}/roles`);
-          if (roleRes.data.code === 200) user.roles = roleRes.data.data;
-        } catch (e) { notifyError(e); }
+          if (roleRes.data.code === 200) {
+            return { ...user, roles: roleRes.data.data };
+          }
+        } catch (e) {
+          notifyError(e);
+        }
+        return { ...user, roles: user.roles || [] };
       }));
     }
   } catch (error) {
@@ -589,8 +594,10 @@ const handleResetPassword = (row: SysUser) => {
 
 .role-tags {
   display: flex;
+  align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+  min-height: 24px;
 }
 
 .avatar-img {

@@ -4,11 +4,27 @@
       <div class="page-title">{{ $t('page.erpCategoryManagement') }}</div>
       <div class="page-toolbar-card">
         <div class="erp-basic-toolbar">
-          <div class="erp-basic-filters erp-basic-filters--2">
+          <div class="erp-basic-filters erp-basic-filters--4">
           <el-input
-            v-model="searchQuery"
-            :placeholder="$t('action.search')"
-            class="table-search erp-basic-field--wide"
+            v-model="nameQuery"
+            placeholder="名称"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="codeQuery"
+            placeholder="编码"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="parentQuery"
+            placeholder="上级分类"
+            class="table-search erp-basic-field--narrow"
             clearable
             @clear="handleSearch"
             @keyup.enter="handleSearch"
@@ -20,6 +36,7 @@
           </el-select>
           </div>
           <div class="erp-basic-actions">
+            <el-button type="primary" @click="handleSearch">{{ $t('action.search') }}</el-button>
             <el-button type="primary" v-permission="'erp-category:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
           </div>
         </div>
@@ -32,7 +49,7 @@
           <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
           <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
-          <ErpDataTableColumn v-if="canShow('parent')" :label="$t('field.parentCategory')" min-width="140" column-key="custom-4">
+          <ErpDataTableColumn v-if="canShow('parent')" :label="$t('field.parentCategory')" min-width="140" column-key="parentCategory">
             <template #default="{ row }">
               {{ getParentName(row.parentId) }}
             </template>
@@ -110,6 +127,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useSystemConfig } from '@/composables/useSystemConfig';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 
 interface OptionItem {
   id: number;
@@ -131,13 +149,16 @@ const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 
-const searchQuery = ref('');
+const nameQuery = ref('');
+const codeQuery = ref('');
+const parentQuery = ref('');
 const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all');
 const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
 const tableData = ref<ErpCategory[]>([]);
+const allTableData = ref<ErpCategory[]>([]);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
@@ -174,20 +195,24 @@ const fetchCategories = async () => {
   }
 };
 
+const applySearch = () => {
+  let filtered = allTableData.value.slice();
+  if (statusFilter.value !== 'all') filtered = filtered.filter(row => row.enabled === (statusFilter.value === 'enabled'));
+  filtered = filterByFuzzyKeyword(filtered, nameQuery.value, row => [row.name]);
+  filtered = filterByFuzzyKeyword(filtered, codeQuery.value, row => [row.code]);
+  filtered = filterByFuzzyKeyword(filtered, parentQuery.value, row => [getParentName(row.parentId)]);
+  total.value = filtered.length;
+  const start = (page.value - 1) * size.value;
+  tableData.value = filtered.slice(start, start + size.value);
+};
+
 const fetchList = async () => {
   loading.value = true;
   try {
-    const params: Record<string, any> = {
-      page: page.value,
-      size: size.value
-    };
-    if (searchQuery.value) params.keyword = searchQuery.value.trim();
-    if (statusFilter.value !== 'all') params.enabled = statusFilter.value === 'enabled';
-
-    const res: any = await request.get('/erp/categories/page', { params });
+    const res: any = await request.get('/erp/categories');
     if (res.data.code === 200) {
-      tableData.value = res.data.data.items || [];
-      total.value = res.data.data.total || 0;
+      allTableData.value = res.data.data || [];
+      applySearch();
     }
   } catch (error) {
     notifyError(error);
@@ -203,13 +228,13 @@ const handleSearch = () => {
 
 const handlePageChange = (newPage: number) => {
   page.value = newPage;
-  fetchList();
+  applySearch();
 };
 
 const handleSizeChange = (newSize: number) => {
   size.value = newSize;
   page.value = 1;
-  fetchList();
+  applySearch();
 };
 
 const openAddModal = () => {

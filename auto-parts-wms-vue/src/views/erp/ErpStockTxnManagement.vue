@@ -36,7 +36,7 @@
     <div class="table-card stock-txn-card">
       <div class="table-body stock-txn-body">
         <ErpDataTable :data="tableData" style="width: 100%" stripe v-loading="loading" :empty-text="$t('table.empty')" table-key="erp-stock-txn-management">
-          <ErpDataTableColumn v-if="canShow('docNo')" :label="$t('field.docNo')" min-width="180" column-key="custom-1">
+          <ErpDataTableColumn v-if="canShow('docNo')" :label="$t('field.docNo')" min-width="180" column-key="docNo">
             <template #default="{ row }">
               <el-button
                 v-if="canPreviewDoc(row)"
@@ -60,17 +60,17 @@
               {{ getProductName(row.productId) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
+          <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouse">
             <template #default="{ row }">
               {{ getWarehouseName(row.warehouseId) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('location')" :label="$t('field.location')" min-width="160" column-key="warehouseLocation">
+          <ErpDataTableColumn v-if="canShow('location')" :label="$t('field.location')" min-width="160" column-key="location">
             <template #default="{ row }">
               {{ getLocationName(row.locationId) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('adjustmentReason')" :label="$t('field.adjustmentReason')" min-width="140" column-key="custom-6">
+          <ErpDataTableColumn v-if="canShow('adjustmentReason')" :label="$t('field.adjustmentReason')" min-width="140" column-key="adjustmentReason">
             <template #default="{ row }">
               {{ formatAdjustmentReason(row.adjustmentReason) }}
             </template>
@@ -80,12 +80,12 @@
           <ErpDataTableColumn v-if="canShow('qtyAfter')" prop="qtyAfter" :label="$t('field.qtyAfter')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('operator')" prop="operator" :label="$t('field.actor')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('remark')" prop="remark" :label="$t('field.remark')" min-width="180" />
-          <ErpDataTableColumn v-if="canShow('unitCost')" :label="$t('field.unitCost')" min-width="120" column-key="custom-12">
+          <ErpDataTableColumn v-if="canShow('unitCost')" :label="$t('field.unitCost')" min-width="120" column-key="unitCost">
             <template #default="{ row }">
               {{ formatMoney(row.unitCost) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('totalCost')" :label="$t('field.totalCost')" min-width="140" column-key="amount">
+          <ErpDataTableColumn v-if="canShow('totalCost')" :label="$t('field.totalCost')" min-width="140" column-key="totalCost">
             <template #default="{ row }">
               {{ formatMoney(row.totalCost) }}
             </template>

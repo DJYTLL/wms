@@ -14,6 +14,9 @@
               @keyup.enter="handleSearch"
             />
           </div>
+          <div class="finance-actions">
+            <el-button type="primary" @click="handleSearch">{{ $t('action.search') }}</el-button>
+          </div>
         </div>
       </div>
     </div>
@@ -39,6 +42,7 @@ import { onMounted, ref } from 'vue';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 
 const { notifyError } = useApiError();
 const defaultColumns = ['supplierName', 'totalDebt'];
@@ -46,6 +50,7 @@ const { isVisible, fetchTenantKeys } = useColumnSettings('erp-finance-supplier-d
 const canShow = (key: string) => isVisible(key);
 
 const tableData = ref<Array<{ supplierId: number; supplierName: string; totalDebt: number }>>([]);
+const allTableData = ref<Array<{ supplierId: number; supplierName: string; totalDebt: number }>>([]);
 const searchQuery = ref('');
 
 const formatAmount = (value: number | string) => {
@@ -56,15 +61,18 @@ const formatAmount = (value: number | string) => {
 
 const fetchData = async () => {
   try {
-    const res: any = await request.get('/erp/finance/supplier-debts', {
-      params: { keyword: searchQuery.value || undefined }
-    });
+    const res: any = await request.get('/erp/finance/supplier-debts');
     if (res.data.code === 200) {
-      tableData.value = res.data.data || [];
+      allTableData.value = res.data.data || [];
+      applySearch();
     }
   } catch (error) {
     notifyError(error);
   }
+};
+
+const applySearch = () => {
+  tableData.value = filterByFuzzyKeyword(allTableData.value, searchQuery.value, row => [row.supplierName]);
 };
 
 const handleSearch = () => {

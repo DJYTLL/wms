@@ -481,7 +481,12 @@ public class DataInitializer {
 
     private boolean shouldSyncMenu(MenuSeedProvider.MenuSeed seed) {
         String code = seed.code();
-        return code != null && (code.equals("erp") || code.startsWith("erp-"));
+        return code != null && (
+            code.equals("erp")
+                || code.startsWith("erp-")
+                || code.equals("permissions")
+                || code.equals("menu-management")
+        );
     }
 
     private boolean equalsText(String left, String right) {

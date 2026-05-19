@@ -61,9 +61,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 // 采购退货服务实现（ERP进销存）
 @Service
@@ -161,7 +164,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     }
 
     @Override
-    public PageResponse<ErpPurchaseReturnSourcePurchaseOrderOption> sourcePurchaseOrderPage(long page, long size, String keyword, Long supplierId) {
+    public PageResponse<ErpPurchaseReturnSourcePurchaseOrderOption> sourcePurchaseOrderPage(long page, long size, String keyword, Long supplierId, Long currentReturnId) {
         Long tenantId = TenantContext.requireTenantId();
         long finalPage = page <= 0 ? 1 : page;
         long finalSize = size <= 0 ? 20 : Math.min(size, 100);
@@ -177,8 +180,14 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             wrapper.and(qw -> qw.like("order_no", trimmed));
         }
         wrapper.orderByDesc("order_at").orderByDesc("id");
-        Page<ErpPurchaseOrder> result = erpPurchaseOrderMapper.selectPage(Page.of(finalPage, finalSize), wrapper);
-        List<ErpPurchaseReturnSourcePurchaseOrderOption> items = result.getRecords().stream()
+        List<ErpPurchaseOrder> returnableOrders = erpPurchaseOrderMapper.selectList(wrapper).stream()
+            .filter(order -> buildSourcePurchaseOrderItems(tenantId, order.getId(), currentReturnId).stream()
+                .anyMatch(item -> zeroIfNull(item.remainingQty()).compareTo(BigDecimal.ZERO) > 0))
+            .toList();
+        long total = returnableOrders.size();
+        int fromIndex = (int) Math.min((finalPage - 1) * finalSize, total);
+        int toIndex = (int) Math.min(fromIndex + finalSize, total);
+        List<ErpPurchaseReturnSourcePurchaseOrderOption> items = returnableOrders.subList(fromIndex, toIndex).stream()
             .map(order -> new ErpPurchaseReturnSourcePurchaseOrderOption(
                 order.getId(),
                 order.getOrderNo(),
@@ -186,17 +195,17 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                 order.getOrderAt()
             ))
             .toList();
-        return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), items);
+        return new PageResponse<>(total, finalPage, finalSize, items);
     }
 
     @Override
-    public PageResponse<ErpPurchaseOrderRecentItem> sourceRecentPurchaseItems(long page, long size, Long supplierId, Long productId) {
+    public PageResponse<ErpPurchaseOrderRecentItem> sourceRecentPurchaseItems(long page, long size, Long supplierId, Long productId, Long currentReturnId) {
         long finalPage = page <= 0 ? 1 : page;
         long finalSize = size <= 0 ? 10 : Math.min(size, 100);
         if (supplierId == null || productId == null) {
             return new PageResponse<>(0, finalPage, finalSize, List.of());
         }
-        return sourceRecentPurchaseItemsInternal(finalPage, finalSize, supplierId, productId);
+        return sourceRecentPurchaseItemsInternal(finalPage, finalSize, supplierId, productId, currentReturnId);
     }
 
     @Override
@@ -204,6 +213,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         Long tenantId = TenantContext.requireTenantId();
         ErpPurchaseReturn order = loadExisting(tenantId, id);
         List<ErpPurchaseReturnItem> items = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
+        enrichSourceItemAvailability(tenantId, items, id);
         return new ErpPurchaseReturnDetail(order, items);
     }
 
@@ -226,10 +236,10 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     }
 
     @Override
-    public ErpPurchaseReturnSourcePurchaseOrderDetail getSourcePurchaseOrderDetail(Long purchaseOrderId) {
+    public ErpPurchaseReturnSourcePurchaseOrderDetail getSourcePurchaseOrderDetail(Long purchaseOrderId, Long currentReturnId) {
         Long tenantId = TenantContext.requireTenantId();
         ErpPurchaseOrder purchaseOrder = loadApprovedPurchaseOrder(tenantId, purchaseOrderId);
-        List<ErpPurchaseReturnSourcePurchaseOrderItem> items = buildSourcePurchaseOrderItems(tenantId, purchaseOrderId);
+        List<ErpPurchaseReturnSourcePurchaseOrderItem> items = buildSourcePurchaseOrderItems(tenantId, purchaseOrderId, currentReturnId);
         ErpPurchaseReturnRefundSummary refundSummary = buildPurchaseOrderRefundSummary(tenantId, purchaseOrder, null);
         return new ErpPurchaseReturnSourcePurchaseOrderDetail(
             purchaseOrder.getId(),
@@ -379,6 +389,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             throw new IllegalArgumentException("仅草稿可审核");
         }
         List<ErpPurchaseReturnItem> items = erpPurchaseReturnItemMapper.findByReturnId(tenantId, id);
+        lockSourcePurchaseOrderItems(tenantId, items);
         validatePurchaseReturnSourceFromItems(tenantId, order.getPurchaseOrderId(), order.getSupplierId(), items, id);
         validateSettlementAmounts(tenantId, order, id);
         boolean inventoryReserved = Boolean.TRUE.equals(order.getInventoryReserved());
@@ -413,6 +424,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         List<ErpPurchaseReturnItemRequest> itemRequests = source.items().stream()
             .map(item -> new ErpPurchaseReturnItemRequest(
                 item.getProductId(),
+                item.getSourcePurchaseOrderItemId(),
+                item.getSourcePurchaseOrderId(),
                 item.getWarehouseId(),
                 item.getLocationId(),
                 item.getQty(),
@@ -563,6 +576,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             item.setTenantId(tenantId);
             item.setReturnId(returnId);
             item.setProductId(product.getId());
+            item.setSourcePurchaseOrderItemId(request.sourcePurchaseOrderItemId());
+            item.setSourcePurchaseOrderId(request.sourcePurchaseOrderId());
             item.setProductCode(product.getCode());
             item.setProductName(product.getName());
             Long warehouseId;
@@ -666,8 +681,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             tenantId,
             purchaseOrderId,
             supplierId,
-            aggregateRequestedQty(requests),
-            aggregateRequestedAmountInclTax(requests),
+            buildRequestedReturnLines(requests),
             currentReturnId
         );
     }
@@ -687,8 +701,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             tenantId,
             purchaseOrderId,
             supplierId,
-            aggregateExistingQty(items),
-            aggregateExistingAmountInclTax(items),
+            buildExistingReturnLines(items),
             currentReturnId
         );
     }
@@ -696,62 +709,88 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private void validatePurchaseReturnSource(Long tenantId,
                                               Long purchaseOrderId,
                                               Long supplierId,
-                                              Map<Long, BigDecimal> requestQtyByProduct,
-                                              Map<Long, BigDecimal> requestAmountByProduct,
+                                              List<PurchaseReturnSourceLine> requestLines,
                                               Long currentReturnId) {
+        if (requestLines == null || requestLines.isEmpty()) {
+            throw new IllegalArgumentException("采购退货明细不能为空");
+        }
+        Map<Long, List<PurchaseReturnSourceLine>> linesByPurchaseOrder = new LinkedHashMap<>();
+        for (PurchaseReturnSourceLine line : requestLines) {
+            if (line == null) {
+                continue;
+            }
+            if (line.sourcePurchaseOrderId() == null || line.sourcePurchaseOrderItemId() == null) {
+                throw new IllegalArgumentException("采购退货明细必须绑定来源采购单和来源采购明细");
+            }
+            linesByPurchaseOrder.computeIfAbsent(line.sourcePurchaseOrderId(), ignored -> new ArrayList<>()).add(line);
+        }
+        for (Map.Entry<Long, List<PurchaseReturnSourceLine>> entry : linesByPurchaseOrder.entrySet()) {
+            validatePurchaseReturnSourceForOrder(tenantId, entry.getKey(), supplierId, entry.getValue(), currentReturnId);
+        }
+    }
+
+    private void validatePurchaseReturnSourceForOrder(Long tenantId,
+                                                      Long purchaseOrderId,
+                                                      Long supplierId,
+                                                      List<PurchaseReturnSourceLine> requestLines,
+                                                      Long currentReturnId) {
         ErpPurchaseOrder purchaseOrder = loadApprovedPurchaseOrder(tenantId, purchaseOrderId);
         if (!supplierId.equals(purchaseOrder.getSupplierId())) {
             throw new IllegalArgumentException("退货供应商必须与原采购单供应商一致");
         }
-        if (requestQtyByProduct.isEmpty()) {
+        if (requestLines == null || requestLines.isEmpty()) {
             throw new IllegalArgumentException("采购退货明细不能为空");
         }
 
         List<ErpPurchaseOrderItem> purchaseItems = erpPurchaseOrderItemMapper.findByOrderId(tenantId, purchaseOrderId);
-        Map<Long, BigDecimal> purchasedQtyByProduct = new HashMap<>();
-        Map<Long, BigDecimal> purchasedAmountByProduct = new HashMap<>();
-        for (ErpPurchaseOrderItem purchaseItem : purchaseItems) {
-            if (purchaseItem.getProductId() == null || purchaseItem.getQty() == null) {
+        Map<Long, ErpPurchaseOrderItem> purchaseItemById = purchaseItems.stream()
+            .filter(item -> item.getId() != null)
+            .collect(Collectors.toMap(ErpPurchaseOrderItem::getId, item -> item, (left, right) -> left));
+
+        Map<Long, BigDecimal> requestQtyBySourceItem = new HashMap<>();
+        Map<Long, BigDecimal> requestAmountBySourceItem = new HashMap<>();
+        for (PurchaseReturnSourceLine line : requestLines) {
+            if (line == null || line.sourcePurchaseOrderItemId() == null || line.qty() == null) {
                 continue;
             }
-            purchasedQtyByProduct.merge(purchaseItem.getProductId(), purchaseItem.getQty(), BigDecimal::add);
-            purchasedAmountByProduct.merge(
-                purchaseItem.getProductId(),
-                purchaseItem.getAmountInclTax() == null ? BigDecimal.ZERO : purchaseItem.getAmountInclTax(),
-                BigDecimal::add
-            );
+            requestQtyBySourceItem.merge(line.sourcePurchaseOrderItemId(), line.qty(), BigDecimal::add);
+            requestAmountBySourceItem.merge(line.sourcePurchaseOrderItemId(), line.amountInclTax(), BigDecimal::add);
         }
 
-        Map<Long, BigDecimal> approvedReturnQtyByProduct = loadApprovedReturnQtyByProduct(tenantId, purchaseOrderId, currentReturnId);
-        Map<Long, BigDecimal> approvedReturnAmountByProduct = loadApprovedReturnAmountByProduct(tenantId, purchaseOrderId, currentReturnId);
-        for (Map.Entry<Long, BigDecimal> entry : requestQtyByProduct.entrySet()) {
-            Long productId = entry.getKey();
-            BigDecimal requestQty = entry.getValue();
-            BigDecimal purchasedQty = purchasedQtyByProduct.get(productId);
-            if (purchasedQty == null || purchasedQty.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("退货商品必须存在于原采购单");
+        Map<Long, BigDecimal> approvedQtyBySourceItem = loadApprovedReturnQtyBySourceItem(tenantId, purchaseOrderId, currentReturnId);
+        Map<Long, BigDecimal> draftQtyBySourceItem = loadDraftReturnQtyBySourceItem(tenantId, purchaseOrderId, currentReturnId);
+        Map<Long, BigDecimal> approvedAmountBySourceItem = loadApprovedReturnAmountBySourceItem(tenantId, purchaseOrderId, currentReturnId);
+        for (Map.Entry<Long, BigDecimal> entry : requestQtyBySourceItem.entrySet()) {
+            Long sourceItemId = entry.getKey();
+            ErpPurchaseOrderItem purchaseItem = purchaseItemById.get(sourceItemId);
+            if (purchaseItem == null) {
+                throw new IllegalArgumentException("退货来源采购明细不存在");
             }
-            BigDecimal approvedQty = approvedReturnQtyByProduct.getOrDefault(productId, BigDecimal.ZERO);
-            BigDecimal remainingQty = purchasedQty.subtract(approvedQty);
+            validateSourcePurchaseItemLines(requestLines, purchaseItem);
+            validateNoDuplicateDestinationForSourceItem(requestLines, purchaseItem);
+            BigDecimal purchasedQty = zeroIfNull(purchaseItem.getQty());
+            BigDecimal approvedQty = approvedQtyBySourceItem.getOrDefault(sourceItemId, BigDecimal.ZERO);
+            BigDecimal draftQty = draftQtyBySourceItem.getOrDefault(sourceItemId, BigDecimal.ZERO);
+            BigDecimal remainingQty = purchasedQty.subtract(approvedQty).subtract(draftQty);
             if (remainingQty.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException("商品退货数量已达原采购上限");
+                throw new IllegalArgumentException("来源采购明细退货数量已达上限");
             }
+            BigDecimal requestQty = entry.getValue();
             if (requestQty.compareTo(remainingQty) > 0) {
-                throw new IllegalArgumentException("商品退货数量不能超过原采购可退数量");
+                throw new IllegalArgumentException("退货数量不能超过来源采购明细可退数量");
             }
-            BigDecimal requestAmount = requestAmountByProduct.getOrDefault(productId, BigDecimal.ZERO);
-            BigDecimal purchasedAmount = purchasedAmountByProduct.getOrDefault(productId, BigDecimal.ZERO);
-            BigDecimal approvedAmount = approvedReturnAmountByProduct.getOrDefault(productId, BigDecimal.ZERO);
+            BigDecimal purchasedAmount = zeroIfNull(purchaseItem.getAmountInclTax());
+            BigDecimal approvedAmount = approvedAmountBySourceItem.getOrDefault(sourceItemId, BigDecimal.ZERO);
             BigDecimal remainingAmount = purchasedAmount.subtract(approvedAmount);
+            BigDecimal requestAmount = requestAmountBySourceItem.getOrDefault(sourceItemId, BigDecimal.ZERO);
             if (requestAmount.compareTo(remainingAmount) > 0) {
-                throw new IllegalArgumentException("商品退货金额不能超过原采购可退金额");
+                throw new IllegalArgumentException("退货金额不能超过来源采购明细可退金额");
             }
-            BigDecimal maxAmountByQty = purchasedAmount
-                .divide(purchasedQty, 6, RoundingMode.HALF_UP)
+            BigDecimal maxAmountByQty = calcLineUnitAmount(purchasedAmount, purchasedQty)
                 .multiply(requestQty)
                 .setScale(2, RoundingMode.HALF_UP);
             if (requestAmount.compareTo(maxAmountByQty) > 0) {
-                throw new IllegalArgumentException("商品退货单价不能高于原采购单价");
+                throw new IllegalArgumentException("退货单价不能高于来源采购明细单价");
             }
         }
     }
@@ -769,33 +808,33 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         return purchaseOrder;
     }
 
-    private PageResponse<ErpPurchaseOrderRecentItem> sourceRecentPurchaseItemsInternal(long page, long size, Long supplierId, Long productId) {
+    private PageResponse<ErpPurchaseOrderRecentItem> sourceRecentPurchaseItemsInternal(long page,
+                                                                                       long size,
+                                                                                       Long supplierId,
+                                                                                       Long productId,
+                                                                                       Long currentReturnId) {
         Long tenantId = TenantContext.requireTenantId();
-        long total = erpPurchaseOrderItemMapper.countRecentItems(tenantId, supplierId, productId);
+        long total = erpPurchaseOrderItemMapper.countRecentItems(tenantId, supplierId, productId, currentReturnId);
         long offset = (page - 1) * size;
         List<ErpPurchaseOrderRecentItem> items = total == 0
             ? List.of()
-            : erpPurchaseOrderItemMapper.findRecentItemsPage(tenantId, supplierId, productId, (int) size, offset);
+            : erpPurchaseOrderItemMapper.findRecentItemsPage(tenantId, supplierId, productId, (int) size, offset, currentReturnId);
         return new PageResponse<>(total, page, size, items);
     }
 
-    private List<ErpPurchaseReturnSourcePurchaseOrderItem> buildSourcePurchaseOrderItems(Long tenantId, Long purchaseOrderId) {
+    private List<ErpPurchaseReturnSourcePurchaseOrderItem> buildSourcePurchaseOrderItems(Long tenantId, Long purchaseOrderId, Long currentReturnId) {
         List<ErpPurchaseOrderItem> purchaseItems = erpPurchaseOrderItemMapper.findByOrderId(tenantId, purchaseOrderId);
-        Map<Long, BigDecimal> remainingReturnedQtyByProduct = new HashMap<>(loadApprovedReturnQtyByProduct(tenantId, purchaseOrderId, null));
+        Map<Long, BigDecimal> returnedQtyBySourceItem = loadApprovedReturnQtyBySourceItem(tenantId, purchaseOrderId, null);
+        Map<Long, BigDecimal> draftQtyBySourceItem = loadDraftReturnQtyBySourceItem(tenantId, purchaseOrderId, currentReturnId);
         List<ErpPurchaseReturnSourcePurchaseOrderItem> items = new ArrayList<>();
         for (ErpPurchaseOrderItem item : purchaseItems) {
-            Long productId = item.getProductId();
             BigDecimal originalQty = item.getQty() == null ? BigDecimal.ZERO : item.getQty();
-            BigDecimal returnedQty = productId == null
-                ? BigDecimal.ZERO
-                : remainingReturnedQtyByProduct.getOrDefault(productId, BigDecimal.ZERO);
-            BigDecimal allocatedReturnedQty = originalQty.min(returnedQty);
-            if (productId != null) {
-                remainingReturnedQtyByProduct.put(productId, returnedQty.subtract(allocatedReturnedQty).max(BigDecimal.ZERO));
-            }
-            BigDecimal remainingQty = originalQty.subtract(allocatedReturnedQty).max(BigDecimal.ZERO);
+            BigDecimal returnedQty = returnedQtyBySourceItem.getOrDefault(item.getId(), BigDecimal.ZERO);
+            BigDecimal draftQty = draftQtyBySourceItem.getOrDefault(item.getId(), BigDecimal.ZERO);
+            BigDecimal remainingQty = originalQty.subtract(returnedQty).subtract(draftQty).max(BigDecimal.ZERO);
             items.add(new ErpPurchaseReturnSourcePurchaseOrderItem(
                 item.getId(),
+                item.getSortNo(),
                 item.getProductId(),
                 item.getProductCode(),
                 item.getProductName(),
@@ -803,11 +842,159 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                 item.getLocationId(),
                 item.getQty(),
                 remainingQty,
+                returnedQty,
+                draftQty,
                 item.getPrice(),
+                item.getPriceInclTax(),
                 item.getTaxRate()
             ));
         }
         return items;
+    }
+
+    private record PurchaseReturnSourceLine(Long sourcePurchaseOrderItemId,
+                                            Long sourcePurchaseOrderId,
+                                            Long productId,
+                                            Long warehouseId,
+                                            Long locationId,
+                                            BigDecimal qty,
+                                            BigDecimal amountInclTax) {
+    }
+
+    private List<PurchaseReturnSourceLine> buildRequestedReturnLines(List<ErpPurchaseReturnItemRequest> requests) {
+        if (requests == null) {
+            return List.of();
+        }
+        List<PurchaseReturnSourceLine> lines = new ArrayList<>();
+        for (ErpPurchaseReturnItemRequest request : requests) {
+            if (request == null || request.productId() == null || request.qty() == null) {
+                continue;
+            }
+            BigDecimal taxRate = request.taxRate() == null ? BigDecimal.ZERO : request.taxRate();
+            BigDecimal priceInclTax = request.priceInclTax();
+            if (priceInclTax == null && request.price() != null) {
+                priceInclTax = calcPriceInclTax(request.price(), taxRate);
+            }
+            BigDecimal amountInclTax = (priceInclTax == null ? BigDecimal.ZERO : priceInclTax).multiply(request.qty());
+            lines.add(new PurchaseReturnSourceLine(
+                request.sourcePurchaseOrderItemId(),
+                request.sourcePurchaseOrderId(),
+                request.productId(),
+                request.warehouseId(),
+                request.locationId(),
+                request.qty(),
+                amountInclTax
+            ));
+        }
+        return lines;
+    }
+
+    private List<PurchaseReturnSourceLine> buildExistingReturnLines(List<ErpPurchaseReturnItem> items) {
+        if (items == null) {
+            return List.of();
+        }
+        List<PurchaseReturnSourceLine> lines = new ArrayList<>();
+        for (ErpPurchaseReturnItem item : items) {
+            if (item == null || item.getProductId() == null || item.getQty() == null) {
+                continue;
+            }
+            lines.add(new PurchaseReturnSourceLine(
+                item.getSourcePurchaseOrderItemId(),
+                item.getSourcePurchaseOrderId(),
+                item.getProductId(),
+                item.getWarehouseId(),
+                item.getLocationId(),
+                item.getQty(),
+                item.getAmountInclTax() == null ? BigDecimal.ZERO : item.getAmountInclTax()
+            ));
+        }
+        return lines;
+    }
+
+    private void enrichSourceItemAvailability(Long tenantId, List<ErpPurchaseReturnItem> items, Long currentReturnId) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        Map<Long, List<ErpPurchaseReturnItem>> itemsByPurchaseOrder = new LinkedHashMap<>();
+        for (ErpPurchaseReturnItem item : items) {
+            if (item == null || item.getSourcePurchaseOrderItemId() == null || item.getSourcePurchaseOrderId() == null) {
+                continue;
+            }
+            itemsByPurchaseOrder.computeIfAbsent(item.getSourcePurchaseOrderId(), ignored -> new ArrayList<>()).add(item);
+        }
+        for (Map.Entry<Long, List<ErpPurchaseReturnItem>> entry : itemsByPurchaseOrder.entrySet()) {
+            List<ErpPurchaseOrderItem> purchaseItems = erpPurchaseOrderItemMapper.findByOrderId(tenantId, entry.getKey());
+            Map<Long, ErpPurchaseOrderItem> purchaseItemById = purchaseItems.stream()
+                .filter(item -> item.getId() != null)
+                .collect(Collectors.toMap(ErpPurchaseOrderItem::getId, item -> item, (left, right) -> left));
+            Map<Long, BigDecimal> approvedQtyBySourceItem = loadApprovedReturnQtyBySourceItem(tenantId, entry.getKey(), currentReturnId);
+            Map<Long, BigDecimal> draftQtyBySourceItem = loadDraftReturnQtyBySourceItem(tenantId, entry.getKey(), currentReturnId);
+            for (ErpPurchaseReturnItem item : entry.getValue()) {
+                ErpPurchaseOrderItem purchaseItem = purchaseItemById.get(item.getSourcePurchaseOrderItemId());
+                if (purchaseItem == null) {
+                    continue;
+                }
+                BigDecimal originalQty = zeroIfNull(purchaseItem.getQty());
+                BigDecimal approvedQty = approvedQtyBySourceItem.getOrDefault(purchaseItem.getId(), BigDecimal.ZERO);
+                BigDecimal draftQty = draftQtyBySourceItem.getOrDefault(purchaseItem.getId(), BigDecimal.ZERO);
+                item.setSourcePurchaseOrderItemQty(originalQty);
+                item.setSourcePurchaseOrderItemApprovedReturnedQty(approvedQty);
+                item.setSourcePurchaseOrderItemDraftOccupiedQty(draftQty);
+                item.setSourcePurchaseOrderItemRemainingQty(originalQty.subtract(approvedQty).subtract(draftQty).max(BigDecimal.ZERO));
+            }
+        }
+    }
+
+    private void lockSourcePurchaseOrderItems(Long tenantId, List<ErpPurchaseReturnItem> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        List<Long> sourceItemIds = items.stream()
+            .map(ErpPurchaseReturnItem::getSourcePurchaseOrderItemId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .sorted()
+            .toList();
+        if (!sourceItemIds.isEmpty()) {
+            erpPurchaseOrderItemMapper.findByIdsForUpdate(tenantId, sourceItemIds);
+        }
+    }
+
+    private void validateSourcePurchaseItemLines(List<PurchaseReturnSourceLine> requestLines, ErpPurchaseOrderItem purchaseItem) {
+        for (PurchaseReturnSourceLine line : requestLines) {
+            if (line == null || !Objects.equals(line.sourcePurchaseOrderItemId(), purchaseItem.getId())) {
+                continue;
+            }
+            if (!Objects.equals(line.productId(), purchaseItem.getProductId())) {
+                throw new IllegalArgumentException("退货商品必须与来源采购明细一致");
+            }
+        }
+    }
+
+    private void validateNoDuplicateDestinationForSourceItem(List<PurchaseReturnSourceLine> requestLines, ErpPurchaseOrderItem purchaseItem) {
+        Set<String> destinationKeys = new HashSet<>();
+        for (PurchaseReturnSourceLine line : requestLines) {
+            if (line == null || !Objects.equals(line.sourcePurchaseOrderItemId(), purchaseItem.getId())) {
+                continue;
+            }
+            String key = String.valueOf(line.warehouseId()) + ":" + String.valueOf(line.locationId());
+            if (!destinationKeys.add(key)) {
+                String lineLabel = purchaseItem.getSortNo() == null ? String.valueOf(purchaseItem.getId()) : "第" + purchaseItem.getSortNo() + "行";
+                throw new IllegalArgumentException("来源采购明细" + lineLabel + "存在相同仓库/库位的重复退货明细，请合并数量");
+            }
+        }
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private BigDecimal calcLineUnitAmount(BigDecimal amount, BigDecimal qty) {
+        BigDecimal safeQty = qty == null ? BigDecimal.ZERO : qty;
+        if (safeQty.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return (amount == null ? BigDecimal.ZERO : amount).divide(safeQty, 6, RoundingMode.HALF_UP);
     }
 
     private Map<Long, BigDecimal> aggregateRequestedQty(List<ErpPurchaseReturnItemRequest> requests) {
@@ -899,6 +1086,47 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         return qtyByProduct;
     }
 
+    private Map<Long, BigDecimal> loadApprovedReturnQtyBySourceItem(Long tenantId, Long purchaseOrderId, Long currentReturnId) {
+        List<ErpPurchaseReturn> approvedReturns = erpPurchaseReturnMapper.selectList(new QueryWrapper<ErpPurchaseReturn>()
+            .eq("tenant_id", tenantId)
+            .isNull("deleted_at")
+            .eq("status", STATUS_APPROVED));
+        Map<Long, BigDecimal> qtyBySourceItem = new HashMap<>();
+        for (ErpPurchaseReturn approvedReturn : approvedReturns) {
+            if (currentReturnId != null && currentReturnId.equals(approvedReturn.getId())) {
+                continue;
+            }
+            List<ErpPurchaseReturnItem> returnItems = erpPurchaseReturnItemMapper.findByReturnId(tenantId, approvedReturn.getId());
+            for (ErpPurchaseReturnItem returnItem : returnItems) {
+                if (returnItem.getSourcePurchaseOrderItemId() == null || returnItem.getQty() == null) {
+                    continue;
+                }
+                qtyBySourceItem.merge(returnItem.getSourcePurchaseOrderItemId(), returnItem.getQty(), BigDecimal::add);
+            }
+        }
+        return qtyBySourceItem;
+    }
+
+    private Map<Long, BigDecimal> loadDraftReturnQtyBySourceItem(Long tenantId, Long purchaseOrderId, Long currentReturnId) {
+        List<ErpPurchaseReturn> draftReturns = erpPurchaseReturnMapper.selectList(new QueryWrapper<ErpPurchaseReturn>()
+            .eq("tenant_id", tenantId)
+            .eq("purchase_order_id", purchaseOrderId)
+            .eq("status", STATUS_DRAFT)
+            .ne(currentReturnId != null, "id", currentReturnId)
+            .isNull("deleted_at"));
+        Map<Long, BigDecimal> qtyBySourceItem = new HashMap<>();
+        for (ErpPurchaseReturn draftReturn : draftReturns) {
+            List<ErpPurchaseReturnItem> returnItems = erpPurchaseReturnItemMapper.findByReturnId(tenantId, draftReturn.getId());
+            for (ErpPurchaseReturnItem returnItem : returnItems) {
+                if (returnItem.getSourcePurchaseOrderItemId() == null || returnItem.getQty() == null) {
+                    continue;
+                }
+                qtyBySourceItem.merge(returnItem.getSourcePurchaseOrderItemId(), returnItem.getQty(), BigDecimal::add);
+            }
+        }
+        return qtyBySourceItem;
+    }
+
     private Map<Long, BigDecimal> loadApprovedReturnAmountByProduct(Long tenantId, Long purchaseOrderId, Long currentReturnId) {
         List<ErpPurchaseReturn> approvedReturns = erpPurchaseReturnMapper.findApprovedByPurchaseOrderId(tenantId, purchaseOrderId);
         Map<Long, BigDecimal> amountByProduct = new HashMap<>();
@@ -922,6 +1150,31 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             }
         }
         return amountByProduct;
+    }
+
+    private Map<Long, BigDecimal> loadApprovedReturnAmountBySourceItem(Long tenantId, Long purchaseOrderId, Long currentReturnId) {
+        List<ErpPurchaseReturn> approvedReturns = erpPurchaseReturnMapper.selectList(new QueryWrapper<ErpPurchaseReturn>()
+            .eq("tenant_id", tenantId)
+            .isNull("deleted_at")
+            .eq("status", STATUS_APPROVED));
+        Map<Long, BigDecimal> amountBySourceItem = new HashMap<>();
+        for (ErpPurchaseReturn approvedReturn : approvedReturns) {
+            if (currentReturnId != null && currentReturnId.equals(approvedReturn.getId())) {
+                continue;
+            }
+            List<ErpPurchaseReturnItem> returnItems = erpPurchaseReturnItemMapper.findByReturnId(tenantId, approvedReturn.getId());
+            for (ErpPurchaseReturnItem returnItem : returnItems) {
+                if (returnItem.getSourcePurchaseOrderItemId() == null) {
+                    continue;
+                }
+                amountBySourceItem.merge(
+                    returnItem.getSourcePurchaseOrderItemId(),
+                    returnItem.getAmountInclTax() == null ? BigDecimal.ZERO : returnItem.getAmountInclTax(),
+                    BigDecimal::add
+                );
+            }
+        }
+        return amountBySourceItem;
     }
 
     private void validateSettlementAmounts(Long tenantId, ErpPurchaseReturn order, Long currentReturnId) {

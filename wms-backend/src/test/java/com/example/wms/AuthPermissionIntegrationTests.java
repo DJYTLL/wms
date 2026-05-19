@@ -26,6 +26,7 @@ import com.example.wms.mapper.UserRoleMapper;
 import com.example.wms.security.JwtAuthenticationFilter;
 import com.example.wms.security.JwtTokenService;
 import com.example.wms.service.RefreshTokenService;
+import com.example.wms.service.RoleScopeService;
 import com.example.wms.service.UserAccountService;
 import com.example.wms.service.impl.RolePermissionServiceImpl;
 import com.example.wms.service.impl.RoleServiceImpl;
@@ -123,7 +124,7 @@ class AuthPermissionIntegrationTests {
         Tenant tenant = tenant(1L, "default");
         UserAccount user = user(10L, 1L, "admin");
         AuthPayload payload = authPayload("admin", 1L, "default", List.of("admin"));
-        TokenPairResponse issued = new TokenPairResponse("access-token", "refresh-token");
+        TokenPairResponse issued = new TokenPairResponse("access-token", "refresh-token", payload);
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(
             authenticationManager, userAccountService, refreshTokenService, tenantMapper, userAccountMapper
         )).build();
@@ -183,8 +184,16 @@ class AuthPermissionIntegrationTests {
         when(userAccountService.loadUserAccount("admin"))
             .thenReturn(systemUser)
             .thenReturn(secondUser);
-        when(refreshTokenService.issueTokens(eq(systemUser), any())).thenReturn(new TokenPairResponse("token-default", "refresh-a"));
-        when(refreshTokenService.issueTokens(eq(secondUser), any())).thenReturn(new TokenPairResponse("token-tenant-b", "refresh-b"));
+        when(refreshTokenService.issueTokens(eq(systemUser), any())).thenReturn(new TokenPairResponse(
+            "token-default",
+            "refresh-a",
+            authPayload("admin", 1L, "default", List.of("super_admin"))
+        ));
+        when(refreshTokenService.issueTokens(eq(secondUser), any())).thenReturn(new TokenPairResponse(
+            "token-tenant-b",
+            "refresh-b",
+            authPayload("admin", 2L, "tenant-b", List.of("admin"))
+        ));
 
         mockMvc.perform(post("/api/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -228,7 +237,13 @@ class AuthPermissionIntegrationTests {
 
     @Test
     void reservedRolesCannotBeCreatedOrRenamed() {
-        RoleServiceImpl service = new RoleServiceImpl(roleMapper, rolePermissionMapper, userRoleMapper, userAccountMapper);
+        RoleServiceImpl service = new RoleServiceImpl(
+            roleMapper,
+            rolePermissionMapper,
+            userRoleMapper,
+            userAccountMapper,
+            roleScopeService()
+        );
         TenantContext.setTenantId(1L);
         Role role = new Role();
         role.setId(8L);
@@ -247,7 +262,13 @@ class AuthPermissionIntegrationTests {
 
     @Test
     void nonSuperAdminCannotAssignSuperAdminRole() {
-        UserServiceImpl service = new UserServiceImpl(userAccountMapper, roleMapper, userRoleMapper, passwordEncoder);
+        UserServiceImpl service = new UserServiceImpl(
+            userAccountMapper,
+            roleMapper,
+            rolePermissionMapper,
+            userRoleMapper,
+            passwordEncoder
+        );
         TenantContext.setTenantId(1L);
         Role superAdminRole = role(99L, 1L, "super_admin");
         UserAccount targetUser = user(22L, 1L, "alice");
@@ -279,7 +300,8 @@ class AuthPermissionIntegrationTests {
             rolePermissionMapper,
             tenantColumnSettingMapper,
             userRoleMapper,
-            userAccountMapper
+            userAccountMapper,
+            roleScopeService()
         );
         TenantContext.setTenantId(1L);
         Role role = role(8L, 1L, "ops");
@@ -309,6 +331,42 @@ class AuthPermissionIntegrationTests {
         verify(rolePermissionMapper).insertIgnore(1L, 8L, 2L);
         verify(rolePermissionMapper, never()).insertIgnore(1L, 8L, 1L);
         verify(rolePermissionMapper, never()).insertIgnore(1L, 8L, 4L);
+    }
+
+    @Test
+    void columnPermissionRoleOptionsHideRolesOutsideActorScope() {
+        RolePermissionServiceImpl service = new RolePermissionServiceImpl(
+            roleMapper,
+            permissionMapper,
+            roleColumnSettingMapper,
+            rolePermissionMapper,
+            tenantColumnSettingMapper,
+            userRoleMapper,
+            userAccountMapper,
+            roleScopeService()
+        );
+        TenantContext.setTenantId(1L);
+        Role role = role(8L, 1L, "ops");
+        Permission allowed = permission(1L, "erp-sale:view");
+        Permission exceeded = permission(2L, "tenant:view");
+
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                "tenant-admin",
+                "N/A",
+                List.of(
+                    new SimpleGrantedAuthority("ROLE_admin"),
+                    new SimpleGrantedAuthority("PERM_erp-sale:view")
+                )
+            )
+        );
+        when(roleMapper.selectOne(any())).thenReturn(role);
+        when(rolePermissionMapper.findPermissionsByRoleId(1L, 8L))
+            .thenReturn(List.of(allowed, exceeded))
+            .thenReturn(List.of(allowed));
+
+        assertThat(service.canManageColumnPermissions(8L)).isFalse();
+        assertThat(service.canManageColumnPermissions(8L)).isTrue();
     }
 
     @Test
@@ -390,6 +448,10 @@ class AuthPermissionIntegrationTests {
             refreshTokenService,
             jwtTokenService
         );
+    }
+
+    private RoleScopeService roleScopeService() {
+        return new RoleScopeService(rolePermissionMapper, userAccountMapper, userRoleMapper);
     }
 
     private Tenant tenant(Long id, String code) {

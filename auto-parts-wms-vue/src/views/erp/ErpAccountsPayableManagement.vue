@@ -57,17 +57,17 @@
             </template>
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <ErpDataTableColumn v-if="canShow('paidAmount')" :label="$t('field.paidAmount')" min-width="140" column-key="custom-6">
+          <ErpDataTableColumn v-if="canShow('paidAmount')" :label="$t('field.paidAmount')" min-width="140" column-key="paidAmount">
             <template #default="{ row }">
               {{ formatAmount(toAmount(row.paidAmount)) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('discountAmount')" :label="$t('field.discountAmount')" min-width="140" column-key="custom-7">
+          <ErpDataTableColumn v-if="canShow('discountAmount')" :label="$t('field.discountAmount')" min-width="140" column-key="discountAmount">
             <template #default="{ row }">
               {{ formatAmount(toAmount(row.discountAmount)) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('unpaidAmount')" :label="$t('field.unpaidAmount')" min-width="140" column-key="custom-8">
+          <ErpDataTableColumn v-if="canShow('unpaidAmount')" :label="$t('field.unpaidAmount')" min-width="140" column-key="unpaidAmount">
             <template #default="{ row }">
               {{ formatAmount(toAmount(row.unpaidAmount)) }}
             </template>

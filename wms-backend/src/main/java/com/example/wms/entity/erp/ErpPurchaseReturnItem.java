@@ -25,6 +25,30 @@ public class ErpPurchaseReturnItem {
     @TableField("product_id")
     private Long productId;
 
+    @TableField("source_purchase_order_item_id")
+    private Long sourcePurchaseOrderItemId;
+
+    @TableField("source_purchase_order_id")
+    private Long sourcePurchaseOrderId;
+
+    @TableField(exist = false)
+    private String sourcePurchaseOrderNo;
+
+    @TableField(exist = false)
+    private Integer sourcePurchaseOrderItemSortNo;
+
+    @TableField(exist = false)
+    private BigDecimal sourcePurchaseOrderItemQty;
+
+    @TableField(exist = false)
+    private BigDecimal sourcePurchaseOrderItemRemainingQty;
+
+    @TableField(exist = false)
+    private BigDecimal sourcePurchaseOrderItemApprovedReturnedQty;
+
+    @TableField(exist = false)
+    private BigDecimal sourcePurchaseOrderItemDraftOccupiedQty;
+
     @TableField("product_code")
     private String productCode;
 
@@ -110,6 +134,70 @@ public class ErpPurchaseReturnItem {
 
     public void setProductId(Long productId) {
         this.productId = productId;
+    }
+
+    public Long getSourcePurchaseOrderItemId() {
+        return sourcePurchaseOrderItemId;
+    }
+
+    public void setSourcePurchaseOrderItemId(Long sourcePurchaseOrderItemId) {
+        this.sourcePurchaseOrderItemId = sourcePurchaseOrderItemId;
+    }
+
+    public Long getSourcePurchaseOrderId() {
+        return sourcePurchaseOrderId;
+    }
+
+    public void setSourcePurchaseOrderId(Long sourcePurchaseOrderId) {
+        this.sourcePurchaseOrderId = sourcePurchaseOrderId;
+    }
+
+    public String getSourcePurchaseOrderNo() {
+        return sourcePurchaseOrderNo;
+    }
+
+    public void setSourcePurchaseOrderNo(String sourcePurchaseOrderNo) {
+        this.sourcePurchaseOrderNo = sourcePurchaseOrderNo;
+    }
+
+    public Integer getSourcePurchaseOrderItemSortNo() {
+        return sourcePurchaseOrderItemSortNo;
+    }
+
+    public void setSourcePurchaseOrderItemSortNo(Integer sourcePurchaseOrderItemSortNo) {
+        this.sourcePurchaseOrderItemSortNo = sourcePurchaseOrderItemSortNo;
+    }
+
+    public BigDecimal getSourcePurchaseOrderItemQty() {
+        return sourcePurchaseOrderItemQty;
+    }
+
+    public void setSourcePurchaseOrderItemQty(BigDecimal sourcePurchaseOrderItemQty) {
+        this.sourcePurchaseOrderItemQty = sourcePurchaseOrderItemQty;
+    }
+
+    public BigDecimal getSourcePurchaseOrderItemRemainingQty() {
+        return sourcePurchaseOrderItemRemainingQty;
+    }
+
+    public void setSourcePurchaseOrderItemRemainingQty(BigDecimal sourcePurchaseOrderItemRemainingQty) {
+        this.sourcePurchaseOrderItemRemainingQty = sourcePurchaseOrderItemRemainingQty;
+    }
+
+    public BigDecimal getSourcePurchaseOrderItemApprovedReturnedQty() {
+        return sourcePurchaseOrderItemApprovedReturnedQty;
+    }
+
+    public void setSourcePurchaseOrderItemApprovedReturnedQty(BigDecimal sourcePurchaseOrderItemApprovedReturnedQty) {
+        this.sourcePurchaseOrderItemApprovedReturnedQty = sourcePurchaseOrderItemApprovedReturnedQty;
+    }
+
+    public BigDecimal getSourcePurchaseOrderItemDraftOccupiedQty() {
+        return sourcePurchaseOrderItemDraftOccupiedQty;
+    }
+
+    public void setSourcePurchaseOrderItemDraftOccupiedQty(BigDecimal sourcePurchaseOrderItemDraftOccupiedQty) {
+        this.sourcePurchaseOrderItemDraftOccupiedQty = sourcePurchaseOrderItemDraftOccupiedQty;
     }
 
     public String getProductCode() {

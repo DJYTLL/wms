@@ -35,6 +35,8 @@ export const useAuthStore = defineStore('auth', () => {
   const permissions = ref<string[]>([]);
   const tenantId = ref<number | null>(null);
   const tenantCode = ref<string | null>(null);
+  const userTenantId = ref<number | null>(null);
+  const userTenantCode = ref<string | null>(null);
   const initialized = ref(false);
   let restorePromise: Promise<boolean> | null = null;
 
@@ -74,13 +76,15 @@ export const useAuthStore = defineStore('auth', () => {
     permissions.value = Array.isArray(authPayload.permissions) ? authPayload.permissions : [];
     tenantId.value = typeof authPayload.tenantId === 'number' ? authPayload.tenantId : null;
     tenantCode.value = typeof authPayload.tenantCode === 'string' ? authPayload.tenantCode : null;
+    userTenantId.value = typeof authPayload.userTenantId === 'number' ? authPayload.userTenantId : null;
+    userTenantCode.value = typeof authPayload.userTenantCode === 'string' ? authPayload.userTenantCode : null;
     persistAuthContext({
       user: user.value,
       permissions: permissions.value,
       tenantId: tenantId.value,
       tenantCode: tenantCode.value,
-      userTenantId: typeof authPayload.userTenantId === 'number' ? authPayload.userTenantId : null,
-      userTenantCode: typeof authPayload.userTenantCode === 'string' ? authPayload.userTenantCode : null,
+      userTenantId: userTenantId.value,
+      userTenantCode: userTenantCode.value,
     });
     return true;
   };
@@ -92,6 +96,8 @@ export const useAuthStore = defineStore('auth', () => {
       permissions.value = [];
       tenantId.value = null;
       tenantCode.value = null;
+      userTenantId.value = null;
+      userTenantCode.value = null;
       persistAuthContext(null);
       return;
     }
@@ -113,12 +119,16 @@ export const useAuthStore = defineStore('auth', () => {
         permissions.value = [];
         tenantId.value = typeof payload.tid === 'number' ? payload.tid : null;
         tenantCode.value = typeof payload.tcode === 'string' ? payload.tcode : null;
+        userTenantId.value = typeof payload.utid === 'number' ? payload.utid : null;
+        userTenantCode.value = typeof payload.utcode === 'string' ? payload.utcode : null;
         const storedContext = readStoredAuthContext();
         if (storedContext && storedContext.user?.username === payload.user?.username) {
           user.value = storedContext.user || user.value;
           permissions.value = Array.isArray(storedContext.permissions) ? storedContext.permissions : [];
           tenantId.value = typeof storedContext.tenantId === 'number' ? storedContext.tenantId : tenantId.value;
           tenantCode.value = typeof storedContext.tenantCode === 'string' ? storedContext.tenantCode : tenantCode.value;
+          userTenantId.value = typeof storedContext.userTenantId === 'number' ? storedContext.userTenantId : userTenantId.value;
+          userTenantCode.value = typeof storedContext.userTenantCode === 'string' ? storedContext.userTenantCode : userTenantCode.value;
         }
       } else {
         throw new Error('Token format invalid');
@@ -223,6 +233,9 @@ export const useAuthStore = defineStore('auth', () => {
    * @returns {boolean} 如果用户拥有该权限，则返回 true。
    */
   const hasPermission = (permission: string) => {
+    if (hasRole('super_admin')) {
+      return true;
+    }
     return permissions.value.includes(permission);
   };
 
@@ -252,6 +265,8 @@ export const useAuthStore = defineStore('auth', () => {
     permissions,
     tenantId,
     tenantCode,
+    userTenantId,
+    userTenantCode,
     initialized,
     isAuthenticated,
     login,

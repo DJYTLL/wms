@@ -61,10 +61,10 @@ public final class MenuSeedProvider {
             new MenuSeed("system", null, "系统设置", "system", null, ICON_SYSTEM, null, 40),
             new MenuSeed("users", "system", "用户管理", "users", "/users", null, "user:view", 10),
             new MenuSeed("roles", "system", "角色权限", "roles", "/roles", null, "role:view", 20),
-            new MenuSeed("permissions", "system", "权限管理", "permissions", "/permissions", null, "role:view", 30),
+            new MenuSeed("permissions", "system", "权限管理", "permissions", "/permissions", null, "permission:view", 30),
             new MenuSeed("audit-logs", "system", "审计日志", "audit-logs", "/audit-logs", null, "audit:view", 35),
             new MenuSeed("column-permissions", "system", "列权限配置", "columnPermissions", "/column-permissions", null, "column:role:manage", 36),
-            new MenuSeed("menu-management", "system", "菜单管理", "menu-management", "/menus", null, "tenant:view", 36),
+            new MenuSeed("menu-management", "system", "菜单管理", "menu-management", "/menus", null, "menu:view", 36),
             new MenuSeed("system-config", "system", "系统配置", "system-config", "/system-config", null, "tenant:view", 38),
             new MenuSeed("tenants", "system", "租户管理", "tenants", "/tenants", null, "tenant:view", 40)
         );

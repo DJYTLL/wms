@@ -4,11 +4,35 @@
       <div class="page-title">{{ $t('page.erpProductManagement') }}</div>
       <div class="page-toolbar-card">
         <div class="erp-basic-toolbar">
-          <div class="erp-basic-filters erp-basic-filters--3">
+          <div class="erp-basic-filters erp-basic-filters--6">
           <el-input
-            v-model="searchQuery"
-            :placeholder="$t('action.search')"
-            class="table-search erp-basic-field--wide"
+            v-model="nameQuery"
+            placeholder="名称"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="codeQuery"
+            placeholder="编码"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="shortNameQuery"
+            placeholder="简称"
+            class="table-search erp-basic-field--narrow"
+            clearable
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-input
+            v-model="barcodeQuery"
+            placeholder="条码"
+            class="table-search erp-basic-field--narrow"
             clearable
             @clear="handleSearch"
             @keyup.enter="handleSearch"
@@ -23,6 +47,7 @@
           </el-select>
           </div>
           <div class="erp-basic-actions">
+            <el-button type="primary" @click="handleSearch">{{ $t('action.search') }}</el-button>
             <el-button type="primary" v-permission="'erp-product:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
           </div>
         </div>
@@ -35,28 +60,28 @@
           <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
           <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
-          <ErpDataTableColumn v-if="canShow('category')" :label="$t('field.category')" min-width="140" column-key="custom-4">
+          <ErpDataTableColumn v-if="canShow('category')" :label="$t('field.category')" min-width="140" column-key="category">
             <template #default="{ row }">
               {{ getCategoryName(row.categoryId) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('unit')" :label="$t('field.unit')" min-width="120" column-key="custom-5">
+          <ErpDataTableColumn v-if="canShow('unit')" :label="$t('field.unit')" min-width="120" column-key="unit">
             <template #default="{ row }">
               {{ getUnitName(row.unitId) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('defaultWarehouse')" :label="$t('field.defaultWarehouse')" min-width="140" column-key="custom-6">
+          <ErpDataTableColumn v-if="canShow('defaultWarehouse')" :label="$t('field.defaultWarehouse')" min-width="140" column-key="defaultWarehouse">
             <template #default="{ row }">
               {{ getWarehouseName(row.defaultWarehouseId) }}
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn v-if="canShow('defaultLocation')" :label="$t('field.defaultLocation')" min-width="140" column-key="custom-7">
+          <ErpDataTableColumn v-if="canShow('defaultLocation')" :label="$t('field.defaultLocation')" min-width="140" column-key="defaultLocation">
             <template #default="{ row }">
               {{ getLocationName(row.defaultLocationId) }}
             </template>
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('price')" prop="salePrice" :label="$t('field.price')" min-width="120" />
-          <ErpDataTableColumn v-if="canShow('costPrice') && canViewCostPrice" :label="$t('field.costPrice')" min-width="120" column-key="custom-9">
+          <ErpDataTableColumn v-if="canShow('costPrice') && canViewCostPrice" :label="$t('field.costPrice')" min-width="120" column-key="costPrice">
             <template #default="{ row }">
               <el-button
                 link
@@ -328,13 +353,13 @@
             <div class="module-card">
               <div class="section-title">{{ $t('section.customFields') }}</div>
               <div class="custom-field-table">
-                <ErpDataTable :data="customFields" style="width: 100%" size="small" border table-key="erp-product-management-15">
-                  <ErpDataTableColumn :label="$t('field.customFieldKey')" min-width="200" column-key="custom-14">
+                <ErpDataTable :data="customFields" style="width: 100%" size="small" border table-key="erp-product-custom-fields">
+                  <ErpDataTableColumn :label="$t('field.customFieldKey')" min-width="200" column-key="customFieldKey">
                     <template #default="{ row }">
                       <el-input v-model="row.key" :placeholder="$t('field.customFieldKey')" />
                     </template>
                   </ErpDataTableColumn>
-                  <ErpDataTableColumn :label="$t('field.customFieldValue')" min-width="240" column-key="custom-15">
+                  <ErpDataTableColumn :label="$t('field.customFieldValue')" min-width="240" column-key="customFieldValue">
                     <template #default="{ row }">
                       <el-input v-model="row.value" :placeholder="$t('field.customFieldValue')" />
                     </template>
@@ -556,13 +581,13 @@
           <div class="form-section module-card">
             <div class="section-title">{{ $t('section.customFields') }}</div>
             <div class="custom-field-table">
-              <ErpDataTable :data="customFields" style="width: 100%" size="small" border table-key="erp-product-management-19">
-                <ErpDataTableColumn :label="$t('field.customFieldKey')" min-width="200" column-key="custom-17">
+              <ErpDataTable :data="customFields" style="width: 100%" size="small" border table-key="erp-product-custom-fields">
+                <ErpDataTableColumn :label="$t('field.customFieldKey')" min-width="200" column-key="customFieldKey">
                   <template #default="{ row }">
                     <el-input v-model="row.key" :placeholder="$t('field.customFieldKey')" />
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="$t('field.customFieldValue')" min-width="240" column-key="custom-18">
+                <ErpDataTableColumn :label="$t('field.customFieldValue')" min-width="240" column-key="customFieldValue">
                   <template #default="{ row }">
                     <el-input v-model="row.value" :placeholder="$t('field.customFieldValue')" />
                   </template>
@@ -626,19 +651,19 @@
           stripe
           :empty-text="$t('table.empty')"
           height="360"
-         table-key="erp-product-management-23">
+         table-key="erp-product-purchase-history">
           <ErpDataTableColumn prop="supplierName" :label="$t('field.supplierName')" min-width="180" />
           <ErpDataTableColumn prop="qty" :label="$t('field.quantity')" width="120" />
-          <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-22">
+          <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="price">
             <template #default="{ row }">{{ formatMoney(row.price) }}</template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.priceInclTax')" width="140" column-key="custom-23">
+          <ErpDataTableColumn :label="$t('field.priceInclTax')" width="140" column-key="priceInclTax">
             <template #default="{ row }">{{ formatMoney(row.priceInclTax) }}</template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.orderTime')" width="180" column-key="custom-24">
+          <ErpDataTableColumn :label="$t('field.orderTime')" width="180" column-key="orderAt">
             <template #default="{ row }">{{ formatHistoryDate(row.orderAt) }}</template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.orderNo')" min-width="180" column-key="custom-25">
+          <ErpDataTableColumn :label="$t('field.orderNo')" min-width="180" column-key="orderNo">
             <template #default="{ row }">
               <el-button
                 link
@@ -711,19 +736,19 @@
             border
             :empty-text="$t('table.empty')"
             max-height="420"
-           table-key="erp-product-management-30">
+           table-key="erp-product-purchase-order-detail">
             <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
             <ErpDataTableColumn :label="$t('field.product')" min-width="220" column-key="product">
               <template #default="{ row }">
                 {{ getPurchaseOrderDetailProductName(row.productId) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
+            <ErpDataTableColumn :label="$t('field.warehouse')" min-width="160" column-key="warehouse">
               <template #default="{ row }">
                 {{ getWarehouseName(row.warehouseId) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.location')" min-width="160" column-key="warehouseLocation">
+            <ErpDataTableColumn :label="$t('field.location')" min-width="160" column-key="location">
               <template #default="{ row }">
                 {{ getLocationName(row.locationId) }}
               </template>
@@ -733,12 +758,12 @@
                 {{ formatPurchaseOrderDetailNumber(row.qty) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-31">
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="price">
               <template #default="{ row }">
                 {{ formatMoney(row.price) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="lineAmount">
               <template #default="{ row }">
                 {{ formatMoney(calcPurchaseOrderDetailLineTotal(row)) }}
               </template>
@@ -765,6 +790,7 @@ import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
+import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 
 interface OptionItem {
   id: number;
@@ -857,7 +883,10 @@ const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = useSystemConfig();
 const authStore = useAuthStore();
 
-const searchQuery = ref('');
+const nameQuery = ref('');
+const codeQuery = ref('');
+const shortNameQuery = ref('');
+const barcodeQuery = ref('');
 const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all');
 const categoryFilter = ref<number | null>(null);
 const loading = ref(false);
@@ -865,6 +894,7 @@ const page = ref(1);
 const size = ref(20);
 const total = ref(0);
 const tableData = ref<ErpProduct[]>([]);
+const allTableData = ref<ErpProduct[]>([]);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
@@ -1234,21 +1264,26 @@ const fetchProductDetail = async (productId: number) => {
   return res.data.data as ErpProduct;
 };
 
+const applySearch = () => {
+  let filtered = allTableData.value.slice();
+  if (statusFilter.value !== 'all') filtered = filtered.filter(row => row.enabled === (statusFilter.value === 'enabled'));
+  if (categoryFilter.value) filtered = filtered.filter(row => row.categoryId === categoryFilter.value);
+  filtered = filterByFuzzyKeyword(filtered, nameQuery.value, row => [row.name]);
+  filtered = filterByFuzzyKeyword(filtered, codeQuery.value, row => [row.code]);
+  filtered = filterByFuzzyKeyword(filtered, shortNameQuery.value, row => [row.shortName]);
+  filtered = filterByFuzzyKeyword(filtered, barcodeQuery.value, row => [row.barcode]);
+  total.value = filtered.length;
+  const start = (page.value - 1) * size.value;
+  tableData.value = filtered.slice(start, start + size.value);
+};
+
 const fetchList = async () => {
   loading.value = true;
   try {
-    const params: Record<string, any> = {
-      page: page.value,
-      size: size.value
-    };
-    if (searchQuery.value) params.keyword = searchQuery.value.trim();
-    if (statusFilter.value !== 'all') params.enabled = statusFilter.value === 'enabled';
-    if (categoryFilter.value) params.categoryId = categoryFilter.value;
-
-    const res: any = await request.get('/erp/products/page', { params });
+    const res: any = await request.get('/erp/products');
     if (res.data.code === 200) {
-      tableData.value = res.data.data.items || [];
-      total.value = res.data.data.total || 0;
+      allTableData.value = res.data.data || [];
+      applySearch();
     }
   } catch (error) {
     notifyError(error);
@@ -1264,13 +1299,13 @@ const handleSearch = () => {
 
 const handlePageChange = (newPage: number) => {
   page.value = newPage;
-  fetchList();
+  applySearch();
 };
 
 const handleSizeChange = (newSize: number) => {
   size.value = newSize;
   page.value = 1;
-  fetchList();
+  applySearch();
 };
 
 const fetchPurchaseHistory = async (pageNo = purchaseHistoryPage.value) => {

@@ -80,7 +80,74 @@
         </div>
 
         <div class="user-actions-group">
-          <div class="tenant-indicator" :title="`${t('field.tenant')}: ${currentTenantCode}`">
+          <el-dropdown
+            v-if="canSwitchTenant"
+            trigger="click"
+            :hide-on-click="false"
+            @visible-change="handleTenantDropdownVisible"
+          >
+            <button class="tenant-indicator tenant-indicator--button" :title="`${t('field.tenant')}: ${currentTenantCode}`">
+              <span class="tenant-indicator__label">{{ t('field.tenant') }}</span>
+              <span class="tenant-indicator__value">{{ currentTenantCode }}</span>
+              <svg class="tenant-indicator__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu class="tenant-switch-menu">
+                <div class="tenant-switch-menu__header">
+                  <span>{{ t('action.switchTenant') }}</span>
+                  <button
+                    class="tenant-switch-menu__refresh"
+                    type="button"
+                    :title="t('action.refresh')"
+                    @click.stop="fetchSwitchableTenants(true)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+                      <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+                    </svg>
+                  </button>
+                </div>
+                <div v-if="tenantSwitchLoading" class="tenant-switch-menu__empty">
+                  {{ t('message.loading') }}
+                </div>
+                <template v-else-if="switchableTenants.length">
+                  <el-dropdown-item
+                    v-for="tenant in switchableTenants"
+                    :key="tenant.code"
+                    :disabled="!tenant.enabled || tenant.code === currentTenantCode"
+                    @click="switchTenantByCode(tenant.code)"
+                  >
+                    <div class="tenant-switch-option">
+                      <span class="tenant-switch-option__name">{{ tenant.name }}</span>
+                      <span class="tenant-switch-option__code">{{ tenant.code }}</span>
+                      <span v-if="tenant.code === currentTenantCode" class="tenant-switch-option__current">
+                        {{ t('status.current') }}
+                      </span>
+                    </div>
+                  </el-dropdown-item>
+                </template>
+                <template v-else>
+                  <el-dropdown-item
+                    v-if="returnTenantCode && returnTenantCode !== currentTenantCode"
+                    @click="switchTenantByCode(returnTenantCode)"
+                  >
+                    <div class="tenant-switch-option">
+                      <span class="tenant-switch-option__name">{{ t('action.backToHomeTenant') }}</span>
+                      <span class="tenant-switch-option__code">{{ returnTenantCode }}</span>
+                    </div>
+                  </el-dropdown-item>
+                  <div v-else class="tenant-switch-menu__empty">
+                    {{ t('message.noData') }}
+                  </div>
+                </template>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <div v-else class="tenant-indicator" :title="`${t('field.tenant')}: ${currentTenantCode}`">
             <span class="tenant-indicator__label">{{ t('field.tenant') }}</span>
             <span class="tenant-indicator__value">{{ currentTenantCode }}</span>
           </div>
@@ -159,7 +226,8 @@ import { useThemeStore } from '@/stores/theme';
 import { useAuthStore } from '@/stores/auth';
 import { useMenuStore } from '@/stores/menu';
 import { useApiError } from '@/composables/useApiError';
-import { ElMessageBox } from 'element-plus';
+import request, { setTokens } from '@/utils/request';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { normalizeMenuKey } from '@/utils/i18n';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
@@ -213,7 +281,72 @@ interface MenuItem {
   children?: MenuItem[];
 }
 
+interface TenantOption {
+  id: number;
+  code: string;
+  name: string;
+  enabled: boolean;
+}
+
 const menuData = ref<MenuItem[]>([]);
+const switchableTenants = ref<TenantOption[]>([]);
+const tenantSwitchLoading = ref(false);
+const tenantSwitchLoaded = ref(false);
+const canSwitchTenant = computed(() => authStore.hasRole('super_admin') && authStore.hasPermission('tenant:switch'));
+const returnTenantCode = computed(() => authStore.userTenantCode || 'default');
+
+const fetchSwitchableTenants = async (force = false) => {
+  if (!canSwitchTenant.value || (tenantSwitchLoaded.value && !force)) {
+    return;
+  }
+  tenantSwitchLoading.value = true;
+  try {
+    const res: any = await request.get('/tenants');
+    if (res.data.code === 200) {
+      switchableTenants.value = Array.isArray(res.data.data) ? res.data.data : [];
+      tenantSwitchLoaded.value = true;
+    }
+  } catch (error) {
+    notifyError(error);
+    if (returnTenantCode.value && returnTenantCode.value !== currentTenantCode.value) {
+      switchableTenants.value = [{
+        id: authStore.userTenantId || 0,
+        code: returnTenantCode.value,
+        name: returnTenantCode.value,
+        enabled: true,
+      }];
+    }
+  } finally {
+    tenantSwitchLoading.value = false;
+  }
+};
+
+const handleTenantDropdownVisible = (visible: boolean) => {
+  if (visible) {
+    fetchSwitchableTenants();
+  }
+};
+
+const switchTenantByCode = async (tenantCode: string) => {
+  if (!tenantCode || tenantCode === currentTenantCode.value) {
+    return;
+  }
+  try {
+    const res: any = await request.post('/tenants/switch', { tenantCode });
+    if (res.data.code === 200) {
+      const newToken = res.data?.data?.token;
+      if (typeof newToken === 'string' && newToken) {
+        setTokens(newToken, res.data?.data?.authPayload);
+      }
+      tenantSwitchLoaded.value = false;
+      switchableTenants.value = [];
+      ElMessage.success(t('message.success'));
+      router.push('/');
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
 
 const menuRouteFallbackMap: Record<string, string> = {
   'erp-stock-transfer': '/erp/stock-transfers',
@@ -1353,6 +1486,16 @@ const handleSearchShortcut = (event: KeyboardEvent) => {
   white-space: nowrap;
 }
 
+.tenant-indicator--button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.tenant-indicator--button:hover {
+  border-color: rgba(0, 113, 227, 0.35);
+  background: linear-gradient(180deg, rgba(0, 113, 227, 0.12), rgba(0, 113, 227, 0.05));
+}
+
 .tenant-indicator__label {
   font-size: 12px;
   color: var(--text-sub);
@@ -1362,6 +1505,89 @@ const handleSearchShortcut = (event: KeyboardEvent) => {
   font-size: 13px;
   font-weight: 600;
   color: var(--active-blue);
+}
+
+.tenant-indicator__chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--active-blue);
+}
+
+:global(.tenant-switch-menu) {
+  min-width: 220px;
+  max-width: 280px;
+}
+
+:global(.tenant-switch-menu__header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+:global(.tenant-switch-menu__refresh) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+:global(.tenant-switch-menu__refresh:hover) {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--active-blue, #0071e3);
+}
+
+:global(.tenant-switch-menu__refresh svg) {
+  width: 14px;
+  height: 14px;
+}
+
+:global(.tenant-switch-menu__empty) {
+  padding: 12px;
+  font-size: 13px;
+  color: #8a8f98;
+}
+
+:global(.tenant-switch-option) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 180px;
+}
+
+:global(.tenant-switch-option__name) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+:global(.tenant-switch-option__code) {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--active-blue, #0071e3);
+}
+
+:global(.tenant-switch-option__current) {
+  grid-column: 1 / -1;
+  width: fit-content;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(0, 113, 227, 0.08);
+  color: var(--active-blue, #0071e3);
+  font-size: 11px;
 }
 
 

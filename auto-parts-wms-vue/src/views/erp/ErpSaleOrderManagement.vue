@@ -271,7 +271,7 @@
             border
             class="sale-return-detail-table"
             :empty-text="$t('table.empty')"
-           table-key="erp-sale-order-management">
+           table-key="erp-sale-order-return-detail">
             <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
             <ErpDataTableColumn :label="$t('field.product')" min-width="220" column-key="product">
               <template #default="{ row }">
@@ -279,12 +279,12 @@
               </template>
             </ErpDataTableColumn>
             <ErpDataTableColumn prop="productCode" label="商品编码" min-width="140" />
-            <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
+            <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouse">
               <template #default="{ row }">
                 {{ getWarehouseName(row.warehouseId) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
+            <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="location">
               <template #default="{ row }">
                 {{ getLocationName(row.locationId) }}
               </template>
@@ -294,27 +294,27 @@
                 {{ formatAmount(row.qty) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.price')" min-width="110" column-key="custom-7">
+            <ErpDataTableColumn :label="$t('field.price')" min-width="110" column-key="price">
               <template #default="{ row }">
                 {{ formatAmount(row.price) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.lineTotal')" min-width="120" column-key="amount">
+            <ErpDataTableColumn :label="$t('field.lineTotal')" min-width="120" column-key="lineAmount">
               <template #default="{ row }">
                 {{ formatAmount(row.amount) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.taxRate')" min-width="110" column-key="custom-9">
+            <ErpDataTableColumn :label="$t('field.taxRate')" min-width="110" column-key="taxRate">
               <template #default="{ row }">
                 {{ formatTaxRate(row.taxRate) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn label="税额" min-width="120" column-key="custom-10">
+            <ErpDataTableColumn label="税额" min-width="120" column-key="taxAmount">
               <template #default="{ row }">
                 {{ formatAmount(row.taxAmount) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn label="含税金额" min-width="130" column-key="amount">
+            <ErpDataTableColumn label="含税金额" min-width="130" column-key="amountInclTax">
               <template #default="{ row }">
                 {{ formatAmount(row.amountInclTax) }}
               </template>

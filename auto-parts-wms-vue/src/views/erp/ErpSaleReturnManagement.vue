@@ -74,7 +74,7 @@
             </template>
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('totalAmount')" prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
-          <ErpDataTableColumn v-if="canShow('refundStatus')" :label="$t('field.refundStatus')" min-width="150" column-key="custom-6">
+          <ErpDataTableColumn v-if="canShow('refundStatus')" :label="$t('field.refundStatus')" min-width="150" column-key="refundStatus">
             <template #default="{ row }">
               <el-tag :type="financeStatusTagType(row.refundStatus)" size="small">
                 {{ formatFinanceStatus(row.refundStatus, row.refundUnpaidAmount) }}
@@ -114,16 +114,6 @@
                   @click="handleCopy(row)"
                 >
                   {{ $t('action.copy') }}
-                </el-button>
-                <el-button
-                  v-if="row.status === 'APPROVED'"
-                  link
-                  type="warning"
-                  size="small"
-                  v-permission="'erp-sale-return-approved:cancel'"
-                  @click="handleCancel(row)"
-                >
-                  {{ $t('action.cancel') }}
                 </el-button>
                 <el-button
                   v-if="row.status === 'APPROVED'"
@@ -284,11 +274,10 @@ const statusOptions = computed(() => {
   const base = [
     { value: 'DRAFT', label: t('status.draft') },
     { value: 'APPROVED', label: t('status.approved') },
-    { value: 'CANCELLED', label: t('status.cancelled') },
     { value: 'RED_FLUSHED', label: t('status.redFlushed') }
   ];
   if (isApprovedPage.value) {
-    base.unshift({ value: 'APPROVED,CANCELLED,RED_FLUSHED', label: `${t('status.approved')}/${t('status.cancelled')}/${t('status.redFlushed')}` });
+    base.unshift({ value: 'APPROVED,RED_FLUSHED', label: `${t('status.approved')}/${t('status.redFlushed')}` });
   }
   return base;
 });
@@ -329,7 +318,6 @@ const canShow = (key: string) => isVisible(key);
 
 const statusTagType = (status: string) => {
   if (status === 'APPROVED') return 'success';
-  if (status === 'CANCELLED') return 'warning';
   if (status === 'RED_FLUSHED') return 'danger';
   return 'info';
 };
@@ -338,7 +326,6 @@ const formatStatus = (status: string) => {
   const mapping: Record<string, string> = {
     DRAFT: t('status.draft'),
     APPROVED: t('status.approved'),
-    CANCELLED: t('status.cancelled'),
     RED_FLUSHED: t('status.redFlushed')
   };
   return mapping[status] || status;
@@ -470,7 +457,7 @@ const applyRouteStatus = () => {
   statusLocked.value = lockStatus;
   if (defaultStatus) {
     if (defaultStatus === 'APPROVED') {
-      statusFilter.value = 'APPROVED,CANCELLED,RED_FLUSHED';
+      statusFilter.value = 'APPROVED,RED_FLUSHED';
     } else {
       statusFilter.value = defaultStatus;
     }
@@ -545,32 +532,6 @@ const handleRedFlush = async (row: SaleReturn) => {
       return;
     }
     await request.post(`/erp/sale-returns/approved/${row.id}/red-flush`, null, {
-      params: { reason: String(value).trim() }
-    });
-    notifySuccess();
-    fetchList();
-  } catch (error) {
-    if (error && error !== 'cancel' && error !== 'close') {
-      notifyError(error);
-    }
-  }
-};
-
-const handleCancel = async (row: SaleReturn) => {
-  try {
-    const { value } = await ElMessageBox.prompt(
-      t('message.confirmCancel'),
-      t('action.cancel'),
-      {
-        inputPlaceholder: t('placeholder.required'),
-        confirmButtonText: t('action.confirm'),
-        cancelButtonText: t('action.cancel')
-      }
-    );
-    if (!value || !String(value).trim()) {
-      return;
-    }
-    await request.post(`/erp/sale-returns/approved/${row.id}/cancel`, null, {
       params: { reason: String(value).trim() }
     });
     notifySuccess();

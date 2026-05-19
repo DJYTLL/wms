@@ -105,12 +105,12 @@
                 <ErpDataTableColumn prop="totalAmount" :label="$t('field.totalAmount')" min-width="140" />
                 <ErpDataTableColumn prop="paidAmount" :label="$t('field.paidAmount')" min-width="140" />
                 <ErpDataTableColumn prop="unpaidAmount" :label="$t('field.unpaidAmount')" min-width="140" />
-                <ErpDataTableColumn :label="$t('field.paymentAmount')" min-width="140" column-key="custom-5">
+                <ErpDataTableColumn :label="$t('field.paymentAmount')" min-width="140" column-key="paymentAmount">
                   <template #default="{ row }">
                     <DecimalInput v-model="getAllocation(row.id).amount" input-mode="decimal" :scale="2" :allow-negative="isReturnPayable(row.id)" />
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="$t('field.discountAmount')" min-width="140" column-key="custom-6">
+                <ErpDataTableColumn :label="$t('field.discountAmount')" min-width="140" column-key="discountAmount">
                   <template #default="{ row }">
                     <DecimalInput v-model="getAllocation(row.id).discount" input-mode="decimal" :scale="2" :allow-negative="isReturnPayable(row.id)" />
                   </template>

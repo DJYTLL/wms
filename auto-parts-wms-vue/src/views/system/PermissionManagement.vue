@@ -128,7 +128,7 @@
           </div>
 
           <div class="table-actions">
-            <el-button type="primary" @click="openAddModal">{{ $t('action.add') }}</el-button>
+            <el-button type="primary" v-permission="'permission:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
           </div>
         </div>
       </div>
@@ -173,10 +173,10 @@
           </ErpDataTableColumn>
           <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" align="center" column-key="actions">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="openEditModal(row)">
+              <el-button link type="primary" size="small" v-permission="'permission:edit'" @click="openEditModal(row)">
                 {{ $t('action.edit') }}
               </el-button>
-              <el-button link type="danger" size="small" @click="handleDelete(row)">
+              <el-button link type="danger" size="small" v-permission="'permission:delete'" @click="handleDelete(row)">
                 {{ $t('action.delete') }}
               </el-button>
             </template>

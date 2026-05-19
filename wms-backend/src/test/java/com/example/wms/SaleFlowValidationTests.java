@@ -432,6 +432,8 @@ class SaleFlowValidationTests {
             BigDecimal.ZERO,
             List.of(new ErpSaleReturnItemRequest(
                 100L,
+                null,
+                null,
                 1L,
                 1L,
                 BigDecimal.ONE,
@@ -469,6 +471,8 @@ class SaleFlowValidationTests {
             BigDecimal.ZERO,
             List.of(new ErpSaleReturnItemRequest(
                 100L,
+                null,
+                null,
                 1L,
                 1L,
                 BigDecimal.ONE,
@@ -779,6 +783,8 @@ class SaleFlowValidationTests {
     private ErpSaleReturnItemRequest saleReturnItemRequest(Long productId, String qty) {
         return new ErpSaleReturnItemRequest(
             productId,
+            null,
+            null,
             1L,
             1L,
             new BigDecimal(qty),

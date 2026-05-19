@@ -1,7 +1,6 @@
 package com.example.wms.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.wms.dto.RoleCreateRequest;
 import com.example.wms.dto.RoleUpdateRequest;
 import com.example.wms.dto.PageResponse;
@@ -11,6 +10,7 @@ import com.example.wms.mapper.RolePermissionMapper;
 import com.example.wms.mapper.UserAccountMapper;
 import com.example.wms.mapper.UserRoleMapper;
 import com.example.wms.aop.AuditLog;
+import com.example.wms.service.RoleScopeService;
 import com.example.wms.service.RoleService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -27,15 +27,18 @@ public class RoleServiceImpl implements RoleService {
     private final RolePermissionMapper rolePermissionMapper;
     private final UserRoleMapper userRoleMapper;
     private final UserAccountMapper userAccountMapper;
+    private final RoleScopeService roleScopeService;
 
     public RoleServiceImpl(RoleMapper roleMapper,
                            RolePermissionMapper rolePermissionMapper,
                            UserRoleMapper userRoleMapper,
-                           UserAccountMapper userAccountMapper) {
+                           UserAccountMapper userAccountMapper,
+                           RoleScopeService roleScopeService) {
         this.roleMapper = roleMapper;
         this.rolePermissionMapper = rolePermissionMapper;
         this.userRoleMapper = userRoleMapper;
         this.userAccountMapper = userAccountMapper;
+        this.roleScopeService = roleScopeService;
     }
 
     @Override
@@ -44,13 +47,14 @@ public class RoleServiceImpl implements RoleService {
         Long tenantId = TenantContext.requireTenantId();
         return roleMapper.selectList(new QueryWrapper<Role>()
             .eq("tenant_id", tenantId)
-            .orderByAsc("id"));
+            .orderByAsc("id")).stream()
+            .filter(roleScopeService::canViewRole)
+            .toList();
     }
 
     @Override
     public PageResponse<Role> page(long page, long size, String keyword, Boolean enabled) {
         Long tenantId = TenantContext.requireTenantId();
-        Page<Role> pageReq = Page.of(page, size);
         QueryWrapper<Role> wrapper = new QueryWrapper<Role>()
             .eq("tenant_id", tenantId)
             .orderByAsc("id");
@@ -64,16 +68,26 @@ public class RoleServiceImpl implements RoleService {
         if (enabled != null) {
             wrapper.eq("is_enabled", enabled);
         }
-        Page<Role> result = roleMapper.selectPage(pageReq, wrapper);
-        return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+        List<Role> visibleRoles = roleMapper.selectList(wrapper).stream()
+            .filter(roleScopeService::canViewRole)
+            .toList();
+        long safePage = Math.max(1, page);
+        long safeSize = Math.max(1, size);
+        int fromIndex = (int) Math.min((safePage - 1) * safeSize, visibleRoles.size());
+        int toIndex = (int) Math.min(fromIndex + safeSize, visibleRoles.size());
+        return new PageResponse<>(visibleRoles.size(), safePage, safeSize, visibleRoles.subList(fromIndex, toIndex));
     }
 
     @Override
     public Role getById(Long id) {
         Long tenantId = TenantContext.requireTenantId();
-        return roleMapper.selectOne(new QueryWrapper<Role>()
+        Role role = roleMapper.selectOne(new QueryWrapper<Role>()
             .eq("tenant_id", tenantId)
             .eq("id", id));
+        if (!roleScopeService.canViewRole(role)) {
+            return null;
+        }
+        return role;
     }
 
     @Override
@@ -107,8 +121,9 @@ public class RoleServiceImpl implements RoleService {
         if (role == null) {
             throw new IllegalArgumentException("角色不存在");
         }
-        ensureMutableRole(role);
         validateCreatableRoleCode(tenantId, request.code());
+        ensureManageableRole(role);
+        ensureMutableRole(role);
         Role existing = roleMapper.findByCode(tenantId, request.code());
         if (existing != null && !existing.getId().equals(id)) {
             throw new IllegalArgumentException("角色编码已存在");
@@ -135,6 +150,7 @@ public class RoleServiceImpl implements RoleService {
         if (role == null) {
             throw new IllegalArgumentException("角色不存在");
         }
+        ensureManageableRole(role);
         ensureMutableRole(role);
         // 先清理角色关联
         List<Long> userIds = userRoleMapper.findUserIdsByRoleId(tenantId, id);
@@ -144,6 +160,15 @@ public class RoleServiceImpl implements RoleService {
             userAccountMapper.incrementAuthVersionByIds(tenantId, userIds);
         }
         roleMapper.deleteById(id);
+    }
+
+    private void ensureManageableRole(Role role) {
+        if (roleScopeService.isCurrentActorRole(role.getId())) {
+            throw new IllegalArgumentException("不能修改当前登录账号所属角色");
+        }
+        if (!roleScopeService.canManageRole(role)) {
+            throw new IllegalArgumentException("无权限维护该角色");
+        }
     }
 
     private void validateCreatableRoleCode(Long tenantId, String code) {

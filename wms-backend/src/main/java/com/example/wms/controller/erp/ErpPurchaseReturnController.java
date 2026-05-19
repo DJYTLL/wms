@@ -117,9 +117,10 @@ public class ErpPurchaseReturnController {
         @RequestParam(defaultValue = "1") long page,
         @RequestParam(defaultValue = "20") long size,
         @RequestParam(required = false) String keyword,
-        @RequestParam(required = false) Long supplierId
+        @RequestParam(required = false) Long supplierId,
+        @RequestParam(required = false) Long currentReturnId
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.sourcePurchaseOrderPage(page, size, keyword, supplierId)));
+        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.sourcePurchaseOrderPage(page, size, keyword, supplierId, currentReturnId)));
     }
 
     @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:source-view','PERM_erp-purchase-approved:view')")
@@ -128,15 +129,19 @@ public class ErpPurchaseReturnController {
         @RequestParam Long supplierId,
         @RequestParam Long productId,
         @RequestParam(defaultValue = "1") long page,
-        @RequestParam(defaultValue = "10") long size
+        @RequestParam(defaultValue = "10") long size,
+        @RequestParam(required = false) Long currentReturnId
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.sourceRecentPurchaseItems(page, size, supplierId, productId)));
+        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.sourceRecentPurchaseItems(page, size, supplierId, productId, currentReturnId)));
     }
 
     @PreAuthorize("hasAnyAuthority('PERM_erp-purchase-return-draft:source-view','PERM_erp-purchase-approved:view')")
     @GetMapping("/source-purchase-orders/{purchaseOrderId}")
-    public ResponseEntity<ApiResponse<ErpPurchaseReturnSourcePurchaseOrderDetail>> getSourcePurchaseOrderDetail(@PathVariable Long purchaseOrderId) {
-        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getSourcePurchaseOrderDetail(purchaseOrderId)));
+    public ResponseEntity<ApiResponse<ErpPurchaseReturnSourcePurchaseOrderDetail>> getSourcePurchaseOrderDetail(
+        @PathVariable Long purchaseOrderId,
+        @RequestParam(required = false) Long currentReturnId
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getSourcePurchaseOrderDetail(purchaseOrderId, currentReturnId)));
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:view') or hasAuthority('PERM_erp-purchase-return-approved:view')")

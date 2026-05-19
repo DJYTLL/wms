@@ -19,6 +19,7 @@ export const useColumnSettings = (key: string, defaultKeys: string[]) => {
   }
 
   const effectiveKeys = computed(() => {
+    // 租户/角色权限永远优先于当前用户的列偏好；用户设置只能在允许的列集合内生效。
     const tenantFilteredKeys = tenantAllowedKeys.value === null
       ? visibleKeys.value
       : visibleKeys.value.filter((keyItem) => tenantAllowedKeys.value?.includes(keyItem))

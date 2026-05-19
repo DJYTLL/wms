@@ -30,16 +30,6 @@
           {{ $t('action.print') }}
         </el-button>
         <el-button
-          v-if="shouldShowCancelButton"
-          type="warning"
-          plain
-          class="action-button action-button--danger"
-          :disabled="isInitializing || !canCancel"
-          @click="handleCancel"
-        >
-          {{ $t('action.cancel') }}
-        </el-button>
-        <el-button
           v-if="shouldShowRedFlushButton"
           type="danger"
           plain
@@ -229,7 +219,7 @@
                       <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                     </el-select>
                     <el-button
-                      v-if="!isReadOnly && formData.returnSource === 'BY_PRODUCT' && canViewSaleOrders"
+                      v-if="!isReadOnly && canViewSaleOrders"
                       class="detail-source-button"
                       size="small"
                       plain
@@ -239,6 +229,16 @@
                       {{ $t('action.selectSource') }}
                     </el-button>
                   </div>
+                </template>
+              </ErpDataTableColumn>
+              <ErpDataTableColumn label="来源单号" min-width="170" column-key="sourceSaleOrderNo">
+                <template #default="{ row }">
+                  <span class="readonly-cell">{{ row.sourceSaleOrderNo || '-' }}</span>
+                </template>
+              </ErpDataTableColumn>
+              <ErpDataTableColumn label="来源行" width="110" column-key="sourceSaleOrderLine">
+                <template #default="{ row }">
+                  <span class="readonly-cell">{{ formatSourceSaleOrderLine(row) }}</span>
                 </template>
               </ErpDataTableColumn>
               <ErpDataTableColumn :label="$t('field.warehouseLocation')" min-width="220" column-key="warehouseLocation">
@@ -287,7 +287,7 @@
                 <DecimalInput v-else v-model="row.qty" :scale="4" />
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-6">
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="price">
               <template #header>
                 <span class="required-table-label">{{ $t('field.price') }}</span>
               </template>
@@ -296,17 +296,17 @@
                 <DecimalInput v-else v-model="row.price" :scale="4" />
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="lineAmount">
               <template #default="{ row }">
                 {{ formatMoney(calcLineAmount(row)) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-8">
+            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="discountAllocated">
               <template #default="{ row }">
                 {{ formatMoney(calcLineDiscount(row)) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="custom-9">
+            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="profit">
               <template #default="{ row }">
                 {{ formatProfitCell(row) }}
               </template>
@@ -423,7 +423,7 @@
             </div>
             <div class="sale-order-refund-summary__item sale-order-refund-summary__item--highlight">
               <span class="sale-order-refund-summary__label">{{ $t('field.refundableCashAmount') }}</span>
-              <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderRefundSummary?.refundableCash) }}</strong>
+              <strong class="sale-order-refund-summary__value">{{ formatMoney(currentRefundableCashAmount) }}</strong>
             </div>
           </div>
         </el-form>
@@ -461,7 +461,7 @@
               <strong class="sale-order-refund-summary__value">{{ formatMoney(saleOrderPreviewDetail.refundSummary?.refundableCash) }}</strong>
             </div>
           </div>
-          <ErpDataTable :data="saleOrderPreviewDetail.items" style="width: 100%" border max-height="460" table-key="erp-sale-return-form-13">
+          <ErpDataTable :data="saleOrderPreviewDetail.items" style="width: 100%" border max-height="460" table-key="erp-sale-return-source-preview">
             <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
               <template #default="{ row }">
                 {{ row.productName || row.productCode }}
@@ -470,18 +470,18 @@
             <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
               <template #default="{ row }">{{ row.qty }}</template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="custom-14">
+            <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="remainingQty">
               <template #default="{ row }">{{ row.remainingQty }}</template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-15">
+            <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="price">
               <template #default="{ row }">{{ row.price }}</template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
+            <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouse">
               <template #default="{ row }">
                 {{ resolveWarehouseLabel(row.warehouseId) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
+            <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="location">
               <template #default="{ row }">
                 {{ resolveLocationLabel(row.locationId) }}
               </template>
@@ -504,7 +504,7 @@
         style="width: 100%"
         border
         @selection-change="handleSaleOrderSelectionChange"
-       table-key="erp-sale-return-form-20">
+       table-key="erp-sale-return-source-items">
         <ErpDataTableColumn type="selection" width="50" />
         <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
           <template #default="{ row }">
@@ -514,18 +514,18 @@
         <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
           <template #default="{ row }">{{ row.qty }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="custom-21">
+        <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="remainingQty">
           <template #default="{ row }">{{ row.remainingQty }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-22">
+        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="price">
           <template #default="{ row }">{{ row.price }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
+        <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouse">
           <template #default="{ row }">
             {{ resolveWarehouseLabel(row.warehouseId) }}
           </template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
+        <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="location">
           <template #default="{ row }">
             {{ resolveLocationLabel(row.locationId) }}
           </template>
@@ -579,20 +579,29 @@
         max-height="420"
         border
         @row-dblclick="applyRecentSaleSelection"
-       table-key="erp-sale-return-form-28">
-        <ErpDataTableColumn :label="$t('field.saleOrderNo')" min-width="220" column-key="custom-25">
-          <template #default="{ row }">{{ row.orderNo }}</template>
+        table-key="erp-sale-return-recent-sales">
+        <ErpDataTableColumn :label="$t('field.saleOrderNo')" min-width="220" column-key="saleOrderNo">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              class="source-sale-order-link"
+              @click.stop="openSourceSaleOrderPreview(row.orderId, row.orderNo)"
+            >
+              {{ row.orderNo || '-' }}
+            </el-button>
+          </template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.orderTime')" width="180" column-key="custom-26">
+        <ErpDataTableColumn :label="$t('field.orderTime')" width="180" column-key="orderAt">
           <template #default="{ row }">{{ formatDisplayDateTime(row.orderAt) }}</template>
         </ErpDataTableColumn>
         <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
           <template #default="{ row }">{{ row.qty }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.remainingQty')" width="130" column-key="custom-28">
-          <template #default="{ row }">{{ row.remainingQty }}</template>
+        <ErpDataTableColumn :label="$t('field.remainingQty')" width="130" column-key="remainingQty">
+          <template #default="{ row }">{{ getRecentSaleRemainingQty(row) }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-29">
+        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="price">
           <template #default="{ row }">{{ row.price }}</template>
         </ErpDataTableColumn>
         <ErpDataTableColumn :label="$t('table.actions')" width="110" align="center" column-key="actions">
@@ -601,7 +610,7 @@
               size="small"
               type="primary"
               plain
-              :disabled="Number(row.remainingQty || 0) <= 0"
+              :disabled="getRecentSaleRemainingQty(row) <= 0"
               @click="applyRecentSaleSelection(row)"
             >
               {{ $t('action.select') }}
@@ -707,6 +716,7 @@ interface SaleOrderOption {
 
 interface SaleOrderDetailItem {
   id?: number;
+  sortNo?: number;
   productId?: number;
   productCode?: string;
   productName?: string;
@@ -714,7 +724,10 @@ interface SaleOrderDetailItem {
   locationId?: number;
   qty?: number;
   remainingQty?: number;
+  approvedReturnedQty?: number;
+  draftOccupiedQty?: number;
   price?: number;
+  priceInclTax?: number;
   taxRate?: number;
 }
 
@@ -730,12 +743,20 @@ interface ProductOption {
 
 interface RecentSaleItem {
   orderId: number;
+  orderItemId?: number;
+  orderItemSortNo?: number;
   orderNo: string;
   orderAt?: string;
   productId: number;
+  warehouseId?: number;
+  locationId?: number;
   qty: number;
   remainingQty?: number;
+  approvedReturnedQty?: number;
+  draftOccupiedQty?: number;
   price: number;
+  priceInclTax?: number;
+  taxRate?: number;
 }
 
 interface SaleReturnSummary {
@@ -795,6 +816,14 @@ interface SaleReturnItem {
   lineKey?: string;
   id?: number;
   productId?: number;
+  sourceSaleOrderItemId?: number;
+  sourceSaleOrderId?: number;
+  sourceSaleOrderNo?: string;
+  sourceSaleOrderItemSortNo?: number;
+  sourceSaleOrderItemQty?: number;
+  sourceSaleOrderItemRemainingQty?: number;
+  sourceSaleOrderItemApprovedReturnedQty?: number;
+  sourceSaleOrderItemDraftOccupiedQty?: number;
   warehouseId?: number;
   locationId?: number;
   stockKey?: string;
@@ -888,6 +917,11 @@ const saveSuccessOrderId = ref<number | null>(null);
 const saveSuccessOrderNo = ref('');
 const saveSuccessDialogMode = ref<'save' | 'approve'>('save');
 const isSaleReturnRoute = computed(() => route.path.startsWith('/erp/sale-returns'));
+const currentReturnId = computed(() => {
+  const raw = route.params.id;
+  const id = Array.isArray(raw) ? Number(raw[0]) : Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : undefined;
+});
 
 const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
@@ -904,7 +938,6 @@ const draftEndpoint = (id?: string | number) => id == null
 
 const canViewSaleOrders = computed(() => (
   hasPermission('erp-sale-return-draft:source-view')
-  || hasPermission('erp-sale-approved:view')
 ));
 
 const isPermissionDeniedError = (error: unknown) => {
@@ -981,20 +1014,6 @@ const canRedFlush = computed(() => {
     && hasPermission('erp-sale-return-approved:redflush');
 });
 
-const canCancel = computed(() => {
-  return isReadOnly.value
-    && formData.status === 'APPROVED'
-    && hasPermission('erp-sale-return-approved:cancel');
-});
-
-const shouldShowCancelButton = computed(() => {
-  if (canCancel.value) return true;
-  return isInitializing.value
-    && isEditing.value
-    && (route.query.mode === 'view' || route.query.from === 'approved')
-    && hasPermission('erp-sale-return-approved:cancel');
-});
-
 const shouldShowRedFlushButton = computed(() => {
   if (canRedFlush.value) return true;
   return isInitializing.value
@@ -1028,14 +1047,10 @@ const canShowProfit = computed(() => canViewProfit.value && showProfitColumn.val
 const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale-form:discountAllocated'));
 const canSelectProduct = computed(() => {
   if (!formData.customerId) return false;
-  if (formData.returnSource === 'BY_SALE_ORDER') return false;
   return true;
 });
 const productSelectPlaceholder = computed(() => {
   if (!formData.customerId) return t('field.customer');
-  if (formData.returnSource === 'BY_SALE_ORDER' && !formData.saleOrderId) {
-    return t('message.selectSaleOrderFirst');
-  }
   return t('placeholder.selectProduct');
 });
 const resolvedSaleOrderNo = computed(() => {
@@ -1243,34 +1258,6 @@ const handleRedFlush = async () => {
 const handleSave = async () => {
   if (isSaving.value) return;
   await saveData({ closeOnSuccess: false, showPostSaveDialog: true });
-};
-
-const handleCancel = async () => {
-  if (!isEditing.value) return;
-  try {
-    const { value } = await ElMessageBox.prompt(
-      t('message.confirmCancel'),
-      t('action.cancel'),
-      {
-        inputPlaceholder: t('placeholder.required'),
-        confirmButtonText: t('action.confirm'),
-        cancelButtonText: t('action.cancel')
-      }
-    );
-    if (!value || !String(value).trim()) {
-      return;
-    }
-    await request.post(`/erp/sale-returns/approved/${route.params.id}/cancel`, null, {
-      params: { reason: String(value).trim() }
-    });
-    notifySuccess();
-    closePage();
-    await router.push('/erp/sale-returns/approved');
-  } catch (error) {
-    if (error && error !== 'cancel' && error !== 'close') {
-      notifyError(error);
-    }
-  }
 };
 
 const openSaveSuccessDialog = (savedId: number | null, savedOrderNo?: string, mode: 'save' | 'approve' = 'save') => {
@@ -1643,6 +1630,47 @@ const formatPlainNumber = (value: number | string | null | undefined) => {
   return Number.isInteger(num) ? String(num) : String(num).replace(/0+$/, '').replace(/\.$/, '');
 };
 
+const formatSourceSaleOrderLine = (row: SaleReturnItem) => {
+  if (row.sourceSaleOrderItemSortNo != null) return `第${row.sourceSaleOrderItemSortNo}行`;
+  if (row.sourceSaleOrderItemId != null) return `ID ${row.sourceSaleOrderItemId}`;
+  return '-';
+};
+
+const getAllocatedSourceQty = (
+  sourceSaleOrderId?: number,
+  sourceSaleOrderItemId?: number,
+  excludeRow?: SaleReturnItem | null
+) => {
+  if (!sourceSaleOrderId || !sourceSaleOrderItemId) return 0;
+  return formData.items.reduce((total, item) => {
+    if (excludeRow && item === excludeRow) return total;
+    if (item.sourceSaleOrderId !== sourceSaleOrderId || item.sourceSaleOrderItemId !== sourceSaleOrderItemId) {
+      return total;
+    }
+    return total + (parseDecimal(item.qty, 4) || 0);
+  }, 0);
+};
+
+const getAvailableSourceQty = (
+  sourceSaleOrderId?: number,
+  sourceSaleOrderItemId?: number,
+  sourceRemainingQty?: number,
+  excludeRow?: SaleReturnItem | null
+) => {
+  const remaining = Number(sourceRemainingQty ?? 0);
+  if (!Number.isFinite(remaining)) return 0;
+  return Math.max(0, remaining - getAllocatedSourceQty(sourceSaleOrderId, sourceSaleOrderItemId, excludeRow));
+};
+
+const getRecentSaleRemainingQty = (sale: RecentSaleItem) => {
+  return getAvailableSourceQty(
+    sale.orderId,
+    sale.orderItemId,
+    Number(sale.remainingQty || 0),
+    recentSaleDialogRow.value
+  );
+};
+
 const formatRate = (value: number | null) => {
   if (value == null || Number.isNaN(value)) return '-';
   return `${(value * 100).toFixed(2)}%`;
@@ -1679,6 +1707,13 @@ const totalSummary = computed(() => {
   });
   const rate = netAmount ? profit / netAmount : null;
   return { amount, netAmount, profit, rate, hasMissingCost };
+});
+
+const currentRefundableCashAmount = computed(() => {
+  const sourceRefundable = Number(saleOrderRefundSummary.value?.refundableCash ?? 0);
+  const currentReturnAmount = Math.max(0, totalSummary.value.netAmount || 0);
+  if (!Number.isFinite(sourceRefundable)) return currentReturnAmount;
+  return Math.min(Math.max(0, sourceRefundable), currentReturnAmount);
 });
 
 const totalProfitText = computed(() => {
@@ -1738,6 +1773,14 @@ const resolveLocationLabel = (id?: number) => {
 };
 
 const handleProductChange = async (row: SaleReturnItem) => {
+  row.sourceSaleOrderItemId = undefined;
+  row.sourceSaleOrderId = undefined;
+  row.sourceSaleOrderNo = undefined;
+  row.sourceSaleOrderItemSortNo = undefined;
+  row.sourceSaleOrderItemQty = undefined;
+  row.sourceSaleOrderItemRemainingQty = undefined;
+  row.sourceSaleOrderItemApprovedReturnedQty = undefined;
+  row.sourceSaleOrderItemDraftOccupiedQty = undefined;
   row.warehouseId = undefined;
   row.locationId = undefined;
   row.stockKey = '';
@@ -1746,7 +1789,7 @@ const handleProductChange = async (row: SaleReturnItem) => {
   await fetchStockOptions(row.productId, true);
   syncStockKey(row);
   await applyPriceForRow(row, true);
-  if (formData.returnSource === 'BY_PRODUCT' && row.productId) {
+  if (row.productId) {
     await openRecentSaleDialog(row);
   }
 };
@@ -1778,6 +1821,7 @@ const normalizeSourceSaleOrderDetail = (payload: any): SourceSaleOrderDetail => 
   items: Array.isArray(payload?.items)
     ? payload.items.map((item: any) => ({
         id: item?.id,
+        sortNo: item?.sortNo,
         productId: item?.productId,
         productCode: item?.productCode,
         productName: item?.productName,
@@ -1785,14 +1829,19 @@ const normalizeSourceSaleOrderDetail = (payload: any): SourceSaleOrderDetail => 
         locationId: item?.locationId,
         qty: Number(item?.qty || 0),
         remainingQty: Number(item?.remainingQty || 0),
+        approvedReturnedQty: Number(item?.approvedReturnedQty || 0),
+        draftOccupiedQty: Number(item?.draftOccupiedQty || 0),
         price: Number(item?.price || 0),
+        priceInclTax: Number(item?.priceInclTax || 0),
         taxRate: Number(item?.taxRate || 0)
       }))
     : []
 });
 
 const fetchSourceSaleOrderDetail = async (orderId: number) => {
-  const res: any = await request.get(`/erp/sale-returns/source-sale-orders/${orderId}`);
+  const res: any = await request.get(`/erp/sale-returns/source-sale-orders/${orderId}`, {
+    params: { currentReturnId: currentReturnId.value }
+  });
   return normalizeSourceSaleOrderDetail(res.data.data || {});
 };
 
@@ -1812,7 +1861,8 @@ const fetchRecentSaleItems = async (
         customerId: formData.customerId,
         productId,
         page,
-        size
+        size,
+        currentReturnId: currentReturnId.value
       }
     });
     const pageData = res.data.data as PageResponse<RecentSaleItem> | RecentSaleItem[] | undefined;
@@ -1888,6 +1938,14 @@ const getSaleOrderDetailRowKey = (row: SaleOrderDetailItem) =>
 const createEmptyItem = (overrides: Partial<SaleReturnItem> = {}): SaleReturnItem => ({
   lineKey: createItemLineKey(),
   productId: undefined,
+  sourceSaleOrderItemId: undefined,
+  sourceSaleOrderId: undefined,
+  sourceSaleOrderNo: undefined,
+  sourceSaleOrderItemSortNo: undefined,
+  sourceSaleOrderItemQty: undefined,
+  sourceSaleOrderItemRemainingQty: undefined,
+  sourceSaleOrderItemApprovedReturnedQty: undefined,
+  sourceSaleOrderItemDraftOccupiedQty: undefined,
   warehouseId: undefined,
   locationId: undefined,
   stockKey: '',
@@ -1911,7 +1969,9 @@ const syncSourceOrderNoToRemark = (orderNo?: string) => {
 };
 
 const bindRecentSaleOrder = async (row: SaleReturnItem, sale: RecentSaleItem) => {
-  formData.saleOrderId = sale.orderId;
+  if (!formData.saleOrderId) {
+    formData.saleOrderId = sale.orderId;
+  }
   mergeSaleOrderOption({
     id: sale.orderId,
     orderNo: sale.orderNo,
@@ -1920,16 +1980,28 @@ const bindRecentSaleOrder = async (row: SaleReturnItem, sale: RecentSaleItem) =>
   await fetchSaleOrderRefundSummary(sale.orderId);
   syncSourceOrderNoToRemark(sale.orderNo);
   row.price = sale.price == null ? row.price : String(sale.price);
+  row.sourceSaleOrderItemId = sale.orderItemId;
+  row.sourceSaleOrderId = sale.orderId;
+  row.sourceSaleOrderNo = sale.orderNo;
+  row.sourceSaleOrderItemSortNo = sale.orderItemSortNo;
+  row.sourceSaleOrderItemQty = Number(sale.qty || 0);
+  row.sourceSaleOrderItemRemainingQty = Number(sale.remainingQty || 0);
+  row.sourceSaleOrderItemApprovedReturnedQty = Number(sale.approvedReturnedQty || 0);
+  row.sourceSaleOrderItemDraftOccupiedQty = Number(sale.draftOccupiedQty || 0);
+  row.taxRate = sale.taxRate ?? row.taxRate;
+  const availableQty = getAvailableSourceQty(sale.orderId, sale.orderItemId, Number(sale.remainingQty || 0), row);
   if (!row.qty && sale.remainingQty != null) {
-    row.qty = String(sale.remainingQty);
+    row.qty = String(availableQty);
   }
+  await fetchStockOptions(row.productId, true);
+  syncStockKey(row);
   await applyPriceForRow(row, false);
 };
 
 const openRecentSaleDialog = async (row: SaleReturnItem) => {
-  if (isReadOnly.value || formData.returnSource !== 'BY_PRODUCT') return;
+  if (isReadOnly.value) return;
   if (!canViewSaleOrders.value) {
-    notifyWarning('当前角色缺少销售单查看权限，不能选择来源销售单');
+    notifyWarning('当前角色缺少来源销售单查看权限，不能选择来源销售单');
     return;
   }
   if (!row.productId) {
@@ -1947,38 +2019,10 @@ const openRecentSaleDialog = async (row: SaleReturnItem) => {
 const applyRecentSaleSelection = async (sale: RecentSaleItem) => {
   if (isReadOnly.value) return;
   if (!sale?.orderId) return;
-  if (Number(sale.remainingQty || 0) <= 0) return;
   const row = recentSaleDialogRow.value;
   if (!row) return;
-  if (!formData.saleOrderId || Number(formData.saleOrderId) === Number(sale.orderId)) {
-    await bindRecentSaleOrder(row, sale);
-    showRecentSaleDialog.value = false;
-    return;
-  }
-  try {
-    await ElMessageBox.confirm(
-      t('message.confirmSwitchSaleOrder', { orderNo: sale.orderNo }),
-      t('action.confirm'),
-      {
-        confirmButtonText: t('action.confirm'),
-        cancelButtonText: t('action.cancel'),
-        type: 'warning'
-      }
-    );
-  } catch {
-    return;
-  }
-  const nextRow = createEmptyItem({
-    productId: row.productId,
-    qty: row.qty,
-    taxRate: row.taxRate,
-    remark: row.remark
-  });
-  formData.items = [nextRow];
-  applyProductDefaults(nextRow, true);
-  await bindRecentSaleOrder(nextRow, sale);
-  await fetchStockOptions(nextRow.productId, true);
-  syncStockKey(nextRow);
+  if (getAvailableSourceQty(sale.orderId, sale.orderItemId, Number(sale.remainingQty || 0), row) <= 0) return;
+  await bindRecentSaleOrder(row, sale);
   showRecentSaleDialog.value = false;
 };
 
@@ -2027,7 +2071,7 @@ const handleReturnSourceChange = () => {
   resetRecentSaleDialogState();
   if (formData.returnSource === 'BY_SALE_ORDER' && !canViewSaleOrders.value) {
     formData.returnSource = 'BY_PRODUCT';
-    notifyWarning('当前角色缺少销售单查看权限，不能按销售单退货');
+    notifyWarning('当前角色缺少来源销售单查看权限，不能按销售单退货');
     return;
   }
   if (formData.returnSource === 'BY_SALE_ORDER') {
@@ -2060,7 +2104,7 @@ const handleSaleOrderChange = (value: number | null) => {
 const openSaleOrderDetail = async (orderId: number) => {
   if (!orderId) return;
   if (!canViewSaleOrders.value) {
-    notifyWarning('当前角色缺少销售单查看权限，不能查看来源销售单明细');
+    notifyWarning('当前角色缺少来源销售单查看权限，不能查看来源销售单明细');
     return;
   }
   try {
@@ -2111,14 +2155,13 @@ const fetchSaleOrderRefundSummary = async (orderId?: number | null) => {
   }
 };
 
-const openSelectedSaleOrderPreview = () => {
-  const saleOrderId = saleOrderRefundSummary.value?.saleOrderId || formData.saleOrderId;
+const openSourceSaleOrderPreview = (saleOrderId?: number | null, saleOrderNo?: string) => {
   if (!saleOrderId) return;
   if (!canViewSaleOrders.value) {
-    notifyWarning('当前角色缺少销售单查看权限，不能查看来源销售单');
+    notifyWarning('当前角色缺少来源销售单查看权限，不能查看来源销售单');
     return;
   }
-  saleOrderPreviewDialogTitle.value = `${t('page.erpSaleOrder')} · ${saleOrderRefundSummary.value?.saleOrderNo || resolvedSaleOrderNo.value || saleOrderId}`;
+  saleOrderPreviewDialogTitle.value = `${t('page.erpSaleOrder')} · ${saleOrderNo || saleOrderId}`;
   saleOrderPreviewDialogLoading.value = true;
   saleOrderPreviewDetail.value = null;
   saleOrderPreviewDialogVisible.value = true;
@@ -2137,6 +2180,12 @@ const openSelectedSaleOrderPreview = () => {
     .finally(() => {
       saleOrderPreviewDialogLoading.value = false;
     });
+};
+
+const openSelectedSaleOrderPreview = () => {
+  const saleOrderId = saleOrderRefundSummary.value?.saleOrderId || formData.saleOrderId;
+  const saleOrderNo = saleOrderRefundSummary.value?.saleOrderNo || resolvedSaleOrderNo.value;
+  openSourceSaleOrderPreview(saleOrderId, saleOrderNo || undefined);
 };
 
 const openSaleOrderReturnedDialog = (saleOrderNo: string, returns: SaleReturnSummary[]) => {
@@ -2187,6 +2236,14 @@ const applySaleOrderSelection = () => {
   formData.items = selectedSaleOrderItems.value.map((item, index) => ({
     lineKey: createItemLineKey(),
     productId: item.productId,
+    sourceSaleOrderItemId: item.id,
+    sourceSaleOrderId: formData.saleOrderId || undefined,
+    sourceSaleOrderNo: resolvedSaleOrderNo.value || saleOrderRefundSummary.value?.saleOrderNo || undefined,
+    sourceSaleOrderItemSortNo: item.sortNo,
+    sourceSaleOrderItemQty: item.qty,
+    sourceSaleOrderItemRemainingQty: item.remainingQty,
+    sourceSaleOrderItemApprovedReturnedQty: item.approvedReturnedQty,
+    sourceSaleOrderItemDraftOccupiedQty: item.draftOccupiedQty,
     warehouseId: item.warehouseId,
     locationId: item.locationId,
     stockKey: '',
@@ -2254,7 +2311,10 @@ const fetchSaleOrders = async (customerId?: number | null) => {
       return;
     }
     const params: Record<string, any> = { page: 1, size: 1000, customerId: targetCustomerId };
-    const res: any = await request.get('/erp/sale-returns/source-sale-orders/page', { params });
+  if (currentReturnId.value) {
+    params.currentReturnId = currentReturnId.value;
+  }
+  const res: any = await request.get('/erp/sale-returns/source-sale-orders/page', { params });
     const items = res.data.data?.items || [];
     saleOrderOptions.value = items.map((item: any) => ({
       id: item.id,
@@ -2419,6 +2479,14 @@ const loadDetail = async () => {
         lineKey: createItemLineKey(),
         id: item.id,
         productId: item.productId,
+        sourceSaleOrderItemId: item.sourceSaleOrderItemId,
+        sourceSaleOrderId: item.sourceSaleOrderId,
+        sourceSaleOrderNo: item.sourceSaleOrderNo,
+        sourceSaleOrderItemSortNo: item.sourceSaleOrderItemSortNo,
+        sourceSaleOrderItemQty: item.sourceSaleOrderItemQty,
+        sourceSaleOrderItemRemainingQty: item.sourceSaleOrderItemRemainingQty,
+        sourceSaleOrderItemApprovedReturnedQty: item.sourceSaleOrderItemApprovedReturnedQty,
+        sourceSaleOrderItemDraftOccupiedQty: item.sourceSaleOrderItemDraftOccupiedQty,
         warehouseId: item.warehouseId,
         locationId: item.locationId,
         stockKey: '',
@@ -2472,6 +2540,43 @@ const removeSelectedItems = () => {
   selectedItems.value = [];
   if (!formData.items.length) {
     addItem();
+  }
+};
+
+const mergeDuplicateSourceDestinationItems = () => {
+  const merged = new Map<string, SaleReturnItem>();
+  const nextItems: SaleReturnItem[] = [];
+  let hasMerged = false;
+  formData.items.forEach((item) => {
+    ensureStockBinding(item);
+    if (!item.productId || !item.sourceSaleOrderId || !item.sourceSaleOrderItemId || !item.warehouseId) {
+      nextItems.push(item);
+      return;
+    }
+    const key = [
+      item.sourceSaleOrderId,
+      item.sourceSaleOrderItemId,
+      item.warehouseId,
+      item.locationId || ''
+    ].join(':');
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, item);
+      nextItems.push(item);
+      return;
+    }
+    const existingQty = parseDecimal(existing.qty, 4) || 0;
+    const currentQty = parseDecimal(item.qty, 4) || 0;
+    existing.qty = formatPlainNumber(existingQty + currentQty);
+    if (!existing.remark && item.remark) {
+      existing.remark = item.remark;
+    }
+    hasMerged = true;
+  });
+  if (hasMerged) {
+    formData.items = nextItems;
+    selectedItems.value = selectedItems.value.filter(item => nextItems.includes(item));
+    notifyWarning('相同来源销售行、仓库、库位的明细已自动合并');
   }
 };
 
@@ -2583,6 +2688,7 @@ const fetchNextOrderNo = async () => {
       notifyWarning(requiredFieldMessage(t('field.settlementMethod')));
       return;
     }
+    mergeDuplicateSourceDestinationItems();
     const validItems = formData.items.filter(item => item.productId);
     if (!validItems.length) {
       notifyWarning(t('message.noItems'));
@@ -2600,12 +2706,59 @@ const fetchNextOrderNo = async () => {
         notifyWarning(invalidRowFieldMessage(rowNumber, t('field.price')));
         return;
       }
+      if (!item.sourceSaleOrderId || !item.sourceSaleOrderItemId) {
+        notifyWarning(`第${rowNumber}行请先选择来源销售单`);
+        return;
+      }
+    }
+
+    const qtyBySourceItem = new Map<string, number>();
+    const availableQtyBySourceItem = new Map<string, number>();
+    const destinationRows = new Map<string, number>();
+    for (const [index, item] of validItems.entries()) {
+      ensureStockBinding(item);
+      const sourceKey = `${item.sourceSaleOrderId}:${item.sourceSaleOrderItemId}`;
+      const qtyValue = parseDecimal(item.qty, 4) || 0;
+      qtyBySourceItem.set(sourceKey, (qtyBySourceItem.get(sourceKey) || 0) + qtyValue);
+      if (item.sourceSaleOrderItemRemainingQty != null) {
+        availableQtyBySourceItem.set(sourceKey, Number(item.sourceSaleOrderItemRemainingQty || 0));
+      }
+
+      const destinationKey = [
+        item.sourceSaleOrderId,
+        item.sourceSaleOrderItemId,
+        item.warehouseId || '',
+        item.locationId || ''
+      ].join(':');
+      const previousRow = destinationRows.get(destinationKey);
+      if (previousRow != null) {
+        notifyWarning(`第${previousRow + 1}行和第${index + 1}行来源销售行、仓库、库位相同，请合并数量`);
+        return;
+      }
+      destinationRows.set(destinationKey, index);
+    }
+    for (const [sourceKey, qtyValue] of qtyBySourceItem.entries()) {
+      const availableQty = availableQtyBySourceItem.get(sourceKey);
+      if (availableQty != null && qtyValue > availableQty) {
+        const matched = validItems.find(item => `${item.sourceSaleOrderId}:${item.sourceSaleOrderItemId}` === sourceKey);
+        const lineLabel = matched ? formatSourceSaleOrderLine(matched) : '-';
+        notifyWarning(`${matched?.sourceSaleOrderNo || '来源销售单'} ${lineLabel} 已分配 ${formatPlainNumber(qtyValue)}，超过可退数量 ${formatPlainNumber(availableQty)}`);
+        return;
+      }
     }
 
     const paidAmount = showRefundPaymentFields.value ? parseAmount(formData.paidAmount) : 0;
     const discountAmount = parseAmount(formData.discountAmount);
     if (paidAmount == null || discountAmount == null) {
       notifyWarning(t('message.invalidNumber'));
+      return;
+    }
+    if (discountAmount > totalAmountBeforeDiscount.value) {
+      notifyWarning('优惠金额不能大于退货商品合计');
+      return;
+    }
+    if (paidAmount > currentRefundableCashAmount.value) {
+      notifyWarning(`退款金额不能超过本次可退实收金额 ${formatMoney(currentRefundableCashAmount.value)}`);
       return;
     }
 
@@ -2625,6 +2778,8 @@ const fetchNextOrderNo = async () => {
         ensureStockBinding(item);
         return {
           productId: item.productId,
+          sourceSaleOrderItemId: item.sourceSaleOrderItemId,
+          sourceSaleOrderId: item.sourceSaleOrderId,
           warehouseId: item.warehouseId,
           locationId: item.locationId,
           qty: parseDecimal(item.qty, 4),
@@ -2723,8 +2878,8 @@ watch(
   (newPath) => {
     if (newPath === lastRouteKey.value) return;
     if (!isPageActive.value) return;
+    if (route.path !== pagePath.value) return;
     lastRouteKey.value = newPath;
-    pagePath.value = route.path;
     if (!isSaleReturnRoute.value) return;
     loadDetail();
   }
@@ -2894,6 +3049,11 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+
+.source-sale-order-link {
+  padding: 0;
+  font-weight: 500;
 }
 
 .sale-theme--paper {

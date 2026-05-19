@@ -14,6 +14,14 @@ public record ErpSaleOrderRecentItem(
      */
     Long orderId,
     /**
+     * 表示销售单明细 ID。
+     */
+    Long orderItemId,
+    /**
+     * 表示销售单明细行号。
+     */
+    Integer orderItemSortNo,
+    /**
      * 表示单据编号。
      */
     String orderNo,
@@ -26,6 +34,14 @@ public record ErpSaleOrderRecentItem(
      */
     Long productId,
     /**
+     * 表示仓库 ID。
+     */
+    Long warehouseId,
+    /**
+     * 表示库位 ID。
+     */
+    Long locationId,
+    /**
      * 表示数量。
      */
     BigDecimal qty,
@@ -34,8 +50,24 @@ public record ErpSaleOrderRecentItem(
      */
     BigDecimal remainingQty,
     /**
+     * 表示已审核退货数量。
+     */
+    BigDecimal approvedReturnedQty,
+    /**
+     * 表示其他草稿占用数量。
+     */
+    BigDecimal draftOccupiedQty,
+    /**
      * 表示价格。
      */
-    BigDecimal price
+    BigDecimal price,
+    /**
+     * 表示含税价格。
+     */
+    BigDecimal priceInclTax,
+    /**
+     * 表示税率。
+     */
+    BigDecimal taxRate
 ) {
 }

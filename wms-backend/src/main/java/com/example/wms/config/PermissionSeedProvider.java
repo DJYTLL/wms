@@ -21,6 +21,16 @@ public final class PermissionSeedProvider {
             new PermissionSeed("role:assign:view", "查看角色选项", "用户管理角色下拉选项"),
             new PermissionSeed("column:role:manage", "配置角色列权限", "角色列权限配置"),
 
+            new PermissionSeed("permission:view", "查看权限", "查看权限定义列表"),
+            new PermissionSeed("permission:add", "新增权限", "新增权限定义"),
+            new PermissionSeed("permission:edit", "编辑权限", "编辑权限定义"),
+            new PermissionSeed("permission:delete", "删除权限", "删除权限定义"),
+
+            new PermissionSeed("menu:view", "查看菜单", "查看菜单定义列表"),
+            new PermissionSeed("menu:add", "新增菜单", "新增菜单定义"),
+            new PermissionSeed("menu:edit", "编辑菜单", "编辑菜单定义"),
+            new PermissionSeed("menu:delete", "删除菜单", "删除菜单定义"),
+
             new PermissionSeed("audit:view", "查看审计日志", "查看系统审计日志"),
             new PermissionSeed("column:edit", "配置列显示", "租户列显示配置"),
             new PermissionSeed("column:user-management:avatar", "用户管理-头像列", "用户管理头像列显示"),
@@ -223,7 +233,6 @@ public final class PermissionSeedProvider {
             new PermissionSeed("erp-sale-return-draft:source-view", "查看销售退货来源销售单(ERP)", "查看销售退货可引用的来源销售单"),
             new PermissionSeed("erp-sale-return-approved:view", "查看已审核销售退货(ERP)", "查看ERP已审核销售退货"),
             new PermissionSeed("erp-sale-return-approved:copy", "复制已审核销售退货(ERP)", "复制ERP已审核销售退货为草稿"),
-            new PermissionSeed("erp-sale-return-approved:cancel", "作废已审核销售退货(ERP)", "作废ERP已审核销售退货"),
             new PermissionSeed("erp-sale-return-approved:redflush", "红冲已审核销售退货(ERP)", "红冲ERP已审核销售退货"),
             new PermissionSeed("erp-sale-return-approved:print", "打印已审核销售退货(ERP)", "打印ERP已审核销售退货"),
 

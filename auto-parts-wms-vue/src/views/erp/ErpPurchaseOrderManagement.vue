@@ -107,7 +107,7 @@
           <h4>{{ $t('field.items') }}</h4>
           <el-button type="primary" plain size="small" @click="addItem">+ {{ $t('action.addItem') }}</el-button>
         </div>
-        <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-purchase-order-management-9">
+        <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-purchase-order-detail-items">
           <ErpDataTableColumn :label="$t('field.product')" min-width="200" column-key="product">
             <template #default="{ row }">
               <el-select v-model="row.productId" filterable clearable style="width: 100%" :placeholder="$t('placeholder.selectProduct')">
@@ -115,14 +115,14 @@
               </el-select>
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.warehouse')" min-width="160" column-key="warehouseLocation">
+          <ErpDataTableColumn :label="$t('field.warehouse')" min-width="160" column-key="warehouse">
             <template #default="{ row }">
               <el-select v-model="row.warehouseId" filterable clearable style="width: 100%" :placeholder="$t('placeholder.selectWarehouse')">
                 <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.location')" min-width="160" column-key="warehouseLocation">
+          <ErpDataTableColumn :label="$t('field.location')" min-width="160" column-key="location">
             <template #default="{ row }">
               <el-select v-model="row.locationId" filterable clearable style="width: 100%" :placeholder="$t('placeholder.selectLocation')">
                 <el-option v-for="item in getLocationOptions(row.warehouseId)" :key="item.id" :label="item.name" :value="item.id" />
@@ -134,12 +134,12 @@
               <el-input-number v-model="row.qty" :min="0" style="width: 100%" />
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-12">
+          <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="price">
             <template #default="{ row }">
               <el-input-number v-model="row.price" :min="0" :step="0.01" style="width: 100%" />
             </template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.taxRate')" width="140" column-key="custom-13">
+          <ErpDataTableColumn :label="$t('field.taxRate')" width="140" column-key="taxRate">
             <template #default="{ row }">
               <el-input-number v-model="row.taxRate" :min="0" :max="1" :step="0.01" style="width: 100%" />
             </template>

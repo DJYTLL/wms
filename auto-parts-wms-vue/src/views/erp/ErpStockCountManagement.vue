@@ -236,7 +236,7 @@
               <h4>{{ $t('section.saleDetailInfo') }}</h4>
             </div>
             <div class="detail-table-wrapper">
-              <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-stock-count-management-10">
+              <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-stock-count-items">
                 <ErpDataTableColumn type="index" :label="$t('table.index')" width="64" align="center" />
                 <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
                   <template #default="{ row }">
@@ -270,29 +270,29 @@
                     />
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="$t('field.systemQty')" min-width="120" column-key="custom-12">
+                <ErpDataTableColumn :label="$t('field.systemQty')" min-width="120" column-key="systemQty">
                   <template #default="{ row }">
                     <div class="readonly-cell">{{ row.systemQty || '0' }}</div>
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="$t('field.countedQty')" min-width="120" column-key="custom-13">
+                <ErpDataTableColumn :label="$t('field.countedQty')" min-width="120" column-key="countedQty">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ row.countedQty || '-' }}</div>
                     <DecimalInput v-else v-model="row.countedQty" :scale="4" input-mode="decimal" />
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn v-if="countType === 'INIT'" :label="$t('field.initUnitCost')" min-width="120" column-key="custom-14">
+                <ErpDataTableColumn v-if="countType === 'INIT'" :label="$t('field.initUnitCost')" min-width="120" column-key="initUnitCost">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ row.initUnitCost || '-' }}</div>
                     <DecimalInput v-else v-model="row.initUnitCost" :scale="4" input-mode="decimal" />
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn v-if="countType === 'INIT'" :label="$t('field.initTotalAmount')" min-width="140" column-key="custom-15">
+                <ErpDataTableColumn v-if="countType === 'INIT'" :label="$t('field.initTotalAmount')" min-width="140" column-key="initTotalAmount">
                   <template #default="{ row }">
                     <div class="readonly-cell">{{ calcInitTotal(row) }}</div>
                   </template>
                 </ErpDataTableColumn>
-                <ErpDataTableColumn :label="$t('field.diffQty')" min-width="120" column-key="custom-16">
+                <ErpDataTableColumn :label="$t('field.diffQty')" min-width="120" column-key="diffQty">
                   <template #default="{ row }">
                     <div class="readonly-cell">{{ calcDiff(row) }}</div>
                   </template>

@@ -28,14 +28,14 @@ public class PermissionController {
 
     // 查询权限列表
     @GetMapping
-    @PreAuthorize("hasAuthority('PERM_role:view')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_role:view') or hasAuthority('PERM_permission:view')")
     public ResponseEntity<ApiResponse<List<Permission>>> list() {
         return ResponseEntity.ok(ApiResponse.ok(permissionService.listAll()));
     }
 
     // 分页查询权限列表
     @GetMapping("/page")
-    @PreAuthorize("hasAuthority('PERM_role:view')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_permission:view')")
     public ResponseEntity<ApiResponse<PageResponse<Permission>>> page(@RequestParam(defaultValue = "1") long page,
                                                                       @RequestParam(defaultValue = "20") long size,
                                                                       @RequestParam(required = false) String keyword,
@@ -52,7 +52,7 @@ public class PermissionController {
 
     // 按 ID 查询权限
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_role:view')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_permission:view')")
     public ResponseEntity<ApiResponse<Permission>> get(@PathVariable Long id) {
         Permission permission = permissionService.getById(id);
         if (permission == null) {
@@ -63,7 +63,7 @@ public class PermissionController {
 
     // 新增权限
     @PostMapping
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_permission:add')")
     public ResponseEntity<ApiResponse<Permission>> create(@Valid @RequestBody PermissionCreateRequest request) {
         Permission created = permissionService.create(request);
         return ResponseEntity.ok(ApiResponse.ok(created));
@@ -71,7 +71,7 @@ public class PermissionController {
 
     // 更新权限
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_permission:edit')")
     public ResponseEntity<ApiResponse<Permission>> update(@PathVariable Long id,
                                                           @Valid @RequestBody PermissionUpdateRequest request) {
         Permission updated = permissionService.update(id, request);
@@ -80,7 +80,7 @@ public class PermissionController {
 
     // 删除权限
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_permission:delete')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
                                                     @Valid @RequestBody DeleteRequest request) {
         try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {

@@ -189,7 +189,7 @@
                       <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
                     </el-select>
                     <el-button
-                      v-if="!isReadOnly && formData.returnSource === 'BY_PRODUCT' && canViewPurchaseOrders"
+                      v-if="!isReadOnly && canViewPurchaseOrders"
                       class="detail-source-button"
                       size="small"
                       plain
@@ -199,6 +199,16 @@
                       {{ $t('action.selectSource') }}
                     </el-button>
                   </div>
+                </template>
+              </ErpDataTableColumn>
+              <ErpDataTableColumn label="来源单号" min-width="170" column-key="sourcePurchaseOrderNo">
+                <template #default="{ row }">
+                  <span class="readonly-cell">{{ row.sourcePurchaseOrderNo || '-' }}</span>
+                </template>
+              </ErpDataTableColumn>
+              <ErpDataTableColumn label="来源行" width="110" column-key="sourcePurchaseOrderLine">
+                <template #default="{ row }">
+                  <span class="readonly-cell">{{ formatSourcePurchaseOrderLine(row) }}</span>
                 </template>
               </ErpDataTableColumn>
               <ErpDataTableColumn :label="$t('field.warehouseLocation')" min-width="220" column-key="warehouseLocation">
@@ -227,22 +237,22 @@
                 <DecimalInput v-model="row.qty" :scale="4" :disabled="isReadOnly" />
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="custom-4">
+            <ErpDataTableColumn :label="$t('field.price')" width="140" column-key="price">
               <template #default="{ row }">
                 <DecimalInput v-model="row.price" :scale="4" :disabled="isReadOnly" />
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="amount">
+            <ErpDataTableColumn :label="$t('field.lineTotal')" width="140" column-key="lineAmount">
               <template #default="{ row }">
                 {{ formatMoney(calcLineAmount(row)) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="custom-6">
+            <ErpDataTableColumn v-if="canShowDiscountAllocated" :label="$t('field.discountAllocated')" width="140" column-key="discountAllocated">
               <template #default="{ row }">
                 {{ formatMoney(calcLineDiscount(row)) }}
               </template>
             </ErpDataTableColumn>
-            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="custom-7">
+            <ErpDataTableColumn v-if="canShowProfit" :label="$t('field.profit')" min-width="160" column-key="profit">
               <template #default="{ row }">
                 {{ formatProfitCell(row) }}
               </template>
@@ -261,7 +271,7 @@
           </ErpDataTable>
           </div>
           <div class="detail-actions">
-            <el-button class="paper-add-item-button" type="primary" plain size="small" :disabled="isReadOnly || isPurchaseOrderBoundMode" @click="addItem">
+            <el-button class="paper-add-item-button" type="primary" plain size="small" :disabled="isReadOnly" @click="addItem">
               + {{ $t('action.addItem') }}
             </el-button>
           </div>
@@ -364,7 +374,7 @@
           <el-descriptions-item :label="$t('field.supplier')">{{ resolveSupplierLabel(purchaseOrderPreviewDetail.supplierId) }}</el-descriptions-item>
           <el-descriptions-item :label="$t('field.orderTime')">{{ purchaseOrderPreviewDetail.orderAt || '-' }}</el-descriptions-item>
         </el-descriptions>
-        <ErpDataTable :data="purchaseOrderPreviewDetail.items || []" border stripe style="width: 100%; margin-top: 16px" table-key="erp-purchase-return-form-11">
+        <ErpDataTable :data="purchaseOrderPreviewDetail.items || []" border stripe style="width: 100%; margin-top: 16px" table-key="erp-purchase-return-source-preview">
           <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
             <template #default="{ row }">
               {{ row.productName || row.productCode }}
@@ -373,16 +383,16 @@
           <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
             <template #default="{ row }">{{ row.qty }}</template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="custom-12">
+          <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="remainingQty">
             <template #default="{ row }">{{ row.remainingQty }}</template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-13">
+          <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="price">
             <template #default="{ row }">{{ row.price }}</template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
+          <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouse">
             <template #default="{ row }">{{ resolveWarehouseLabel(row.warehouseId) }}</template>
           </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
+          <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="location">
             <template #default="{ row }">{{ resolveLocationLabel(row.locationId) }}</template>
           </ErpDataTableColumn>
         </ErpDataTable>
@@ -401,7 +411,7 @@
         style="width: 100%"
         border
         @selection-change="handlePurchaseOrderSelectionChange"
-       table-key="erp-purchase-return-form-18">
+       table-key="erp-purchase-return-source-items">
         <ErpDataTableColumn type="selection" width="50" />
         <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
           <template #default="{ row }">
@@ -411,18 +421,18 @@
         <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
           <template #default="{ row }">{{ row.qty }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="custom-19">
+        <ErpDataTableColumn :label="$t('field.remainingQty')" width="120" column-key="remainingQty">
           <template #default="{ row }">{{ row.remainingQty }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-20">
+        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="price">
           <template #default="{ row }">{{ row.price }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouseLocation">
+        <ErpDataTableColumn :label="$t('field.warehouse')" min-width="140" column-key="warehouse">
           <template #default="{ row }">
             {{ resolveWarehouseLabel(row.warehouseId) }}
           </template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="warehouseLocation">
+        <ErpDataTableColumn :label="$t('field.location')" min-width="140" column-key="location">
           <template #default="{ row }">
             {{ resolveLocationLabel(row.locationId) }}
           </template>
@@ -447,20 +457,20 @@
         max-height="420"
         border
         @row-dblclick="applyRecentPurchaseSelection"
-       table-key="erp-purchase-return-form-26">
-        <ErpDataTableColumn :label="$t('field.purchaseOrderNo')" min-width="220" column-key="custom-23">
+       table-key="erp-purchase-return-recent-purchases">
+        <ErpDataTableColumn :label="$t('field.purchaseOrderNo')" min-width="220" column-key="purchaseOrderNo">
           <template #default="{ row }">{{ row.orderNo }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.orderTime')" width="180" column-key="custom-24">
+        <ErpDataTableColumn :label="$t('field.orderTime')" width="180" column-key="orderAt">
           <template #default="{ row }">{{ formatDisplayDateTime(row.orderAt) }}</template>
         </ErpDataTableColumn>
         <ErpDataTableColumn :label="$t('field.quantity')" width="120" column-key="quantity">
           <template #default="{ row }">{{ row.qty }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.remainingQty')" width="130" column-key="custom-26">
-          <template #default="{ row }">{{ row.remainingQty }}</template>
+        <ErpDataTableColumn :label="$t('field.remainingQty')" width="130" column-key="remainingQty">
+          <template #default="{ row }">{{ getRecentPurchaseRemainingQty(row) }}</template>
         </ErpDataTableColumn>
-        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="custom-27">
+        <ErpDataTableColumn :label="$t('field.price')" width="120" column-key="price">
           <template #default="{ row }">{{ row.price }}</template>
         </ErpDataTableColumn>
         <ErpDataTableColumn :label="$t('table.actions')" width="110" align="center" column-key="actions">
@@ -469,7 +479,7 @@
               size="small"
               type="primary"
               plain
-              :disabled="Number(row.remainingQty || 0) <= 0"
+              :disabled="getRecentPurchaseRemainingQty(row) <= 0"
               @click="applyRecentPurchaseSelection(row)"
             >
               {{ $t('action.select') }}
@@ -574,6 +584,7 @@ interface PurchaseOrderOption {
 
 interface PurchaseOrderDetailItem {
   id?: number;
+  sortNo?: number;
   productId?: number;
   productCode?: string;
   productName?: string;
@@ -581,7 +592,10 @@ interface PurchaseOrderDetailItem {
   locationId?: number;
   qty?: number;
   remainingQty?: number;
+  approvedReturnedQty?: number;
+  draftOccupiedQty?: number;
   price?: number;
+  priceInclTax?: number;
   taxRate?: number;
 }
 
@@ -597,12 +611,20 @@ interface ProductOption {
 
 interface RecentPurchaseItem {
   orderId: number;
+  orderItemId?: number;
+  orderItemSortNo?: number;
   orderNo: string;
   orderAt?: string;
   productId: number;
+  warehouseId?: number;
+  locationId?: number;
   qty: number;
   remainingQty?: number;
+  approvedReturnedQty?: number;
+  draftOccupiedQty?: number;
   price: number;
+  priceInclTax?: number;
+  taxRate?: number;
 }
 
 interface PurchaseOrderRefundSummary {
@@ -654,6 +676,14 @@ interface CodeOptionItem {
 interface PurchaseReturnItem {
   id?: number;
   productId?: number;
+  sourcePurchaseOrderItemId?: number;
+  sourcePurchaseOrderId?: number;
+  sourcePurchaseOrderNo?: string;
+  sourcePurchaseOrderItemSortNo?: number;
+  sourcePurchaseOrderItemQty?: number;
+  sourcePurchaseOrderItemRemainingQty?: number;
+  sourcePurchaseOrderItemApprovedReturnedQty?: number;
+  sourcePurchaseOrderItemDraftOccupiedQty?: number;
   warehouseId?: number;
   locationId?: number;
   stockKey?: string;
@@ -757,6 +787,11 @@ const recentPurchaseDialogPage = ref(1);
 const recentPurchaseDialogSize = ref(10);
 const recentPurchaseDialogTotal = ref(0);
 const isPurchaseReturnRoute = computed(() => route.path.startsWith('/erp/purchase-returns'));
+const currentReturnId = computed(() => {
+  const raw = route.params.id;
+  const id = Array.isArray(raw) ? Number(raw[0]) : Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : undefined;
+});
 
 const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
@@ -837,7 +872,7 @@ const isPurchaseOrderBoundMode = computed(() => {
   return formData.returnSource === 'BY_PURCHASE_ORDER';
 });
 const isProductSelectDisabled = computed(() => {
-  return isReadOnly.value || !formData.supplierId || mustSelectPurchaseOrderBeforeProduct.value || isPurchaseOrderBoundMode.value;
+  return isReadOnly.value || !formData.supplierId || mustSelectPurchaseOrderBeforeProduct.value;
 });
 const isCreditSettlement = computed(() => {
   if (!formData.settlementMethod) return false;
@@ -1362,6 +1397,54 @@ const formatMoney = (value: number | string | null | undefined) => {
   return numeric.toFixed(2);
 };
 
+const formatPlainNumber = (value: number | string | null | undefined) => {
+  if (value == null || value === '') return '-';
+  const num = Number(value);
+  if (Number.isNaN(num)) return String(value);
+  return Number.isInteger(num) ? String(num) : String(num).replace(/0+$/, '').replace(/\.$/, '');
+};
+
+const formatSourcePurchaseOrderLine = (row: PurchaseReturnItem) => {
+  if (row.sourcePurchaseOrderItemSortNo != null) return `第${row.sourcePurchaseOrderItemSortNo}行`;
+  if (row.sourcePurchaseOrderItemId != null) return `ID ${row.sourcePurchaseOrderItemId}`;
+  return '-';
+};
+
+const getAllocatedSourceQty = (
+  sourcePurchaseOrderId?: number,
+  sourcePurchaseOrderItemId?: number,
+  excludeRow?: PurchaseReturnItem | null
+) => {
+  if (!sourcePurchaseOrderId || !sourcePurchaseOrderItemId) return 0;
+  return formData.items.reduce((total, item) => {
+    if (excludeRow && item === excludeRow) return total;
+    if (item.sourcePurchaseOrderId !== sourcePurchaseOrderId || item.sourcePurchaseOrderItemId !== sourcePurchaseOrderItemId) {
+      return total;
+    }
+    return total + (parseDecimal(item.qty, 4) || 0);
+  }, 0);
+};
+
+const getAvailableSourceQty = (
+  sourcePurchaseOrderId?: number,
+  sourcePurchaseOrderItemId?: number,
+  sourceRemainingQty?: number,
+  excludeRow?: PurchaseReturnItem | null
+) => {
+  const remaining = Number(sourceRemainingQty ?? 0);
+  if (!Number.isFinite(remaining)) return 0;
+  return Math.max(0, remaining - getAllocatedSourceQty(sourcePurchaseOrderId, sourcePurchaseOrderItemId, excludeRow));
+};
+
+const getRecentPurchaseRemainingQty = (purchase: RecentPurchaseItem) => {
+  return getAvailableSourceQty(
+    purchase.orderId,
+    purchase.orderItemId,
+    Number(purchase.remainingQty || 0),
+    recentPurchaseDialogRow.value
+  );
+};
+
 const formatRate = (value: number | null) => {
   if (value == null || Number.isNaN(value)) return '-';
   return `${(value * 100).toFixed(2)}%`;
@@ -1462,6 +1545,14 @@ const handleProductChange = async (row: PurchaseReturnItem) => {
     notifyWarning(t('message.required'));
     return;
   }
+  row.sourcePurchaseOrderItemId = undefined;
+  row.sourcePurchaseOrderId = undefined;
+  row.sourcePurchaseOrderNo = undefined;
+  row.sourcePurchaseOrderItemSortNo = undefined;
+  row.sourcePurchaseOrderItemQty = undefined;
+  row.sourcePurchaseOrderItemRemainingQty = undefined;
+  row.sourcePurchaseOrderItemApprovedReturnedQty = undefined;
+  row.sourcePurchaseOrderItemDraftOccupiedQty = undefined;
   row.warehouseId = undefined;
   row.locationId = undefined;
   row.stockKey = '';
@@ -1471,7 +1562,7 @@ const handleProductChange = async (row: PurchaseReturnItem) => {
   await fetchRecentPurchaseItems(row.productId);
   syncStockKey(row);
   await applyPriceForRow(row, true);
-  if (formData.returnSource === 'BY_PRODUCT' && row.productId) {
+  if (row.productId) {
     await openRecentPurchaseDialog(row);
   }
 };
@@ -1515,7 +1606,8 @@ const fetchRecentPurchaseItems = async (
           supplierId: formData.supplierId,
           productId,
           page,
-          size
+          size,
+          currentReturnId: currentReturnId.value
         }
       });
       const pageData = res.data.data as PageResponse<RecentPurchaseItem> | RecentPurchaseItem[] | undefined;
@@ -1532,7 +1624,8 @@ const fetchRecentPurchaseItems = async (
         supplierId: formData.supplierId,
         productId,
         page: 1,
-        size: 10
+        size: 10,
+        currentReturnId: currentReturnId.value
       }
     });
     const items = res.data.data?.items || [];
@@ -1612,6 +1705,14 @@ const resetRecentPurchaseDialogState = (resetSize = false) => {
 
 const createEmptyItem = (overrides: Partial<PurchaseReturnItem> = {}): PurchaseReturnItem => ({
   productId: undefined,
+  sourcePurchaseOrderItemId: undefined,
+  sourcePurchaseOrderId: undefined,
+  sourcePurchaseOrderNo: undefined,
+  sourcePurchaseOrderItemSortNo: undefined,
+  sourcePurchaseOrderItemQty: undefined,
+  sourcePurchaseOrderItemRemainingQty: undefined,
+  sourcePurchaseOrderItemApprovedReturnedQty: undefined,
+  sourcePurchaseOrderItemDraftOccupiedQty: undefined,
   warehouseId: undefined,
   locationId: undefined,
   stockKey: '',
@@ -1635,7 +1736,9 @@ const syncSourceOrderNoToRemark = (orderNo?: string) => {
 };
 
 const bindRecentPurchaseOrder = async (row: PurchaseReturnItem, purchase: RecentPurchaseItem) => {
-  formData.purchaseOrderId = purchase.orderId;
+  if (!formData.purchaseOrderId) {
+    formData.purchaseOrderId = purchase.orderId;
+  }
   mergePurchaseOrderOption({
     id: purchase.orderId,
     orderNo: purchase.orderNo,
@@ -1644,14 +1747,28 @@ const bindRecentPurchaseOrder = async (row: PurchaseReturnItem, purchase: Recent
   await fetchPurchaseOrderRefundSummary(purchase.orderId);
   syncSourceOrderNoToRemark(purchase.orderNo);
   row.price = purchase.price == null ? row.price : String(purchase.price);
+  row.sourcePurchaseOrderItemId = purchase.orderItemId;
+  row.sourcePurchaseOrderId = purchase.orderId;
+  row.sourcePurchaseOrderNo = purchase.orderNo;
+  row.sourcePurchaseOrderItemSortNo = purchase.orderItemSortNo;
+  row.sourcePurchaseOrderItemQty = Number(purchase.qty || 0);
+  row.sourcePurchaseOrderItemRemainingQty = Number(purchase.remainingQty || 0);
+  row.sourcePurchaseOrderItemApprovedReturnedQty = Number(purchase.approvedReturnedQty || 0);
+  row.sourcePurchaseOrderItemDraftOccupiedQty = Number(purchase.draftOccupiedQty || 0);
+  row.warehouseId = purchase.warehouseId;
+  row.locationId = purchase.locationId;
+  row.taxRate = purchase.taxRate ?? row.taxRate;
+  const availableQty = getAvailableSourceQty(purchase.orderId, purchase.orderItemId, Number(purchase.remainingQty || 0), row);
   if (!row.qty && purchase.remainingQty != null) {
-    row.qty = String(purchase.remainingQty);
+    row.qty = String(availableQty);
   }
+  await fetchStockOptions(row.productId, true);
+  syncStockKey(row);
   await applyPriceForRow(row, false);
 };
 
 const openRecentPurchaseDialog = async (row: PurchaseReturnItem) => {
-  if (isReadOnly.value || formData.returnSource !== 'BY_PRODUCT') return;
+  if (isReadOnly.value) return;
   if (!canViewPurchaseOrders.value) {
     notifyWarning('当前角色缺少来源采购单引用权限，不能选择来源采购单');
     return;
@@ -1671,38 +1788,10 @@ const openRecentPurchaseDialog = async (row: PurchaseReturnItem) => {
 const applyRecentPurchaseSelection = async (purchase: RecentPurchaseItem) => {
   if (isReadOnly.value) return;
   if (!purchase?.orderId) return;
-  if (Number(purchase.remainingQty || 0) <= 0) return;
   const row = recentPurchaseDialogRow.value;
   if (!row) return;
-  if (!formData.purchaseOrderId || Number(formData.purchaseOrderId) === Number(purchase.orderId)) {
-    await bindRecentPurchaseOrder(row, purchase);
-    showRecentPurchaseDialog.value = false;
-    return;
-  }
-  try {
-    await ElMessageBox.confirm(
-      t('message.confirmSwitchPurchaseOrder', { orderNo: purchase.orderNo }),
-      t('action.confirm'),
-      {
-        confirmButtonText: t('action.confirm'),
-        cancelButtonText: t('action.cancel'),
-        type: 'warning'
-      }
-    );
-  } catch {
-    return;
-  }
-  const nextRow = createEmptyItem({
-    productId: row.productId,
-    qty: row.qty,
-    taxRate: row.taxRate,
-    remark: row.remark
-  });
-  formData.items = [nextRow];
-  applyProductDefaults(nextRow, true);
-  await bindRecentPurchaseOrder(nextRow, purchase);
-  await fetchStockOptions(nextRow.productId, true);
-  syncStockKey(nextRow);
+  if (getAvailableSourceQty(purchase.orderId, purchase.orderItemId, Number(purchase.remainingQty || 0), row) <= 0) return;
+  await bindRecentPurchaseOrder(row, purchase);
   showRecentPurchaseDialog.value = false;
 };
 
@@ -1791,11 +1880,14 @@ const openPurchaseOrderDetail = async (orderId: number) => {
   }
   try {
     purchaseOrderRefundSummaryLoading.value = true;
-    const res: any = await request.get(`/erp/purchase-returns/source-purchase-orders/${orderId}`);
+    const res: any = await request.get(`/erp/purchase-returns/source-purchase-orders/${orderId}`, {
+      params: { currentReturnId: currentReturnId.value }
+    });
     const data = res.data.data || {};
     purchaseOrderRefundSummary.value = data.refundSummary || null;
     purchaseOrderDetailItems.value = (data.items || []).map((item: any) => ({
       id: item.id,
+      sortNo: item.sortNo,
       productId: item.productId,
       productCode: item.productCode,
       productName: item.productName,
@@ -1803,7 +1895,10 @@ const openPurchaseOrderDetail = async (orderId: number) => {
       locationId: item.locationId,
       qty: Number(item.qty || 0),
       remainingQty: Number(item.remainingQty || 0),
+      approvedReturnedQty: Number(item.approvedReturnedQty || 0),
+      draftOccupiedQty: Number(item.draftOccupiedQty || 0),
       price: Number(item.price || 0),
+      priceInclTax: Number(item.priceInclTax || 0),
       taxRate: Number(item.taxRate || 0)
     })).filter((item: PurchaseOrderDetailItem) => Number(item.remainingQty || 0) > 0);
     if (!purchaseOrderDetailItems.value.length) {
@@ -1844,7 +1939,9 @@ const openSelectedPurchaseOrderPreview = () => {
     return;
   }
   const purchaseOrderNo = purchaseOrderRefundSummary.value?.purchaseOrderNo || resolvedPurchaseOrderNo.value || '';
-  request.get(`/erp/purchase-returns/source-purchase-orders/${purchaseOrderId}`).then((res: any) => {
+  request.get(`/erp/purchase-returns/source-purchase-orders/${purchaseOrderId}`, {
+    params: { currentReturnId: currentReturnId.value }
+  }).then((res: any) => {
     purchaseOrderPreviewDetail.value = res.data.data || null;
     purchaseOrderPreviewDialogTitle.value = `${t('page.erpPurchaseOrder')} · ${purchaseOrderNo || purchaseOrderId}`;
     purchaseOrderPreviewDialogVisible.value = true;
@@ -1864,6 +1961,14 @@ const applyPurchaseOrderSelection = () => {
   }
   formData.items = selectedPurchaseOrderItems.value.map((item, index) => ({
     productId: item.productId,
+    sourcePurchaseOrderItemId: item.id,
+    sourcePurchaseOrderId: formData.purchaseOrderId || undefined,
+    sourcePurchaseOrderNo: resolvedPurchaseOrderNo.value || purchaseOrderRefundSummary.value?.purchaseOrderNo || undefined,
+    sourcePurchaseOrderItemSortNo: item.sortNo,
+    sourcePurchaseOrderItemQty: item.qty,
+    sourcePurchaseOrderItemRemainingQty: item.remainingQty,
+    sourcePurchaseOrderItemApprovedReturnedQty: item.approvedReturnedQty,
+    sourcePurchaseOrderItemDraftOccupiedQty: item.draftOccupiedQty,
     warehouseId: item.warehouseId,
     locationId: item.locationId,
     stockKey: '',
@@ -1928,6 +2033,9 @@ const fetchPurchaseOrders = async () => {
     const params: Record<string, any> = { status: 'APPROVED', page: 1, size: 200 };
     if (formData.supplierId) {
       params.supplierId = formData.supplierId;
+    }
+    if (currentReturnId.value) {
+      params.currentReturnId = currentReturnId.value;
     }
     const res: any = await request.get('/erp/purchase-returns/source-purchase-orders/page', { params });
     const items = res.data.data?.items || [];
@@ -2080,6 +2188,14 @@ const loadDetail = async () => {
       formData.items = (data.items || data.order?.items || []).map((item: any) => ({
         id: item.id,
         productId: item.productId,
+        sourcePurchaseOrderItemId: item.sourcePurchaseOrderItemId,
+        sourcePurchaseOrderId: item.sourcePurchaseOrderId,
+        sourcePurchaseOrderNo: item.sourcePurchaseOrderNo,
+        sourcePurchaseOrderItemSortNo: item.sourcePurchaseOrderItemSortNo,
+        sourcePurchaseOrderItemQty: item.sourcePurchaseOrderItemQty,
+        sourcePurchaseOrderItemRemainingQty: item.sourcePurchaseOrderItemRemainingQty,
+        sourcePurchaseOrderItemApprovedReturnedQty: item.sourcePurchaseOrderItemApprovedReturnedQty,
+        sourcePurchaseOrderItemDraftOccupiedQty: item.sourcePurchaseOrderItemDraftOccupiedQty,
         warehouseId: item.warehouseId,
         locationId: item.locationId,
         stockKey: '',
@@ -2109,20 +2225,47 @@ const loadDetail = async () => {
 };
 
 const addItem = () => {
-  formData.items.push({
-    productId: undefined,
-    warehouseId: undefined,
-    locationId: undefined,
-    stockKey: '',
-    qty: '',
-    price: '',
-    taxRate: 0,
-    remark: ''
-  });
+  formData.items.push(createEmptyItem());
 };
 
 const removeItem = (index: number) => {
   formData.items.splice(index, 1);
+};
+
+const mergeDuplicateSourceDestinationItems = () => {
+  const merged = new Map<string, PurchaseReturnItem>();
+  const nextItems: PurchaseReturnItem[] = [];
+  let hasMerged = false;
+  formData.items.forEach((item) => {
+    ensureStockBinding(item);
+    if (!item.productId || !item.sourcePurchaseOrderId || !item.sourcePurchaseOrderItemId || !item.warehouseId) {
+      nextItems.push(item);
+      return;
+    }
+    const key = [
+      item.sourcePurchaseOrderId,
+      item.sourcePurchaseOrderItemId,
+      item.warehouseId,
+      item.locationId || ''
+    ].join(':');
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, item);
+      nextItems.push(item);
+      return;
+    }
+    const existingQty = parseDecimal(existing.qty, 4) || 0;
+    const currentQty = parseDecimal(item.qty, 4) || 0;
+    existing.qty = formatPlainNumber(existingQty + currentQty);
+    if (!existing.remark && item.remark) {
+      existing.remark = item.remark;
+    }
+    hasMerged = true;
+  });
+  if (hasMerged) {
+    formData.items = nextItems;
+    notifyWarning('相同来源采购行、仓库、库位的明细已自动合并');
+  }
 };
 
 const resetForm = () => {
@@ -2230,6 +2373,7 @@ const fetchNextOrderNo = async () => {
       notifyWarning(requiredFieldMessage(t('field.settlementMethod')));
       return;
     }
+    mergeDuplicateSourceDestinationItems();
     const validItems = formData.items.filter(item => item.productId);
     if (!validItems.length) {
       notifyWarning(t('message.noItems'));
@@ -2245,6 +2389,45 @@ const fetchNextOrderNo = async () => {
       const priceValue = parseDecimal(item.price, 4);
       if (priceValue == null) {
         notifyWarning(invalidRowFieldMessage(rowNumber, t('field.price')));
+        return;
+      }
+      if (!item.sourcePurchaseOrderId || !item.sourcePurchaseOrderItemId) {
+        notifyWarning(`第${rowNumber}行请先选择来源采购单`);
+        return;
+      }
+    }
+
+    const qtyBySourceItem = new Map<string, number>();
+    const availableQtyBySourceItem = new Map<string, number>();
+    const destinationRows = new Map<string, number>();
+    for (const [index, item] of validItems.entries()) {
+      ensureStockBinding(item);
+      const sourceKey = `${item.sourcePurchaseOrderId}:${item.sourcePurchaseOrderItemId}`;
+      const qtyValue = parseDecimal(item.qty, 4) || 0;
+      qtyBySourceItem.set(sourceKey, (qtyBySourceItem.get(sourceKey) || 0) + qtyValue);
+      if (item.sourcePurchaseOrderItemRemainingQty != null) {
+        availableQtyBySourceItem.set(sourceKey, Number(item.sourcePurchaseOrderItemRemainingQty || 0));
+      }
+
+      const destinationKey = [
+        item.sourcePurchaseOrderId,
+        item.sourcePurchaseOrderItemId,
+        item.warehouseId || '',
+        item.locationId || ''
+      ].join(':');
+      const previousRow = destinationRows.get(destinationKey);
+      if (previousRow != null) {
+        notifyWarning(`第${previousRow + 1}行和第${index + 1}行来源采购行、仓库、库位相同，请合并数量`);
+        return;
+      }
+      destinationRows.set(destinationKey, index);
+    }
+    for (const [sourceKey, qtyValue] of qtyBySourceItem.entries()) {
+      const availableQty = availableQtyBySourceItem.get(sourceKey);
+      if (availableQty != null && qtyValue > availableQty) {
+        const matched = validItems.find(item => `${item.sourcePurchaseOrderId}:${item.sourcePurchaseOrderItemId}` === sourceKey);
+        const lineLabel = matched ? formatSourcePurchaseOrderLine(matched) : '-';
+        notifyWarning(`${matched?.sourcePurchaseOrderNo || '来源采购单'} ${lineLabel} 已分配 ${formatPlainNumber(qtyValue)}，超过可退数量 ${formatPlainNumber(availableQty)}`);
         return;
       }
     }
@@ -2272,6 +2455,8 @@ const fetchNextOrderNo = async () => {
         ensureStockBinding(item);
         return {
           productId: item.productId,
+          sourcePurchaseOrderItemId: item.sourcePurchaseOrderItemId,
+          sourcePurchaseOrderId: item.sourcePurchaseOrderId,
           warehouseId: item.warehouseId,
           locationId: item.locationId,
           qty: parseDecimal(item.qty, 4),

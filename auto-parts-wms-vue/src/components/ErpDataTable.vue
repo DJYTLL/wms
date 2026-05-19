@@ -1,14 +1,18 @@
 <template>
-  <div class="erp-data-table-shell">
-    <div v-if="showColumnSettings" class="erp-data-table-tools">
+  <div class="erp-data-table-shell" :class="{ 'is-layout-pending': isLayoutPending }">
+    <div v-if="shouldReserveColumnTools" class="erp-data-table-tools">
       <el-popover placement="bottom-end" trigger="click" width="360">
         <template #reference>
-          <el-button size="small" text class="erp-data-table-tools__button">
+          <el-button v-show="showColumnSettings" size="small" text class="erp-data-table-tools__button">
             <el-icon><Operation /></el-icon>
             <span>列设置</span>
           </el-button>
         </template>
         <div class="erp-data-table-settings">
+          <div class="erp-data-table-settings__header">
+            <span>个人列设置</span>
+            <el-button text size="small" @click="resetTableSettings">恢复默认</el-button>
+          </div>
           <div
             v-for="(column, index) in customizableColumns"
             :key="column.key"
@@ -168,6 +172,8 @@ const slots = useSlots()
 const effectiveTableKey = computed(() => props.tableKey || '')
 const {
   fetchConfig,
+  loaded: tableSettingsLoaded,
+  resetConfig,
   getColumnLayout,
   getColumnWidth,
   setColumnWidth,
@@ -270,6 +276,8 @@ const displayColumns = computed(() => {
 
 const customizableColumns = computed(() => orderedColumns.value.filter(isConfigurable))
 const showColumnSettings = computed(() => Boolean(effectiveTableKey.value) && customizableColumns.value.length > 0)
+const shouldReserveColumnTools = computed(() => Boolean(effectiveTableKey.value))
+const isLayoutPending = computed(() => Boolean(effectiveTableKey.value) && !tableSettingsLoaded.value)
 
 const orderedColumnIndex = computed(() => new Map(
   orderedColumns.value.map((column, index) => [column.key, index])
@@ -406,6 +414,7 @@ const handleElementHeaderDragend = async (
 
 const scheduleFetchConfig = () => {
   if (!effectiveTableKey.value) {
+    tableSettingsLoaded.value = true
     return
   }
   if (fetchTimer.value !== null) {
@@ -532,6 +541,11 @@ const handleColumnFixedChange = async (column: ErpDataTableColumn, value: '' | '
   await setColumnFixed(column.key, value || false)
 }
 
+const resetTableSettings = async () => {
+  draftWidths.value = {}
+  await resetConfig()
+}
+
 watch(
   effectiveTableKey,
   (key) => {
@@ -581,8 +595,10 @@ onBeforeUnmount(() => {
 .erp-data-table-tools {
   display: flex;
   justify-content: flex-end;
+  min-height: 37px;
   padding: 4px 6px 6px;
   border-bottom: 1px solid #eef2f7;
+  box-sizing: border-box;
 }
 
 .erp-data-table-tools__button {
@@ -592,12 +608,28 @@ onBeforeUnmount(() => {
   color: #606266;
 }
 
+.erp-data-table-shell.is-layout-pending .erp-data-table-element,
+.erp-data-table-shell.is-layout-pending .erp-data-table-scroll {
+  visibility: hidden;
+}
+
 .erp-data-table-settings {
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-height: 360px;
   overflow: auto;
+}
+
+.erp-data-table-settings__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eef2f7;
+  color: #606266;
+  font-size: 13px;
 }
 
 .erp-data-table-settings__row {
