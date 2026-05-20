@@ -8,20 +8,29 @@ import com.example.wms.dto.erp.ErpAssemblyOrderCreateRequest;
 import com.example.wms.dto.erp.ErpAssemblyOrderDetail;
 import com.example.wms.dto.erp.ErpAssemblyOrderItemRequest;
 import com.example.wms.dto.erp.ErpAssemblyOrderUpdateRequest;
+import com.example.wms.dto.erp.ErpAssemblySourceSaleOrderDetail;
+import com.example.wms.dto.erp.ErpAssemblySourceSaleOrderItem;
+import com.example.wms.dto.erp.ErpAssemblySourceSaleOrderOption;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAssemblyOrder;
 import com.example.wms.entity.erp.ErpAssemblyOrderItem;
+import com.example.wms.entity.erp.ErpCustomer;
 import com.example.wms.entity.erp.ErpLocation;
 import com.example.wms.entity.erp.ErpProduct;
+import com.example.wms.entity.erp.ErpSaleOrder;
+import com.example.wms.entity.erp.ErpSaleOrderItem;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockTxn;
 import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderItemMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderMapper;
+import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
+import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
+import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
@@ -54,10 +63,16 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
     private static final String TYPE_ASSEMBLE = "ASSEMBLE";
     private static final String TYPE_DISASSEMBLE = "DISASSEMBLE";
     private static final String ORDER_TYPE = "ASSEMBLY";
+    private static final String SOURCE_MANUAL = "MANUAL";
+    private static final String SOURCE_SALE_ORDER = "SALE_ORDER";
+    private static final String SOURCE_STOCK_PREPARE = "STOCK_PREPARE";
 
     private final ErpAssemblyOrderMapper erpAssemblyOrderMapper;
     private final ErpAssemblyOrderItemMapper erpAssemblyOrderItemMapper;
     private final ErpProductMapper erpProductMapper;
+    private final ErpSaleOrderMapper erpSaleOrderMapper;
+    private final ErpSaleOrderItemMapper erpSaleOrderItemMapper;
+    private final ErpCustomerMapper erpCustomerMapper;
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpLocationMapper erpLocationMapper;
     private final ErpStockBalanceMapper erpStockBalanceMapper;
@@ -69,6 +84,9 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
     public ErpAssemblyOrderServiceImpl(ErpAssemblyOrderMapper erpAssemblyOrderMapper,
                                        ErpAssemblyOrderItemMapper erpAssemblyOrderItemMapper,
                                        ErpProductMapper erpProductMapper,
+                                       ErpSaleOrderMapper erpSaleOrderMapper,
+                                       ErpSaleOrderItemMapper erpSaleOrderItemMapper,
+                                       ErpCustomerMapper erpCustomerMapper,
                                        ErpWarehouseMapper erpWarehouseMapper,
                                        ErpLocationMapper erpLocationMapper,
                                        ErpStockBalanceMapper erpStockBalanceMapper,
@@ -79,6 +97,9 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         this.erpAssemblyOrderMapper = erpAssemblyOrderMapper;
         this.erpAssemblyOrderItemMapper = erpAssemblyOrderItemMapper;
         this.erpProductMapper = erpProductMapper;
+        this.erpSaleOrderMapper = erpSaleOrderMapper;
+        this.erpSaleOrderItemMapper = erpSaleOrderItemMapper;
+        this.erpCustomerMapper = erpCustomerMapper;
         this.erpWarehouseMapper = erpWarehouseMapper;
         this.erpLocationMapper = erpLocationMapper;
         this.erpStockBalanceMapper = erpStockBalanceMapper;
@@ -102,6 +123,47 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         wrapper.orderByDesc("updated_at");
         Page<ErpAssemblyOrder> result = erpAssemblyOrderMapper.selectPage(pageReq, wrapper);
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+    }
+
+    @Override
+    public PageResponse<ErpAssemblySourceSaleOrderOption> sourceSaleOrderPage(long page, long size, String keyword, Long customerId) {
+        Long tenantId = TenantContext.requireTenantId();
+        long safePage = Math.max(page, 1);
+        int safeSize = (int) Math.max(1, Math.min(size, 100));
+        long offset = (safePage - 1) * safeSize;
+        String normalizedKeyword = keyword == null ? null : keyword.trim();
+        long total = erpAssemblyOrderMapper.countSourceSaleOrders(tenantId, normalizedKeyword, customerId);
+        List<ErpAssemblySourceSaleOrderOption> items = total == 0
+            ? List.of()
+            : erpAssemblyOrderMapper.findSourceSaleOrders(tenantId, normalizedKeyword, customerId, safeSize, offset);
+        return new PageResponse<>(total, safePage, safeSize, items);
+    }
+
+    @Override
+    public ErpAssemblySourceSaleOrderDetail getSourceSaleOrderDetail(Long saleOrderId) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpSaleOrder saleOrder = loadSaleOrder(tenantId, saleOrderId);
+        ErpCustomer customer = saleOrder.getCustomerId() == null ? null : erpCustomerMapper.selectOne(new QueryWrapper<ErpCustomer>()
+            .eq("tenant_id", tenantId)
+            .eq("id", saleOrder.getCustomerId()));
+        List<ErpAssemblySourceSaleOrderItem> items = erpAssemblyOrderMapper.findSourceSaleOrderItems(tenantId, saleOrderId);
+        List<ErpAssemblyOrder> relatedAssemblies = erpAssemblyOrderMapper.findBySourceSaleOrderId(tenantId, saleOrderId);
+        return new ErpAssemblySourceSaleOrderDetail(
+            saleOrder.getId(),
+            saleOrder.getOrderNo(),
+            saleOrder.getStatus(),
+            saleOrder.getCustomerId(),
+            customer == null ? null : customer.getName(),
+            saleOrder.getOrderAt(),
+            items,
+            relatedAssemblies
+        );
+    }
+
+    @Override
+    public List<ErpAssemblyOrder> listBySaleOrderId(Long saleOrderId) {
+        Long tenantId = TenantContext.requireTenantId();
+        return erpAssemblyOrderMapper.findBySourceSaleOrderId(tenantId, saleOrderId);
     }
 
     @Override
@@ -145,6 +207,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         order.setOrderNo(orderNo);
         order.setOrderType(type);
         order.setStatus(STATUS_DRAFT);
+        applySource(order, request.sourceType(), request.sourceSaleOrderId(), request.sourceSaleOrderItemId(), request.customerId(), request.finishedProductId(), tenantId);
         order.setFinishedProductId(request.finishedProductId());
         order.setFinishedQty(normalizeAmount(request.finishedQty()));
         order.setWarehouseId(request.warehouseId());
@@ -199,6 +262,7 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         String newOrderNo = resolveOrderNoForUpdate(request.orderNo(), order.getOrderNo(), tenantId, order.getId());
         order.setOrderNo(newOrderNo);
         order.setOrderType(normalizeType(request.orderType()));
+        applySource(order, request.sourceType(), request.sourceSaleOrderId(), request.sourceSaleOrderItemId(), request.customerId(), request.finishedProductId(), tenantId);
         order.setFinishedProductId(request.finishedProductId());
         order.setFinishedQty(normalizeAmount(request.finishedQty()));
         order.setWarehouseId(request.warehouseId());
@@ -289,6 +353,91 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         order.setUpdatedAt(Instant.now());
         order.setUpdatedBy(operator);
         erpAssemblyOrderMapper.updateById(order);
+    }
+
+    private void applySource(ErpAssemblyOrder order,
+                             String sourceType,
+                             Long sourceSaleOrderId,
+                             Long sourceSaleOrderItemId,
+                             Long customerId,
+                             Long finishedProductId,
+                             Long tenantId) {
+        String normalizedSourceType = normalizeSourceType(sourceType, sourceSaleOrderId);
+        order.setSourceType(normalizedSourceType);
+        order.setSourceSaleOrderId(null);
+        order.setSourceSaleOrderNo(null);
+        order.setSourceSaleOrderItemId(null);
+        order.setCustomerId(null);
+        order.setCustomerName(null);
+
+        if (!SOURCE_SALE_ORDER.equals(normalizedSourceType)) {
+            order.setCustomerId(customerId);
+            if (customerId != null) {
+                ErpCustomer customer = erpCustomerMapper.selectOne(new QueryWrapper<ErpCustomer>()
+                    .eq("tenant_id", tenantId)
+                    .eq("id", customerId));
+                if (customer == null) {
+                    throw new IllegalArgumentException("客户不存在");
+                }
+                order.setCustomerName(customer.getName());
+            }
+            return;
+        }
+
+        if (sourceSaleOrderId == null) {
+            throw new IllegalArgumentException("请选择来源销售单");
+        }
+        ErpSaleOrder saleOrder = loadSaleOrder(tenantId, sourceSaleOrderId);
+        if ("CANCELLED".equals(saleOrder.getStatus()) || "RED_FLUSHED".equals(saleOrder.getStatus())) {
+            throw new IllegalArgumentException("已作废或已红冲的销售单不能作为组装来源");
+        }
+        if (sourceSaleOrderItemId != null) {
+            ErpSaleOrderItem saleItem = erpSaleOrderItemMapper.selectOne(new QueryWrapper<ErpSaleOrderItem>()
+                .eq("tenant_id", tenantId)
+                .eq("id", sourceSaleOrderItemId)
+                .eq("order_id", sourceSaleOrderId));
+            if (saleItem == null) {
+                throw new IllegalArgumentException("来源销售单明细不存在");
+            }
+            if (finishedProductId != null && saleItem.getProductId() != null && !finishedProductId.equals(saleItem.getProductId())) {
+                throw new IllegalArgumentException("来源销售行商品必须与组装成品一致");
+            }
+        }
+        ErpCustomer customer = saleOrder.getCustomerId() == null ? null : erpCustomerMapper.selectOne(new QueryWrapper<ErpCustomer>()
+            .eq("tenant_id", tenantId)
+            .eq("id", saleOrder.getCustomerId()));
+        order.setSourceSaleOrderId(saleOrder.getId());
+        order.setSourceSaleOrderNo(saleOrder.getOrderNo());
+        order.setSourceSaleOrderItemId(sourceSaleOrderItemId);
+        order.setCustomerId(saleOrder.getCustomerId());
+        order.setCustomerName(customer == null ? null : customer.getName());
+    }
+
+    private String normalizeSourceType(String sourceType, Long sourceSaleOrderId) {
+        if (sourceSaleOrderId != null) {
+            return SOURCE_SALE_ORDER;
+        }
+        if (sourceType == null || sourceType.isBlank()) {
+            return SOURCE_MANUAL;
+        }
+        String normalized = sourceType.trim().toUpperCase();
+        if (SOURCE_SALE_ORDER.equals(normalized) || SOURCE_STOCK_PREPARE.equals(normalized) || SOURCE_MANUAL.equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("来源类型不正确");
+    }
+
+    private ErpSaleOrder loadSaleOrder(Long tenantId, Long saleOrderId) {
+        if (saleOrderId == null) {
+            throw new IllegalArgumentException("销售单不存在");
+        }
+        ErpSaleOrder saleOrder = erpSaleOrderMapper.selectOne(new QueryWrapper<ErpSaleOrder>()
+            .eq("tenant_id", tenantId)
+            .eq("id", saleOrderId));
+        if (saleOrder == null) {
+            throw new IllegalArgumentException("销售单不存在");
+        }
+        return saleOrder;
     }
 
     private List<ErpAssemblyOrderItem> buildItems(Long tenantId,
@@ -604,7 +753,10 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         QueryWrapper<ErpAssemblyOrder> wrapper = new QueryWrapper<>();
         wrapper.eq("tenant_id", tenantId);
         if (keyword != null && !keyword.isBlank()) {
-            wrapper.and(w -> w.like("order_no", keyword).or().like("remark", keyword));
+            wrapper.and(w -> w.like("order_no", keyword)
+                .or().like("source_sale_order_no", keyword)
+                .or().like("customer_name", keyword)
+                .or().like("remark", keyword));
         }
         if (status != null && !status.isBlank()) {
             wrapper.eq("status", status);

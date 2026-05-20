@@ -35,6 +35,10 @@ public class ErpProduct {
     @TableField("short_name")
     private String shortName;
 
+    // 商品类型
+    @TableField("product_type")
+    private String productType;
+
     // 规格型号
     @TableField("spec")
     private String spec;
@@ -184,6 +188,14 @@ public class ErpProduct {
 
     public void setShortName(String shortName) {
         this.shortName = shortName;
+    }
+
+    public String getProductType() {
+        return productType;
+    }
+
+    public void setProductType(String productType) {
+        this.productType = productType;
     }
 
     public String getSpec() {

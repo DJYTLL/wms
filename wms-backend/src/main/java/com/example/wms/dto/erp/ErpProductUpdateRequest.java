@@ -24,6 +24,10 @@ public record ErpProductUpdateRequest(
      */
     String shortName,
     /**
+     * 表示商品类型。
+     */
+    String productType,
+    /**
      * 表示spec。
      */
     String spec,

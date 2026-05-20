@@ -63,6 +63,16 @@
               {{ getProductName(row.finishedProductId) }}
             </template>
           </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('sourceSaleOrder')" prop="sourceSaleOrderNo" label="来源销售单" min-width="160">
+            <template #default="{ row }">
+              {{ row.sourceSaleOrderNo || '-' }}
+            </template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('customerName')" prop="customerName" label="客户" min-width="150">
+            <template #default="{ row }">
+              {{ row.customerName || '-' }}
+            </template>
+          </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('finishedQty')" prop="finishedQty" :label="$t('field.finishedQty')" min-width="140" />
           <ErpDataTableColumn v-if="canShow('totalCost')" prop="totalCost" :label="$t('field.totalCost')" min-width="140" />
           <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
@@ -157,6 +167,8 @@ interface AssemblyOrder {
   orderNo: string;
   orderType: string;
   finishedProductId?: number;
+  sourceSaleOrderNo?: string;
+  customerName?: string;
   finishedQty?: number;
   totalCost?: number;
   status?: string;
@@ -181,7 +193,7 @@ const dateRange = ref<[string, string] | null>(null);
 
 const productOptions = ref<OptionItem[]>([]);
 
-const defaultColumns = ['orderNo', 'orderType', 'finishedProduct', 'finishedQty', 'totalCost', 'status', 'orderAt'];
+const defaultColumns = ['orderNo', 'orderType', 'finishedProduct', 'sourceSaleOrder', 'customerName', 'finishedQty', 'totalCost', 'status', 'orderAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-assemble-order', defaultColumns);
 
 const canShow = (key: string) => isVisible(key);

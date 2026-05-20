@@ -14,9 +14,12 @@ import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderItemMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderMapper;
+import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
+import com.example.wms.mapper.erp.ErpSaleOrderItemMapper;
+import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockCountItemMapper;
 import com.example.wms.mapper.erp.ErpStockCountMapper;
@@ -71,6 +74,12 @@ class ErpInventoryWorkflowTests {
     private ErpAssemblyOrderMapper assemblyOrderMapper;
     @Mock
     private ErpAssemblyOrderItemMapper assemblyOrderItemMapper;
+    @Mock
+    private ErpSaleOrderMapper saleOrderMapper;
+    @Mock
+    private ErpSaleOrderItemMapper saleOrderItemMapper;
+    @Mock
+    private ErpCustomerMapper customerMapper;
 
     @BeforeEach
     void setUp() {
@@ -203,6 +212,10 @@ class ErpInventoryWorkflowTests {
             null,
             "ASSEMBLE",
             "2026-05-12 08:00:00",
+            null,
+            null,
+            null,
+            null,
             100L,
             BigDecimal.ZERO,
             200L,
@@ -228,6 +241,10 @@ class ErpInventoryWorkflowTests {
             null,
             "ASSEMBLE",
             "2026-05-12 08:00:00",
+            null,
+            null,
+            null,
+            null,
             100L,
             BigDecimal.ONE,
             200L,
@@ -252,6 +269,10 @@ class ErpInventoryWorkflowTests {
             null,
             "ASSEMBLE",
             "2026-05-12 08:00:00",
+            null,
+            null,
+            null,
+            null,
             100L,
             BigDecimal.ONE,
             200L,
@@ -469,6 +490,10 @@ class ErpInventoryWorkflowTests {
             "AO-050",
             "ASSEMBLE",
             "2026-05-12 08:00:00",
+            null,
+            null,
+            null,
+            null,
             101L,
             BigDecimal.ONE,
             200L,
@@ -567,6 +592,9 @@ class ErpInventoryWorkflowTests {
             assemblyOrderMapper,
             assemblyOrderItemMapper,
             productMapper,
+            saleOrderMapper,
+            saleOrderItemMapper,
+            customerMapper,
             warehouseMapper,
             locationMapper,
             stockBalanceMapper,

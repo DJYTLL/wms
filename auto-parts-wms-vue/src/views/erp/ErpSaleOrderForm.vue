@@ -151,6 +151,13 @@
             <h4>{{ $t('section.saleDetailInfo') }}</h4>
             <div v-if="!isReadOnly" class="detail-header-actions">
               <el-button
+                class="detail-toolbar-button detail-toolbar-button--primary"
+                :icon="Plus"
+                @click="addItem"
+              >
+                {{ $t('action.addItem') }}
+              </el-button>
+              <el-button
                 class="detail-toolbar-button"
                 :icon="Delete"
                 :disabled="!selectedItems.length"
@@ -175,11 +182,12 @@
                 <template #header>
                   <span class="required-table-label">{{ $t('field.product') }}</span>
                 </template>
-                <template #default="{ row }">
+                <template #default="{ row, $index }">
                   <div class="product-cell">
                     <span v-if="isReadOnly" class="product-cell__label">{{ resolveProductLabel(row) }}</span>
                     <el-select
                       v-else
+                      :ref="(el: any) => setProductSelectRef(el, $index)"
                       :key="formData.customerId ?? 'no-customer'"
                       v-model="row.productId"
                       filterable
@@ -201,7 +209,7 @@
                       <el-icon class="history-icon"><View /></el-icon>
                     </el-tag>
                     <el-tooltip
-                      v-if="canUseQuickAssembly && row.productId && getAssemblyTemplateCount(row) > 0"
+                      v-if="canUseQuickAssembly && row.productId && isAssemblyProduct(row)"
                       content="快捷组装"
                       placement="top"
                     >
@@ -488,9 +496,14 @@
                 <el-option
                   v-for="item in getAssemblyTemplatesForProduct(assemblyQuickForm.productId)"
                   :key="item.id"
-                  :label="item.name"
+                  :label="formatAssemblyTemplateOptionLabel(item)"
                   :value="item.id"
-                />
+                >
+                  <div class="assembly-template-option">
+                    <span class="assembly-template-option__name">{{ item.name }}</span>
+                    <span v-if="item.remark" class="assembly-template-option__remark">{{ item.remark }}</span>
+                  </div>
+                </el-option>
               </el-select>
             </el-form-item>
             <el-form-item label="组装数量" required>
@@ -613,6 +626,7 @@ interface OptionItem {
 interface ProductOption {
   id: number;
   name: string;
+  productType?: string;
   defaultWarehouseId?: number;
   defaultLocationId?: number;
   salePrice?: number;
@@ -856,6 +870,7 @@ const historyOrderDialogTitle = ref('');
 const historyOrderDialogUrl = ref('');
 const activeRowIndex = ref<number | null>(null);
 const selectedItems = ref<SaleOrderItem[]>([]);
+const productSelectRefs = ref<any[]>([]);
 const customerCategoryOptions = ref<OptionItem[]>([]);
 const assemblyTemplateMap = ref<Record<number, AssemblyTemplateOption[]>>({});
 const assemblyQuickDialogVisible = ref(false);
@@ -1091,8 +1106,15 @@ const getAssemblyTemplatesForProduct = (productId?: number | null) => {
   return assemblyTemplateMap.value[productId] || [];
 };
 
-const getAssemblyTemplateCount = (row: SaleOrderItem) => {
-  return getAssemblyTemplatesForProduct(row.productId).length;
+const isAssemblyProduct = (row: SaleOrderItem) => {
+  if (!row.productId) return false;
+  const product = productOptions.value.find(item => item.id === row.productId);
+  return product?.productType === 'ASSEMBLY';
+};
+
+const formatAssemblyTemplateOptionLabel = (item: AssemblyTemplateOption) => {
+  if (!item.remark) return item.name;
+  return `${item.name} / ${item.remark}`;
 };
 
 const fetchAssemblyTemplatesByProductId = async (productId?: number | null, force = false): Promise<AssemblyTemplateOption[]> => {
@@ -2186,6 +2208,7 @@ const handleProductChange = async (row: SaleOrderItem) => {
   syncStockKey(row);
   await fetchAssemblyTemplatesByProductId(row.productId);
   await applyPriceForRow(row, true);
+  await ensureNextItemAfterCompletedProduct(row);
 };
 
 const handleRowClick = (row: SaleOrderItem) => {
@@ -2327,6 +2350,7 @@ const ensureProductOption = async (productId?: number | null) => {
       productOptions.value = mergeOptionById(productOptions.value, {
         id: product.id,
         name: product.name,
+        productType: product.productType,
         defaultWarehouseId: product.defaultWarehouseId,
         defaultLocationId: product.defaultLocationId,
         salePrice: product.salePrice,
@@ -2466,7 +2490,7 @@ const loadDetail = async () => {
 };
 
 const addItem = () => {
-  formData.items.push({
+  const item: SaleOrderItem = {
     productId: undefined,
     warehouseId: undefined,
     locationId: undefined,
@@ -2476,7 +2500,27 @@ const addItem = () => {
     unitCost: undefined,
     taxRate: 0,
     remark: ''
-  });
+  };
+  formData.items.push(item);
+  return item;
+};
+
+const setProductSelectRef = (el: any, index: number) => {
+  productSelectRefs.value[index] = el;
+};
+
+const focusProductSelectAt = async (index: number) => {
+  await nextTick();
+  productSelectRefs.value[index]?.focus?.();
+};
+
+const ensureNextItemAfterCompletedProduct = async (row: SaleOrderItem) => {
+  if (isReadOnly.value || !row.productId) return;
+  const rowIndex = formData.items.indexOf(row);
+  if (rowIndex === -1 || rowIndex !== formData.items.length - 1) return;
+  addItem();
+  activeRowIndex.value = rowIndex + 1;
+  await focusProductSelectAt(rowIndex + 1);
 };
 
 const handleItemSelectionChange = (rows: SaleOrderItem[]) => {
@@ -2901,6 +2945,10 @@ const buildAssemblyQuickPayload = () => ({
   orderNo: null,
   orderType: 'ASSEMBLE',
   orderAt: formatDateTime(new Date()),
+  sourceType: route.params.id ? 'SALE_ORDER' : 'MANUAL',
+  sourceSaleOrderId: route.params.id ? Number(route.params.id) : undefined,
+  sourceSaleOrderItemId: assemblyQuickRow.value?.id,
+  customerId: formData.customerId || undefined,
   finishedProductId: assemblyQuickForm.productId,
   finishedQty: parseDecimal(assemblyQuickForm.finishedQty, 4),
   warehouseId: assemblyQuickForm.warehouseId,
@@ -3604,6 +3652,12 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.detail-toolbar-button--primary {
+  border-color: var(--sale-primary);
+  color: var(--sale-primary);
+  background: #ffffff;
+}
+
 .detail-table-wrapper {
   flex: 0 0 auto;
   min-height: 0;
@@ -3897,6 +3951,27 @@ onBeforeUnmount(() => {
 
 .sale-form--inline :deep(.el-form-item__content) {
   line-height: 28px;
+}
+
+.assembly-template-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.assembly-template-option__name {
+  flex: 0 0 auto;
+  color: #1f2b3d;
+  font-weight: 600;
+}
+
+.assembly-template-option__remark {
+  min-width: 0;
+  overflow: hidden;
+  color: #7a889c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1280px) {

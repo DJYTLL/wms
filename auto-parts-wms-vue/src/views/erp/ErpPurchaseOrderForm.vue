@@ -141,6 +141,13 @@
             <h4>{{ $t('section.saleDetailInfo') }}</h4>
             <div v-if="!isReadOnly" class="detail-header-actions">
               <el-button
+                class="detail-toolbar-button detail-toolbar-button--primary"
+                :icon="Plus"
+                @click="addItem"
+              >
+                {{ $t('action.addItem') }}
+              </el-button>
+              <el-button
                 class="detail-toolbar-button"
                 :icon="Delete"
                 :disabled="!selectedItems.length"
@@ -164,11 +171,12 @@
                 <template #header>
                   <span class="required-table-label">{{ $t('field.product') }}</span>
                 </template>
-                <template #default="{ row }">
+                <template #default="{ row, $index }">
                   <div class="product-cell">
                     <span v-if="isReadOnly" class="product-cell__label">{{ resolveProductLabel(row.productId) }}</span>
                     <el-select
                       v-else
+                      :ref="(el: any) => setProductSelectRef(el, $index)"
                       :key="formData.supplierId ?? 'no-supplier'"
                       v-model="row.productId"
                       filterable
@@ -510,6 +518,7 @@ const settlementMethodOptions = ref<MethodOption[]>([]);
 const paymentMethodOptions = ref<MethodOption[]>([]);
 const productRecentPurchaseMap = ref<Record<number, PurchaseRecentItem[]>>({});
 const selectedItems = ref<PurchaseOrderItem[]>([]);
+const productSelectRefs = ref<any[]>([]);
 const isInitializing = ref(true);
 const isSaving = ref(false);
 const needsReload = ref(false);
@@ -919,6 +928,7 @@ const handleProductChange = async (row: PurchaseOrderItem) => {
     await applyProductDefaults(row);
   }
   await applyPriceForRow(row, true);
+  await ensureNextItemAfterCompletedProduct(row);
 };
 
 const handleStockSelectionChange = (
@@ -961,7 +971,7 @@ const resetForm = () => {
 };
 
 const addItem = () => {
-  formData.items.push({
+  const item: PurchaseOrderItem = {
     productId: undefined,
     warehouseId: undefined,
     locationId: undefined,
@@ -970,7 +980,26 @@ const addItem = () => {
     price: '',
     taxRate: '',
     remark: ''
-  });
+  };
+  formData.items.push(item);
+  return item;
+};
+
+const setProductSelectRef = (el: any, index: number) => {
+  productSelectRefs.value[index] = el;
+};
+
+const focusProductSelectAt = async (index: number) => {
+  await nextTick();
+  productSelectRefs.value[index]?.focus?.();
+};
+
+const ensureNextItemAfterCompletedProduct = async (row: PurchaseOrderItem) => {
+  if (isReadOnly.value || !row.productId) return;
+  const rowIndex = formData.items.indexOf(row);
+  if (rowIndex === -1 || rowIndex !== formData.items.length - 1) return;
+  addItem();
+  await focusProductSelectAt(rowIndex + 1);
 };
 
 const removeItem = (index: number) => {
@@ -2289,6 +2318,12 @@ onBeforeUnmount(() => {
   border-color: #d8e1ed;
   color: #4c5b70;
   font-weight: 600;
+}
+
+.detail-toolbar-button--primary {
+  border-color: var(--purchase-primary);
+  color: var(--purchase-primary);
+  background: #ffffff;
 }
 
 .detail-table-wrapper {

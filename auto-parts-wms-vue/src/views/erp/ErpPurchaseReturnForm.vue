@@ -170,13 +170,23 @@
         <div class="detail-section">
           <div class="card-section-header detail-header">
             <h4>{{ $t('section.saleDetailInfo') }}</h4>
+            <div v-if="!isReadOnly" class="detail-header-actions">
+              <el-button
+                class="detail-toolbar-button detail-toolbar-button--primary"
+                :icon="Plus"
+                @click="addItem"
+              >
+                {{ $t('action.addItem') }}
+              </el-button>
+            </div>
           </div>
           <div class="detail-table-wrapper">
             <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-purchase-return-form">
               <ErpDataTableColumn :label="$t('field.product')" min-width="200" column-key="product">
-                <template #default="{ row }">
+                <template #default="{ row, $index }">
                   <div class="product-cell">
                     <el-select
+                      :ref="(el: any) => setProductSelectRef(el, $index)"
                       v-model="row.productId"
                       filterable
                       clearable
@@ -225,8 +235,9 @@
                     :product-id="row.productId"
                     :warehouse-id="row.warehouseId"
                     :location-id="row.locationId"
+                    :allow-manual-location-select="true"
                     :warehouse-options="warehouseOptions"
-                    :location-options="getLocationOptions(row.warehouseId)"
+                    :location-options="locationOptions"
                     :placeholder="$t('placeholder.selectLocation')"
                     @selection-change="(payload) => handleStockSelectionChange(row, payload)"
                   />
@@ -564,6 +575,7 @@ import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { ElMessageBox } from 'element-plus';
+import { Plus } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import { mergeOptionById } from '@/utils/erpMasterData';
 
@@ -733,6 +745,7 @@ const purchaseOrderOptions = ref<PurchaseOrderOption[]>([]);
 const productOptions = ref<ProductOption[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
+const productSelectRefs = ref<any[]>([]);
 const settlementMethodOptions = ref<CodeOptionItem[]>([]);
 const paymentMethodOptions = ref<CodeOptionItem[]>([]);
 const productStockMap = ref<Record<number, StockOption[]>>({});
@@ -752,7 +765,7 @@ const formData = reactive({
   orderAt: '',
   status: '',
   returnType: 'RETURN',
-  returnSource: 'BY_PURCHASE_ORDER',
+  returnSource: 'BY_PRODUCT',
   supplierId: null as number | null,
   purchaseOrderId: null as number | null,
   settlementMethod: '',
@@ -804,7 +817,7 @@ const canViewPurchaseOrders = computed(() => (
   hasPermission('erp-purchase-return-draft:source-view')
   || hasPermission('erp-purchase-approved:view')
 ));
-const getDefaultReturnSource = () => (canViewPurchaseOrders.value ? 'BY_PURCHASE_ORDER' : 'BY_PRODUCT');
+const getDefaultReturnSource = () => 'BY_PRODUCT';
 
 const canApprove = computed(() => {
   return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-purchase-return-draft:approve');
@@ -1565,6 +1578,7 @@ const handleProductChange = async (row: PurchaseReturnItem) => {
   if (row.productId) {
     await openRecentPurchaseDialog(row);
   }
+  await ensureNextItemAfterCompletedProduct(row);
 };
 
 const handleProductVisibleChange = async (row: PurchaseReturnItem, visible: boolean) => {
@@ -2177,7 +2191,7 @@ const loadDetail = async () => {
       formData.returnType = data.order?.returnType || data.returnType || 'RETURN';
       formData.supplierId = data.order?.supplierId || data.supplierId || null;
       formData.purchaseOrderId = data.order?.purchaseOrderId || data.purchaseOrderId || null;
-      formData.returnSource = 'BY_PURCHASE_ORDER';
+      formData.returnSource = formData.purchaseOrderId ? 'BY_PURCHASE_ORDER' : 'BY_PRODUCT';
       formData.orderAt = normalizeDateTimeValue(data.order?.orderAt || data.orderAt) || formatDateTime(new Date());
       formData.remark = data.order?.remark || data.remark || '';
       formData.settlementMethod = data.order?.settlementMethod || data.settlementMethod || '';
@@ -2225,7 +2239,26 @@ const loadDetail = async () => {
 };
 
 const addItem = () => {
-  formData.items.push(createEmptyItem());
+  const item = createEmptyItem();
+  formData.items.push(item);
+  return item;
+};
+
+const setProductSelectRef = (el: any, index: number) => {
+  productSelectRefs.value[index] = el;
+};
+
+const focusProductSelectAt = async (index: number) => {
+  await nextTick();
+  productSelectRefs.value[index]?.focus?.();
+};
+
+const ensureNextItemAfterCompletedProduct = async (row: PurchaseReturnItem) => {
+  if (isReadOnly.value || !row.productId) return;
+  const rowIndex = formData.items.indexOf(row);
+  if (rowIndex === -1 || rowIndex !== formData.items.length - 1) return;
+  addItem();
+  await focusProductSelectAt(rowIndex + 1);
 };
 
 const removeItem = (index: number) => {
@@ -2330,7 +2363,9 @@ const applyDefaultMethods = () => {
   if (!formData.returnType) {
     formData.returnType = 'RETURN';
   }
-  formData.returnSource = getDefaultReturnSource();
+  if (!formData.returnSource) {
+    formData.returnSource = getDefaultReturnSource();
+  }
 };
 
 const fetchNextOrderNo = async () => {
@@ -3280,6 +3315,26 @@ onBeforeUnmount(() => {
 .detail-actions {
   display: flex;
   justify-content: flex-start;
+}
+
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-toolbar-button {
+  height: 32px;
+  border-radius: 6px;
+  border-color: #d8e1ed;
+  color: #4c5b70;
+  font-weight: 600;
+}
+
+.detail-toolbar-button--primary {
+  border-color: var(--sale-primary);
+  color: var(--sale-primary);
+  background: #ffffff;
 }
 
 .detail-summary {

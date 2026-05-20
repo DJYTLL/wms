@@ -31,6 +31,24 @@ public class ErpAssemblyOrder {
     @TableField("order_at")
     private Instant orderAt;
 
+    @TableField("source_type")
+    private String sourceType;
+
+    @TableField("source_sale_order_id")
+    private Long sourceSaleOrderId;
+
+    @TableField("source_sale_order_no")
+    private String sourceSaleOrderNo;
+
+    @TableField("source_sale_order_item_id")
+    private Long sourceSaleOrderItemId;
+
+    @TableField("customer_id")
+    private Long customerId;
+
+    @TableField("customer_name")
+    private String customerName;
+
     @TableField("finished_product_id")
     private Long finishedProductId;
 
@@ -132,6 +150,54 @@ public class ErpAssemblyOrder {
 
     public void setOrderAt(Instant orderAt) {
         this.orderAt = orderAt;
+    }
+
+    public String getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(String sourceType) {
+        this.sourceType = sourceType;
+    }
+
+    public Long getSourceSaleOrderId() {
+        return sourceSaleOrderId;
+    }
+
+    public void setSourceSaleOrderId(Long sourceSaleOrderId) {
+        this.sourceSaleOrderId = sourceSaleOrderId;
+    }
+
+    public String getSourceSaleOrderNo() {
+        return sourceSaleOrderNo;
+    }
+
+    public void setSourceSaleOrderNo(String sourceSaleOrderNo) {
+        this.sourceSaleOrderNo = sourceSaleOrderNo;
+    }
+
+    public Long getSourceSaleOrderItemId() {
+        return sourceSaleOrderItemId;
+    }
+
+    public void setSourceSaleOrderItemId(Long sourceSaleOrderItemId) {
+        this.sourceSaleOrderItemId = sourceSaleOrderItemId;
+    }
+
+    public Long getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(Long customerId) {
+        this.customerId = customerId;
+    }
+
+    public String getCustomerName() {
+        return customerName;
+    }
+
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
     }
 
     public Long getFinishedProductId() {

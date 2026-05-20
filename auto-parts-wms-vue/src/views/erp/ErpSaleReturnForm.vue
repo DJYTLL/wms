@@ -179,6 +179,13 @@
             <h4>{{ $t('section.saleDetailInfo') }}</h4>
             <div v-if="!isReadOnly" class="detail-header-actions">
               <el-button
+                class="detail-toolbar-button detail-toolbar-button--primary"
+                :icon="Plus"
+                @click="addItem"
+              >
+                {{ $t('action.addItem') }}
+              </el-button>
+              <el-button
                 class="detail-toolbar-button"
                 :icon="Delete"
                 :disabled="!selectedItems.length"
@@ -203,11 +210,12 @@
                 <template #header>
                   <span class="required-table-label">{{ $t('field.product') }}</span>
                 </template>
-                <template #default="{ row }">
+                <template #default="{ row, $index }">
                   <div class="product-cell">
                     <span v-if="isReadOnly" class="product-cell__label">{{ resolveProductLabel(row) }}</span>
                     <el-select
                       v-else
+                      :ref="(el: any) => setProductSelectRef(el, $index)"
                       v-model="row.productId"
                       filterable
                       clearable
@@ -871,6 +879,7 @@ const saleOrderPreviewDialogTitle = ref('');
 const saleOrderPreviewDialogLoading = ref(false);
 const saleOrderPreviewDetail = ref<SourceSaleOrderDetail | null>(null);
 const selectedItems = ref<SaleReturnItem[]>([]);
+const productSelectRefs = ref<any[]>([]);
 const showSaleOrderDialog = ref(false);
 const showSaleOrderReturnedDialog = ref(false);
 const returnedSaleOrderNo = ref('');
@@ -1792,6 +1801,7 @@ const handleProductChange = async (row: SaleReturnItem) => {
   if (row.productId) {
     await openRecentSaleDialog(row);
   }
+  await ensureNextItemAfterCompletedProduct(row);
 };
 
 const mergeRecentSaleOrderOptions = (items: RecentSaleItem[]) => {
@@ -2519,7 +2529,26 @@ const loadDetail = async () => {
 };
 
 const addItem = () => {
-  formData.items.push(createEmptyItem());
+  const item = createEmptyItem();
+  formData.items.push(item);
+  return item;
+};
+
+const setProductSelectRef = (el: any, index: number) => {
+  productSelectRefs.value[index] = el;
+};
+
+const focusProductSelectAt = async (index: number) => {
+  await nextTick();
+  productSelectRefs.value[index]?.focus?.();
+};
+
+const ensureNextItemAfterCompletedProduct = async (row: SaleReturnItem) => {
+  if (isReadOnly.value || !row.productId) return;
+  const rowIndex = formData.items.indexOf(row);
+  if (rowIndex === -1 || rowIndex !== formData.items.length - 1) return;
+  addItem();
+  await focusProductSelectAt(rowIndex + 1);
 };
 
 const handleItemSelectionChange = (rows: SaleReturnItem[]) => {
@@ -3761,6 +3790,12 @@ onBeforeUnmount(() => {
   border-color: #d8e1ed;
   color: #4c5b70;
   font-weight: 600;
+}
+
+.detail-toolbar-button--primary {
+  border-color: var(--sale-primary);
+  color: var(--sale-primary);
+  background: #ffffff;
 }
 
 .sale-page-surface :deep(.el-table) {

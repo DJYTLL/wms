@@ -60,6 +60,13 @@
           <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
           <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('productType')" label="商品类型" min-width="120" column-key="productType">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.productType === 'ASSEMBLY' ? 'warning' : 'info'">
+                {{ formatProductType(row.productType) }}
+              </el-tag>
+            </template>
+          </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('category')" :label="$t('field.category')" min-width="140" column-key="category">
             <template #default="{ row }">
               {{ getCategoryName(row.categoryId) }}
@@ -187,6 +194,13 @@
                   </el-form-item>
                 </el-col>
               </el-row>
+
+              <el-form-item label="商品类型">
+                <el-radio-group v-model="formData.productType">
+                  <el-radio-button value="NORMAL">普通商品</el-radio-button>
+                  <el-radio-button value="ASSEMBLY">组装商品</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
 
               <el-row :gutter="16">
                 <el-col :span="12">
@@ -423,6 +437,13 @@
                 </el-form-item>
               </el-col>
             </el-row>
+
+            <el-form-item label="商品类型">
+              <el-radio-group v-model="formData.productType">
+                <el-radio-button value="NORMAL">普通商品</el-radio-button>
+                <el-radio-button value="ASSEMBLY">组装商品</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
 
             <el-row :gutter="16">
               <el-col :span="12">
@@ -806,6 +827,7 @@ interface ErpProduct {
   code: string;
   name: string;
   shortName?: string;
+  productType?: string;
   spec?: string;
   model?: string;
   categoryId?: number;
@@ -923,13 +945,14 @@ const priceItems = ref<ProductPriceItem[]>([]);
 const currentPriceMap = ref<Map<number, string>>(new Map());
 const customFields = ref<CustomField[]>([]);
 
-const defaultColumns = ['code', 'name', 'category', 'unit', 'defaultWarehouse', 'defaultLocation', 'price', 'costPrice', 'minStock', 'maxStock', 'status'];
+const defaultColumns = ['code', 'name', 'productType', 'category', 'unit', 'defaultWarehouse', 'defaultLocation', 'price', 'costPrice', 'minStock', 'maxStock', 'status'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-product', defaultColumns);
 
 const formData = reactive({
   code: '',
   name: '',
   shortName: '',
+  productType: 'NORMAL',
   spec: '',
   model: '',
   categoryId: null as number | null,
@@ -979,6 +1002,7 @@ const formatMoney = (value?: number) => {
   if (value == null || Number.isNaN(value)) return '-';
   return Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 };
+const formatProductType = (value?: string) => value === 'ASSEMBLY' ? '组装商品' : '普通商品';
 const getLocationOptions = (warehouseId?: number | null) => {
   if (!warehouseId) return locationOptions.value;
   return locationOptions.value.filter(item => item.warehouseId === warehouseId);
@@ -1396,6 +1420,7 @@ const applyProductDetail = (row: ErpProduct) => {
   formData.code = row.code;
   formData.name = row.name;
   formData.shortName = row.shortName || '';
+  formData.productType = row.productType || 'NORMAL';
   formData.spec = row.spec || '';
   formData.model = row.model || '';
   formData.categoryId = row.categoryId || null;
@@ -1446,6 +1471,7 @@ const resetForm = () => {
   formData.code = '';
   formData.name = '';
   formData.shortName = '';
+  formData.productType = 'NORMAL';
   formData.spec = '';
   formData.model = '';
   formData.categoryId = null;

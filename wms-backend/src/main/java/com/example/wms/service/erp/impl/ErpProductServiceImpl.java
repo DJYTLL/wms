@@ -44,6 +44,9 @@ import java.util.Set;
 // 商品服务实现（ERP进销存）
 @Service
 public class ErpProductServiceImpl implements ErpProductService {
+    private static final String PRODUCT_TYPE_NORMAL = "NORMAL";
+    private static final String PRODUCT_TYPE_ASSEMBLY = "ASSEMBLY";
+
     private static final String PRODUCT_CODE_TYPE = "PRODUCT";
 
     private final ErpProductMapper erpProductMapper;
@@ -195,6 +198,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         product.setCode(request.code());
         product.setName(request.name());
         product.setShortName(request.shortName());
+        product.setProductType(normalizeProductType(request.productType()));
         product.setSpec(request.spec());
         product.setModel(request.model());
         product.setCategoryId(request.categoryId());
@@ -225,6 +229,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         product.setCode(request.code());
         product.setName(request.name());
         product.setShortName(request.shortName());
+        product.setProductType(normalizeProductType(request.productType()));
         product.setSpec(request.spec());
         product.setModel(request.model());
         product.setCategoryId(request.categoryId());
@@ -253,6 +258,17 @@ public class ErpProductServiceImpl implements ErpProductService {
 
     private boolean canEditCostPrice() {
         return hasAuthority("PERM_erp-product:cost:edit");
+    }
+
+    private String normalizeProductType(String productType) {
+        if (productType == null || productType.isBlank()) {
+            return PRODUCT_TYPE_NORMAL;
+        }
+        String normalized = productType.trim().toUpperCase();
+        if (PRODUCT_TYPE_ASSEMBLY.equals(normalized) || PRODUCT_TYPE_NORMAL.equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("商品类型不正确");
     }
 
     private boolean hasAuthority(String authority) {

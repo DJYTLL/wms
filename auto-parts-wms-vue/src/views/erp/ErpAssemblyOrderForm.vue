@@ -67,9 +67,14 @@
                   <el-option
                     v-for="item in templateOptions"
                     :key="item.id"
-                    :label="item.name"
+                    :label="formatTemplateOptionLabel(item)"
                     :value="item.id"
-                  />
+                  >
+                    <div class="template-option">
+                      <span class="template-option__name">{{ item.name }}</span>
+                      <span v-if="item.remark" class="template-option__remark">{{ item.remark }}</span>
+                    </div>
+                  </el-option>
                 </el-select>
               </el-form-item>
             </div>
@@ -93,6 +98,55 @@
                     更新模板
                   </el-button>
                 </div>
+              </el-form-item>
+            </div>
+            <div class="form-group">
+              <el-form-item label="来源销售单">
+                <el-select
+                  v-model="formData.sourceSaleOrderId"
+                  filterable
+                  remote
+                  clearable
+                  reserve-keyword
+                  placeholder="可选择销售单"
+                  style="width: 100%"
+                  :disabled="isReadOnly"
+                  :remote-method="searchSourceSaleOrders"
+                  :loading="sourceSaleOrderLoading"
+                  @change="handleSourceSaleOrderChange"
+                  @clear="clearSourceSaleOrder"
+                >
+                  <el-option
+                    v-for="item in sourceSaleOrderOptions"
+                    :key="item.id"
+                    :label="`${item.orderNo} / ${item.customerName || '-'}`"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="form-group">
+              <el-form-item label="来源销售行">
+                <el-select
+                  v-model="formData.sourceSaleOrderItemId"
+                  clearable
+                  placeholder="可选择销售明细行"
+                  style="width: 100%"
+                  :disabled="isReadOnly || !formData.sourceSaleOrderId"
+                  @change="handleSourceSaleOrderItemChange"
+                >
+                  <el-option
+                    v-for="item in sourceSaleOrderItems"
+                    :key="item.id"
+                    :label="`第${item.sortNo || '-'}行 / ${item.productName || item.productCode || item.productId} / ${formatAmount(item.qty)}`"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="form-group">
+              <el-form-item label="来源客户">
+                <div class="readonly-field">{{ formData.customerName || '-' }}</div>
               </el-form-item>
             </div>
             <div class="form-group">
@@ -329,6 +383,28 @@ interface TemplateOptionItem {
   remark?: string;
 }
 
+interface SourceSaleOrderOption {
+  id: number;
+  orderNo: string;
+  status?: string;
+  customerId?: number;
+  customerName?: string;
+  orderAt?: string;
+}
+
+interface SourceSaleOrderItem {
+  id: number;
+  sortNo?: number;
+  productId: number;
+  productCode?: string;
+  productName?: string;
+  warehouseId?: number | null;
+  locationId?: number | null;
+  qty?: number;
+  linkedAssemblyQty?: number;
+  approvedAssemblyQty?: number;
+}
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -341,6 +417,9 @@ const locationOptions = ref<OptionItem[]>([]);
 const productStockMap = ref<Record<number, StockOption[]>>({});
 const templateOptions = ref<TemplateOptionItem[]>([]);
 const selectedTemplateId = ref<number | null>(null);
+const sourceSaleOrderOptions = ref<SourceSaleOrderOption[]>([]);
+const sourceSaleOrderItems = ref<SourceSaleOrderItem[]>([]);
+const sourceSaleOrderLoading = ref(false);
 const templateDialog = reactive({
   visible: false,
   isEditing: false,
@@ -353,6 +432,12 @@ const formData = reactive({
   orderAt: '',
   status: '',
   orderType: 'ASSEMBLE',
+  sourceType: 'MANUAL',
+  sourceSaleOrderId: null as number | null,
+  sourceSaleOrderNo: '',
+  sourceSaleOrderItemId: null as number | null,
+  customerId: null as number | null,
+  customerName: '',
   finishedProductId: null as number | null,
   finishedQty: '',
   finishedStockKey: '',
@@ -425,6 +510,11 @@ const normalizeDateTimeValue = (value: any) => {
 const formatAmount = (value?: number) => {
   if (value == null || Number.isNaN(value)) return '0';
   return Number(value).toFixed(2);
+};
+
+const formatTemplateOptionLabel = (item: TemplateOptionItem) => {
+  if (!item.remark) return item.name;
+  return `${item.name} / ${item.remark}`;
 };
 
 const parseDecimal = (value: string | number) => {
@@ -651,6 +741,12 @@ const resetForm = async () => {
   formData.orderAt = formatDateTime(new Date());
   formData.status = '';
   formData.orderType = 'ASSEMBLE';
+  formData.sourceType = 'MANUAL';
+  formData.sourceSaleOrderId = null;
+  formData.sourceSaleOrderNo = '';
+  formData.sourceSaleOrderItemId = null;
+  formData.customerId = null;
+  formData.customerName = '';
   formData.finishedProductId = null;
   formData.finishedQty = '';
   formData.finishedStockKey = '';
@@ -663,6 +759,7 @@ const resetForm = async () => {
   templateDialog.visible = false;
   templateDialog.name = '';
   templateDialog.remark = '';
+  sourceSaleOrderItems.value = [];
   addItem();
   await loadNextOrderNo();
 };
@@ -692,6 +789,93 @@ const fetchOptions = async () => {
     templateOptions.value = templatesRes.data.data || [];
   } catch (error) {
     notifyError(error);
+  }
+};
+
+const searchSourceSaleOrders = async (keyword = '') => {
+  sourceSaleOrderLoading.value = true;
+  try {
+    const res: any = await request.get('/erp/assembly-orders/source-sale-orders/page', {
+      params: { page: 1, size: 20, keyword: keyword.trim() || undefined }
+    });
+    sourceSaleOrderOptions.value = res.data?.data?.items || [];
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    sourceSaleOrderLoading.value = false;
+  }
+};
+
+const ensureSourceSaleOrderOption = (order: SourceSaleOrderOption) => {
+  if (!order?.id || sourceSaleOrderOptions.value.some(item => item.id === order.id)) return;
+  sourceSaleOrderOptions.value = [order, ...sourceSaleOrderOptions.value];
+};
+
+const clearSourceSaleOrder = () => {
+  formData.sourceType = 'MANUAL';
+  formData.sourceSaleOrderId = null;
+  formData.sourceSaleOrderNo = '';
+  formData.sourceSaleOrderItemId = null;
+  formData.customerId = null;
+  formData.customerName = '';
+  sourceSaleOrderItems.value = [];
+};
+
+const handleSourceSaleOrderChange = async (saleOrderId?: number | null) => {
+  formData.sourceSaleOrderItemId = null;
+  sourceSaleOrderItems.value = [];
+  if (!saleOrderId) {
+    clearSourceSaleOrder();
+    return;
+  }
+  try {
+    const res: any = await request.get(`/erp/assembly-orders/source-sale-orders/${saleOrderId}`);
+    const detail = res.data?.data;
+    if (!detail) return;
+    formData.sourceType = 'SALE_ORDER';
+    formData.sourceSaleOrderId = detail.id;
+    formData.sourceSaleOrderNo = detail.orderNo || '';
+    formData.customerId = detail.customerId || null;
+    formData.customerName = detail.customerName || '';
+    ensureSourceSaleOrderOption({
+      id: detail.id,
+      orderNo: detail.orderNo,
+      status: detail.status,
+      customerId: detail.customerId,
+      customerName: detail.customerName,
+      orderAt: detail.orderAt
+    });
+    sourceSaleOrderItems.value = detail.items || [];
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const handleSourceSaleOrderItemChange = async (itemId?: number | null) => {
+  if (!itemId) return;
+  const item = sourceSaleOrderItems.value.find(row => row.id === itemId);
+  if (!item) return;
+  if (formData.finishedProductId && item.productId && Number(formData.finishedProductId) !== Number(item.productId)) {
+    notifyWarning('来源销售行商品与当前成品不一致，不能关联到该组装单');
+    formData.sourceSaleOrderItemId = null;
+    return;
+  }
+  if (!formData.finishedProductId) {
+    formData.finishedProductId = item.productId || null;
+    formData.warehouseId = item.warehouseId ?? null;
+    formData.locationId = item.locationId ?? null;
+  }
+  if (parseDecimal(formData.finishedQty) <= 0) {
+    formData.finishedQty = String(item.qty ?? '');
+  }
+  await Promise.all([
+    ensureProductOption(formData.finishedProductId),
+    ensureWarehouseOption(formData.warehouseId),
+    ensureLocationOption(formData.locationId)
+  ]);
+  if (formData.finishedProductId) {
+    await fetchStockOptions(formData.finishedProductId, true);
+    syncFinishedStockKey();
   }
 };
 
@@ -908,6 +1092,10 @@ const buildPayload = () => {
     orderNo: formData.orderNo || null,
     orderType: formData.orderType,
     orderAt: formData.orderAt || null,
+    sourceType: formData.sourceSaleOrderId ? 'SALE_ORDER' : (formData.sourceType || 'MANUAL'),
+    sourceSaleOrderId: formData.sourceSaleOrderId,
+    sourceSaleOrderItemId: formData.sourceSaleOrderItemId,
+    customerId: formData.customerId,
     finishedProductId: formData.finishedProductId,
     finishedQty: parseDecimal(formData.finishedQty),
     warehouseId: formData.warehouseId,
@@ -1036,6 +1224,12 @@ const fetchDetail = async () => {
     formData.orderAt = normalizeDateTimeValue(order.orderAt) || formatDateTime(new Date());
     formData.status = order.status || '';
     formData.orderType = order.orderType || 'ASSEMBLE';
+    formData.sourceType = order.sourceType || 'MANUAL';
+    formData.sourceSaleOrderId = order.sourceSaleOrderId || null;
+    formData.sourceSaleOrderNo = order.sourceSaleOrderNo || '';
+    formData.sourceSaleOrderItemId = order.sourceSaleOrderItemId || null;
+    formData.customerId = order.customerId || null;
+    formData.customerName = order.customerName || '';
     formData.finishedProductId = order.finishedProductId || null;
     await ensureProductOption(formData.finishedProductId);
     formData.finishedQty = String(order.finishedQty ?? '');
@@ -1046,6 +1240,18 @@ const fetchDetail = async () => {
     formData.laborCost = String(order.laborCost ?? '');
     formData.remark = order.remark || '';
     selectedTemplateId.value = null;
+    if (formData.sourceSaleOrderId) {
+      ensureSourceSaleOrderOption({
+        id: formData.sourceSaleOrderId,
+        orderNo: formData.sourceSaleOrderNo,
+        customerId: formData.customerId || undefined,
+        customerName: formData.customerName
+      });
+      await handleSourceSaleOrderChange(formData.sourceSaleOrderId);
+      formData.sourceSaleOrderItemId = order.sourceSaleOrderItemId || null;
+    } else {
+      sourceSaleOrderItems.value = [];
+    }
     if (formData.finishedProductId) {
       await fetchStockOptions(formData.finishedProductId);
       syncFinishedStockKey();
@@ -1429,6 +1635,27 @@ onActivated(async () => {
 .order-time-picker :deep(.el-input__wrapper) {
   width: 100%;
   box-sizing: border-box;
+}
+
+.template-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.template-option__name {
+  flex: 0 0 auto;
+  color: #1f2b3d;
+  font-weight: 600;
+}
+
+.template-option__remark {
+  min-width: 0;
+  overflow: hidden;
+  color: #7a889c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1280px) {

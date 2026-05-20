@@ -25,6 +25,22 @@ public record ErpAssemblyOrderCreateRequest(
      */
     String orderAt,
     /**
+     * 表示来源类型。
+     */
+    String sourceType,
+    /**
+     * 表示来源销售单 ID。
+     */
+    Long sourceSaleOrderId,
+    /**
+     * 表示来源销售单明细 ID。
+     */
+    Long sourceSaleOrderItemId,
+    /**
+     * 表示客户 ID。
+     */
+    Long customerId,
+    /**
      * 表示finished商品 ID。
      */
     @NotNull Long finishedProductId,

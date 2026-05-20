@@ -7,6 +7,8 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpAssemblyOrderCreateRequest;
 import com.example.wms.dto.erp.ErpAssemblyOrderDetail;
 import com.example.wms.dto.erp.ErpAssemblyOrderUpdateRequest;
+import com.example.wms.dto.erp.ErpAssemblySourceSaleOrderDetail;
+import com.example.wms.dto.erp.ErpAssemblySourceSaleOrderOption;
 import com.example.wms.entity.erp.ErpAssemblyOrder;
 import com.example.wms.service.erp.ErpAssemblyOrderService;
 import jakarta.validation.Valid;
@@ -55,6 +57,28 @@ public class ErpAssemblyOrderController {
         return ResponseEntity.ok(ApiResponse.ok(
             erpAssemblyOrderService.page(page, size, keyword, status, orderType, start, end)
         ));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @GetMapping("/source-sale-orders/page")
+    public ResponseEntity<ApiResponse<PageResponse<ErpAssemblySourceSaleOrderOption>>> sourceSaleOrderPage(
+        @RequestParam(defaultValue = "1") long page,
+        @RequestParam(defaultValue = "20") long size,
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Long customerId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.sourceSaleOrderPage(page, size, keyword, customerId)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @GetMapping("/source-sale-orders/{saleOrderId}")
+    public ResponseEntity<ApiResponse<ErpAssemblySourceSaleOrderDetail>> getSourceSaleOrder(@PathVariable Long saleOrderId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.getSourceSaleOrderDetail(saleOrderId)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @GetMapping("/sale-order/{saleOrderId}")
+    public ResponseEntity<ApiResponse<List<ErpAssemblyOrder>>> listBySaleOrderId(@PathVariable Long saleOrderId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.listBySaleOrderId(saleOrderId)));
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
