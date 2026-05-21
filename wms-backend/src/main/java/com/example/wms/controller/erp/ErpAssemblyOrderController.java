@@ -29,7 +29,7 @@ public class ErpAssemblyOrderController {
         this.erpAssemblyOrderService = erpAssemblyOrderService;
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:view','PERM_erp-assemble-order:view','PERM_erp-disassemble-order:view')")
     @GetMapping
     public ResponseEntity<ApiResponse<List<ErpAssemblyOrder>>> list(@RequestParam(required = false) String keyword,
                                                                     @RequestParam(required = false) String status,
@@ -43,7 +43,7 @@ public class ErpAssemblyOrderController {
         ));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:view','PERM_erp-assemble-order:view','PERM_erp-disassemble-order:view')")
     @GetMapping("/page")
     public ResponseEntity<ApiResponse<PageResponse<ErpAssemblyOrder>>> page(@RequestParam(defaultValue = "1") long page,
                                                                             @RequestParam(defaultValue = "20") long size,
@@ -59,7 +59,7 @@ public class ErpAssemblyOrderController {
         ));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:view','PERM_erp-assemble-order:view','PERM_erp-disassemble-order:view')")
     @GetMapping("/source-sale-orders/page")
     public ResponseEntity<ApiResponse<PageResponse<ErpAssemblySourceSaleOrderOption>>> sourceSaleOrderPage(
         @RequestParam(defaultValue = "1") long page,
@@ -69,44 +69,44 @@ public class ErpAssemblyOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.sourceSaleOrderPage(page, size, keyword, customerId)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:view','PERM_erp-assemble-order:view','PERM_erp-disassemble-order:view')")
     @GetMapping("/source-sale-orders/{saleOrderId}")
     public ResponseEntity<ApiResponse<ErpAssemblySourceSaleOrderDetail>> getSourceSaleOrder(@PathVariable Long saleOrderId) {
         return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.getSourceSaleOrderDetail(saleOrderId)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:view','PERM_erp-assemble-order:view','PERM_erp-disassemble-order:view')")
     @GetMapping("/sale-order/{saleOrderId}")
     public ResponseEntity<ApiResponse<List<ErpAssemblyOrder>>> listBySaleOrderId(@PathVariable Long saleOrderId) {
         return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.listBySaleOrderId(saleOrderId)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:view','PERM_erp-assemble-order:view','PERM_erp-disassemble-order:view')")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpAssemblyOrderDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.getDetail(id)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:add')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:add','PERM_erp-assemble-order:add','PERM_erp-disassemble-order:add')")
     @GetMapping("/next-order-no")
     public ResponseEntity<ApiResponse<String>> nextOrderNo(@RequestParam(required = false) String orderType) {
         return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.nextOrderNo(orderType)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:add')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:add','PERM_erp-assemble-order:add','PERM_erp-disassemble-order:add')")
     @PostMapping
     public ResponseEntity<ApiResponse<ErpAssemblyOrderDetail>> create(@Valid @RequestBody ErpAssemblyOrderCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.create(request)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:edit')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:edit','PERM_erp-assemble-order:edit','PERM_erp-disassemble-order:edit')")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ErpAssemblyOrderDetail>> update(@PathVariable Long id,
                                                                       @Valid @RequestBody ErpAssemblyOrderUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpAssemblyOrderService.update(id, request)));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:delete')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:delete','PERM_erp-assemble-order:delete','PERM_erp-disassemble-order:delete')")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
                                                     @Valid @RequestBody DeleteRequest request) {
@@ -116,7 +116,7 @@ public class ErpAssemblyOrderController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    @PreAuthorize("hasAuthority('PERM_erp-assembly:approve')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-assembly:approve','PERM_erp-assemble-order:approve','PERM_erp-disassemble-order:approve')")
     @PostMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<Void>> approve(@PathVariable Long id) {
         erpAssemblyOrderService.approve(id);

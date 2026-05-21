@@ -55,6 +55,8 @@ const zh = {
         erpSaleReturnApproved: '销售退货（已审核）',
         erpWarehouseModule: '仓库管理',
         erpFinance: '财务管理',
+        erpCustomerDebtManagement: '客户欠款',
+        erpSupplierDebtManagement: '供应商欠款',
         erpAr: '应收管理',
         erpAp: '应付管理',
         erpReceipt: '收款单',

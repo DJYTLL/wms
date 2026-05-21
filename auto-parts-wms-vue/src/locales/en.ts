@@ -55,6 +55,8 @@ const en = {
         erpSaleReturnApproved: 'Sales Returns (Approved)',
         erpWarehouseModule: 'ERP Warehouse',
         erpFinance: 'ERP Finance',
+        erpCustomerDebtManagement: 'Customer Debts',
+        erpSupplierDebtManagement: 'Supplier Debts',
         erpAr: 'Accounts Receivable',
         erpAp: 'Accounts Payable',
         erpReceipt: 'Receipts',

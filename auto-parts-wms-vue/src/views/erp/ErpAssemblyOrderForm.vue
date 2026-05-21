@@ -464,7 +464,7 @@ const hasPermission = (code: string) => authStore.hasPermission(code) || authSto
 const canApprove = computed(() => {
   return !isReadOnly.value
     && (!formData.status || formData.status === 'DRAFT')
-    && hasPermission('erp-assembly:approve');
+    && hasPermission('erp-assemble-order:approve');
 });
 
 const canShow = (_key?: string) => true;

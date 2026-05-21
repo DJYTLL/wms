@@ -454,21 +454,31 @@ const permissionPrefixPageMap: Array<{ prefix: string; pageKeys: string[] }> = [
   { prefix: 'erp-stock-init:', pageKeys: ['erp-stock-init'] },
   { prefix: 'erp-stock-txn:', pageKeys: ['erp-stock-txn'] },
   { prefix: 'erp-stock:', pageKeys: ['erp-stock'] },
+  { prefix: 'erp-assemble-order:', pageKeys: ['erp-assemble-order'] },
+  { prefix: 'erp-disassemble-order:', pageKeys: ['erp-disassemble-order'] },
   { prefix: 'erp-assembly:', pageKeys: ['erp-assemble-order', 'erp-disassemble-order'] },
   { prefix: 'erp-disassemble:', pageKeys: ['erp-disassemble-order'] },
 ];
 
 const menuPageKeyMap: Record<string, string[]> = {
+  user: ['user-management'],
   users: ['user-management'],
+  role: ['role-management'],
   roles: ['role-management'],
+  permission: ['permission-management'],
   permissions: ['permission-management'],
+  audit: ['audit-logs'],
   'audit-logs': ['audit-logs'],
+  column: ['column-permissions'],
   'column-permissions': ['column-permissions'],
   columnPermissions: ['column-permissions'],
+  menu: ['menu-management'],
   'menu-management': ['menu-management'],
   'system-config': ['system-configs'],
+  tenant: ['tenant-management'],
   tenants: ['tenant-management'],
   'erp-product': ['erp-product'],
+  'erp-product-fitment': ['erp-vehicle-brand', 'erp-vehicle-series', 'erp-vehicle-model', 'erp-product-fitment'],
   'erp-vehicle-fitment': ['erp-vehicle-brand', 'erp-vehicle-series', 'erp-vehicle-model', 'erp-product-fitment'],
   'erp-customer': ['erp-customer'],
   'erp-customer-category': ['erp-customer-category'],
@@ -499,8 +509,8 @@ const menuPageKeyMap: Record<string, string[]> = {
   'erp-assemble-order': ['erp-assemble-order'],
   'erp-disassemble-order': ['erp-disassemble-order'],
   'erp-ar': ['erp-ar'],
-  'erp-finance-summary': ['erp-finance-customer-debt'],
   'erp-finance-customer-debt': ['erp-finance-customer-debt'],
+  'erp-finance-summary': ['erp-finance-customer-debt'],
   'erp-finance-supplier-debt': ['erp-finance-supplier-debt'],
   'erp-ap': ['erp-ap'],
   'erp-receipt': ['erp-receipt'],
@@ -510,16 +520,16 @@ const menuPageKeyMap: Record<string, string[]> = {
 const menuExtraPageMap: Record<string, ExtraPageNode[]> = {};
 
 const menuPathKeyMap: Record<string, string> = {
-  '/users': 'users',
-  '/roles': 'roles',
-  '/permissions': 'permissions',
-  '/audit-logs': 'audit-logs',
-  '/column-permissions': 'column-permissions',
-  '/menus': 'menu-management',
+  '/users': 'user',
+  '/roles': 'role',
+  '/permissions': 'permission',
+  '/audit-logs': 'audit',
+  '/column-permissions': 'column',
+  '/menus': 'menu',
   '/system-config': 'system-config',
-  '/tenants': 'tenants',
+  '/tenants': 'tenant',
   '/erp/products': 'erp-product',
-  '/erp/vehicle-fitments': 'erp-vehicle-fitment',
+  '/erp/vehicle-fitments': 'erp-product-fitment',
   '/erp/customers': 'erp-customer',
   '/erp/customer-categories': 'erp-customer-category',
   '/erp/suppliers': 'erp-supplier',
@@ -557,16 +567,16 @@ const menuPathKeyMap: Record<string, string> = {
 };
 
 const menuTitleKeyMap: Record<string, string> = {
-  '用户管理': 'users',
-  '角色权限': 'roles',
-  '权限管理': 'permissions',
-  '审计日志': 'audit-logs',
-  '列权限配置': 'column-permissions',
-  '菜单管理': 'menu-management',
+  '用户管理': 'user',
+  '角色权限': 'role',
+  '权限管理': 'permission',
+  '审计日志': 'audit',
+  '列权限配置': 'column',
+  '菜单管理': 'menu',
   '系统配置': 'system-config',
-  '租户管理': 'tenants',
+  '租户管理': 'tenant',
   '商品管理': 'erp-product',
-  '车型适配管理': 'erp-vehicle-fitment',
+  '车型适配管理': 'erp-product-fitment',
   '客户管理': 'erp-customer',
   '客户类别': 'erp-customer-category',
   '供应商管理': 'erp-supplier',
@@ -603,7 +613,7 @@ const menuTitleKeyMap: Record<string, string> = {
   '付款单': 'erp-payment',
 };
 
-const hiddenLegacyPermissionPrefixes = ['erp-purchase:', 'erp-sale:'];
+const hiddenLegacyPermissionPrefixes = ['erp-purchase:', 'erp-sale:', 'erp-assembly:'];
 
 const formData = reactive<Omit<Role, 'id'>>({
   name: '',

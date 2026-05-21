@@ -1,6 +1,7 @@
 package com.example.wms.service;
 
 import com.example.wms.dto.PermissionCreateRequest;
+import com.example.wms.dto.PermissionDiagnosticResponse;
 import com.example.wms.dto.PermissionUpdateRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.entity.Permission;
@@ -29,4 +30,7 @@ public interface PermissionService {
 
     // 查询列权限列表
     List<Permission> listColumnPermissions();
+
+    // 查询权限诊断信息
+    List<PermissionDiagnosticResponse> listDiagnostics();
 }

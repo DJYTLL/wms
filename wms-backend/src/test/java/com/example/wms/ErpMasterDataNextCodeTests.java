@@ -110,6 +110,8 @@ class ErpMasterDataNextCodeTests {
             paymentMethodMapper,
             purchaseOrderMapper,
             paymentMapper,
+            supplierMapper,
+            purchaseReturnMapper,
             codeGenerator()
         );
 
@@ -146,8 +148,8 @@ class ErpMasterDataNextCodeTests {
     }
 
     private void mockSequence(String prefixKey, String prefixValue) {
-        when(systemConfigMapper.findByKey(anyString())).thenReturn(null);
-        when(systemConfigMapper.findByKey(prefixKey)).thenReturn(systemConfig(prefixValue));
+        when(systemConfigMapper.findByKey(eq(1L), anyString())).thenReturn(null);
+        when(systemConfigMapper.findByKey(1L, prefixKey)).thenReturn(systemConfig(prefixValue));
         when(orderSequenceMapper.incrementAndGet(eq(1L), anyString(), eq(today()))).thenReturn(7L);
     }
 

@@ -11,12 +11,12 @@ import java.util.List;
 // 系统配置 Mapper
 @Mapper
 public interface SystemConfigMapper extends BaseMapper<SystemConfig> {
-    @Select("SELECT * FROM app_system_config ORDER BY config_key ASC")
-    List<SystemConfig> findAll();
+    @Select("SELECT * FROM app_system_config WHERE tenant_id = #{tenantId} ORDER BY config_key ASC")
+    List<SystemConfig> findAll(@Param("tenantId") Long tenantId);
 
-    @Select("SELECT * FROM app_system_config WHERE config_key = #{key}")
-    SystemConfig findByKey(@Param("key") String key);
+    @Select("SELECT * FROM app_system_config WHERE tenant_id = #{tenantId} AND config_key = #{key}")
+    SystemConfig findByKey(@Param("tenantId") Long tenantId, @Param("key") String key);
 
-    @Select("SELECT * FROM app_system_config WHERE is_public = TRUE ORDER BY config_key ASC")
-    List<SystemConfig> findPublic();
+    @Select("SELECT * FROM app_system_config WHERE tenant_id = #{tenantId} AND is_public = TRUE ORDER BY config_key ASC")
+    List<SystemConfig> findPublic(@Param("tenantId") Long tenantId);
 }

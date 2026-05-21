@@ -1,187 +1,252 @@
 <template>
-  <div class="page-shell page-shell--system">
+  <div class="page-shell page-shell--system permission-management-page">
     <div class="page-header">
       <div class="page-title">{{ $t('page.permissionManagement') }}</div>
+    </div>
 
-      <div class="permission-toolbar">
-        <div class="table-toolbar">
-          <div class="table-filters permission-toolbar__filters">
-            <el-form label-width="72px" class="permission-filter-form">
-              <el-form-item :label="$t('field.page')">
-                <el-popover
-                  placement="bottom-start"
-                  :width="360"
-                  trigger="click"
-                  popper-class="page-tree-popper"
-                  v-model:visible="pageTreeVisible"
-                >
-                  <template #reference>
-                    <button type="button" class="page-tree-trigger top-select">
-                      <span :class="['page-tree-trigger__text', { 'is-placeholder': !selectedResourceKey }]">
-                        {{ selectedPageLabel }}
-                      </span>
-                      <span class="page-tree-trigger__arrow" :class="{ 'is-open': pageTreeVisible }">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                      </span>
-                    </button>
-                  </template>
-
-                  <div class="page-tree-dropdown">
-                    <div v-for="item in pageTreeData" :key="item.id" class="page-tree-node page-tree-node--root">
-                      <button
-                        type="button"
-                        class="page-tree-label page-tree-label--root"
-                        :class="{ 'is-active': isTreeNodeActive(item) }"
-                        @click.stop="handleTreeNodeClick(item)"
-                      >
-                        <span v-if="item.icon" class="page-tree-label__icon" v-html="item.icon"></span>
-                        <span class="page-tree-label__text">{{ item.label }}</span>
-                        <span
-                          v-if="item.children.length"
-                          class="page-tree-label__arrow"
-                          :class="{ 'is-open': item.isOpen }"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                          </svg>
-                        </span>
-                      </button>
-
-                      <div v-if="item.children.length && item.isOpen" class="page-tree-children">
-                        <template v-for="child in item.children" :key="child.id">
-                          <button
-                            type="button"
-                            class="page-tree-label page-tree-label--child"
-                            :class="{
-                              'is-active': isTreeNodeActive(child),
-                              'is-leaf': child.selectable && child.children.length === 0,
-                            }"
-                            @click.stop="handleTreeNodeClick(child)"
-                          >
-                            <span
-                              v-if="child.selectable && child.children.length === 0"
-                              class="page-tree-label__bullet"
-                              :class="{ 'is-active': isTreeNodeActive(child) && child.selectable }"
-                            ></span>
-                            <span class="page-tree-label__text">{{ child.label }}</span>
-                            <span
-                              v-if="child.children.length"
-                              class="page-tree-label__arrow"
-                              :class="{ 'is-open': child.isOpen }"
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                              </svg>
-                            </span>
-                          </button>
-
-                          <div v-if="child.children.length && child.isOpen" class="page-tree-grandchildren">
-                            <button
-                              v-for="grandChild in child.children"
-                              :key="grandChild.id"
-                              type="button"
-                              class="page-tree-label page-tree-label--leaf"
-                              :class="{ 'is-active': isTreeNodeActive(grandChild) }"
-                              @click.stop="handleTreeNodeClick(grandChild)"
-                            >
-                              <span
-                                class="page-tree-label__bullet"
-                                :class="{ 'is-active': isTreeNodeActive(grandChild) }"
-                              ></span>
-                              <span class="page-tree-label__text">{{ grandChild.label }}</span>
-                            </button>
-                          </div>
-                        </template>
-                      </div>
-                    </div>
-
-                    <div v-if="pageTreeData.length === 0" class="page-tree-empty">
-                      {{ $t('table.empty') }}
-                    </div>
-                  </div>
-                </el-popover>
-              </el-form-item>
-
-              <el-form-item :label="$t('action.search')">
-                <el-input
-                  v-model="searchQuery"
-                  :placeholder="$t('action.search')"
-                  class="table-search permission-toolbar__search--wide"
-                  clearable
-                />
-              </el-form-item>
-
-              <el-form-item :label="$t('field.status')">
-                <el-select
-                  v-model="statusFilter"
-                  :placeholder="$t('field.status')"
-                  class="table-search permission-toolbar__search--narrow"
-                >
-                  <el-option :label="$t('filter.all')" value="all" />
-                  <el-option :label="$t('status.active')" value="enabled" />
-                  <el-option :label="$t('status.inactive')" value="disabled" />
-                </el-select>
-              </el-form-item>
-            </el-form>
-          </div>
-
-          <div class="table-actions">
-            <el-button type="primary" v-permission="'permission:add'" @click="openAddModal">{{ $t('action.add') }}</el-button>
-          </div>
+    <div class="permission-panel" v-loading="loading">
+      <div class="permission-panel__toolbar">
+        <div class="permission-panel__tools">
+          <el-tag type="info" effect="plain">
+            {{ currentPagePermissionSummary }}
+          </el-tag>
+          <el-tag type="success" effect="plain">
+            {{ allPermissionSummary }}
+          </el-tag>
+          <el-tag :type="warningPermissionCount > 0 ? 'warning' : 'success'" effect="plain">
+            风险: {{ warningPermissionCount }}
+          </el-tag>
+          <el-tag type="info" effect="plain">
+            未分配: {{ unassignedPermissionCount }}
+          </el-tag>
+          <el-tag type="info" effect="plain">
+            未挂菜单: {{ menuUnboundPermissionCount }}
+          </el-tag>
+          <el-select
+            v-model="statusFilter"
+            :placeholder="$t('field.status')"
+            class="permission-status-filter"
+          >
+            <el-option :label="$t('filter.all')" value="all" />
+            <el-option :label="$t('status.active')" value="enabled" />
+            <el-option :label="$t('status.inactive')" value="disabled" />
+          </el-select>
+          <el-switch
+            v-model="advancedMaintenance"
+            active-text="高级维护"
+            inactive-text="诊断视图"
+          />
+          <el-button v-if="advancedMaintenance" size="small" type="primary" plain v-permission="'permission:edit'" @click="enableAllPermissions">
+            全部启用
+          </el-button>
+          <el-button v-if="advancedMaintenance" size="small" type="danger" plain v-permission="'permission:edit'" @click="disableAllPermissions">
+            全部停用
+          </el-button>
+          <el-button v-if="advancedMaintenance" type="primary" v-permission="'permission:add'" @click="openAddModal">
+            {{ $t('action.add') }}
+          </el-button>
         </div>
       </div>
-    </div>
 
-    <div class="main-headers">
-      <div class="main-header">{{ currentPageLabel }}</div>
-      <div class="main-header main-header--meta">共 {{ filteredPermissions.length }} 条权限</div>
-    </div>
+      <el-alert
+        v-if="advancedMaintenance"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="高级维护会影响登录态和接口授权；修改权限编码不会自动同步后端注解、前端路由或菜单配置。"
+      />
 
-    <div class="table-card">
-      <div v-if="!selectedResourceKey" class="empty-tip">
-        {{ $t('message.required') }}
-      </div>
+      <div class="permission-workspace">
+        <div class="permission-tree-list">
+          <el-input
+            v-model="permissionTreeSearch"
+            class="permission-tree-search"
+            placeholder="搜索菜单、权限名称或编码"
+            clearable
+          />
 
-      <div v-else class="table-body">
-        <ErpDataTable
-          v-loading="loading"
-          :data="filteredPermissions"
-          style="width: 100%"
-          height="100%"
-          :empty-text="$t('table.empty')"
-         table-key="permission-management">
-          <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="220" />
-          <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="220">
-            <template #default="{ row }">
-              <code class="code-badge">{{ row.code }}</code>
-            </template>
-          </ErpDataTableColumn>
-          <ErpDataTableColumn
-            v-if="canShow('description')"
-            prop="description"
-            :label="$t('field.description')"
-            min-width="240"
-            show-overflow-tooltip />
-          <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
-                {{ row.enabled ? $t('status.active') : $t('status.inactive') }}
-              </el-tag>
-            </template>
-          </ErpDataTableColumn>
-          <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" align="center" column-key="actions">
-            <template #default="{ row }">
-              <el-button link type="primary" size="small" v-permission="'permission:edit'" @click="openEditModal(row)">
-                {{ $t('action.edit') }}
-              </el-button>
-              <el-button link type="danger" size="small" v-permission="'permission:delete'" @click="handleDelete(row)">
-                {{ $t('action.delete') }}
-              </el-button>
-            </template>
-          </ErpDataTableColumn>
-        </ErpDataTable>
+          <div v-for="item in displayPermissionTreeData" :key="item.id" class="permission-tree-node">
+            <button
+              type="button"
+              class="permission-tree-label permission-tree-label--root"
+              :class="{ 'is-active': isTreeNodeActive(item) }"
+              @click.stop="handleTreeNodeClick(item)"
+            >
+              <el-checkbox
+                v-if="advancedMaintenance"
+                :model-value="isTreeNodeChecked(item)"
+                :indeterminate="isTreeNodeIndeterminate(item)"
+                @click.stop
+                @change="(checked: boolean) => toggleTreeNodePermissions(item, checked)"
+              />
+              <span v-if="item.icon" class="permission-tree-label__icon" v-html="item.icon"></span>
+              <span class="permission-tree-label__text">{{ item.label }}</span>
+              <span class="permission-tree-label__count">
+                {{ treeNodePermissionStats[item.id]?.enabled || 0 }}/{{ treeNodePermissionStats[item.id]?.total || 0 }}
+              </span>
+              <span
+                v-if="item.children.length"
+                class="permission-tree-label__arrow"
+                :class="{ 'is-open': item.isOpen }"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </span>
+            </button>
+
+            <div v-if="item.children.length && item.isOpen" class="permission-tree-children">
+              <template v-for="child in item.children" :key="child.id">
+                <button
+                  type="button"
+                  class="permission-tree-label permission-tree-label--child"
+                  :class="{
+                    'is-active': isTreeNodeActive(child),
+                    'is-leaf': child.selectable && child.children.length === 0,
+                  }"
+                  @click.stop="handleTreeNodeClick(child)"
+                >
+                  <el-checkbox
+                    v-if="advancedMaintenance"
+                    :model-value="isTreeNodeChecked(child)"
+                    :indeterminate="isTreeNodeIndeterminate(child)"
+                    @click.stop
+                    @change="(checked: boolean) => toggleTreeNodePermissions(child, checked)"
+                  />
+                  <span
+                    v-if="child.selectable && child.children.length === 0"
+                    class="permission-tree-label__bullet"
+                    :class="{ 'is-active': isTreeNodeActive(child) && child.selectable }"
+                  ></span>
+                  <span class="permission-tree-label__text">{{ child.label }}</span>
+                  <span class="permission-tree-label__count">
+                    {{ treeNodePermissionStats[child.id]?.enabled || 0 }}/{{ treeNodePermissionStats[child.id]?.total || 0 }}
+                  </span>
+                  <span
+                    v-if="child.children.length"
+                    class="permission-tree-label__arrow"
+                    :class="{ 'is-open': child.isOpen }"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </span>
+                </button>
+
+                <div v-if="child.children.length && child.isOpen" class="permission-tree-grandchildren">
+                  <button
+                    v-for="grandChild in child.children"
+                    :key="grandChild.id"
+                    type="button"
+                    class="permission-tree-label permission-tree-label--leaf"
+                    :class="{ 'is-active': isTreeNodeActive(grandChild) }"
+                    @click.stop="handleTreeNodeClick(grandChild)"
+                  >
+                    <el-checkbox
+                      v-if="advancedMaintenance"
+                      :model-value="isTreeNodeChecked(grandChild)"
+                      :indeterminate="isTreeNodeIndeterminate(grandChild)"
+                      @click.stop
+                      @change="(checked: boolean) => toggleTreeNodePermissions(grandChild, checked)"
+                    />
+                    <span
+                      class="permission-tree-label__bullet"
+                      :class="{ 'is-active': isTreeNodeActive(grandChild) }"
+                    ></span>
+                    <span class="permission-tree-label__text">{{ grandChild.label }}</span>
+                    <span class="permission-tree-label__count">
+                      {{ treeNodePermissionStats[grandChild.id]?.enabled || 0 }}/{{ treeNodePermissionStats[grandChild.id]?.total || 0 }}
+                    </span>
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div v-if="displayPermissionTreeData.length === 0" class="permission-tree-empty">
+            未找到匹配的权限目录
+          </div>
+        </div>
+
+        <div v-if="selectedResourceKey" class="permission-definition-panel">
+          <div class="permission-definition-panel__header">
+            <div>
+              <div class="permission-definition-panel__title">{{ currentPageLabel }}</div>
+              <div class="permission-definition-panel__meta">共 {{ filteredPermissions.length }} 条权限</div>
+            </div>
+            <el-input
+              v-model="searchQuery"
+              :placeholder="$t('action.search')"
+              class="permission-definition-panel__search"
+              clearable
+            />
+          </div>
+
+          <el-empty v-if="filteredPermissions.length === 0" :description="$t('table.empty')" />
+
+          <div v-else class="permission-definition-list">
+            <div
+              v-for="permission in filteredPermissions"
+              :key="permission.id"
+              class="permission-definition-item"
+              :class="{ 'permission-definition-item--readonly': !advancedMaintenance }"
+            >
+              <el-checkbox
+                v-if="advancedMaintenance"
+                :model-value="permission.enabled"
+                v-permission="'permission:edit'"
+                @change="(checked: boolean) => togglePermissionEnabled(permission, checked)"
+              />
+              <div class="permission-definition-item__content">
+                <div class="permission-definition-item__main">
+                  <span v-if="canShow('name')" class="permission-definition-item__name">{{ permission.name }}</span>
+                  <code v-if="canShow('code')" class="code-badge">{{ permission.code }}</code>
+                  <el-tag v-if="canShow('status')" :type="permission.enabled ? 'success' : 'danger'" size="small">
+                    {{ permission.enabled ? $t('status.active') : $t('status.inactive') }}
+                  </el-tag>
+                  <el-tag
+                    :type="getPermissionDiagnostic(permission.id)?.riskLevel === 'ok' ? 'success' : 'warning'"
+                    size="small"
+                  >
+                    {{ getPermissionDiagnostic(permission.id)?.riskLevel === 'ok' ? '正常' : '需检查' }}
+                  </el-tag>
+                </div>
+                <div v-if="canShow('description')" class="permission-definition-item__description">
+                  {{ permission.description || '-' }}
+                </div>
+                <div class="permission-usage-row">
+                  <span>角色 {{ getPermissionDiagnostic(permission.id)?.roleCount ?? 0 }}</span>
+                  <span>菜单 {{ getPermissionDiagnostic(permission.id)?.menuCount ?? 0 }}</span>
+                </div>
+                <div
+                  v-if="getPermissionDiagnostic(permission.id)?.warnings?.length"
+                  class="permission-warning-row"
+                >
+                  <el-tag
+                    v-for="warning in getPermissionDiagnostic(permission.id)?.warnings || []"
+                    :key="warning"
+                    type="warning"
+                    effect="plain"
+                    size="small"
+                  >
+                    {{ warning }}
+                  </el-tag>
+                </div>
+              </div>
+              <div v-if="advancedMaintenance" class="permission-definition-item__actions">
+                <el-button link type="primary" size="small" v-permission="'permission:edit'" @click="openEditModal(permission)">
+                  {{ $t('action.edit') }}
+                </el-button>
+                <el-button link type="danger" size="small" v-permission="'permission:delete'" @click="handleDelete(permission)">
+                  {{ $t('action.delete') }}
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="permission-definition-panel permission-definition-panel--empty">
+          <el-empty :description="$t('table.empty')" />
+        </div>
       </div>
     </div>
 
@@ -233,9 +298,19 @@ interface Permission {
   enabled: boolean
 }
 
+interface PermissionDiagnostic {
+  permissionId: number
+  code: string
+  roleCount: number
+  menuCount: number
+  riskLevel: 'ok' | 'warning'
+  warnings: string[]
+}
+
 interface ResourceOption {
   key: string
   label: string
+  resourceKeys?: string[]
 }
 
 interface PageTreeNode {
@@ -258,13 +333,15 @@ const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all')
 const showModal = ref(false)
 const isEditing = ref(false)
 const loading = ref(false)
-const pageTreeVisible = ref(false)
+const advancedMaintenance = ref(false)
 const pageTreeOpenState = ref<Record<string, boolean>>({})
 const selectedResourceKey = ref('')
+const permissionTreeSearch = ref('')
 
 const permissionList = ref<Permission[]>([])
+const permissionDiagnostics = ref<PermissionDiagnostic[]>([])
 const treeMenus = ref<MenuItem[]>([])
-const hiddenResourceKeys = new Set<string>()
+const hiddenResourceKeys = new Set<string>(['erp-purchase', 'erp-sale', 'erp-assembly'])
 const forcedResourceKeys = ['permission', 'menu']
 
 const defaultColumns = ['name', 'code', 'description', 'status']
@@ -285,17 +362,25 @@ const formData = reactive<Omit<Permission, 'id'>>({
 const currentId = ref<number | null>(null)
 
 const menuResourceKeyMap: Record<string, string[]> = {
+  user: ['user'],
   users: ['user'],
+  role: ['role'],
   roles: ['role'],
+  permission: ['permission'],
   permissions: ['permission'],
+  audit: ['audit'],
   'audit-logs': ['audit'],
+  column: ['column'],
   'column-permissions': ['column'],
+  menu: ['menu'],
   'menu-management': ['menu'],
   'system-config': ['system-config'],
+  tenant: ['tenant'],
   tenants: ['tenant'],
   erp: [],
   'erp-basic': [],
   'erp-product': ['erp-product'],
+  'erp-product-fitment': ['erp-product-fitment', 'erp-vehicle-brand', 'erp-vehicle-series', 'erp-vehicle-model'],
   'erp-vehicle-fitment': ['erp-product-fitment', 'erp-vehicle-brand', 'erp-vehicle-series', 'erp-vehicle-model'],
   'erp-customer': ['erp-customer'],
   'erp-customer-category': ['erp-customer-category'],
@@ -325,10 +410,9 @@ const menuResourceKeyMap: Record<string, string[]> = {
   'erp-stock-warning': ['erp-stock-warning'],
   'erp-warehouse-module': [],
   'erp-finance': [],
-  'erp-assemble-order': ['erp-assembly'],
-  'erp-disassemble-order': ['erp-assembly'],
+  'erp-assemble-order': ['erp-assemble-order'],
+  'erp-disassemble-order': ['erp-disassemble-order'],
   'erp-ar': ['erp-ar'],
-  'erp-finance-summary': ['erp-finance-customer-debt'],
   'erp-finance-customer-debt': ['erp-finance-customer-debt'],
   'erp-finance-supplier-debt': ['erp-finance-supplier-debt'],
   'erp-ap': ['erp-ap'],
@@ -354,10 +438,7 @@ const normalizeAlias = (value?: string | null) => {
 
 const normalizePermissionResource = (resource: string) => {
   const normalized = normalizeAlias(resource)
-  const legacyMap: Record<string, string> = {
-    'erp-finance-summary': 'erp-finance-customer-debt',
-  }
-  return legacyMap[normalized] || normalized
+  return normalized
 }
 
 const extractPermissionResource = (code: string) => {
@@ -372,6 +453,9 @@ const resourceLabelMap = computed(() => {
     items.forEach((item) => {
       const label = item.title?.trim() || item.key?.trim() || ''
       const mappedKeys = menuResourceKeyMap[item.key || ''] || []
+      if (item.key && mappedKeys.length > 1 && label && !labelMap.has(item.key)) {
+        labelMap.set(item.key, label)
+      }
       mappedKeys.forEach((resourceKey) => {
         const normalized = normalizeAlias(resourceKey)
         if (normalized && label && !labelMap.has(normalized)) {
@@ -386,6 +470,11 @@ const resourceLabelMap = computed(() => {
 
   walk(treeMenus.value)
   labelMap.set('column', t('page.columnPermissionManagement'))
+  labelMap.set('erp-vehicle-fitment', t('page.erpVehicleFitmentManagement'))
+  labelMap.set('erp-vehicle-brand', `${t('page.erpVehicleFitmentManagement')} - ${t('field.vehicleBrand')}`)
+  labelMap.set('erp-vehicle-series', `${t('page.erpVehicleFitmentManagement')} - ${t('field.vehicleSeries')}`)
+  labelMap.set('erp-vehicle-model', `${t('page.erpVehicleFitmentManagement')} - ${t('field.vehicleModel')}`)
+  labelMap.set('erp-product-fitment', `${t('page.erpVehicleFitmentManagement')} - ${t('field.productFitment')}`)
   labelMap.set('erp-finance-customer-debt', t('page.erpCustomerDebtManagement'))
   return labelMap
 })
@@ -397,24 +486,80 @@ const pageOptions = computed<ResourceOption[]>(() => {
   ]))
     .filter((key) => Boolean(key) && !hiddenResourceKeys.has(key))
 
-  return keys.map((key) => ({
-    key,
-    label: resourceLabelMap.value.get(key) || formatGroupLabel(key),
-  }))
+  const availableKeys = new Set(keys)
+  const menuKeys = new Set<string>()
+  const collectMenuKeys = (items: MenuItem[]) => {
+    items.forEach((item) => {
+      if (item.key) {
+        menuKeys.add(item.key)
+      }
+      if (item.children?.length) {
+        collectMenuKeys(item.children)
+      }
+    })
+  }
+  collectMenuKeys(treeMenus.value)
+  const groupKeys = new Set(
+    Object.entries(menuResourceKeyMap)
+      .filter(([key, resourceKeys]) => {
+        return resourceKeys.length > 1
+          && menuKeys.has(key)
+          && resourceKeys.some((resourceKey) => availableKeys.has(resourceKey))
+      })
+      .map(([key]) => key),
+  )
+  const resourceOptions = keys
+    .filter((key) => !groupKeys.has(key))
+    .map((key) => ({
+      key,
+      label: resourceLabelMap.value.get(key) || formatGroupLabel(key),
+    }))
+  const groupOptions = Object.entries(menuResourceKeyMap)
+    .filter(([key, resourceKeys]) => {
+      return groupKeys.has(key)
+    })
+    .map(([key, resourceKeys]) => ({
+      key,
+      label: resourceLabelMap.value.get(key) || formatGroupLabel(key),
+      resourceKeys: resourceKeys.filter((resourceKey) => availableKeys.has(resourceKey)),
+    }))
+
+  return [...resourceOptions, ...groupOptions]
 })
 
 const pageOptionsMap = computed(() => {
   return new Map(pageOptions.value.map((item) => [item.key, item]))
 })
 
-const selectedPageLabel = computed(() => {
+const currentPageLabel = computed(() => {
   if (!selectedResourceKey.value) return t('field.page')
   return pageOptionsMap.value.get(selectedResourceKey.value)?.label || selectedResourceKey.value
 })
 
-const currentPageLabel = computed(() => {
-  if (!selectedResourceKey.value) return t('field.page')
-  return pageOptionsMap.value.get(selectedResourceKey.value)?.label || selectedResourceKey.value
+const permissionDiagnosticsMap = computed(() => {
+  return new Map(permissionDiagnostics.value.map((item) => [item.permissionId, item]))
+})
+
+const getPermissionDiagnostic = (permissionId: number) => {
+  return permissionDiagnosticsMap.value.get(permissionId)
+}
+
+const warningPermissionCount = computed(() => {
+  return permissionDiagnostics.value.filter((item) => item.riskLevel !== 'ok').length
+})
+
+const unassignedPermissionCount = computed(() => {
+  return permissionDiagnostics.value.filter((item) => item.roleCount === 0).length
+})
+
+const menuUnboundPermissionCount = computed(() => {
+  return permissionDiagnostics.value.filter((item) => item.menuCount === 0).length
+})
+
+const selectedResourceKeys = computed(() => {
+  if (!selectedResourceKey.value) return [] as string[]
+  const option = pageOptionsMap.value.get(selectedResourceKey.value)
+  return option?.resourceKeys?.length ? option.resourceKeys : [selectedResourceKey.value]
 })
 
 const containsTreeSelection = (node: PageTreeNode): boolean => {
@@ -490,7 +635,8 @@ const buildExtraResourceLeafNodes = (parentId: string, menuKey: string): PageTre
 const buildTreeNode = (item: MenuItem, parentId: string): PageTreeNode | null => {
   const menuKey = item.key || ''
   const nodeId = `${parentId}:${menuKey || item.id}`
-  const mappedNodes = buildResourceLeafNodes(nodeId, item.title || '', menuResourceKeyMap[menuKey] || [])
+  const mappedResourceKeys = menuResourceKeyMap[menuKey] || []
+  const mappedNodes = buildResourceLeafNodes(nodeId, item.title || '', mappedResourceKeys)
   const extraNodes = buildExtraResourceLeafNodes(nodeId, menuKey)
   const childNodes = (item.children || [])
     .map((child) => buildTreeNode(child, nodeId))
@@ -501,20 +647,30 @@ const buildTreeNode = (item: MenuItem, parentId: string): PageTreeNode | null =>
     && Boolean(firstMappedNode?.pageKey)
     && childNodes.length === 0
     && extraNodes.length === 0
+  const onlyMappedGroup = mappedNodes.length === 1
+    && !firstMappedNode?.pageKey
+    && firstMappedNode?.label === (item.title || '')
+    && mappedResourceKeys.length > 1
+    && pageOptionsMap.value.has(menuKey)
   const directPageKey = onlyDirectLeaf ? firstMappedNode?.pageKey : undefined
-  const children = onlyDirectLeaf ? [] : [...mappedNodes, ...extraNodes, ...childNodes]
+  const groupPageKey = onlyMappedGroup ? menuKey : directPageKey
+  const children = onlyDirectLeaf ? [] : [
+    ...(onlyMappedGroup ? (firstMappedNode?.children || []) : mappedNodes),
+    ...extraNodes,
+    ...childNodes,
+  ]
 
   if (!onlyDirectLeaf && children.length === 0) {
     return null
   }
 
-  const containsCurrent = directPageKey === selectedResourceKey.value || children.some((child) => containsTreeSelection(child))
+  const containsCurrent = groupPageKey === selectedResourceKey.value || children.some((child) => containsTreeSelection(child))
   return {
     id: nodeId,
     label: item.title || item.key || '',
     icon: parentId === 'root' ? item.icon : undefined,
-    pageKey: directPageKey,
-    selectable: Boolean(directPageKey),
+    pageKey: groupPageKey,
+    selectable: Boolean(groupPageKey),
     isOpen: resolveTreeNodeOpen(nodeId, containsCurrent || parentId === 'root'),
     children,
   }
@@ -527,7 +683,11 @@ const pageTreeData = computed<PageTreeNode[]>(() => {
 
   const seen = new Set<string>()
   const walk = (node: PageTreeNode) => {
-    if (node.pageKey) seen.add(node.pageKey)
+    if (node.pageKey) {
+      seen.add(node.pageKey)
+      const option = pageOptionsMap.value.get(node.pageKey)
+      option?.resourceKeys?.forEach((resourceKey) => seen.add(resourceKey))
+    }
     node.children.forEach(walk)
   }
   tree.forEach(walk)
@@ -559,29 +719,78 @@ const pageTreeData = computed<PageTreeNode[]>(() => {
   return tree
 })
 
+const collectTreeNodeResourceKeys = (node: PageTreeNode): string[] => {
+  const option = node.pageKey ? pageOptionsMap.value.get(node.pageKey) : undefined
+  const selfKeys = option?.resourceKeys?.length ? option.resourceKeys : node.pageKey ? [node.pageKey] : []
+  const childKeys = node.children.flatMap((child) => collectTreeNodeResourceKeys(child))
+  return Array.from(new Set([...selfKeys, ...childKeys]))
+}
+
+const treeNodeMatchesSearch = (node: PageTreeNode, keyword: string) => {
+  const normalized = keyword.toLowerCase()
+  const resourceKeys = collectTreeNodeResourceKeys(node)
+  const matchedPermission = permissionList.value.some((permission) => {
+    return resourceKeys.includes(extractPermissionResource(permission.code))
+      && `${permission.name} ${permission.code} ${permission.description || ''}`.toLowerCase().includes(normalized)
+  })
+  return node.label.toLowerCase().includes(normalized) || matchedPermission
+}
+
+const filterTreeBySearch = (nodes: PageTreeNode[], keyword: string): PageTreeNode[] => {
+  const normalized = keyword.trim().toLowerCase()
+  if (!normalized) {
+    return nodes
+  }
+
+  return nodes
+    .map<PageTreeNode | null>((node) => {
+      const children = filterTreeBySearch(node.children, normalized)
+      if (!treeNodeMatchesSearch(node, normalized) && children.length === 0) {
+        return null
+      }
+      return {
+        ...node,
+        isOpen: children.length > 0 ? true : node.isOpen,
+        children,
+      }
+    })
+    .filter((node): node is PageTreeNode => Boolean(node))
+}
+
+const displayPermissionTreeData = computed(() => {
+  return filterTreeBySearch(pageTreeData.value, permissionTreeSearch.value)
+})
+
 const isTreeNodeActive = (node: PageTreeNode): boolean => {
   if (node.pageKey && node.pageKey === selectedResourceKey.value) return true
   return node.children.some((child) => isTreeNodeActive(child))
 }
 
 const handleTreeNodeClick = (node: PageTreeNode) => {
+  const nextOpenState = node.children.length > 0 ? !node.isOpen : undefined
   if (node.selectable && node.pageKey) {
     selectedResourceKey.value = node.pageKey
-    pageTreeVisible.value = false
+    if (nextOpenState !== undefined) {
+      pageTreeOpenState.value = {
+        ...pageTreeOpenState.value,
+        [node.id]: nextOpenState,
+      }
+    }
     return
   }
 
-  if (node.children.length > 0) {
+  if (nextOpenState !== undefined) {
     pageTreeOpenState.value = {
       ...pageTreeOpenState.value,
-      [node.id]: !node.isOpen,
+      [node.id]: nextOpenState,
     }
   }
 }
 
 const basePermissions = computed(() => {
   if (!selectedResourceKey.value) return [] as Permission[]
-  return permissionList.value.filter((item) => extractPermissionResource(item.code) === selectedResourceKey.value)
+  const keys = new Set(selectedResourceKeys.value)
+  return permissionList.value.filter((item) => keys.has(extractPermissionResource(item.code)))
 })
 
 const filteredPermissions = computed(() => {
@@ -618,6 +827,131 @@ const canShow = (key: string) => {
   return isVisible(key)
 }
 
+const pagePermissionStats = computed<Record<string, { enabled: number; total: number }>>(() => {
+  return pageOptions.value.reduce<Record<string, { enabled: number; total: number }>>((acc, item) => {
+    const keys = new Set(item.resourceKeys?.length ? item.resourceKeys : [item.key])
+    const permissions = permissionList.value.filter((permission) => keys.has(extractPermissionResource(permission.code)))
+    acc[item.key] = {
+      enabled: permissions.filter((permission) => permission.enabled).length,
+      total: permissions.length,
+    }
+    return acc
+  }, {})
+})
+
+const treeNodePermissionStats = computed<Record<string, { enabled: number; total: number }>>(() => {
+  const stats: Record<string, { enabled: number; total: number }> = {}
+  const walk = (node: PageTreeNode) => {
+    const nodeStats = collectTreeNodeResourceKeys(node).reduce(
+      (acc, key) => {
+        const current = pagePermissionStats.value[key]
+        if (!current) {
+          return acc
+        }
+        acc.enabled += current.enabled
+        acc.total += current.total
+        return acc
+      },
+      { enabled: 0, total: 0 },
+    )
+    stats[node.id] = nodeStats
+    node.children.forEach(walk)
+  }
+
+  pageTreeData.value.forEach(walk)
+  return stats
+})
+
+const currentPagePermissionSummary = computed(() => {
+  if (!selectedResourceKey.value) {
+    return t('table.empty')
+  }
+  const stats = pagePermissionStats.value[selectedResourceKey.value] || { enabled: 0, total: 0 }
+  return `${currentPageLabel.value}: ${stats.enabled}/${stats.total}`
+})
+
+const allPermissionSummary = computed(() => {
+  const enabled = permissionList.value.filter((permission) => permission.enabled).length
+  return `全部: ${enabled}/${permissionList.value.length}`
+})
+
+const getPermissionsByTreeNode = (node: PageTreeNode) => {
+  const keys = collectTreeNodeResourceKeys(node)
+  return permissionList.value.filter((permission) => keys.includes(extractPermissionResource(permission.code)))
+}
+
+const isTreeNodeChecked = (node: PageTreeNode) => {
+  const permissions = getPermissionsByTreeNode(node)
+  return permissions.length > 0 && permissions.every((permission) => permission.enabled)
+}
+
+const isTreeNodeIndeterminate = (node: PageTreeNode) => {
+  const permissions = getPermissionsByTreeNode(node)
+  if (permissions.length === 0) {
+    return false
+  }
+  const enabledCount = permissions.filter((permission) => permission.enabled).length
+  return enabledCount > 0 && enabledCount < permissions.length
+}
+
+const updatePermissionEnabled = async (permission: Permission, enabled: boolean) => {
+  await request.put(`/permissions/${permission.id}`, {
+    name: permission.name,
+    code: permission.code,
+    description: permission.description || '',
+    enabled,
+  })
+}
+
+const togglePermissionEnabled = async (permission: Permission, checked: string | number | boolean) => {
+  const enabled = Boolean(checked)
+  if (permission.enabled === enabled) {
+    return
+  }
+  try {
+    await updatePermissionEnabled(permission, enabled)
+    permission.enabled = enabled
+    await fetchPermissionDiagnostics()
+    notifySuccess()
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const togglePermissionsEnabled = async (permissions: Permission[], enabled: boolean) => {
+  const targets = permissions.filter((permission) => permission.enabled !== enabled)
+  if (targets.length === 0) {
+    return
+  }
+
+  loading.value = true
+  try {
+    await Promise.all(targets.map((permission) => updatePermissionEnabled(permission, enabled)))
+    targets.forEach((permission) => {
+      permission.enabled = enabled
+    })
+    await fetchPermissionDiagnostics()
+    notifySuccess()
+  } catch (error) {
+    notifyError(error)
+    await fetchPermissions()
+  } finally {
+    loading.value = false
+  }
+}
+
+const toggleTreeNodePermissions = (node: PageTreeNode, checked: string | number | boolean) => {
+  togglePermissionsEnabled(getPermissionsByTreeNode(node), Boolean(checked))
+}
+
+const enableAllPermissions = () => {
+  togglePermissionsEnabled(permissionList.value, true)
+}
+
+const disableAllPermissions = () => {
+  togglePermissionsEnabled(permissionList.value, false)
+}
+
 const fetchPermissions = async () => {
   loading.value = true
   try {
@@ -629,6 +963,17 @@ const fetchPermissions = async () => {
     notifyError(error)
   } finally {
     loading.value = false
+  }
+}
+
+const fetchPermissionDiagnostics = async () => {
+  try {
+    const res: any = await request.get('/permissions/diagnostics')
+    if (res.data.code === 200) {
+      permissionDiagnostics.value = res.data.data || []
+    }
+  } catch (error) {
+    notifyError(error)
   }
 }
 
@@ -662,7 +1007,7 @@ const normalizeTreeMenu = (item: any): MenuItem => {
 }
 
 const refreshPage = async () => {
-  await Promise.all([fetchPermissions(), fetchMenus(), fetchTenantKeys()])
+  await Promise.all([fetchPermissions(), fetchPermissionDiagnostics(), fetchMenus(), fetchTenantKeys()])
 }
 
 onMounted(() => {
@@ -714,7 +1059,7 @@ const saveData = async () => {
     if (res.data.code === 200) {
       notifySuccess()
       showModal.value = false
-      await fetchPermissions()
+      await Promise.all([fetchPermissions(), fetchPermissionDiagnostics()])
     }
   } catch (error) {
     notifyError(error)
@@ -735,7 +1080,7 @@ const handleDelete = (row: Permission) => {
       })
       if (res.data.code === 200) {
         notifySuccess()
-        await fetchPermissions()
+        await Promise.all([fetchPermissions(), fetchPermissionDiagnostics()])
       }
     } catch (error) {
       notifyError(error)
@@ -745,158 +1090,151 @@ const handleDelete = (row: Permission) => {
 </script>
 
 <style>
-.permission-toolbar {
-  width: 100%;
-  padding: 16px 18px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-sizing: border-box;
-}
-
-.table-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-}
-
-.permission-toolbar__filters {
-  min-width: 0;
-}
-
-.permission-filter-form {
-  display: grid;
-  grid-template-columns: minmax(240px, 360px) minmax(220px, 1fr) 160px;
-  gap: 12px;
-  align-items: start;
-}
-
-.table-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-  margin-left: 0;
-}
-
-.top-select {
-  width: 100%;
-  max-width: 100%;
-}
-
-.page-tree-trigger {
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
-  background: #fff;
-  color: #303133;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.page-tree-trigger:hover,
-.page-tree-trigger:focus-visible {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
-  outline: none;
-}
-
-.page-tree-trigger__text {
-  min-width: 0;
-  text-align: left;
-  white-space: nowrap;
+.permission-management-page {
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.page-tree-trigger__text.is-placeholder {
-  color: #a8abb2;
-}
-
-.page-tree-trigger__arrow {
-  width: 16px;
-  height: 16px;
-  color: #909399;
+.permission-management-page .page-header {
   flex: 0 0 auto;
-  transition: transform 0.2s ease;
 }
 
-.page-tree-trigger__arrow.is-open {
-  transform: rotate(180deg);
-}
-
-.page-tree-dropdown {
-  max-height: 420px;
-  overflow: auto;
-  padding: 6px 0;
-}
-
-.page-tree-node {
+.permission-panel {
+  width: 100%;
+  min-height: 0;
+  border: 1px solid #dcdfe6;
+  border-radius: 10px;
+  padding: 14px;
+  background: #fff;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-.page-tree-children,
-.page-tree-grandchildren {
+.permission-panel__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.permission-panel__tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.permission-status-filter {
+  width: 120px;
+}
+
+.permission-workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.permission-tree-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  background: #f8fafc;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.page-tree-children {
-  padding: 4px 0 10px 14px;
+.permission-tree-search {
+  margin-bottom: 4px;
 }
 
-.page-tree-grandchildren {
-  padding: 4px 0 4px 18px;
+.permission-tree-empty {
+  padding: 18px 10px;
+  color: #909399;
+  font-size: 13px;
+  text-align: center;
 }
 
-.page-tree-label {
+.permission-tree-node,
+.permission-tree-children,
+.permission-tree-grandchildren {
+  display: flex;
+  flex-direction: column;
+}
+
+.permission-tree-children {
+  padding: 4px 0 8px 12px;
+}
+
+.permission-tree-grandchildren {
+  padding: 4px 0 4px 16px;
+}
+
+.permission-tree-label {
   width: 100%;
   border: 0;
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
   background: transparent;
   color: #303133;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-align: left;
   cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
-.page-tree-label__icon {
+:deep(.permission-tree-label .el-checkbox) {
+  height: 16px;
+  margin-right: 0;
+}
+
+.permission-tree-label:hover {
+  background: #eef5ff;
+}
+
+.permission-tree-label__icon {
   display: flex;
   margin-right: 2px;
   opacity: 0.8;
 }
 
-.page-tree-label__text {
+.permission-tree-label__text {
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.page-tree-label__arrow {
-  width: 16px;
-  height: 16px;
+.permission-tree-label__count {
+  flex: 0 0 auto;
+  color: #909399;
+  font-size: 12px;
+}
+
+.permission-tree-label__arrow {
+  width: 14px;
+  height: 14px;
   color: #909399;
   flex: 0 0 auto;
   transition: transform 0.2s ease;
 }
 
-.page-tree-label__arrow.is-open {
+.permission-tree-label__arrow.is-open {
   transform: rotate(90deg);
 }
 
-.page-tree-label__bullet {
+.permission-tree-label__bullet {
   width: 4px;
   height: 4px;
   border-radius: 999px;
@@ -905,85 +1243,149 @@ const handleDelete = (row: Permission) => {
   opacity: 0.5;
 }
 
-.page-tree-label__bullet.is-active {
+.permission-tree-label__bullet.is-active {
   background: var(--el-color-primary);
   opacity: 1;
 }
 
-.page-tree-label--root {
-  min-height: 44px;
-  padding: 0 16px;
-  border-radius: 12px;
-  font-size: 16px;
+.permission-tree-label--root {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14px;
   font-weight: 600;
-  justify-content: flex-start;
 }
 
-.page-tree-label--child {
+.permission-tree-label--child {
   min-height: 34px;
-  padding: 7px 10px;
-  font-size: 13.5px;
-  color: #555;
-  justify-content: flex-start;
-}
-
-.page-tree-label--child.is-leaf {
-  padding-left: 10px;
-}
-
-.page-tree-label--leaf {
-  min-height: 34px;
-  padding: 6px 10px;
+  padding: 7px 9px;
+  border-radius: 9px;
   font-size: 13px;
+  color: #555;
+}
+
+.permission-tree-label--leaf {
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  font-size: 12.5px;
   color: #666;
-  justify-content: flex-start;
 }
 
-.page-tree-label.is-active {
+.permission-tree-label.is-active {
   color: var(--el-color-primary);
-}
-
-.page-tree-label--root.is-active {
   background: rgba(64, 158, 255, 0.14);
 }
 
-.page-tree-label--child.is-active,
-.page-tree-label--leaf.is-active {
-  background: rgba(64, 158, 255, 0.1);
+.permission-tree-label.is-active .permission-tree-label__count {
+  color: var(--el-color-primary);
+}
+
+.permission-definition-panel {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid #ebeef5;
   border-radius: 10px;
+  background: #fff;
 }
 
-.page-tree-empty {
-  padding: 18px 16px;
-  color: #909399;
-  font-size: 13px;
+.permission-definition-panel--empty {
+  border-style: dashed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.permission-filter-form :deep(.el-form-item__label) {
-  color: #606266;
-}
-
-.permission-filter-form :deep(.el-form-item) {
-  margin-bottom: 0;
-}
-
-.main-headers {
+.permission-definition-panel__header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 12px;
-  align-items: end;
-  margin-top: 16px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
 }
 
-.main-header {
+.permission-definition-panel__title {
   font-size: 16px;
   font-weight: 600;
+  color: #303133;
 }
 
-.main-header--meta {
-  font-size: 14px;
-  color: #606266;
+.permission-definition-panel__meta {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #909399;
+}
+
+.permission-definition-panel__search {
+  width: 100%;
+}
+
+.permission-definition-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.permission-definition-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 66px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.permission-definition-item--readonly {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.permission-definition-item:last-child {
+  border-bottom: 0;
+}
+
+.permission-definition-item__content {
+  min-width: 0;
+}
+
+.permission-definition-item__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.permission-definition-item__name {
   font-weight: 500;
+  color: #303133;
+}
+
+.permission-definition-item__description {
+  margin-top: 6px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.permission-usage-row,
+.permission-warning-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.permission-usage-row {
+  color: #606266;
+  font-size: 12px;
+}
+
+.permission-definition-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .code-badge {
@@ -998,31 +1400,43 @@ const handleDelete = (row: Permission) => {
 }
 
 @media (max-width: 1280px) {
-  .permission-toolbar {
-    padding: 14px;
-  }
-
-  .table-toolbar {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .permission-filter-form {
-    grid-template-columns: 1fr;
-  }
-
-  .table-actions {
+  .permission-panel__toolbar {
     justify-content: flex-start;
+  }
+
+  .permission-panel__tools {
+    justify-content: flex-start;
+  }
+
+  .permission-workspace {
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 }
 
 @media (max-width: 768px) {
-  .main-headers {
+  .permission-workspace {
     grid-template-columns: 1fr;
   }
 
-  .table-actions {
-    width: 100%;
-    justify-content: flex-end;
+  .permission-tree-list {
+    max-height: 260px;
+  }
+
+  .permission-definition-panel__header {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-definition-item {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .permission-definition-item--readonly {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .permission-definition-item__actions {
+    grid-column: 2;
+    justify-content: flex-start;
   }
 }
 </style>

@@ -321,11 +321,11 @@ const isReadOnly = computed(() => {
 const canCopy = computed(() => {
   return isReadOnly.value
     && (formData.status === 'APPROVED' || formData.status === 'RED_FLUSHED')
-    && hasPermission('erp-sale:add');
+    && hasPermission('erp-sale-draft:add');
 });
 
 const canRedFlush = computed(() => {
-  return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-sale:redflush');
+  return isReadOnly.value && formData.status === 'APPROVED' && hasPermission('erp-sale-approved:redflush');
 });
 
 const pageTitle = computed(() => t('page.erpSaleOrderCreatePreview'));
@@ -364,7 +364,7 @@ const hasPermission = (code: string) => {
 };
 
 const canApprove = computed(() => {
-  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale:approve');
+  return !isReadOnly.value && formData.status === 'DRAFT' && hasPermission('erp-sale-draft:approve');
 });
 
 const canViewProfit = computed(() => {

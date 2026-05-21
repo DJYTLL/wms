@@ -15,6 +15,7 @@ import com.example.wms.mapper.TenantMapper;
 import com.example.wms.mapper.TenantMenuMapper;
 import com.example.wms.mapper.UserAccountMapper;
 import com.example.wms.mapper.UserRoleMapper;
+import com.example.wms.tenant.TenantContext;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -97,6 +98,7 @@ public class DataInitializer {
             }
 
             // 初始化系统配置
+            TenantContext.setTenantId(tenantId);
             ensureSystemConfig(systemConfigMapper, "default.page.size", "20", "int", "默认分页大小", true);
             ensureSystemConfig(systemConfigMapper, "audit.retention.days", "180", "int", "审计日志保留天数", false);
             ensureSystemConfig(systemConfigMapper, "password.min.length", "8", "int", "密码最小长度", false);
@@ -156,6 +158,7 @@ public class DataInitializer {
             ensureSystemConfig(systemConfigMapper, "erp.vehicle-model.code.prefix", "VM", "string", "ERP车型编码前缀", false);
             ensureSystemConfig(systemConfigMapper, "erp.vehicle-model.code.date-format", "yyyyMMdd", "string", "ERP车型编码日期格式", false);
             ensureSystemConfig(systemConfigMapper, "erp.vehicle-model.code.seq-length", "4", "int", "ERP车型编码序列长度", false);
+            TenantContext.clear();
 
             // 创建租户管理员角色并绑定租户内权限
             Role adminRole = roleMapper.findByCode(tenantId, "admin");
@@ -370,9 +373,11 @@ public class DataInitializer {
                                     String valueType,
                                     String description,
                                     boolean isPublic) {
-        com.example.wms.entity.SystemConfig config = mapper.findByKey(key);
+        Long tenantId = TenantContext.requireTenantId();
+        com.example.wms.entity.SystemConfig config = mapper.findByKey(tenantId, key);
         if (config == null) {
             config = new com.example.wms.entity.SystemConfig();
+            config.setTenantId(tenantId);
             config.setConfigKey(key);
         }
         boolean changed = false;
@@ -403,6 +408,7 @@ public class DataInitializer {
             mapper.insert(config);
         } else {
             mapper.update(config, new QueryWrapper<com.example.wms.entity.SystemConfig>()
+                .eq("tenant_id", tenantId)
                 .eq("config_key", key));
         }
     }

@@ -31,13 +31,13 @@ const routes: Array<RouteRecordRaw> = [
     path: '/erp/sale-orders/:id/print',
     name: 'erp-sale-order-print',
     component: () => import('../views/erp/ErpSaleOrderPrintRedirect.vue'),
-    meta: { title: '销售单打印', permission: 'erp-sale:view' }
+    meta: { title: '销售单打印' }
   },
   {
     path: '/erp/purchase-orders/:id/print',
     name: 'erp-purchase-order-print',
     component: () => import('../views/erp/ErpPurchaseOrderPrint.vue'),
-    meta: { title: '采购单打印', permission: 'erp-purchase:view' }
+    meta: { title: '采购单打印' }
   },
   {
     path: '/erp/purchase-orders/draft/:id/print',
@@ -376,19 +376,19 @@ const routes: Array<RouteRecordRaw> = [
         path: 'erp/sale-orders/create-preview',
         name: 'erp-sale-orders-create-preview',
         component: () => import('../views/erp/ErpSaleOrderFormPreview.vue'),
-        meta: { title: '新增销售单(预览)', permission: 'erp-sale:add', titleKey: 'page.erpSaleOrderCreatePreview' }
+        meta: { title: '新增销售单(预览)', permission: 'erp-sale-draft:add', titleKey: 'page.erpSaleOrderCreatePreview' }
       },
       {
         path: 'erp/sale-orders/create-preview-alt',
         name: 'erp-sale-orders-create-preview-alt',
         component: () => import('../views/erp/ErpSaleOrderFormPreviewAlt.vue'),
-        meta: { title: '新增销售单(预览替代)', permission: 'erp-sale:add', titleKey: 'page.erpSaleOrderCreatePreviewAlt' }
+        meta: { title: '新增销售单(预览替代)', permission: 'erp-sale-draft:add', titleKey: 'page.erpSaleOrderCreatePreviewAlt' }
       },
       {
         path: 'erp/sale-orders/create-preview-paper',
         name: 'erp-sale-orders-create-preview-paper',
         component: () => import('../views/erp/ErpSaleOrderFormPreviewPaper.vue'),
-        meta: { title: '新增销售单(纸质风格)', permission: 'erp-sale:add', titleKey: 'page.erpSaleOrderCreatePreviewPaper' }
+        meta: { title: '新增销售单(纸质风格)', permission: 'erp-sale-draft:add', titleKey: 'page.erpSaleOrderCreatePreviewPaper' }
       },
       {
         path: 'erp/sale-orders/:id/edit',
@@ -578,49 +578,49 @@ const routes: Array<RouteRecordRaw> = [
         path: 'erp/assemble-orders',
         name: 'erp-assemble-orders',
         component: () => import('../views/erp/ErpAssemblyOrderManagement.vue'),
-        meta: { title: '组装单', permission: 'erp-assembly:view', titleKey: 'page.erpAssembleOrderManagement' }
+        meta: { title: '组装单', permission: 'erp-assemble-order:view', titleKey: 'page.erpAssembleOrderManagement' }
       },
       {
         path: 'erp/assemble-orders/create',
         name: 'erp-assemble-order-create',
         component: () => import('../views/erp/ErpAssemblyOrderForm.vue'),
-        meta: { title: '新增组装单', permission: 'erp-assembly:add', titleKey: 'page.erpAssembleOrderCreate' }
+        meta: { title: '新增组装单', permission: 'erp-assemble-order:add', titleKey: 'page.erpAssembleOrderCreate' }
       },
       {
         path: 'erp/assemble-orders/:id/edit',
         name: 'erp-assemble-order-edit',
         component: () => import('../views/erp/ErpAssemblyOrderForm.vue'),
-        meta: { title: '编辑组装单', permission: 'erp-assembly:edit', titleKey: 'page.erpAssembleOrderEdit' }
+        meta: { title: '编辑组装单', permission: 'erp-assemble-order:edit', titleKey: 'page.erpAssembleOrderEdit' }
       },
       {
         path: 'erp/assemble-orders/:id/view',
         name: 'erp-assemble-order-view',
         component: () => import('../views/erp/ErpAssemblyOrderForm.vue'),
-        meta: { title: '查看组装单', permission: 'erp-assembly:view', titleKey: 'page.erpAssembleOrderEdit' }
+        meta: { title: '查看组装单', permission: 'erp-assemble-order:view', titleKey: 'page.erpAssembleOrderEdit' }
       },
       {
         path: 'erp/disassemble-orders',
         name: 'erp-disassemble-orders',
         component: () => import('../views/erp/ErpDisassembleOrderManagement.vue'),
-        meta: { title: '拆分单', permission: 'erp-assembly:view', titleKey: 'page.erpDisassembleOrderManagement' }
+        meta: { title: '拆分单', permission: 'erp-disassemble-order:view', titleKey: 'page.erpDisassembleOrderManagement' }
       },
       {
         path: 'erp/disassemble-orders/create',
         name: 'erp-disassemble-order-create',
         component: () => import('../views/erp/ErpDisassembleOrderForm.vue'),
-        meta: { title: '新增拆分单', permission: 'erp-assembly:add', titleKey: 'page.erpDisassembleOrderCreate' }
+        meta: { title: '新增拆分单', permission: 'erp-disassemble-order:add', titleKey: 'page.erpDisassembleOrderCreate' }
       },
       {
         path: 'erp/disassemble-orders/:id/edit',
         name: 'erp-disassemble-order-edit',
         component: () => import('../views/erp/ErpDisassembleOrderForm.vue'),
-        meta: { title: '编辑拆分单', permission: 'erp-assembly:edit', titleKey: 'page.erpDisassembleOrderEdit' }
+        meta: { title: '编辑拆分单', permission: 'erp-disassemble-order:edit', titleKey: 'page.erpDisassembleOrderEdit' }
       },
       {
         path: 'erp/disassemble-orders/:id/view',
         name: 'erp-disassemble-order-view',
         component: () => import('../views/erp/ErpDisassembleOrderForm.vue'),
-        meta: { title: '查看拆分单', permission: 'erp-assembly:view', titleKey: 'page.erpDisassembleOrderEdit' }
+        meta: { title: '查看拆分单', permission: 'erp-disassemble-order:view', titleKey: 'page.erpDisassembleOrderEdit' }
       },
       {
         path: 'erp/assemblies',

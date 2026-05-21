@@ -981,7 +981,11 @@ const canShow = (key: string) => isVisible(key);
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 const canViewCostPrice = computed(() => hasPermission('erp-product:cost:view') || hasPermission('erp-product:cost:edit'));
 const canEditCostPrice = computed(() => hasPermission('erp-product:cost:edit'));
-const canViewPurchaseHistory = computed(() => hasPermission('erp-purchase:view'));
+const canViewPurchaseHistory = computed(() => (
+  hasPermission('erp-purchase-draft:view')
+  || hasPermission('erp-purchase-approved:view')
+  || hasPermission('erp-purchase:view')
+));
 const historyProductName = computed(() => historyProduct.value?.name || '-');
 const purchaseOrderDetailTitle = computed(() => {
   const orderNo = purchaseOrderDetail.value?.order?.orderNo;

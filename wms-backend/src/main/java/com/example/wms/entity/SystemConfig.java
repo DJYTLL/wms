@@ -10,6 +10,7 @@ import java.time.Instant;
 public class SystemConfig {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long tenantId;
     private String configKey;
     private String configValue;
     private String valueType;
@@ -24,6 +25,14 @@ public class SystemConfig {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Long getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(Long tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getConfigKey() {

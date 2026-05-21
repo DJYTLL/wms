@@ -378,7 +378,7 @@ const isReadOnly = computed(() => route.query.mode === 'view');
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 
 const canApprove = computed(() => {
-  return !isReadOnly.value && isEditing.value && formData.status === 'DRAFT' && hasPermission('erp-assembly:approve');
+  return !isReadOnly.value && isEditing.value && formData.status === 'DRAFT' && hasPermission('erp-disassemble-order:approve');
 });
 
 const canShow = (_key?: string) => true;

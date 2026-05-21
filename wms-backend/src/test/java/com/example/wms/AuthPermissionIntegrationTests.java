@@ -4,6 +4,7 @@ import com.example.wms.audit.RequestAuditContext;
 import com.example.wms.controller.AuthController;
 import com.example.wms.controller.UserController;
 import com.example.wms.dto.AuthPayload;
+import com.example.wms.dto.PermissionUpdateRequest;
 import com.example.wms.dto.TokenPairResponse;
 import com.example.wms.dto.RoleUpdateRequest;
 import com.example.wms.dto.RoleCreateRequest;
@@ -29,6 +30,7 @@ import com.example.wms.service.RefreshTokenService;
 import com.example.wms.service.RoleScopeService;
 import com.example.wms.service.UserAccountService;
 import com.example.wms.service.impl.RolePermissionServiceImpl;
+import com.example.wms.service.impl.PermissionServiceImpl;
 import com.example.wms.service.impl.RoleServiceImpl;
 import com.example.wms.service.impl.TenantServiceImpl;
 import com.example.wms.service.impl.UserServiceImpl;
@@ -331,6 +333,82 @@ class AuthPermissionIntegrationTests {
         verify(rolePermissionMapper).insertIgnore(1L, 8L, 2L);
         verify(rolePermissionMapper, never()).insertIgnore(1L, 8L, 1L);
         verify(rolePermissionMapper, never()).insertIgnore(1L, 8L, 4L);
+    }
+
+    @Test
+    void permissionDiagnosticsSummarizeRoleMenuAndRisk() {
+        PermissionServiceImpl service = new PermissionServiceImpl(
+            permissionMapper,
+            rolePermissionMapper,
+            userRoleMapper,
+            userAccountMapper,
+            menuMapper
+        );
+        Permission permission = permission(11L, "erp-sale:view");
+        Permission orphan = permission(12L, "orphan:view");
+        Permission actionPermission = permission(13L, "erp-product:add");
+        Permission apiViewPermission = permission(14L, "erp-finance-summary:view");
+        orphan.setEnabled(false);
+
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                "sysadmin",
+                "N/A",
+                List.of(new SimpleGrantedAuthority("ROLE_super_admin"))
+            )
+        );
+        when(permissionMapper.selectList(any())).thenReturn(List.of(permission, orphan, actionPermission, apiViewPermission));
+        when(rolePermissionMapper.countActiveRolesByPermissionId(11L)).thenReturn(2L);
+        when(rolePermissionMapper.countActiveRolesByPermissionId(12L)).thenReturn(0L);
+        when(rolePermissionMapper.countActiveRolesByPermissionId(13L)).thenReturn(1L);
+        when(rolePermissionMapper.countActiveRolesByPermissionId(14L)).thenReturn(3L);
+        when(menuMapper.countActiveMenusByPermissionCode("erp-sale:view")).thenReturn(1L);
+        when(menuMapper.countActiveMenusByPermissionCode("orphan:view")).thenReturn(0L);
+        when(menuMapper.countActiveMenusByPermissionCode("erp-product:add")).thenReturn(0L);
+        when(menuMapper.countActiveMenusByPermissionCode("erp-finance-summary:view")).thenReturn(0L);
+
+        var diagnostics = service.listDiagnostics();
+
+        assertThat(diagnostics).hasSize(4);
+        assertThat(diagnostics.get(0).permissionId()).isEqualTo(11L);
+        assertThat(diagnostics.get(0).roleCount()).isEqualTo(2L);
+        assertThat(diagnostics.get(0).menuCount()).isEqualTo(1L);
+        assertThat(diagnostics.get(0).riskLevel()).isEqualTo("ok");
+        assertThat(diagnostics.get(1).permissionId()).isEqualTo(12L);
+        assertThat(diagnostics.get(1).riskLevel()).isEqualTo("warning");
+        assertThat(diagnostics.get(1).warnings()).contains("权限已停用", "未分配给任何角色", "未被菜单引用");
+        assertThat(diagnostics.get(2).permissionId()).isEqualTo(13L);
+        assertThat(diagnostics.get(2).riskLevel()).isEqualTo("ok");
+        assertThat(diagnostics.get(2).warnings()).doesNotContain("未被菜单引用");
+        assertThat(diagnostics.get(3).permissionId()).isEqualTo(14L);
+        assertThat(diagnostics.get(3).riskLevel()).isEqualTo("ok");
+        assertThat(diagnostics.get(3).warnings()).doesNotContain("未被菜单引用");
+    }
+
+    @Test
+    void permissionUpdateBumpsUsersAffectedByAssignedRoles() {
+        PermissionServiceImpl service = new PermissionServiceImpl(
+            permissionMapper,
+            rolePermissionMapper,
+            userRoleMapper,
+            userAccountMapper,
+            menuMapper
+        );
+        Permission permission = permission(11L, "erp-sale:view");
+        permission.setEnabled(true);
+        PermissionUpdateRequest request = new PermissionUpdateRequest("erp-sale:view", "销售查看", "销售查看", false);
+        var pair = new RolePermissionMapper.RoleTenantPair();
+        pair.setTenantId(1L);
+        pair.setRoleId(8L);
+
+        when(permissionMapper.selectOne(any())).thenReturn(permission);
+        when(permissionMapper.findByCode("erp-sale:view")).thenReturn(permission);
+        when(rolePermissionMapper.findRoleTenantPairsByPermissionId(11L)).thenReturn(List.of(pair));
+        when(userRoleMapper.findUserIdsByRoleId(1L, 8L)).thenReturn(List.of(21L, 22L));
+
+        service.update(11L, request);
+
+        verify(userAccountMapper).incrementAuthVersionByIds(1L, List.of(21L, 22L));
     }
 
     @Test

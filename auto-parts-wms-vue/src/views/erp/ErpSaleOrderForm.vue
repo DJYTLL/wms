@@ -929,10 +929,10 @@ const canShowProfit = computed(() => canViewProfit.value && showProfitColumn.val
 const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale-form:discountAllocated'));
 const canUseQuickAssembly = computed(() => {
   return !isReadOnly.value
-    && hasPermission('erp-assembly:view')
-    && hasPermission('erp-assembly:add');
+    && hasPermission('erp-assemble-order:view')
+    && hasPermission('erp-assemble-order:add');
 });
-const canQuickApproveAssembly = computed(() => hasPermission('erp-assembly:approve'));
+const canQuickApproveAssembly = computed(() => hasPermission('erp-assemble-order:approve'));
 const showCustomerDebtTotal = computed(() => formData.status === 'APPROVED');
 const currentCustomerName = computed(() => {
   if (!formData.customerId) return '-';

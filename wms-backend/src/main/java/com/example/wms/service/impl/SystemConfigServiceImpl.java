@@ -7,6 +7,7 @@ import com.example.wms.entity.SystemConfig;
 import com.example.wms.exception.NotFoundException;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.service.SystemConfigService;
+import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -23,12 +24,12 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     @Override
     public List<SystemConfigResponse> listAll() {
-        return systemConfigMapper.findAll().stream().map(this::toResponse).toList();
+        return systemConfigMapper.findAll(TenantContext.requireTenantId()).stream().map(this::toResponse).toList();
     }
 
     @Override
     public List<SystemConfigResponse> listPublic() {
-        return systemConfigMapper.findPublic().stream().map(this::toResponse).toList();
+        return systemConfigMapper.findPublic(TenantContext.requireTenantId()).stream().map(this::toResponse).toList();
     }
 
     @Override
@@ -39,14 +40,16 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     @Override
     public SystemConfigResponse create(String key, SystemConfigRequest request) {
+        Long tenantId = TenantContext.requireTenantId();
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("配置键不能为空");
         }
-        SystemConfig existing = systemConfigMapper.findByKey(key);
+        SystemConfig existing = systemConfigMapper.findByKey(tenantId, key);
         if (existing != null) {
             throw new IllegalArgumentException("配置键已存在");
         }
         SystemConfig config = new SystemConfig();
+        config.setTenantId(tenantId);
         config.setConfigKey(key.trim());
         applyRequest(config, request);
         systemConfigMapper.insert(config);
@@ -55,18 +58,23 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     @Override
     public SystemConfigResponse update(String key, SystemConfigRequest request) {
-        SystemConfig config = loadByKey(key);
+        Long tenantId = TenantContext.requireTenantId();
+        SystemConfig config = loadByKey(tenantId, key);
         applyRequest(config, request);
         config.setUpdatedAt(Instant.now());
         systemConfigMapper.update(
             config,
-            new QueryWrapper<SystemConfig>().eq("config_key", key)
+            new QueryWrapper<SystemConfig>().eq("tenant_id", tenantId).eq("config_key", key)
         );
         return toResponse(config);
     }
 
     private SystemConfig loadByKey(String key) {
-        SystemConfig config = systemConfigMapper.findByKey(key);
+        return loadByKey(TenantContext.requireTenantId(), key);
+    }
+
+    private SystemConfig loadByKey(Long tenantId, String key) {
+        SystemConfig config = systemConfigMapper.findByKey(tenantId, key);
         if (config == null) {
             throw new NotFoundException("配置不存在");
         }

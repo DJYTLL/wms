@@ -114,10 +114,11 @@ CREATE TABLE IF NOT EXISTS app_audit_log (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 系统配置表（全局）
+-- 系统配置表（租户隔离）
 CREATE TABLE IF NOT EXISTS app_system_config (
     id BIGSERIAL PRIMARY KEY,
-    config_key VARCHAR(120) NOT NULL UNIQUE,
+    tenant_id BIGINT NOT NULL,
+    config_key VARCHAR(120) NOT NULL,
     config_value TEXT,
     value_type VARCHAR(40) NOT NULL DEFAULT 'string',
     description VARCHAR(500),
@@ -146,7 +147,7 @@ CREATE INDEX IF NOT EXISTS idx_app_permission_code ON app_permission(code);
 CREATE INDEX IF NOT EXISTS idx_refresh_token_tenant_user_id ON app_refresh_token(tenant_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_actor ON app_audit_log(tenant_id, actor_username);
 CREATE INDEX IF NOT EXISTS idx_audit_log_request_id ON app_audit_log(request_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_system_config_key ON app_system_config(config_key);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_system_config_tenant_key ON app_system_config(tenant_id, config_key);
 CREATE INDEX IF NOT EXISTS idx_idempotency_expires_at ON app_idempotency(expires_at);
 
 -- 菜单表（全局）

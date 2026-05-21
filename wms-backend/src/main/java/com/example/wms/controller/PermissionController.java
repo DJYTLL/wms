@@ -4,6 +4,7 @@ import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PermissionCreateRequest;
+import com.example.wms.dto.PermissionDiagnosticResponse;
 import com.example.wms.dto.PermissionUpdateRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.entity.Permission;
@@ -31,6 +32,13 @@ public class PermissionController {
     @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_role:view') or hasAuthority('PERM_permission:view')")
     public ResponseEntity<ApiResponse<List<Permission>>> list() {
         return ResponseEntity.ok(ApiResponse.ok(permissionService.listAll()));
+    }
+
+    // 查询权限诊断信息
+    @GetMapping("/diagnostics")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_permission:view')")
+    public ResponseEntity<ApiResponse<List<PermissionDiagnosticResponse>>> diagnostics() {
+        return ResponseEntity.ok(ApiResponse.ok(permissionService.listDiagnostics()));
     }
 
     // 分页查询权限列表

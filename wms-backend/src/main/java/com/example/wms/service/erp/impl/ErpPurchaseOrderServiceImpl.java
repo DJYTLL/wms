@@ -1140,7 +1140,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     }
 
     private String readConfig(String key, String fallback) {
-        SystemConfig config = systemConfigMapper.findByKey(key);
+        SystemConfig config = systemConfigMapper.findByKey(TenantContext.requireTenantId(), key);
         if (config == null || config.getConfigValue() == null || config.getConfigValue().isBlank()) {
             return fallback;
         }

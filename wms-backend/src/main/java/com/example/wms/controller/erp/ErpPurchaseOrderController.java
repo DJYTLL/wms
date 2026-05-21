@@ -26,7 +26,10 @@ import java.util.Map;
 public class ErpPurchaseOrderController {
     private static final String PURCHASE_ORDER_READ_OR_RETURN_SOURCE_ACCESS =
         "hasAuthority('PERM_erp-purchase:view')"
+            + " or hasAuthority('PERM_erp-purchase-draft:view')"
+            + " or hasAuthority('PERM_erp-purchase-draft:print')"
             + " or hasAuthority('PERM_erp-purchase-approved:view')"
+            + " or hasAuthority('PERM_erp-purchase-approved:print')"
             + " or hasAuthority('PERM_erp-purchase-return-draft:view')"
             + " or hasAuthority('PERM_erp-purchase-return-draft:add')"
             + " or hasAuthority('PERM_erp-purchase-return-draft:edit')"

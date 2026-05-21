@@ -32,7 +32,7 @@ public class ErpSaleOrderController {
 
     // 查询销售单列表
     @GetMapping
-    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-sale-draft:view','PERM_erp-sale-approved:view')")
     public ResponseEntity<ApiResponse<List<ErpSaleOrder>>> list(@RequestParam(required = false) String keyword,
                                                                 @RequestParam(required = false) String status,
                                                                 @RequestParam(required = false) Long customerId,
@@ -45,7 +45,7 @@ public class ErpSaleOrderController {
 
     // 分页查询销售单
     @GetMapping("/page")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-sale-draft:view','PERM_erp-sale-approved:view')")
     public ResponseEntity<ApiResponse<PageResponse<ErpSaleOrder>>> page(@RequestParam(defaultValue = "1") long page,
                                                                         @RequestParam(defaultValue = "20") long size,
                                                                         @RequestParam(required = false) String keyword,
@@ -87,7 +87,7 @@ public class ErpSaleOrderController {
 
     // 销售单汇总
     @GetMapping("/summary")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-sale-draft:view','PERM_erp-sale-approved:view')")
     public ResponseEntity<ApiResponse<ErpSaleOrderSummary>> summary(@RequestParam(required = false) String keyword,
                                                                     @RequestParam(required = false) String status,
                                                                     @RequestParam(required = false) Long customerId,
@@ -125,7 +125,7 @@ public class ErpSaleOrderController {
 
     // 查询销售单详情
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-sale-draft:view','PERM_erp-sale-approved:view')")
     public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.getDetail(id)));
     }
@@ -175,7 +175,7 @@ public class ErpSaleOrderController {
 
     // 商品销售历史（用于商品历史弹窗）
     @GetMapping("/product-history")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:view')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:view','PERM_erp-sale-draft:view','PERM_erp-sale-approved:view')")
     public ResponseEntity<ApiResponse<PageResponse<ErpSaleOrderHistoryItem>>> productHistory(@RequestParam Long productId,
                                                                                              @RequestParam(required = false) Long customerId,
                                                                                              @RequestParam(required = false) String keyword,
@@ -192,7 +192,7 @@ public class ErpSaleOrderController {
 
     // 预生成销售单号
     @GetMapping("/next-order-no")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:add')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:add','PERM_erp-sale-draft:add')")
     public ResponseEntity<ApiResponse<String>> nextOrderNo() {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.nextOrderNo()));
     }
@@ -205,7 +205,7 @@ public class ErpSaleOrderController {
 
     // 新增销售单
     @PostMapping
-    @PreAuthorize("hasAuthority('PERM_erp-sale:add')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:add','PERM_erp-sale-draft:add')")
     public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> create(@Valid @RequestBody ErpSaleOrderCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.create(request)));
     }
@@ -218,7 +218,7 @@ public class ErpSaleOrderController {
 
     // 更新销售单
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:edit')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:edit','PERM_erp-sale-draft:edit')")
     public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> update(@PathVariable Long id,
                                                                   @Valid @RequestBody ErpSaleOrderUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.update(id, request)));
@@ -234,7 +234,7 @@ public class ErpSaleOrderController {
 
     // 删除销售单
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:edit')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:edit','PERM_erp-sale-draft:delete')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id,
                                                     @Valid @RequestBody DeleteRequest request) {
         try (DeleteAuditScope ignored = DeleteAuditScope.bind(request.reason())) {
@@ -256,7 +256,7 @@ public class ErpSaleOrderController {
 
     // 审核销售单
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:approve')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:approve','PERM_erp-sale-draft:approve')")
     public ResponseEntity<ApiResponse<Void>> approve(@PathVariable Long id) {
         erpSaleOrderService.approve(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
@@ -272,7 +272,7 @@ public class ErpSaleOrderController {
 
     // 作废销售单
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:cancel')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:cancel','PERM_erp-sale-approved:cancel')")
     public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id) {
         erpSaleOrderService.cancel(id);
         return ResponseEntity.ok(ApiResponse.ok(null));
@@ -290,7 +290,7 @@ public class ErpSaleOrderController {
 
     // 红冲销售单
     @PostMapping("/{id}/red-flush")
-    @PreAuthorize("hasAuthority('PERM_erp-sale:redflush')")
+    @PreAuthorize("hasAnyAuthority('PERM_erp-sale:redflush','PERM_erp-sale-approved:redflush')")
     public ResponseEntity<ApiResponse<Void>> redFlush(@PathVariable Long id,
                                                       @RequestBody(required = false) RedFlushRequest request) {
         String reason = request == null ? null : request.reason();

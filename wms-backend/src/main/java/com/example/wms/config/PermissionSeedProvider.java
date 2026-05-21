@@ -278,6 +278,16 @@ public final class PermissionSeedProvider {
             new PermissionSeed("erp-assembly:edit", "编辑商品组装(ERP)", "编辑ERP商品组装"),
             new PermissionSeed("erp-assembly:approve", "审核商品组装(ERP)", "审核ERP商品组装"),
             new PermissionSeed("erp-assembly:delete", "删除商品组装(ERP)", "删除ERP商品组装"),
+            new PermissionSeed("erp-assemble-order:view", "查看组装单(ERP)", "查看ERP组装单"),
+            new PermissionSeed("erp-assemble-order:add", "新增组装单(ERP)", "新增ERP组装单"),
+            new PermissionSeed("erp-assemble-order:edit", "编辑组装单(ERP)", "编辑ERP组装单"),
+            new PermissionSeed("erp-assemble-order:approve", "审核组装单(ERP)", "审核ERP组装单"),
+            new PermissionSeed("erp-assemble-order:delete", "删除组装单(ERP)", "删除ERP组装单"),
+            new PermissionSeed("erp-disassemble-order:view", "查看拆分单(ERP)", "查看ERP拆分单"),
+            new PermissionSeed("erp-disassemble-order:add", "新增拆分单(ERP)", "新增ERP拆分单"),
+            new PermissionSeed("erp-disassemble-order:edit", "编辑拆分单(ERP)", "编辑ERP拆分单"),
+            new PermissionSeed("erp-disassemble-order:approve", "审核拆分单(ERP)", "审核ERP拆分单"),
+            new PermissionSeed("erp-disassemble-order:delete", "删除拆分单(ERP)", "删除ERP拆分单"),
 
             // ERP 列权限
             new PermissionSeed("column:erp-product:code", "ERP商品-编码列", "ERP商品编码列显示"),

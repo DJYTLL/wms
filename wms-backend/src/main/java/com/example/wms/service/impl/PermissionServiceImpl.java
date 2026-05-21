@@ -3,9 +3,11 @@ package com.example.wms.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.wms.dto.PermissionCreateRequest;
+import com.example.wms.dto.PermissionDiagnosticResponse;
 import com.example.wms.dto.PermissionUpdateRequest;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.entity.Permission;
+import com.example.wms.mapper.MenuMapper;
 import com.example.wms.mapper.PermissionMapper;
 import com.example.wms.mapper.RolePermissionMapper;
 import com.example.wms.mapper.UserAccountMapper;
@@ -26,19 +28,26 @@ import java.util.Set;
 // 权限服务实现
 @Service
 public class PermissionServiceImpl implements PermissionService {
+    private static final Set<String> MENU_REFERENCE_OPTIONAL_VIEW_PERMISSIONS = Set.of(
+        "erp-finance-summary:view"
+    );
+
     private final PermissionMapper permissionMapper;
     private final RolePermissionMapper rolePermissionMapper;
     private final UserRoleMapper userRoleMapper;
     private final UserAccountMapper userAccountMapper;
+    private final MenuMapper menuMapper;
 
     public PermissionServiceImpl(PermissionMapper permissionMapper,
                                  RolePermissionMapper rolePermissionMapper,
                                  UserRoleMapper userRoleMapper,
-                                 UserAccountMapper userAccountMapper) {
+                                 UserAccountMapper userAccountMapper,
+                                 MenuMapper menuMapper) {
         this.permissionMapper = permissionMapper;
         this.rolePermissionMapper = rolePermissionMapper;
         this.userRoleMapper = userRoleMapper;
         this.userAccountMapper = userAccountMapper;
+        this.menuMapper = menuMapper;
     }
 
     @Override
@@ -118,11 +127,15 @@ public class PermissionServiceImpl implements PermissionService {
         if (existing != null && !existing.getId().equals(id)) {
             throw new IllegalArgumentException("权限编码已存在");
         }
+        boolean authRelevantChange = isAuthRelevantChange(permission, request);
         permission.setCode(request.code());
         permission.setName(request.name());
         permission.setDescription(request.description());
         if (request.enabled() != null) {
             permission.setEnabled(request.enabled());
+        }
+        if (authRelevantChange) {
+            bumpUsersByPermission(id);
         }
         permission.setUpdatedAt(Instant.now());
         permissionMapper.updateById(permission);
@@ -137,9 +150,71 @@ public class PermissionServiceImpl implements PermissionService {
         if (permission == null) {
             throw new IllegalArgumentException("权限不存在");
         }
-        // 获取受影响的角色与用户
+        bumpUsersByPermission(id);
+        // 先删除角色权限关联
+        rolePermissionMapper.deleteByPermissionId(id);
+        permissionMapper.deleteById(id);
+    }
+
+    @Override
+    public List<PermissionDiagnosticResponse> listDiagnostics() {
+        List<Permission> permissions = listAll();
+        return permissions.stream()
+            .map(this::toDiagnosticResponse)
+            .toList();
+    }
+
+    private PermissionDiagnosticResponse toDiagnosticResponse(Permission permission) {
+        long roleCount = rolePermissionMapper.countActiveRolesByPermissionId(permission.getId());
+        long menuCount = permission.getCode() == null
+            ? 0L
+            : menuMapper.countActiveMenusByPermissionCode(permission.getCode());
+        List<String> warnings = buildWarnings(permission, roleCount, menuCount);
+        String riskLevel = warnings.isEmpty() ? "ok" : "warning";
+        return new PermissionDiagnosticResponse(
+            permission.getId(),
+            permission.getCode(),
+            roleCount,
+            menuCount,
+            riskLevel,
+            warnings
+        );
+    }
+
+    private List<String> buildWarnings(Permission permission, long roleCount, long menuCount) {
+        List<String> warnings = new java.util.ArrayList<>();
+        if (!permission.isEnabled()) {
+            warnings.add("权限已停用");
+        }
+        if (roleCount == 0) {
+            warnings.add("未分配给任何角色");
+        }
+        if (requiresMenuReference(permission.getCode()) && menuCount == 0) {
+            warnings.add("未被菜单引用");
+        }
+        return warnings;
+    }
+
+    private boolean requiresMenuReference(String code) {
+        if (code == null || code.isBlank() || code.startsWith("column:")) {
+            return false;
+        }
+        if (MENU_REFERENCE_OPTIONAL_VIEW_PERMISSIONS.contains(code)) {
+            return false;
+        }
+        String[] parts = code.split(":", 2);
+        return parts.length == 2 && "view".equals(parts[1]);
+    }
+
+    private boolean isAuthRelevantChange(Permission permission, PermissionUpdateRequest request) {
+        boolean codeChanged = request.code() != null && !request.code().equals(permission.getCode());
+        boolean enabledChanged = request.enabled() != null && request.enabled() != permission.isEnabled();
+        return codeChanged || enabledChanged;
+    }
+
+    private void bumpUsersByPermission(Long permissionId) {
         List<com.example.wms.mapper.RolePermissionMapper.RoleTenantPair> pairs =
-            rolePermissionMapper.findRoleTenantPairsByPermissionId(id);
+            rolePermissionMapper.findRoleTenantPairsByPermissionId(permissionId);
         if (pairs != null && !pairs.isEmpty()) {
             java.util.Map<Long, java.util.Set<Long>> tenantRoleIds = new java.util.HashMap<>();
             for (com.example.wms.mapper.RolePermissionMapper.RoleTenantPair pair : pairs) {
@@ -158,9 +233,6 @@ public class PermissionServiceImpl implements PermissionService {
                 }
             }
         }
-        // 先删除角色权限关联
-        rolePermissionMapper.deleteByPermissionId(id);
-        permissionMapper.deleteById(id);
     }
 
     @Override

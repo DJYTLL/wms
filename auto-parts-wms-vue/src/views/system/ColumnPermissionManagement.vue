@@ -1,145 +1,176 @@
 <template>
-  <div class="page-shell page-shell--system">
+  <div class="page-shell page-shell--system column-permission-page">
     <div class="page-header">
       <div class="page-title">{{ t('page.columnPermissionManagement') }}</div>
+    </div>
 
-      <div class="top-card">
-        <div class="top-card-main">
-          <el-form label-width="96px" class="top-form">
-            <div class="top-left">
-              <el-form-item :label="t('field.mode')" class="mode-item">
-                <el-radio-group v-model="mode">
-                  <el-radio-button value="role">{{ t('field.roles') }}</el-radio-button>
-                  <el-radio-button v-if="isSuperAdmin" value="tenant">{{
-                    t('field.tenant')
-                  }}</el-radio-button>
-                </el-radio-group>
-              </el-form-item>
-            </div>
+    <div class="column-permission-panel">
+      <div class="column-tree-list">
+        <el-input
+          v-model="columnTreeSearch"
+          class="column-tree-search"
+          placeholder="搜索菜单、页面或列名"
+          clearable
+        />
 
-            <div class="top-right">
-              <el-form-item :label="t('field.page')">
-                <el-popover
-                  placement="bottom-start"
-                  :width="360"
-                  trigger="click"
-                  popper-class="page-tree-popper"
-                  v-model:visible="pageTreeVisible"
+        <div v-for="item in displayPageTreeData" :key="item.id" class="page-tree-node">
+          <button
+            type="button"
+            class="page-tree-label page-tree-label--root"
+            :class="{ 'is-active': isTreeNodeActive(item) }"
+            @click.stop="handleTreeNodeClick(item)"
+          >
+            <span v-if="item.icon" class="page-tree-label__icon" v-html="item.icon"></span>
+            <span class="page-tree-label__text">{{ item.label }}</span>
+            <span class="page-tree-label__count">
+              {{ treeNodeColumnStats[item.id]?.selected || 0 }}/{{ treeNodeColumnStats[item.id]?.total || 0 }}
+            </span>
+            <span
+              v-if="item.children.length"
+              class="page-tree-label__arrow"
+              :class="{ 'is-open': item.isOpen }"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </span>
+          </button>
+
+          <div v-if="item.children.length && item.isOpen" class="page-tree-children">
+            <template v-for="child in item.children" :key="child.id">
+              <button
+                type="button"
+                class="page-tree-label page-tree-label--child"
+                :class="{
+                  'is-active': isTreeNodeActive(child),
+                  'is-leaf': child.selectable && child.children.length === 0,
+                }"
+                @click.stop="handleTreeNodeClick(child)"
+              >
+                <span
+                  v-if="child.selectable && child.children.length === 0"
+                  class="page-tree-label__bullet"
+                  :class="{ 'is-active': isTreeNodeActive(child) && child.selectable }"
+                ></span>
+                <span class="page-tree-label__text">{{ child.label }}</span>
+                <span class="page-tree-label__count">
+                  {{ treeNodeColumnStats[child.id]?.selected || 0 }}/{{ treeNodeColumnStats[child.id]?.total || 0 }}
+                </span>
+                <span
+                  v-if="child.children.length"
+                  class="page-tree-label__arrow"
+                  :class="{ 'is-open': child.isOpen }"
                 >
-                  <template #reference>
-                    <button type="button" class="page-tree-trigger top-select">
-                      <span :class="['page-tree-trigger__text', { 'is-placeholder': !pageKey }]">
-                        {{ selectedPageLabel }}
-                      </span>
-                      <span class="page-tree-trigger__arrow" :class="{ 'is-open': pageTreeVisible }">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </span>
+              </button>
+
+              <div v-if="child.children.length && child.isOpen" class="page-tree-grandchildren">
+                <div v-for="grandChild in child.children" :key="grandChild.id" class="page-tree-node">
+                  <button
+                    type="button"
+                    class="page-tree-label page-tree-label--leaf"
+                    :class="{ 'is-active': isTreeNodeActive(grandChild) }"
+                    @click.stop="handleTreeNodeClick(grandChild)"
+                  >
+                    <span
+                      class="page-tree-label__bullet"
+                      :class="{ 'is-active': isTreeNodeActive(grandChild) }"
+                    ></span>
+                    <span class="page-tree-label__text">{{ grandChild.label }}</span>
+                    <span class="page-tree-label__count">
+                      {{ treeNodeColumnStats[grandChild.id]?.selected || 0 }}/{{ treeNodeColumnStats[grandChild.id]?.total || 0 }}
+                    </span>
+                    <span
+                      v-if="grandChild.children.length"
+                      class="page-tree-label__arrow"
+                      :class="{ 'is-open': grandChild.isOpen }"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </span>
+                  </button>
+
+                  <div v-if="grandChild.children.length && grandChild.isOpen" class="page-tree-greatgrandchildren">
+                    <button
+                      v-for="greatGrandChild in grandChild.children"
+                      :key="greatGrandChild.id"
+                      type="button"
+                      class="page-tree-label page-tree-label--leaf page-tree-label--nested-leaf"
+                      :class="{ 'is-active': isTreeNodeActive(greatGrandChild) }"
+                      @click.stop="handleTreeNodeClick(greatGrandChild)"
+                    >
+                      <span
+                        class="page-tree-label__bullet"
+                        :class="{ 'is-active': isTreeNodeActive(greatGrandChild) }"
+                      ></span>
+                      <span class="page-tree-label__text">{{ greatGrandChild.label }}</span>
+                      <span class="page-tree-label__count">
+                        {{ treeNodeColumnStats[greatGrandChild.id]?.selected || 0 }}/{{ treeNodeColumnStats[greatGrandChild.id]?.total || 0 }}
                       </span>
                     </button>
-                  </template>
-
-                  <div class="page-tree-dropdown">
-                    <div v-for="item in pageTreeData" :key="item.id" class="page-tree-node page-tree-node--root">
-                      <button
-                        type="button"
-                        class="page-tree-label page-tree-label--root"
-                        :class="{ 'is-active': isTreeNodeActive(item) }"
-                        @click.stop="handleTreeNodeClick(item)"
-                      >
-                        <span v-if="item.icon" class="page-tree-label__icon" v-html="item.icon"></span>
-                        <span class="page-tree-label__text">{{ item.label }}</span>
-                        <span
-                          v-if="item.children.length"
-                          class="page-tree-label__arrow"
-                          :class="{ 'is-open': item.isOpen }"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                          </svg>
-                        </span>
-                      </button>
-
-                      <div v-if="item.children.length && item.isOpen" class="page-tree-children">
-                        <template v-for="child in item.children" :key="child.id">
-                          <button
-                            type="button"
-                            class="page-tree-label page-tree-label--child"
-                            :class="{
-                              'is-active': isTreeNodeActive(child),
-                              'is-leaf': child.selectable && child.children.length === 0,
-                            }"
-                            @click.stop="handleTreeNodeClick(child)"
-                          >
-                            <span
-                              v-if="child.selectable && child.children.length === 0"
-                              class="page-tree-label__bullet"
-                              :class="{ 'is-active': isTreeNodeActive(child) && child.selectable }"
-                            ></span>
-                            <span class="page-tree-label__text">{{ child.label }}</span>
-                            <span
-                              v-if="child.children.length"
-                              class="page-tree-label__arrow"
-                              :class="{ 'is-open': child.isOpen }"
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                              </svg>
-                            </span>
-                          </button>
-
-                          <div v-if="child.children.length && child.isOpen" class="page-tree-grandchildren">
-                            <button
-                              v-for="grandChild in child.children"
-                              :key="grandChild.id"
-                              type="button"
-                              class="page-tree-label page-tree-label--leaf"
-                              :class="{ 'is-active': isTreeNodeActive(grandChild) }"
-                              @click.stop="handleTreeNodeClick(grandChild)"
-                            >
-                              <span
-                                class="page-tree-label__bullet"
-                                :class="{ 'is-active': isTreeNodeActive(grandChild) }"
-                              ></span>
-                              <span class="page-tree-label__text">{{ grandChild.label }}</span>
-                            </button>
-                          </div>
-                        </template>
-                      </div>
-                    </div>
-
-                    <div v-if="pageTreeData.length === 0" class="page-tree-empty">
-                      {{ t('table.empty') }}
-                    </div>
                   </div>
-                </el-popover>
-              </el-form-item>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
 
-              <el-form-item v-if="mode === 'role'" :label="t('field.roles')">
-                <el-select v-model="selectedRoleId" placeholder="Select Role" class="top-select">
-                  <el-option
-                    v-for="role in roleOptions"
-                    :key="role.id"
-                    :label="role.name"
-                    :value="role.id"
-                  />
-                </el-select>
-              </el-form-item>
+        <div v-if="displayPageTreeData.length === 0" class="page-tree-empty">
+          {{ t('table.empty') }}
+        </div>
+      </div>
 
-              <el-form-item v-if="mode === 'tenant' && isSuperAdmin" :label="t('field.tenant')">
-                <el-select v-model="selectedTenantId" placeholder="Select Tenant" class="top-select">
-                  <el-option
-                    v-for="tenant in tenantOptions"
-                    :key="tenant.id"
-                    :label="tenant.name"
-                    :value="tenant.id"
-                  />
-                </el-select>
-              </el-form-item>
-            </div>
-          </el-form>
+      <div class="column-config-panel">
+        <div class="column-config-toolbar">
+          <div class="column-config-toolbar__left">
+            <el-radio-group v-model="mode">
+              <el-radio-button value="role">{{ t('field.roles') }}</el-radio-button>
+              <el-radio-button v-if="isSuperAdmin" value="tenant">{{ t('field.tenant') }}</el-radio-button>
+            </el-radio-group>
 
-          <div class="card-actions">
+            <el-select v-if="mode === 'role'" v-model="selectedRoleId" placeholder="Select Role" class="target-select">
+              <el-option
+                v-for="role in roleOptions"
+                :key="role.id"
+                :label="role.name"
+                :value="role.id"
+              />
+            </el-select>
+
+            <el-select
+              v-if="mode === 'tenant' && isSuperAdmin"
+              v-model="selectedTenantId"
+              placeholder="Select Tenant"
+              class="target-select"
+            >
+              <el-option
+                v-for="tenant in tenantOptions"
+                :key="tenant.id"
+                :label="tenant.name"
+                :value="tenant.id"
+              />
+            </el-select>
+          </div>
+
+          <div class="column-config-toolbar__right">
+            <el-tag type="info" effect="plain">{{ selectedPageSummary }}</el-tag>
+            <el-tag type="success" effect="plain">
+              {{
+                mode === 'role'
+                  ? `${t('field.roles')} 模板: ${roleTemplateSummary}`
+                  : `${t('field.tenant')} ${t('field.limit')}: ${tenantLimitSummary}`
+              }}
+            </el-tag>
+            <el-button size="small" @click="selectCurrentPageColumns">
+              {{ t('action.selectAll') }}
+            </el-button>
+            <el-button size="small" plain @click="clearCurrentPageColumns">
+              全部清空
+            </el-button>
             <el-button
               v-if="mode === 'role'"
               type="primary"
@@ -148,7 +179,6 @@
             >
               {{ t('action.save') }}
             </el-button>
-
             <el-button
               v-else
               type="primary"
@@ -160,83 +190,76 @@
           </div>
         </div>
 
-        <div class="tenant-hint">
-          <el-tag type="info" effect="plain">
-            {{
-              mode === 'role'
-                ? `${t('field.roles')} 模板: ${roleTemplateSummary}`
-                : `${t('field.tenant')} ${t('field.limit')}: ${tenantLimitSummary}`
-            }}
-          </el-tag>
+        <div class="column-config-body">
+          <div v-if="!pageKey" class="empty-tip">
+            {{ t('message.required') }}
+          </div>
+
+          <div v-else class="column-config-content">
+            <section class="column-config-section column-config-section--config">
+              <div class="column-config-section__title">
+                {{ mode === 'role' ? t('field.roleColumnConfig') : t('field.tenantColumnConfig') }}
+              </div>
+
+              <el-empty
+                v-if="currentPagePermissions.length === 0"
+                class="column-config-empty"
+                :description="t('table.empty')"
+              />
+
+              <el-checkbox-group v-else-if="mode === 'role'" v-model="selectedRolePermissionIds" class="column-check-list">
+                <div
+                  v-for="permission in currentPagePermissions"
+                  :key="permission.id"
+                  class="column-check-item"
+                  spellcheck="false"
+                >
+                  <el-checkbox :value="permission.id" />
+                  <span class="column-check-item__main">
+                    <span class="column-check-item__name">{{ permission.name }}</span>
+                  </span>
+                </div>
+              </el-checkbox-group>
+
+              <el-checkbox-group v-else v-model="tenantVisibleColumns" class="column-check-list">
+                <div
+                  v-for="permission in currentPagePermissions"
+                  :key="permission.id"
+                  class="column-check-item"
+                  spellcheck="false"
+                >
+                  <el-checkbox :value="permission.columnKey" />
+                  <span class="column-check-item__main">
+                    <span class="column-check-item__name">{{ permission.name }}</span>
+                  </span>
+                </div>
+              </el-checkbox-group>
+            </section>
+
+            <section class="column-config-section column-config-section--preview">
+              <div class="column-config-section__title">
+                {{ t('field.preview') }}
+              </div>
+
+              <div class="preview-table-wrapper">
+                <ErpDataTable :data="previewRows" height="100%" stripe table-key="column-permission-management">
+                  <ErpDataTableColumn type="index" width="64" :label="t('table.index')" />
+                  <ErpDataTableColumn
+                    v-for="column in previewColumns"
+                    :key="column.key"
+                    :prop="column.key"
+                    :label="column.label"
+                    min-width="140"
+                    show-overflow-tooltip />
+                </ErpDataTable>
+              </div>
+
+              <div v-if="previewColumns.length === 0" class="empty-tip">
+                {{ t('table.empty') }}
+              </div>
+            </section>
+          </div>
         </div>
-      </div>
-    </div>
-
-    <div class="main-headers">
-      <div class="main-header">
-        {{ mode === 'role' ? t('field.roleColumnConfig') : t('field.tenantColumnConfig') }}
-      </div>
-    </div>
-
-    <div class="config-card control-card">
-      <div v-if="!pageKey" class="empty-tip">
-        {{ t('message.required') }}
-      </div>
-
-      <div v-if="mode === 'tenant' && isSuperAdmin && pageKey" class="tenant-tools">
-        <el-button size="small" @click="selectAllTenantColumns">
-          {{ t('action.selectAll') }}
-        </el-button>
-        <el-button size="small" type="primary" plain @click="selectAllTenantColumns">
-          {{ t('action.resetDefault') }}
-        </el-button>
-      </div>
-
-      <div v-if="pageKey" class="checkbox-panel">
-        <el-empty v-if="currentPagePermissions.length === 0" :description="t('table.empty')" />
-
-        <el-checkbox-group v-else-if="mode === 'role'" v-model="selectedRolePermissionIds">
-          <el-checkbox
-            v-for="permission in currentPagePermissions"
-            :key="permission.id"
-            :value="permission.id"
-          >
-            {{ permission.name }}
-          </el-checkbox>
-        </el-checkbox-group>
-
-        <el-checkbox-group v-else v-model="tenantVisibleColumns">
-          <el-checkbox
-            v-for="permission in currentPagePermissions"
-            :key="permission.id"
-            :value="permission.columnKey"
-          >
-            {{ permission.name }}
-          </el-checkbox>
-        </el-checkbox-group>
-      </div>
-    </div>
-
-    <div class="main-headers">
-      <div class="main-header">{{ t('field.preview') }}</div>
-    </div>
-
-    <div class="config-card preview-card">
-      <div class="preview-table-wrapper">
-        <ErpDataTable :data="previewRows" height="100%" stripe table-key="column-permission-management">
-          <ErpDataTableColumn type="index" width="64" :label="t('table.index')" />
-          <ErpDataTableColumn
-            v-for="column in previewColumns"
-            :key="column.key"
-            :prop="column.key"
-            :label="column.label"
-            min-width="140"
-            show-overflow-tooltip />
-        </ErpDataTable>
-      </div>
-
-      <div v-if="previewColumns.length === 0" class="empty-tip">
-        {{ t('table.empty') }}
       </div>
     </div>
   </div>
@@ -317,8 +340,8 @@ const isSuperAdmin = computed(() => authStore.hasRole('super_admin'))
 
 const mode = ref<ModeType>('role')
 const pageKey = ref<string>('')
-const pageTreeVisible = ref(false)
 const pageTreeOpenState = ref<Record<string, boolean>>({})
+const columnTreeSearch = ref('')
 
 const permissions = ref<PermissionItem[]>([])
 const roleOptions = ref<RoleOption[]>([])
@@ -331,9 +354,13 @@ const fullRolePermissionIds = ref<number[]>([])
 const updatingRoleSelection = ref(false)
 const roleSettingExists = ref(false)
 const currentRoleSetting = ref<RoleColumnResponse | null>(null)
+const rolePageSettingMap = ref<Record<string, RoleColumnResponse | null>>({})
+const rolePageSettingLoadSeq = ref(0)
 
 const selectedTenantId = ref<number | null>(null)
 const tenantVisibleColumns = ref<string[]>([])
+const tenantPageSettingMap = ref<Record<string, TenantColumnResponse | null>>({})
+const tenantPageSettingLoadSeq = ref(0)
 
 const tenantAllowedKeys = ref<string[]>([])
 const tenantSettingExists = ref(false)
@@ -347,16 +374,24 @@ const hiddenPageKeys = new Set([
 ])
 
 const menuPageKeyMap: Record<string, string[]> = {
+  user: ['user-management'],
   users: ['user-management'],
+  role: ['role-management'],
   roles: ['role-management'],
+  permission: ['permission-management'],
   permissions: ['permission-management'],
+  audit: ['audit-logs'],
   'audit-logs': ['audit-logs'],
+  column: [],
   'column-permissions': [],
   columnPermissions: [],
+  menu: ['menu-management'],
   'menu-management': ['menu-management'],
   'system-config': ['system-configs'],
+  tenant: ['tenant-management'],
   tenants: ['tenant-management'],
   'erp-product': ['erp-product'],
+  'erp-product-fitment': ['erp-vehicle-brand', 'erp-vehicle-series', 'erp-vehicle-model', 'erp-product-fitment'],
   'erp-vehicle-fitment': ['erp-vehicle-brand', 'erp-vehicle-series', 'erp-vehicle-model', 'erp-product-fitment'],
   'erp-customer': ['erp-customer'],
   'erp-customer-category': ['erp-customer-category'],
@@ -387,8 +422,8 @@ const menuPageKeyMap: Record<string, string[]> = {
   'erp-assemble-order': ['erp-assemble-order'],
   'erp-disassemble-order': ['erp-disassemble-order'],
   'erp-ar': ['erp-ar'],
-  'erp-finance-summary': ['erp-finance-customer-debt'],
   'erp-finance-customer-debt': ['erp-finance-customer-debt'],
+  'erp-finance-summary': ['erp-finance-customer-debt'],
   'erp-finance-supplier-debt': ['erp-finance-supplier-debt'],
   'erp-ap': ['erp-ap'],
   'erp-receipt': ['erp-receipt'],
@@ -461,11 +496,6 @@ const pageOptions = computed<PageOption[]>(() => {
 
 const pageOptionsMap = computed(() => {
   return new Map(pageOptions.value.map((item) => [item.key, item]))
-})
-
-const selectedPageLabel = computed(() => {
-  if (!pageKey.value) return t('field.page')
-  return pageLabelMap.value[pageKey.value] || pageKey.value
 })
 
 const containsTreeSelection = (node: PageTreeNode): boolean => {
@@ -559,14 +589,22 @@ const buildTreeNode = (item: MenuItem, parentId: string): PageTreeNode | null =>
     .filter((child): child is PageTreeNode => Boolean(child))
 
   const firstMappedNode = mappedNodes[0]
+  const onlyMappedGroup = mappedNodes.length === 1
+    && !firstMappedNode?.pageKey
+    && childNodes.length === 0
+    && extraNodes.length === 0
   const onlyDirectLeaf = mappedNodes.length === 1
     && Boolean(firstMappedNode?.pageKey)
     && childNodes.length === 0
     && extraNodes.length === 0
   const directPageKey = onlyDirectLeaf ? firstMappedNode?.pageKey : undefined
-  const children = onlyDirectLeaf ? [] : [...mappedNodes, ...extraNodes, ...childNodes]
+  const children = onlyDirectLeaf
+    ? []
+    : onlyMappedGroup
+      ? firstMappedNode?.children || []
+      : [...mappedNodes, ...extraNodes, ...childNodes]
 
-  if (!onlyDirectLeaf && children.length === 0) {
+  if (!onlyDirectLeaf && !onlyMappedGroup && children.length === 0) {
     return null
   }
 
@@ -577,7 +615,10 @@ const buildTreeNode = (item: MenuItem, parentId: string): PageTreeNode | null =>
     icon: parentId === 'root' ? item.icon : undefined,
     pageKey: directPageKey,
     selectable: Boolean(directPageKey),
-    isOpen: resolveTreeNodeOpen(nodeId, containsCurrent || parentId === 'root'),
+    isOpen: resolveTreeNodeOpen(
+      nodeId,
+      containsCurrent || parentId === 'root' || (onlyMappedGroup && firstMappedNode?.isOpen) || false,
+    ),
     children,
   }
 }
@@ -621,22 +662,124 @@ const pageTreeData = computed<PageTreeNode[]>(() => {
   return tree
 })
 
+const pageColumnStats = computed<Record<string, { selected: number; total: number }>>(() => {
+  return pageOptions.value.reduce<Record<string, { selected: number; total: number }>>((acc, item) => {
+    const pageColumns = permissions.value.filter((permission) => permission.pageKey === item.key)
+    let selected = 0
+    if (mode.value === 'role') {
+      const cachedSetting = rolePageSettingMap.value[item.key]
+      if (cachedSetting === undefined) {
+        const selectedIds = new Set(fullRolePermissionIds.value)
+        selected = pageColumns.filter((permission) => selectedIds.has(permission.id)).length
+      } else if (!cachedSetting?.updatedAt && !cachedSetting?.updatedBy) {
+        selected = pageColumns.length
+      } else {
+        const visibleColumns = new Set(cachedSetting.visibleColumns || [])
+        selected = pageColumns.filter((permission) => visibleColumns.has(permission.columnKey)).length
+      }
+    } else {
+      const cachedSetting = tenantPageSettingMap.value[item.key]
+      if (cachedSetting === undefined) {
+        if (item.key === pageKey.value) {
+          const visibleKeys = new Set(tenantVisibleColumns.value)
+          selected = pageColumns.filter((permission) => visibleKeys.has(permission.columnKey)).length
+        }
+      } else if (!cachedSetting?.updatedAt && !cachedSetting?.updatedBy) {
+        selected = pageColumns.length
+      } else {
+        const visibleKeys = new Set(cachedSetting.visibleColumns || [])
+        selected = pageColumns.filter((permission) => visibleKeys.has(permission.columnKey)).length
+      }
+    }
+    acc[item.key] = {
+      selected,
+      total: pageColumns.length,
+    }
+    return acc
+  }, {})
+})
+
+const collectTreeNodePageKeys = (node: PageTreeNode): string[] => {
+  const keys = node.pageKey ? [node.pageKey] : []
+  node.children.forEach((child) => {
+    keys.push(...collectTreeNodePageKeys(child))
+  })
+  return Array.from(new Set(keys))
+}
+
+const treeNodeColumnStats = computed<Record<string, { selected: number; total: number }>>(() => {
+  const stats: Record<string, { selected: number; total: number }> = {}
+  const walk = (node: PageTreeNode) => {
+    const nodeStats = collectTreeNodePageKeys(node).reduce(
+      (acc, key) => {
+        const current = pageColumnStats.value[key]
+        if (!current) return acc
+        acc.selected += current.selected
+        acc.total += current.total
+        return acc
+      },
+      { selected: 0, total: 0 },
+    )
+    stats[node.id] = nodeStats
+    node.children.forEach(walk)
+  }
+  pageTreeData.value.forEach(walk)
+  return stats
+})
+
+const treeNodeMatchesSearch = (node: PageTreeNode, keyword: string) => {
+  const normalized = keyword.toLowerCase()
+  const pageKeys = collectTreeNodePageKeys(node)
+  const matchedColumn = permissions.value.some((permission) => (
+    pageKeys.includes(permission.pageKey)
+    && `${permission.name} ${permission.columnKey} ${permission.code}`.toLowerCase().includes(normalized)
+  ))
+  return node.label.toLowerCase().includes(normalized) || matchedColumn
+}
+
+const filterTreeBySearch = (nodes: PageTreeNode[], keyword: string): PageTreeNode[] => {
+  const normalized = keyword.trim().toLowerCase()
+  if (!normalized) return nodes
+
+  return nodes
+    .map<PageTreeNode | null>((node) => {
+      const children = filterTreeBySearch(node.children, normalized)
+      if (!treeNodeMatchesSearch(node, normalized) && children.length === 0) {
+        return null
+      }
+      return {
+        ...node,
+        isOpen: children.length > 0 ? true : node.isOpen,
+        children,
+      }
+    })
+    .filter((node): node is PageTreeNode => Boolean(node))
+}
+
+const displayPageTreeData = computed(() => filterTreeBySearch(pageTreeData.value, columnTreeSearch.value))
+
 const isTreeNodeActive = (node: PageTreeNode): boolean => {
   if (node.pageKey && node.pageKey === pageKey.value) return true
   return node.children.some((child) => isTreeNodeActive(child))
 }
 
 const handleTreeNodeClick = (node: PageTreeNode) => {
+  const nextOpenState = node.children.length > 0 ? !node.isOpen : undefined
   if (node.selectable && node.pageKey) {
     pageKey.value = node.pageKey
-    pageTreeVisible.value = false
+    if (nextOpenState !== undefined) {
+      pageTreeOpenState.value = {
+        ...pageTreeOpenState.value,
+        [node.id]: nextOpenState,
+      }
+    }
     return
   }
 
-  if (node.children.length > 0) {
+  if (nextOpenState !== undefined) {
     pageTreeOpenState.value = {
       ...pageTreeOpenState.value,
-      [node.id]: !node.isOpen,
+      [node.id]: nextOpenState,
     }
   }
 }
@@ -644,6 +787,12 @@ const handleTreeNodeClick = (node: PageTreeNode) => {
 const currentPageLabel = computed(() => {
   if (!pageKey.value) return '-'
   return pageLabelMap.value[pageKey.value] || pageKey.value
+})
+
+const selectedPageSummary = computed(() => {
+  if (!pageKey.value) return t('table.empty')
+  const stats = pageColumnStats.value[pageKey.value] || { selected: 0, total: 0 }
+  return `${currentPageLabel.value}: ${stats.selected}/${stats.total}`
 })
 
 const basePagePermissions = computed(() => {
@@ -796,6 +945,12 @@ const loadRoleOptions = async () => {
       roleSettingExists.value = false
       currentRoleSetting.value = null
     }
+    if (!selectedRoleId.value && roleOptions.value.length > 0) {
+      const defaultRole = roleOptions.value.find((role) => role.code === 'super_admin') ?? roleOptions.value[0]
+      if (defaultRole) {
+        selectedRoleId.value = defaultRole.id
+      }
+    }
   } catch (error) {
     notifyError(error)
   }
@@ -844,6 +999,7 @@ const loadRolePermissions = async () => {
     fullRolePermissionIds.value = []
     roleSettingExists.value = false
     currentRoleSetting.value = null
+    rolePageSettingMap.value = {}
     return
   }
   try {
@@ -851,6 +1007,68 @@ const loadRolePermissions = async () => {
     const data = res.data.data || []
     fullRolePermissionIds.value = data.map((item: any) => item.id)
     clampRoleSelections()
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const loadAllRoleSettingsForStats = async () => {
+  if (mode.value !== 'role' || !selectedRoleId.value || pageOptions.value.length === 0) {
+    rolePageSettingMap.value = {}
+    return
+  }
+  const seq = rolePageSettingLoadSeq.value + 1
+  rolePageSettingLoadSeq.value = seq
+  const roleId = selectedRoleId.value
+  try {
+    const entries = await Promise.all(pageOptions.value.map(async (item) => {
+      const res: any = await request.get(`/roles/${roleId}/column-settings/${item.key}`)
+      const data: RoleColumnResponse = res.data.data || {
+        roleId,
+        pageKey: item.key,
+        visibleColumns: [],
+      }
+      return [item.key, data] as const
+    }))
+    if (rolePageSettingLoadSeq.value !== seq || selectedRoleId.value !== roleId || mode.value !== 'role') {
+      return
+    }
+    rolePageSettingMap.value = Object.fromEntries(entries)
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const loadAllTenantSettingsForStats = async () => {
+  if (
+    mode.value !== 'tenant'
+    || !isSuperAdmin.value
+    || !selectedTenantId.value
+    || pageOptions.value.length === 0
+  ) {
+    tenantPageSettingMap.value = {}
+    return
+  }
+  const seq = tenantPageSettingLoadSeq.value + 1
+  tenantPageSettingLoadSeq.value = seq
+  const tenantId = selectedTenantId.value
+  try {
+    const entries = await Promise.all(pageOptions.value.map(async (item) => {
+      const res: any = await request.get(`/tenants/${tenantId}/columns/${item.key}`)
+      const data: TenantColumnResponse = res.data.data || {
+        pageKey: item.key,
+        visibleColumns: [],
+      }
+      return [item.key, data] as const
+    }))
+    if (
+      tenantPageSettingLoadSeq.value !== seq
+      || selectedTenantId.value !== tenantId
+      || mode.value !== 'tenant'
+    ) {
+      return
+    }
+    tenantPageSettingMap.value = Object.fromEntries(entries)
   } catch (error) {
     notifyError(error)
   }
@@ -889,6 +1107,10 @@ const loadRoleSettingForCurrentContext = async () => {
       roleId: selectedRoleId.value,
       pageKey: pageKey.value,
       visibleColumns: [],
+    }
+    rolePageSettingMap.value = {
+      ...rolePageSettingMap.value,
+      [pageKey.value]: data,
     }
     applyRoleSettingForCurrentPage(data)
   } catch (error) {
@@ -937,6 +1159,10 @@ const loadTenantSettingForCurrentContext = async () => {
         pageKey: pageKey.value,
         visibleColumns: [],
       }
+      tenantPageSettingMap.value = {
+        ...tenantPageSettingMap.value,
+        [pageKey.value]: data,
+      }
       resolveAllowedKeysFromTenantResponse(data)
 
       const allKeys = allPageColumnKeys.value
@@ -953,6 +1179,10 @@ const loadTenantSettingForCurrentContext = async () => {
     const data: TenantColumnResponse = res.data.data || {
       pageKey: pageKey.value,
       visibleColumns: [],
+    }
+    tenantPageSettingMap.value = {
+      ...tenantPageSettingMap.value,
+      [pageKey.value]: data,
     }
     resolveAllowedKeysFromTenantResponse(data)
     clampRoleSelections()
@@ -979,6 +1209,10 @@ const saveRolePermissions = async () => {
         .map((item) => item.columnKey),
       updatedAt: new Date().toISOString(),
     }
+    rolePageSettingMap.value = {
+      ...rolePageSettingMap.value,
+      [pageKey.value]: currentRoleSetting.value,
+    }
     roleSettingExists.value = true
     if (isEditingCurrentUserRole.value) {
       await refreshCurrentSession()
@@ -999,6 +1233,14 @@ const saveTenantColumns = async () => {
       visibleColumns: tenantVisibleColumns.value,
     })
     tenantAllowedKeys.value = [...tenantVisibleColumns.value]
+    tenantPageSettingMap.value = {
+      ...tenantPageSettingMap.value,
+      [pageKey.value]: {
+        pageKey: pageKey.value,
+        visibleColumns: [...tenantVisibleColumns.value],
+        updatedAt: new Date().toISOString(),
+      },
+    }
     tenantSettingExists.value = true
     notifySuccess()
   } catch (error) {
@@ -1008,6 +1250,22 @@ const saveTenantColumns = async () => {
 
 const selectAllTenantColumns = () => {
   tenantVisibleColumns.value = [...allPageColumnKeys.value]
+}
+
+const selectCurrentPageColumns = () => {
+  if (mode.value === 'role') {
+    selectedRolePermissionIds.value = roleEditablePermissions.value.map((item) => item.id)
+    return
+  }
+  tenantVisibleColumns.value = [...allPageColumnKeys.value]
+}
+
+const clearCurrentPageColumns = () => {
+  if (mode.value === 'role') {
+    selectedRolePermissionIds.value = []
+    return
+  }
+  tenantVisibleColumns.value = []
 }
 
 const previewColumns = computed(() => {
@@ -1082,6 +1340,17 @@ const previewRows = computed(() => {
 
 watch(selectedRoleId, () => {
   loadRolePermissions()
+  loadAllRoleSettingsForStats()
+})
+
+watch([pageOptions, mode], () => {
+  loadAllRoleSettingsForStats()
+  loadAllTenantSettingsForStats()
+})
+
+watch(selectedTenantId, () => {
+  tenantPageSettingMap.value = {}
+  loadAllTenantSettingsForStats()
 })
 
 watch([pageKey, mode, selectedTenantId], () => {
@@ -1133,120 +1402,63 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.page-subtitle {
-  margin-top: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.top-card {
-  width: 100%;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.top-card-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-}
-
-.top-form {
-  display: grid;
-  grid-template-columns: minmax(280px, 336px) minmax(336px, 1fr);
-  column-gap: 12px;
-  row-gap: 12px;
-  align-items: start;
-}
-
-.top-select {
-  width: 336px;
-  max-width: 100%;
-}
-
-.page-tree-trigger {
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
-  background: #fff;
-  color: #303133;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.page-tree-trigger:hover,
-.page-tree-trigger:focus-visible {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
-  outline: none;
-}
-
-.page-tree-trigger__text {
-  min-width: 0;
-  text-align: left;
-  white-space: nowrap;
+.column-permission-page {
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.page-tree-trigger__text.is-placeholder {
-  color: #a8abb2;
-}
-
-.page-tree-trigger__arrow {
-  width: 16px;
-  height: 16px;
-  color: #909399;
+.column-permission-page .page-header {
   flex: 0 0 auto;
-  transition: transform 0.2s ease;
 }
 
-.page-tree-trigger__arrow.is-open {
-  transform: rotate(180deg);
+.column-permission-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #dcdfe6;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.page-tree-dropdown {
-  max-height: 420px;
-  overflow: auto;
-  padding: 6px 0;
-}
-
-.page-tree-node {
-  display: flex;
-  flex-direction: column;
-}
-
-.page-tree-children,
-.page-tree-grandchildren {
+.column-tree-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  background: #f8fafc;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
+.column-tree-search {
+  margin-bottom: 4px;
+  flex: 0 0 auto;
+}
+
+.page-tree-node,
+.page-tree-children,
+.page-tree-grandchildren,
+.page-tree-greatgrandchildren {
+  display: flex;
+  flex-direction: column;
+}
+
 .page-tree-children {
-  padding: 4px 0 10px 14px;
+  padding: 4px 0 8px 12px;
 }
 
 .page-tree-grandchildren {
-  padding: 4px 0 4px 18px;
+  padding: 4px 0 4px 16px;
+}
+
+.page-tree-greatgrandchildren {
+  padding: 4px 0 4px 16px;
 }
 
 .page-tree-label {
@@ -1256,9 +1468,14 @@ onMounted(async () => {
   color: #303133;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-align: left;
   cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.page-tree-label:hover {
+  background: #eef5ff;
 }
 
 .page-tree-label__icon {
@@ -1270,11 +1487,20 @@ onMounted(async () => {
 .page-tree-label__text {
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-tree-label__count {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #909399;
 }
 
 .page-tree-label__arrow {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: #909399;
   flex: 0 0 auto;
   transition: transform 0.2s ease;
@@ -1299,162 +1525,183 @@ onMounted(async () => {
 }
 
 .page-tree-label--root {
-  min-height: 44px;
-  padding: 0 16px;
-  border-radius: 12px;
-  font-size: 16px;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .page-tree-label--child {
   min-height: 34px;
-  padding: 7px 10px;
-  font-size: 13.5px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  font-size: 13px;
   color: #555;
 }
 
-.page-tree-label--child.is-leaf {
-  padding-left: 10px;
+.page-tree-label--leaf {
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  color: #666;
 }
 
-.page-tree-label--leaf {
-  min-height: 34px;
-  padding: 6px 10px;
-  font-size: 13px;
-  color: #666;
+.page-tree-label--nested-leaf {
+  font-size: 12px;
 }
 
 .page-tree-label.is-active {
   color: var(--el-color-primary);
-}
-
-.page-tree-label--root.is-active {
   background: rgba(64, 158, 255, 0.14);
 }
 
-.page-tree-label--child.is-active,
-.page-tree-label--leaf.is-active {
-  background: rgba(64, 158, 255, 0.1);
-  border-radius: 10px;
+.page-tree-label.is-active .page-tree-label__count {
+  color: var(--el-color-primary);
 }
 
 .page-tree-empty {
-  padding: 18px 16px;
+  padding: 18px 10px;
   color: #909399;
   font-size: 13px;
+  text-align: center;
 }
 
-.top-form :deep(.el-form-item__label) {
-  color: #606266;
+.column-config-panel {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow: hidden;
 }
 
-.top-form :deep(.el-form-item) {
-  margin-bottom: 0;
-}
-
-.top-left {
+.column-config-toolbar {
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
-  min-height: 100%;
-}
-
-.top-right {
-  display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
 }
 
-.top-right :deep(.el-form-item) {
-  margin-bottom: 0;
-}
-
-.mode-item {
-  align-self: flex-start;
-  margin-bottom: 0;
-}
-
-.tenant-hint {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.main-headers {
-  display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
-  gap: 12px;
-  align-items: end;
-  margin-top: 16px;
-}
-
-.main-header {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.main-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
-  gap: 16px;
-}
-
-.config-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.main-headers + .config-card {
-  margin-top: 16px;
-}
-
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.card-subtitle {
-  font-size: 13px;
-  color: #909399;
-  margin-bottom: 12px;
-}
-
-.tenant-tools {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.control-card {
-  overflow: hidden;
-}
-
-.checkbox-panel {
-  flex: 1;
-  min-height: 0;
-  border: 1px solid #eef1f4;
-  border-radius: 8px;
-  padding: 12px;
-  overflow: auto;
-}
-
-.card-actions {
+.column-config-toolbar__left,
+.column-config-toolbar__right {
   display: flex;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.column-config-toolbar__right {
   justify-content: flex-end;
 }
 
-.preview-card {
+.target-select {
+  width: 220px;
+}
+
+.column-config-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
+}
+
+.column-config-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.column-config-section {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.column-config-section--config {
+  flex: 0 0 auto;
+  max-height: 142px;
+}
+
+.column-config-section--preview {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.column-config-section__title {
+  flex: 0 0 auto;
+  color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 22px;
+  margin-bottom: 4px;
+}
+
+.column-config-section--preview .column-config-section__title {
+  color: #303133;
+}
+
+.column-config-empty {
+  flex: 0 0 auto;
+  min-height: 82px;
+  border: 1px solid #eef1f4;
+  border-radius: 8px;
+}
+
+.column-check-list {
+  flex: 0 1 auto;
+  max-height: 116px;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  align-content: start;
+  gap: 6px;
+  padding: 2px 4px 2px 0;
+}
+
+.column-check-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.column-check-item__main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.column-check-item__name {
+  font-weight: 500;
+  color: #303133;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.column-check-item :deep(.el-checkbox) {
+  height: 18px;
 }
 
 .preview-table-wrapper {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   border: 1px solid #eef1f4;
   border-radius: 8px;
@@ -1468,33 +1715,27 @@ onMounted(async () => {
 }
 
 @media (max-width: 1200px) {
-  .top-card-main {
-    grid-template-columns: 1fr;
+  .column-permission-panel {
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 
-  .top-form {
-    grid-template-columns: 1fr;
-    row-gap: 12px;
-  }
-
-  .top-left {
-    align-items: flex-start;
-  }
-
-  .top-select {
-    width: 100%;
-  }
-
-  .card-actions {
+  .column-config-toolbar,
+  .column-config-toolbar__right {
     justify-content: flex-start;
   }
+}
 
-  .main-headers {
-    display: none;
+@media (max-width: 768px) {
+  .column-permission-panel {
+    grid-template-columns: 1fr;
   }
 
-  .main-grid {
-    grid-template-columns: 1fr;
+  .column-tree-list {
+    max-height: 260px;
+  }
+
+  .target-select {
+    width: 100%;
   }
 }
 </style>

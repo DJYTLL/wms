@@ -81,6 +81,15 @@ public interface RolePermissionMapper {
         """)
     List<RoleTenantPair> findRoleTenantPairsByPermissionId(@Param("permissionId") Long permissionId);
 
+    // 统计当前仍绑定该权限的角色数量
+    @Select("""
+        SELECT COUNT(DISTINCT role_id)
+        FROM app_role_permission
+        WHERE permission_id = #{permissionId}
+          AND deleted_at IS NULL
+        """)
+    long countActiveRolesByPermissionId(@Param("permissionId") Long permissionId);
+
     // 查询角色拥有的权限
     @Select("""
         SELECT p.*

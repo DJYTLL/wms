@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>租户菜单配置 Mockup</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, "Microsoft YaHei", Arial, sans-serif;
+      color: #1f2d3d;
+      background: #f5f7fb;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: #fff;
+      border-right: 1px solid #e5e7eb;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 36px;
+      font-weight: 700;
+    }
+
+    .brand-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: #0f5fb8;
+      position: relative;
+    }
+
+    .brand-icon::after {
+      content: "";
+      position: absolute;
+      inset: 7px;
+      border: 2px solid #7cc2ff;
+      border-radius: 4px;
+    }
+
+    .search {
+      height: 34px;
+      border: 1px solid #e5e7eb;
+      border-radius: 7px;
+      padding: 0 12px;
+      color: #909399;
+      display: flex;
+      align-items: center;
+      background: #f8fafc;
+      font-size: 13px;
+    }
+
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 14px;
+    }
+
+    .nav-item {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      border-radius: 8px;
+      color: #4b5563;
+    }
+
+    .nav-item.active {
+      color: #1684fc;
+      background: #e8f3ff;
+      font-weight: 600;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 18px 24px;
+    }
+
+    .crumb {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 18px;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+
+    .table-card {
+      height: 650px;
+      border: 1px solid #dcdfe6;
+      border-radius: 9px;
+      background: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .toolbar {
+      height: 76px;
+      padding: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #ebeef5;
+    }
+
+    .input {
+      width: 220px;
+      height: 34px;
+      border: 1px solid #dcdfe6;
+      border-radius: 5px;
+      padding: 0 12px;
+      color: #a8abb2;
+      font-size: 13px;
+    }
+
+    .primary {
+      border: 0;
+      height: 34px;
+      padding: 0 18px;
+      border-radius: 5px;
+      background: #409eff;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      height: 48px;
+      border-bottom: 1px solid #ebeef5;
+      text-align: left;
+      padding: 0 18px;
+    }
+
+    th {
+      color: #607089;
+      background: #fbfcfe;
+      font-weight: 600;
+    }
+
+    .link {
+      color: #1684fc;
+      margin-right: 12px;
+    }
+
+    .danger {
+      color: #f56c6c;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.48);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+    }
+
+    .dialog {
+      width: min(1080px, calc(100vw - 44px));
+      height: min(700px, calc(100vh - 44px));
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 18px 42px rgba(15, 23, 42, 0.28);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .dialog-header {
+      flex: 0 0 auto;
+      height: 58px;
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #ebeef5;
+    }
+
+    .dialog-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .tenant-pill {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 9px;
+      border: 1px solid #b3d8ff;
+      border-radius: 999px;
+      color: #1684fc;
+      background: #ecf5ff;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .close {
+      border: 0;
+      background: transparent;
+      color: #909399;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .dialog-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 12px;
+      padding: 14px;
+      background: #f8fafc;
+    }
+
+    .menu-nav,
+    .menu-editor {
+      min-height: 0;
+      border: 1px solid #ebeef5;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .menu-nav {
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+    }
+
+    .menu-search {
+      flex: 0 0 auto;
+      height: 34px;
+      border: 1px solid #dcdfe6;
+      border-radius: 6px;
+      padding: 0 10px;
+      margin-bottom: 8px;
+      color: #a8abb2;
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .tree {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-right: 2px;
+    }
+
+    .tree-node {
+      border: 0;
+      width: 100%;
+      min-height: 36px;
+      border-radius: 8px;
+      padding: 0 8px;
+      display: grid;
+      grid-template-columns: 14px minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      text-align: left;
+      background: transparent;
+      color: #4b5563;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .tree-node:hover {
+      background: #eef5ff;
+    }
+
+    .tree-node.active {
+      background: #dceeff;
+      color: #1684fc;
+      font-weight: 600;
+    }
+
+    .tree-node.child {
+      padding-left: 22px;
+      min-height: 32px;
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.45;
+    }
+
+    .arrow {
+      color: #909399;
+      font-size: 12px;
+    }
+
+    .count {
+      color: #1684fc;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .menu-editor {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor-toolbar {
+      flex: 0 0 auto;
+      min-height: 46px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #ebeef5;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .current-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .current-title strong {
+      font-size: 15px;
+      white-space: nowrap;
+    }
+
+    .current-title span {
+      color: #909399;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .summary-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .tag {
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 9px;
+      border-radius: 4px;
+      border: 1px solid #dcdfe6;
+      color: #607089;
+      background: #fff;
+      font-size: 12px;
+    }
+
+    .tag.ok {
+      border-color: #b7eb8f;
+      color: #52c41a;
+      background: #f6ffed;
+    }
+
+    .small-btn {
+      height: 28px;
+      border: 1px solid #dcdfe6;
+      border-radius: 5px;
+      background: #fff;
+      padding: 0 10px;
+      color: #303133;
+    }
+
+    .editor-content {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .section {
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #303133;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .section-count {
+      color: #1684fc;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+    }
+
+    .menu-item {
+      min-height: 38px;
+      border: 1px solid #ebeef5;
+      border-radius: 6px;
+      padding: 8px 9px;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      background: #fff;
+      font-size: 13px;
+    }
+
+    .menu-item input {
+      width: 14px;
+      height: 14px;
+      accent-color: #409eff;
+    }
+
+    .menu-item span {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .dialog-footer {
+      flex: 0 0 auto;
+      min-height: 58px;
+      padding: 12px 18px;
+      border-top: 1px solid #ebeef5;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+    }
+
+    .footer-meta {
+      color: #909399;
+      font-size: 13px;
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .plain {
+      height: 34px;
+      border: 1px solid #dcdfe6;
+      border-radius: 5px;
+      background: #fff;
+      padding: 0 16px;
+      color: #303133;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .dialog-body {
+        grid-template-columns: 1fr;
+      }
+
+      .menu-nav {
+        max-height: 230px;
+      }
+
+      .editor-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .summary-tags {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon"></div>
+        <span>库存管理Pro</span>
+      </div>
+      <div class="search">搜索</div>
+      <nav class="nav">
+        <div class="nav-item">◇ 进销存</div>
+        <div class="nav-item active">⚙ 系统设置</div>
+        <div class="nav-item">　用户管理</div>
+        <div class="nav-item">　角色权限</div>
+        <div class="nav-item">　权限管理</div>
+        <div class="nav-item">　菜单管理</div>
+        <div class="nav-item">　列权限配置</div>
+        <div class="nav-item active">　租户管理</div>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="crumb">系统设置 / 租户管理</div>
+      <div class="page-title">租户管理</div>
+
+      <section class="table-card">
+        <div class="toolbar">
+          <div class="input">搜索租户编码或名称</div>
+          <button class="primary">新增</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>租户编码</th>
+              <th>租户名称</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>default</td>
+              <td>默认租户</td>
+              <td>启用</td>
+              <td>2026-01-20 09:30:00</td>
+              <td><span class="link">菜单配置</span><span class="link">编辑</span></td>
+            </tr>
+            <tr>
+              <td>B</td>
+              <td>租户 B</td>
+              <td>启用</td>
+              <td>2026-05-18 15:22:00</td>
+              <td><span class="link">菜单配置</span><span class="link">编辑</span><span class="danger">禁用</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <div class="overlay">
+    <section class="dialog">
+      <header class="dialog-header">
+        <div class="dialog-title">
+          <span>菜单配置</span>
+          <span class="tenant-pill">租户 B</span>
+        </div>
+        <button class="close">×</button>
+      </header>
+
+      <div class="dialog-body">
+        <aside class="menu-nav">
+          <div class="menu-search">搜索菜单</div>
+          <div class="tree">
+            <button class="tree-node active">
+              <span class="arrow">⌄</span>
+              <span>进销存</span>
+              <span class="count">31/245</span>
+            </button>
+            <button class="tree-node child active" data-target="base">
+              <span class="dot"></span>
+              <span>基础资料</span>
+              <span class="count">14/104</span>
+            </button>
+            <button class="tree-node child">
+              <span class="dot"></span>
+              <span>采购管理</span>
+              <span class="count">4/20</span>
+            </button>
+            <button class="tree-node child">
+              <span class="dot"></span>
+              <span>销售管理</span>
+              <span class="count">3/31</span>
+            </button>
+            <button class="tree-node child">
+              <span class="dot"></span>
+              <span>仓库管理</span>
+              <span class="count">6/61</span>
+            </button>
+            <button class="tree-node">
+              <span class="arrow">⌄</span>
+              <span>系统设置</span>
+              <span class="count">12/49</span>
+            </button>
+            <button class="tree-node child">
+              <span class="dot"></span>
+              <span>用户管理</span>
+              <span class="count">7/7</span>
+            </button>
+            <button class="tree-node child">
+              <span class="dot"></span>
+              <span>角色权限</span>
+              <span class="count">1/4</span>
+            </button>
+            <button class="tree-node child">
+              <span class="dot"></span>
+              <span>菜单管理</span>
+              <span class="count">1/6</span>
+            </button>
+          </div>
+        </aside>
+
+        <section class="menu-editor">
+          <div class="editor-toolbar">
+            <div class="current-title">
+              <strong>基础资料</strong>
+              <span>当前分组 14/104</span>
+            </div>
+            <div class="summary-tags">
+              <span class="tag ok">租户菜单 31/245</span>
+              <button class="small-btn">全选</button>
+              <button class="small-btn">全部清空</button>
+              <button class="small-btn">重置默认</button>
+            </div>
+          </div>
+
+          <div class="editor-content">
+            <div class="section">
+              <div class="section-title">
+                <span>商品资料</span>
+                <span class="section-count">4/11</span>
+              </div>
+              <div class="menu-grid">
+                <label class="menu-item"><input type="checkbox" checked><span>商品管理</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>车型适配管理</span></label>
+                <label class="menu-item"><input type="checkbox"><span>商品分类</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>单位管理</span></label>
+                <label class="menu-item"><input type="checkbox"><span>商品价格表</span></label>
+                <label class="menu-item"><input type="checkbox"><span>商品导入</span></label>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">
+                <span>往来资料</span>
+                <span class="section-count">3/19</span>
+              </div>
+              <div class="menu-grid">
+                <label class="menu-item"><input type="checkbox" checked><span>客户管理</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>客户类别</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>供应商管理</span></label>
+                <label class="menu-item"><input type="checkbox"><span>供应商类别</span></label>
+                <label class="menu-item"><input type="checkbox"><span>客户价格等级</span></label>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">
+                <span>仓储资料</span>
+                <span class="section-count">4/24</span>
+              </div>
+              <div class="menu-grid">
+                <label class="menu-item"><input type="checkbox" checked><span>仓库管理</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>库位管理</span></label>
+                <label class="menu-item"><input type="checkbox"><span>库存初始化</span></label>
+                <label class="menu-item"><input type="checkbox"><span>库存预警</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>调拨原因</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>盘点原因</span></label>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">
+                <span>结算资料</span>
+                <span class="section-count">3/12</span>
+              </div>
+              <div class="menu-grid">
+                <label class="menu-item"><input type="checkbox" checked><span>结算方式</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>付款方式</span></label>
+                <label class="menu-item"><input type="checkbox" checked><span>收款方式</span></label>
+                <label class="menu-item"><input type="checkbox"><span>发票类型</span></label>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="dialog-footer">
+        <div class="footer-meta">已选菜单会同时保存必要的父级菜单</div>
+        <div class="footer-actions">
+          <button class="plain">取消</button>
+          <button class="primary">保存</button>
+        </div>
+      </footer>
+    </section>
+  </div>
+</body>
+</html>

@@ -32,7 +32,7 @@
           <div class="table-actions inventory-actions">
             <el-button
               type="primary"
-              v-permission="'erp-assembly:add'"
+              v-permission="'erp-assemble-order:add'"
               @click="openCreatePage"
             >
               {{ $t('action.add') }}
@@ -102,7 +102,7 @@
                 link
                 type="primary"
                 size="small"
-                v-permission="'erp-assembly:edit'"
+                v-permission="'erp-assemble-order:edit'"
                 @click="openEditPage(row)"
               >
                 {{ $t('action.edit') }}
@@ -112,7 +112,7 @@
                 link
                 type="success"
                 size="small"
-                v-permission="'erp-assembly:approve'"
+                v-permission="'erp-assemble-order:approve'"
                 @click="handleApprove(row)"
               >
                 {{ $t('action.approve') }}
@@ -122,7 +122,7 @@
                 link
                 type="danger"
                 size="small"
-                v-permission="'erp-assembly:delete'"
+                v-permission="'erp-assemble-order:delete'"
                 @click="handleDelete(row)"
               >
                 {{ $t('action.delete') }}

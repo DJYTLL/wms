@@ -28,9 +28,9 @@ public class ErpMasterDataCodeGenerator {
                            String dateFormatConfigKey,
                            String seqLengthConfigKey) {
         Long tenantId = TenantContext.requireTenantId();
-        String prefix = readConfig(prefixConfigKey, defaultPrefix);
-        String dateFormat = readConfig(dateFormatConfigKey, "yyyyMMdd");
-        int seqLength = readIntConfig(seqLengthConfigKey, 4);
+        String prefix = readConfig(tenantId, prefixConfigKey, defaultPrefix);
+        String dateFormat = readConfig(tenantId, dateFormatConfigKey, "yyyyMMdd");
+        int seqLength = readIntConfig(tenantId, seqLengthConfigKey, 4);
         String dateKey = LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(dateFormat));
         erpOrderSequenceMapper.insertIgnore(tenantId, sequenceType, dateKey);
         Long seq = erpOrderSequenceMapper.incrementAndGet(tenantId, sequenceType, dateKey);
@@ -38,16 +38,16 @@ public class ErpMasterDataCodeGenerator {
         return prefix + dateKey + seqStr;
     }
 
-    private String readConfig(String key, String fallback) {
-        SystemConfig config = systemConfigMapper.findByKey(key);
+    private String readConfig(Long tenantId, String key, String fallback) {
+        SystemConfig config = systemConfigMapper.findByKey(tenantId, key);
         if (config == null || config.getConfigValue() == null || config.getConfigValue().isBlank()) {
             return fallback;
         }
         return config.getConfigValue().trim();
     }
 
-    private int readIntConfig(String key, int fallback) {
-        String value = readConfig(key, String.valueOf(fallback));
+    private int readIntConfig(Long tenantId, String key, int fallback) {
+        String value = readConfig(tenantId, key, String.valueOf(fallback));
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException ex) {
