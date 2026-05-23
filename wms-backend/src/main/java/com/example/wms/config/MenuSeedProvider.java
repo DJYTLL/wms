@@ -66,6 +66,7 @@ public final class MenuSeedProvider {
             new MenuSeed("column", "system", "列权限配置", "column", "/column-permissions", null, "column:role:manage", 36),
             new MenuSeed("menu", "system", "菜单管理", "menu", "/menus", null, "menu:view", 36),
             new MenuSeed("system-config", "system", "系统配置", "system-config", "/system-config", null, "system-config:view", 38),
+            new MenuSeed("tenant-setting", "system", "租户设置", "tenant-setting", "/tenant-settings", null, "tenant-setting:view", 39),
             new MenuSeed("tenant", "system", "租户管理", "tenant", "/tenants", null, "tenant:view", 40)
         );
     }

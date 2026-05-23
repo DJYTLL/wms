@@ -168,33 +168,19 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         Long tenantId = TenantContext.requireTenantId();
         long finalPage = page <= 0 ? 1 : page;
         long finalSize = size <= 0 ? 20 : Math.min(size, 100);
-        QueryWrapper<ErpPurchaseOrder> wrapper = new QueryWrapper<ErpPurchaseOrder>()
-            .eq("tenant_id", tenantId)
-            .eq("status", STATUS_APPROVED)
-            .isNull("deleted_at");
-        if (supplierId != null) {
-            wrapper.eq("supplier_id", supplierId);
-        }
-        if (keyword != null && !keyword.isBlank()) {
-            String trimmed = keyword.trim();
-            wrapper.and(qw -> qw.like("order_no", trimmed));
-        }
-        wrapper.orderByDesc("order_at").orderByDesc("id");
-        List<ErpPurchaseOrder> returnableOrders = erpPurchaseOrderMapper.selectList(wrapper).stream()
-            .filter(order -> buildSourcePurchaseOrderItems(tenantId, order.getId(), currentReturnId).stream()
-                .anyMatch(item -> zeroIfNull(item.remainingQty()).compareTo(BigDecimal.ZERO) > 0))
-            .toList();
-        long total = returnableOrders.size();
-        int fromIndex = (int) Math.min((finalPage - 1) * finalSize, total);
-        int toIndex = (int) Math.min(fromIndex + finalSize, total);
-        List<ErpPurchaseReturnSourcePurchaseOrderOption> items = returnableOrders.subList(fromIndex, toIndex).stream()
-            .map(order -> new ErpPurchaseReturnSourcePurchaseOrderOption(
-                order.getId(),
-                order.getOrderNo(),
-                order.getSupplierId(),
-                order.getOrderAt()
-            ))
-            .toList();
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        long total = erpPurchaseOrderMapper.countReturnableSourceOrders(tenantId, supplierId, normalizedKeyword, currentReturnId);
+        long offset = (finalPage - 1) * finalSize;
+        List<ErpPurchaseReturnSourcePurchaseOrderOption> items = total == 0
+            ? List.of()
+            : erpPurchaseOrderMapper.findReturnableSourceOrdersPage(
+                tenantId,
+                supplierId,
+                normalizedKeyword,
+                currentReturnId,
+                (int) finalSize,
+                offset
+            );
         return new PageResponse<>(total, finalPage, finalSize, items);
     }
 

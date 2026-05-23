@@ -99,7 +99,7 @@ public class DataInitializer {
 
             // 初始化系统配置
             TenantContext.setTenantId(tenantId);
-            ensureSystemConfig(systemConfigMapper, "default.page.size", "20", "int", "默认分页大小", true);
+            ensureSystemConfig(systemConfigMapper, "default.page.size", "20", "int", "默认分页大小", false);
             ensureSystemConfig(systemConfigMapper, "audit.retention.days", "180", "int", "审计日志保留天数", false);
             ensureSystemConfig(systemConfigMapper, "password.min.length", "8", "int", "密码最小长度", false);
             ensureSystemConfig(systemConfigMapper, "login.max.retry", "5", "int", "登录失败最大次数", false);

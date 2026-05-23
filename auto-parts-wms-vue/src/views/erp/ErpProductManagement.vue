@@ -806,9 +806,10 @@ import { ref, reactive, onMounted, onActivated, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useAuthStore } from '@/stores/auth';
+import { getCachedCategories, getCachedCustomerCategories, getCachedLocationOptions, getCachedUnits, getCachedWarehouseOptions } from '@/composables/erpBaseDataCache';
 import DecimalInput from '@/components/DecimalInput.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
@@ -902,8 +903,9 @@ interface PurchaseOrderDetailData {
 
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const nameQuery = ref('');
 const codeQuery = ref('');
@@ -915,6 +917,9 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<ErpProduct[]>([]);
 const allTableData = ref<ErpProduct[]>([]);
 const showModal = ref(false);
@@ -1161,8 +1166,7 @@ const syncDefaultLocation = () => {
 
 const fetchCategories = async () => {
   try {
-    const res: any = await request.get('/erp/categories');
-    categoryOptions.value = res.data.data || [];
+    categoryOptions.value = await getCachedCategories(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -1170,8 +1174,7 @@ const fetchCategories = async () => {
 
 const fetchCustomerCategories = async () => {
   try {
-    const res: any = await request.get('/erp/customer-categories');
-    customerCategoryOptions.value = res.data.data || [];
+    customerCategoryOptions.value = await getCachedCustomerCategories(tenantCacheKey.value);
     buildPriceItems();
   } catch (error) {
     notifyError(error);
@@ -1180,8 +1183,7 @@ const fetchCustomerCategories = async () => {
 
 const fetchUnits = async () => {
   try {
-    const res: any = await request.get('/erp/units');
-    unitOptions.value = res.data.data || [];
+    unitOptions.value = await getCachedUnits(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -1189,8 +1191,7 @@ const fetchUnits = async () => {
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses/options');
-    warehouseOptions.value = res.data.data || [];
+    warehouseOptions.value = await getCachedWarehouseOptions(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -1198,8 +1199,7 @@ const fetchWarehouses = async () => {
 
 const fetchLocations = async () => {
   try {
-    const res: any = await request.get('/erp/locations/options');
-    locationOptions.value = res.data.data || [];
+    locationOptions.value = await getCachedLocationOptions(tenantCacheKey.value);
     syncDefaultLocation();
   } catch (error) {
     notifyError(error);
@@ -1563,23 +1563,36 @@ watch([purchaseHistoryKeyword, purchaseHistoryRange], () => {
   }
 }, { deep: true });
 
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
 onMounted(() => {
   fetchCategories();
   fetchCustomerCategories();
   fetchUnits();
   fetchWarehouses();
   fetchLocations();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
   fetchTenantKeys();
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(() => {
-  fetchCategories();
-  fetchCustomerCategories();
-  fetchUnits();
-  fetchWarehouses();
-  fetchLocations();
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchList();
 });
 </script>

@@ -1,5 +1,5 @@
 <template>
-  <ErpSaleReturnManagement />
+  <ErpSaleReturnManagement workspace="draft" />
 </template>
 
 <script setup lang="ts">

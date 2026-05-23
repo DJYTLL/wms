@@ -456,7 +456,7 @@ import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 
 interface ProductOption {
@@ -504,7 +504,7 @@ interface Fitment {
 
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 const brandColumns = ['code', 'name', 'enabled', 'remark'];
 const seriesColumns = ['code', 'brand', 'name', 'enabled', 'remark'];
 const modelColumns = ['code', 'series', 'name', 'yearFrom', 'yearTo', 'displacement', 'engine', 'enabled', 'remark'];
@@ -526,6 +526,9 @@ const fetchColumnKeys = () => {
 };
 
 const activeTab = ref('brands');
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReadyCount = ref(0);
+const pendingInitialLoad = ref(false);
 
 const brandNameQuery = ref('');
 const brandCodeQuery = ref('');
@@ -572,6 +575,7 @@ const fitmentProductFilter = ref<number | null>(null);
 const fitmentModelFilter = ref<number | null>(null);
 const fitmentLoading = ref(false);
 const fitmentTable = ref<Fitment[]>([]);
+const allFitmentTable = ref<Fitment[]>([]);
 const showFitmentModal = ref(false);
 const fitmentEditing = ref(false);
 const currentFitmentId = ref<number | null>(null);
@@ -746,23 +750,12 @@ const applyBrandSearch = () => {
 };
 
 const fetchBrandList = async () => {
-  brandLoading.value = true;
-  try {
-    const res: any = await request.get('/erp/vehicle-brands');
-    if (res.data.code === 200) {
-      allBrandTable.value = res.data.data || [];
-      applyBrandSearch();
-    }
-  } catch (error) {
-    notifyError(error);
-  } finally {
-    brandLoading.value = false;
-  }
+  applyBrandSearch();
 };
 
 const handleBrandSearch = () => {
   brandPage.value = 1;
-  fetchBrandList();
+  applyBrandSearch();
 };
 
 const handleBrandPageChange = (page: number) => {
@@ -814,8 +807,7 @@ const saveBrand = async () => {
     if (res.data.code === 200) {
       notifySuccess();
       showBrandModal.value = false;
-      fetchBrandList();
-      fetchBrandOptions();
+      fetchBootstrapData();
     }
   } catch (error) {
     notifyError(error);
@@ -826,8 +818,7 @@ const handleBrandDelete = async (row: VehicleBrand) => {
   try {
     await request.delete(`/erp/vehicle-brands/${row.id}`);
     notifySuccess();
-    fetchBrandList();
-    fetchBrandOptions();
+    fetchBootstrapData();
   } catch (error) {
     notifyError(error);
   }
@@ -845,23 +836,12 @@ const applySeriesSearch = () => {
 };
 
 const fetchSeriesList = async () => {
-  seriesLoading.value = true;
-  try {
-    const res: any = await request.get('/erp/vehicle-series');
-    if (res.data.code === 200) {
-      allSeriesTable.value = res.data.data || [];
-      applySeriesSearch();
-    }
-  } catch (error) {
-    notifyError(error);
-  } finally {
-    seriesLoading.value = false;
-  }
+  applySeriesSearch();
 };
 
 const handleSeriesSearch = () => {
   seriesPage.value = 1;
-  fetchSeriesList();
+  applySeriesSearch();
 };
 
 const handleSeriesPageChange = (page: number) => {
@@ -914,8 +894,7 @@ const saveSeries = async () => {
     if (res.data.code === 200) {
       notifySuccess();
       showSeriesModal.value = false;
-      fetchSeriesList();
-      fetchSeriesOptions();
+      fetchBootstrapData();
     }
   } catch (error) {
     notifyError(error);
@@ -926,8 +905,7 @@ const handleSeriesDelete = async (row: VehicleSeries) => {
   try {
     await request.delete(`/erp/vehicle-series/${row.id}`);
     notifySuccess();
-    fetchSeriesList();
-    fetchSeriesOptions();
+    fetchBootstrapData();
   } catch (error) {
     notifyError(error);
   }
@@ -945,23 +923,12 @@ const applyModelSearch = () => {
 };
 
 const fetchModelList = async () => {
-  modelLoading.value = true;
-  try {
-    const res: any = await request.get('/erp/vehicle-models');
-    if (res.data.code === 200) {
-      allModelTable.value = res.data.data || [];
-      applyModelSearch();
-    }
-  } catch (error) {
-    notifyError(error);
-  } finally {
-    modelLoading.value = false;
-  }
+  applyModelSearch();
 };
 
 const handleModelSearch = () => {
   modelPage.value = 1;
-  fetchModelList();
+  applyModelSearch();
 };
 
 const handleModelPageChange = (page: number) => {
@@ -1032,8 +999,7 @@ const saveModel = async () => {
     if (res.data.code === 200) {
       notifySuccess();
       showModelModal.value = false;
-      fetchModelList();
-      fetchModelOptions();
+      fetchBootstrapData();
     }
   } catch (error) {
     notifyError(error);
@@ -1044,27 +1010,61 @@ const handleModelDelete = async (row: VehicleModel) => {
   try {
     await request.delete(`/erp/vehicle-models/${row.id}`);
     notifySuccess();
-    fetchModelList();
-    fetchModelOptions();
+    fetchBootstrapData();
   } catch (error) {
     notifyError(error);
   }
 };
 
-const fetchFitmentList = async () => {
+const applyFitmentFilters = () => {
+  let filtered = allFitmentTable.value.slice();
+  if (fitmentProductFilter.value) {
+    filtered = filtered.filter(row => row.productId === fitmentProductFilter.value);
+  }
+  if (fitmentModelFilter.value) {
+    filtered = filtered.filter(row => row.modelId === fitmentModelFilter.value);
+  }
+  fitmentTable.value = filtered;
+};
+
+async function fetchFitmentList() {
+  applyFitmentFilters();
+}
+
+const fetchBootstrapData = async () => {
   fitmentLoading.value = true;
+  brandLoading.value = true;
+  seriesLoading.value = true;
+  modelLoading.value = true;
   try {
-    const params: Record<string, any> = {};
-    if (fitmentProductFilter.value) params.productId = fitmentProductFilter.value;
-    if (fitmentModelFilter.value) params.modelId = fitmentModelFilter.value;
-    const res: any = await request.get('/erp/product-fitments', { params });
+    const res: any = await request.get('/erp/vehicle-fitments/bootstrap');
     if (res.data.code === 200) {
-      fitmentTable.value = res.data.data || [];
+      const data = res.data.data || {};
+      const brands = data.brands || [];
+      const series = data.series || [];
+      const models = data.models || [];
+      const products = data.products || [];
+      const fitments = data.fitments || [];
+      brandOptions.value = brands;
+      seriesOptions.value = series;
+      modelOptions.value = models;
+      productOptions.value = products;
+      allBrandTable.value = brands;
+      allSeriesTable.value = series;
+      allModelTable.value = models;
+      allFitmentTable.value = fitments;
+      applyBrandSearch();
+      applySeriesSearch();
+      applyModelSearch();
+      applyFitmentFilters();
     }
   } catch (error) {
     notifyError(error);
   } finally {
     fitmentLoading.value = false;
+    brandLoading.value = false;
+    seriesLoading.value = false;
+    modelLoading.value = false;
   }
 };
 
@@ -1107,7 +1107,7 @@ const saveFitment = async () => {
     if (res.data.code === 200) {
       notifySuccess();
       showFitmentModal.value = false;
-      fetchFitmentList();
+      fetchBootstrapData();
     }
   } catch (error) {
     notifyError(error);
@@ -1118,32 +1118,51 @@ const handleFitmentDelete = async (row: Fitment) => {
   try {
     await request.delete(`/erp/product-fitments/${row.id}`);
     notifySuccess();
-    fetchFitmentList();
+    fetchBootstrapData();
   } catch (error) {
     notifyError(error);
   }
 };
 
 const initData = () => {
-  fetchBrandOptions();
-  fetchSeriesOptions();
-  fetchModelOptions();
-  fetchProductOptions();
-  fetchBrandList();
-  fetchSeriesList();
-  fetchModelList();
-  fetchFitmentList();
+  fetchBootstrapData();
 };
+
+const handlePageSizeSyncReady = () => {
+  pageSizeSyncReadyCount.value += 1;
+  if (pageSizeSyncReadyCount.value >= 3 && pendingInitialLoad.value) {
+    pendingInitialLoad.value = false;
+    initData();
+  }
+};
+
+bindPageSizeSync(brandSize, fetchBrandList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: handlePageSizeSyncReady
+});
+bindPageSizeSync(seriesSize, fetchSeriesList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: handlePageSizeSyncReady
+});
+bindPageSizeSync(modelSize, fetchModelList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: handlePageSizeSyncReady
+});
 
 onMounted(() => {
   fetchColumnKeys();
-  initData();
-  bindPageSizeSync(brandSize, fetchBrandList);
-  bindPageSizeSync(seriesSize, fetchSeriesList);
-  bindPageSizeSync(modelSize, fetchModelList);
+  if (pageSizeSyncReadyCount.value >= 3) {
+    initData();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(() => {
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchColumnKeys();
   initData();
 });

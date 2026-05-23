@@ -106,6 +106,7 @@ import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useRouter } from 'vue-router';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
@@ -129,8 +130,11 @@ const customerOptions = ref<OptionItem[]>([]);
 const loading = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 
 const { notifyError } = useApiError();
+const { bindPageSizeSync } = usePageSizePreference();
 const defaultColumns = ['customerName', 'orderNo', 'status', 'totalAmount', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-ar', defaultColumns);
 const canShow = (key: string) => isVisible(key);
@@ -224,14 +228,36 @@ const formatDateTime = (value?: string) => {
   return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 };
 
-onMounted(() => {
-  fetchTenantKeys();
+const runPageLoad = () => {
   fetchCustomers();
   fetchList();
+};
+
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      runPageLoad();
+    }
+  }
+});
+
+onMounted(() => {
+  fetchTenantKeys();
+  if (!pageSizeSyncReady.value) {
+    pendingInitialLoad.value = true;
+    return;
+  }
+  runPageLoad();
 });
 
 onActivated(() => {
-  fetchCustomers();
-  fetchList();
+  if (!pageSizeSyncReady.value) {
+    pendingInitialLoad.value = true;
+    return;
+  }
+  runPageLoad();
 });
 </script>

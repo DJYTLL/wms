@@ -523,60 +523,37 @@ const loadPaymentDetail = async () => {
   }
 };
 
-const fetchPaymentNo = async () => {
-  try {
-    const res: any = await request.get('/erp/payments/next-payment-no');
-    if (res.data.code === 200) {
-      formData.value.paymentNo = res.data.data || '';
+const applyPaymentBootstrapData = (data: any) => {
+  formData.value.paymentNo = data?.nextPaymentNo || formData.value.paymentNo;
+  supplierOptions.value = Array.isArray(data?.suppliers) ? data.suppliers : [];
+  const allSettlementOptions: SettlementOption[] = Array.isArray(data?.settlementMethods) ? data.settlementMethods : [];
+  settlementOptions.value = allSettlementOptions.filter((item) => item.fundInputMode !== 'HIDDEN');
+  paymentMethodOptions.value = Array.isArray(data?.paymentMethods) ? data.paymentMethods : [];
+  if (!settlementOptions.value.some((item) => item.code === formData.value.settlementMethod)) {
+    formData.value.settlementMethod = '';
+  }
+  if (!formData.value.settlementMethod && settlementOptions.value.length > 0) {
+    const defaultMethod = settlementOptions.value.find((item) => item.isDefault) ?? settlementOptions.value[0];
+    if (defaultMethod) {
+      formData.value.settlementMethod = defaultMethod.code;
     }
-  } catch (error) {
-    notifyError(error);
+  }
+  if (!paymentMethodOptions.value.some((item) => item.code === formData.value.paymentMethodCode)) {
+    formData.value.paymentMethodCode = '';
+  }
+  if (!formData.value.paymentMethodCode && paymentMethodOptions.value.length > 0) {
+    const defaultMethod = paymentMethodOptions.value.find((item) => item.isDefault) ?? paymentMethodOptions.value[0];
+    if (defaultMethod) {
+      formData.value.paymentMethodCode = defaultMethod.code;
+    }
   }
 };
 
-const fetchSuppliers = async () => {
+const fetchBootstrapData = async () => {
   try {
-    const res: any = await request.get('/erp/suppliers');
+    const res: any = await request.get('/erp/payments/bootstrap');
     if (res.data.code === 200) {
-      supplierOptions.value = res.data.data || [];
-    }
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const fetchSettlementMethods = async () => {
-  try {
-    const res: any = await request.get('/erp/settlement-methods');
-    if (res.data.code === 200) {
-      const allOptions: SettlementOption[] = res.data.data || [];
-      settlementOptions.value = allOptions.filter((item) => item.fundInputMode !== 'HIDDEN');
-      if (!settlementOptions.value.some((item) => item.code === formData.value.settlementMethod)) {
-        formData.value.settlementMethod = '';
-      }
-      if (!formData.value.settlementMethod && settlementOptions.value.length > 0) {
-        const defaultMethod = settlementOptions.value.find((item) => item.isDefault) ?? settlementOptions.value[0];
-        if (defaultMethod) {
-          formData.value.settlementMethod = defaultMethod.code;
-        }
-      }
-    }
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const fetchPaymentMethods = async () => {
-  try {
-    const res: any = await request.get('/erp/payment-methods');
-    if (res.data.code === 200) {
-      paymentMethodOptions.value = res.data.data || [];
-      if (!formData.value.paymentMethodCode && paymentMethodOptions.value.length > 0) {
-        const defaultMethod = paymentMethodOptions.value.find((item) => item.isDefault) ?? paymentMethodOptions.value[0];
-        if (defaultMethod) {
-          formData.value.paymentMethodCode = defaultMethod.code;
-        }
-      }
+      applyPaymentBootstrapData(res.data.data || {});
     }
   } catch (error) {
     notifyError(error);
@@ -585,6 +562,10 @@ const fetchPaymentMethods = async () => {
 
 const fetchPayables = async (supplierId: number | null) => {
   if (!canViewSourcePayables.value) {
+    payableOptions.value = [];
+    return [];
+  }
+  if (!supplierId) {
     payableOptions.value = [];
     return [];
   }
@@ -813,14 +794,9 @@ const handleTagClosing = (event: Event) => {
 onMounted(() => {
   pagePath.value = route.path;
   resetForm();
-  fetchSuppliers();
-  fetchSettlementMethods();
-  fetchPaymentMethods();
+  fetchBootstrapData();
   if (isPaymentRoute.value && isEditing.value) {
     loadPaymentDetail();
-  } else {
-    fetchPaymentNo();
-    fetchPayables(formData.value.supplierId);
   }
   if (typeof window !== 'undefined') {
     window.addEventListener('tags:closing', handleTagClosing as EventListener);
@@ -837,11 +813,7 @@ onActivated(() => {
     return;
   }
   resetForm();
-  fetchPaymentNo();
-  fetchSuppliers();
-  fetchSettlementMethods();
-  fetchPaymentMethods();
-  fetchPayables(formData.value.supplierId);
+  fetchBootstrapData();
 });
 
 onBeforeUnmount(() => {

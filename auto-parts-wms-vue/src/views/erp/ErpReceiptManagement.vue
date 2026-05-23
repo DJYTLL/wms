@@ -127,6 +127,7 @@ import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useRouter } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
@@ -152,8 +153,11 @@ const customerOptions = ref<OptionItem[]>([]);
 const loading = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 
 const { notifyError } = useApiError();
+const { bindPageSizeSync } = usePageSizePreference();
 const defaultColumns = ['receiptNo', 'customerName', 'status', 'amount', 'discountAmount', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-receipt', defaultColumns);
 const canShow = (key: string) => isVisible(key);
@@ -259,6 +263,22 @@ const receiptRowClass = ({ row }: { row: any }) => {
   return row.status === 'RED_FLUSHED' ? 'row-red-flush' : '';
 };
 
+const runPageLoad = () => {
+  fetchCustomers();
+  fetchList();
+};
+
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      runPageLoad();
+    }
+  }
+});
+
 const approveRow = async (row: any) => {
   try {
     await ElMessageBox.confirm(
@@ -302,13 +322,19 @@ const redFlushRow = async (row: any) => {
 
 onMounted(() => {
   fetchTenantKeys();
-  fetchCustomers();
-  fetchList();
+  if (!pageSizeSyncReady.value) {
+    pendingInitialLoad.value = true;
+    return;
+  }
+  runPageLoad();
 });
 
 onActivated(() => {
-  fetchCustomers();
-  fetchList();
+  if (!pageSizeSyncReady.value) {
+    pendingInitialLoad.value = true;
+    return;
+  }
+  runPageLoad();
 });
 </script>
 

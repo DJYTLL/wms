@@ -100,7 +100,7 @@ COMMENT ON COLUMN app_audit_log.duration_ms IS '耗时(毫秒)';
 COMMENT ON COLUMN app_audit_log.created_at IS '创建时间';
 
 -- app_system_config
-COMMENT ON TABLE app_system_config IS '系统配置表（租户隔离）';
+COMMENT ON TABLE app_system_config IS '系统配置表';
 COMMENT ON COLUMN app_system_config.id IS '主键';
 COMMENT ON COLUMN app_system_config.config_key IS '配置键';
 COMMENT ON COLUMN app_system_config.config_value IS '配置值';

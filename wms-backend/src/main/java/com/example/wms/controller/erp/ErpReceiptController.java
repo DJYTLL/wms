@@ -2,12 +2,14 @@ package com.example.wms.controller.erp;
 
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpReceiptBootstrapData;
 import com.example.wms.dto.erp.ErpReceiptCreateRequest;
 import com.example.wms.dto.erp.ErpReceiptDetail;
 import com.example.wms.dto.erp.ErpReceiptSourceReceivableDetail;
 import com.example.wms.dto.erp.ErpReceiptSourceReceivableOption;
 import com.example.wms.dto.erp.ErpReceiptView;
 import com.example.wms.service.erp.ErpReceiptService;
+import com.example.wms.service.erp.support.ErpFinanceDocumentBootstrapService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,9 +23,18 @@ import java.util.List;
 @RequestMapping("/api/erp/receipts")
 public class ErpReceiptController {
     private final ErpReceiptService erpReceiptService;
+    private final ErpFinanceDocumentBootstrapService bootstrapService;
 
-    public ErpReceiptController(ErpReceiptService erpReceiptService) {
+    public ErpReceiptController(ErpReceiptService erpReceiptService,
+                                ErpFinanceDocumentBootstrapService bootstrapService) {
         this.erpReceiptService = erpReceiptService;
+        this.bootstrapService = bootstrapService;
+    }
+
+    @GetMapping("/bootstrap")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt:add')")
+    public ResponseEntity<ApiResponse<ErpReceiptBootstrapData>> bootstrap() {
+        return ResponseEntity.ok(ApiResponse.ok(bootstrapService.getReceiptBootstrapData()));
     }
 
     @GetMapping

@@ -2,12 +2,14 @@ package com.example.wms.controller.erp;
 
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpPaymentBootstrapData;
 import com.example.wms.dto.erp.ErpPaymentCreateRequest;
 import com.example.wms.dto.erp.ErpPaymentDetail;
 import com.example.wms.dto.erp.ErpPaymentSourcePayableDetail;
 import com.example.wms.dto.erp.ErpPaymentSourcePayableOption;
 import com.example.wms.dto.erp.ErpPaymentView;
 import com.example.wms.service.erp.ErpPaymentService;
+import com.example.wms.service.erp.support.ErpFinanceDocumentBootstrapService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,9 +23,18 @@ import java.util.List;
 @RequestMapping("/api/erp/payments")
 public class ErpPaymentController {
     private final ErpPaymentService erpPaymentService;
+    private final ErpFinanceDocumentBootstrapService bootstrapService;
 
-    public ErpPaymentController(ErpPaymentService erpPaymentService) {
+    public ErpPaymentController(ErpPaymentService erpPaymentService,
+                                ErpFinanceDocumentBootstrapService bootstrapService) {
         this.erpPaymentService = erpPaymentService;
+        this.bootstrapService = bootstrapService;
+    }
+
+    @GetMapping("/bootstrap")
+    @PreAuthorize("hasAuthority('PERM_erp-payment:add')")
+    public ResponseEntity<ApiResponse<ErpPaymentBootstrapData>> bootstrap() {
+        return ResponseEntity.ok(ApiResponse.ok(bootstrapService.getPaymentBootstrapData()));
     }
 
     @GetMapping

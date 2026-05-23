@@ -195,17 +195,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated, computed, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-  import { useSystemConfig } from '@/composables/useSystemConfig';
-  import { useColumnSettings } from '@/composables/useColumnSettings';
-  import { useRouter } from 'vue-router';
-  import { ElMessageBox } from 'element-plus';
-  import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
-  import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
+import { useColumnSettings } from '@/composables/useColumnSettings';
+import { useRouter } from 'vue-router';
+import { ElMessageBox } from 'element-plus';
+import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
+import { getCachedCustomers, invalidateErpBaseDataCache } from '@/composables/erpBaseDataCache';
+import { createInflightRequestDeduper } from '@/composables/inflightRequestDeduperCore';
+import { useAuthStore } from '@/stores/auth';
 
 interface OptionItem {
   id: number;
@@ -236,11 +239,16 @@ interface SaleReturn {
   createdAt?: string;
 }
 
+const props = defineProps<{
+  workspace?: 'draft' | 'approved'
+}>();
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 
 const searchQuery = ref('');
 const statusFilter = ref('');
@@ -254,21 +262,29 @@ const total = ref(0);
 const tableData = ref<SaleReturn[]>([]);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const initializedRoutePath = ref('');
+const pageSizeSyncReady = ref(false);
+const pendingRouteRefresh = ref(false);
+const listRequestDeduper = createInflightRequestDeduper();
 
 const customerOptions = ref<OptionItem[]>([]);
-const productOptions = ref<OptionItem[]>([]);
-const warehouseOptions = ref<OptionItem[]>([]);
-const locationOptions = ref<OptionItem[]>([]);
 
 const isSaleReturnRoute = computed(() => route.path.startsWith('/erp/sale-returns'));
 const currentWorkspace = computed<'draft' | 'approved'>(() => {
-  if (route.path.includes('/erp/sale-returns/draft')) return 'draft';
+  if (props.workspace) return props.workspace;
   if (route.path.includes('/erp/sale-returns/approved')) return 'approved';
   return 'draft';
+});
+const isCurrentWorkspaceRoute = computed(() => {
+  if (!isSaleReturnRoute.value) return false;
+  if (props.workspace === 'draft') return route.path === '/erp/sale-returns/draft';
+  if (props.workspace === 'approved') return route.path === '/erp/sale-returns/approved';
+  return route.path === '/erp/sale-returns/draft' || route.path === '/erp/sale-returns/approved';
 });
 const isDraftPage = computed(() => currentWorkspace.value === 'draft');
 const isApprovedPage = computed(() => currentWorkspace.value === 'approved');
 const printDocType = computed(() => isApprovedPage.value ? 'SALE_RETURN_APPROVED' : 'SALE_RETURN_DRAFT');
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const statusOptions = computed(() => {
   const base = [
@@ -371,49 +387,19 @@ const formatDateTime = (value?: string) => {
 
 const getCustomerName = (id?: number) => customerOptions.value.find(item => item.id === id)?.name || '-';
 
-const getLocationOptions = (warehouseId?: number) => {
-  if (!warehouseId) return locationOptions.value;
-  return locationOptions.value.filter(item => item.warehouseId === warehouseId);
-};
-
 const fetchCustomers = async () => {
-  try {
-    const res: any = await request.get('/erp/customers');
-    customerOptions.value = res.data.data || [];
-  } catch (error) {
-    notifyError(error);
+  if (!isCurrentWorkspaceRoute.value || customerOptions.value.length > 0) {
+    return;
   }
-};
-
-const fetchProducts = async () => {
   try {
-    const res: any = await request.get('/erp/products');
-    productOptions.value = res.data.data || [];
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const fetchWarehouses = async () => {
-  try {
-    const res: any = await request.get('/erp/warehouses');
-    warehouseOptions.value = res.data.data || [];
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const fetchLocations = async () => {
-  try {
-    const res: any = await request.get('/erp/locations');
-    locationOptions.value = res.data.data || [];
+    customerOptions.value = await getCachedCustomers(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
 };
 
 const fetchList = async () => {
-  if (!isSaleReturnRoute.value) {
+  if (!isCurrentWorkspaceRoute.value) {
     loading.value = false;
     return;
   }
@@ -434,7 +420,10 @@ const fetchList = async () => {
     }
 
     const endpoint = isApprovedPage.value ? '/erp/sale-returns/approved/page' : '/erp/sale-returns/draft/page';
-    const res: any = await request.get(endpoint, { params });
+    const requestKey = `${endpoint}?${JSON.stringify(params)}`;
+    const res: any = await listRequestDeduper.run(requestKey, () => (
+      request.get(endpoint, { params })
+    ));
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -473,6 +462,22 @@ const applyRouteStatus = () => {
 const handleSearch = () => {
   page.value = 1;
   fetchList();
+};
+
+const runRouteRefresh = () => {
+  if (!isCurrentWorkspaceRoute.value) {
+    return;
+  }
+  const isFirstInitForCurrentPath = initializedRoutePath.value !== route.fullPath;
+  initializedRoutePath.value = route.fullPath;
+  applyRouteStatus();
+  if (isFirstInitForCurrentPath) {
+    tableData.value = [];
+    total.value = 0;
+  }
+  void fetchCustomers();
+  void fetchCurrentTenantKeys();
+  handleSearch();
 };
 
 const handlePageChange = (newPage: number) => {
@@ -606,42 +611,41 @@ const rowClassName = ({ row }: { row: SaleReturn }) => {
   return '';
 };
 
-onMounted(() => {
-  if (!isSaleReturnRoute.value) return;
-  applyRouteStatus();
-  fetchCustomers();
-  fetchProducts();
-  fetchWarehouses();
-  fetchLocations();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
-  fetchCurrentTenantKeys();
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingRouteRefresh.value) {
+      pendingRouteRefresh.value = false;
+      runRouteRefresh();
+    }
+  }
 });
 
-onActivated(() => {
-  if (!isSaleReturnRoute.value) return;
-  applyRouteStatus();
-  tableData.value = [];
-  total.value = 0;
-  fetchCustomers();
-  fetchProducts();
-  fetchWarehouses();
-  fetchLocations();
-  fetchList();
-  fetchCurrentTenantKeys();
-});
+watch(
+  () => authStore.tenantId,
+  (nextTenantId, prevTenantId) => {
+    if (nextTenantId === prevTenantId) {
+      return;
+    }
+    invalidateErpBaseDataCache(prevTenantId ?? undefined);
+    customerOptions.value = [];
+  }
+);
 
 watch(
   () => route.fullPath,
   () => {
-    if (!isSaleReturnRoute.value) {
+    if (!isCurrentWorkspaceRoute.value) {
       return;
     }
-    applyRouteStatus();
-    fetchCurrentTenantKeys();
-    handleSearch();
+    if (!pageSizeSyncReady.value) {
+      pendingRouteRefresh.value = true;
+      return;
+    }
+    runRouteRefresh();
   },
-  { flush: 'sync' }
+  { flush: 'sync', immediate: true }
 );
 </script>
 

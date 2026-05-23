@@ -666,60 +666,37 @@ const loadReceiptDetail = async () => {
   }
 };
 
-const fetchReceiptNo = async () => {
-  try {
-    const res: any = await request.get('/erp/receipts/next-receipt-no');
-    if (res.data.code === 200) {
-      formData.value.receiptNo = res.data.data || '';
+const applyReceiptBootstrapData = (data: any) => {
+  formData.value.receiptNo = data?.nextReceiptNo || formData.value.receiptNo;
+  customerOptions.value = Array.isArray(data?.customers) ? data.customers : [];
+  const allSettlementOptions: SettlementOption[] = Array.isArray(data?.settlementMethods) ? data.settlementMethods : [];
+  settlementOptions.value = allSettlementOptions.filter((item) => item.fundInputMode !== 'HIDDEN');
+  receiptMethodOptions.value = Array.isArray(data?.receiptMethods) ? data.receiptMethods : [];
+  if (!settlementOptions.value.some((item) => item.code === formData.value.settlementMethod)) {
+    formData.value.settlementMethod = '';
+  }
+  if (!formData.value.settlementMethod && settlementOptions.value.length > 0) {
+    const defaultMethod = settlementOptions.value.find((item) => item.isDefault) ?? settlementOptions.value[0];
+    if (defaultMethod) {
+      formData.value.settlementMethod = defaultMethod.code;
     }
-  } catch (error) {
-    notifyError(error);
+  }
+  if (!receiptMethodOptions.value.some((item) => item.code === formData.value.receiptMethodCode)) {
+    formData.value.receiptMethodCode = '';
+  }
+  if (!formData.value.receiptMethodCode && receiptMethodOptions.value.length > 0) {
+    const defaultMethod = receiptMethodOptions.value.find((item) => item.isDefault) ?? receiptMethodOptions.value[0];
+    if (defaultMethod) {
+      formData.value.receiptMethodCode = defaultMethod.code;
+    }
   }
 };
 
-const fetchCustomers = async () => {
+const fetchBootstrapData = async () => {
   try {
-    const res: any = await request.get('/erp/customers');
+    const res: any = await request.get('/erp/receipts/bootstrap');
     if (res.data.code === 200) {
-      customerOptions.value = res.data.data || [];
-    }
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const fetchSettlementMethods = async () => {
-  try {
-    const res: any = await request.get('/erp/settlement-methods');
-    if (res.data.code === 200) {
-      const allOptions: SettlementOption[] = res.data.data || [];
-      settlementOptions.value = allOptions.filter((item) => item.fundInputMode !== 'HIDDEN');
-      if (!settlementOptions.value.some((item) => item.code === formData.value.settlementMethod)) {
-        formData.value.settlementMethod = '';
-      }
-      if (!formData.value.settlementMethod && settlementOptions.value.length > 0) {
-        const defaultMethod = settlementOptions.value.find((item) => item.isDefault) ?? settlementOptions.value[0];
-        if (defaultMethod) {
-          formData.value.settlementMethod = defaultMethod.code;
-        }
-      }
-    }
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const fetchReceiptMethods = async () => {
-  try {
-    const res: any = await request.get('/erp/receipt-methods');
-    if (res.data.code === 200) {
-      receiptMethodOptions.value = res.data.data || [];
-      if (!formData.value.receiptMethodCode && receiptMethodOptions.value.length > 0) {
-        const defaultMethod = receiptMethodOptions.value.find((item) => item.isDefault) ?? receiptMethodOptions.value[0];
-        if (defaultMethod) {
-          formData.value.receiptMethodCode = defaultMethod.code;
-        }
-      }
+      applyReceiptBootstrapData(res.data.data || {});
     }
   } catch (error) {
     notifyError(error);
@@ -728,6 +705,10 @@ const fetchReceiptMethods = async () => {
 
 const fetchReceivables = async (customerId: number | null) => {
   if (!canViewSourceReceivables.value) {
+    receivableOptions.value = [];
+    return [];
+  }
+  if (!customerId) {
     receivableOptions.value = [];
     return [];
   }
@@ -1080,13 +1061,10 @@ const handleTagClosing = (event: Event) => {
 onMounted(() => {
   pagePath.value = route.path;
   resetForm();
-  fetchCustomers();
-  fetchSettlementMethods();
-  fetchReceiptMethods();
+  fetchBootstrapData();
   if (isReceiptRoute.value && isEditing.value) {
     loadReceiptDetail();
   } else {
-    fetchReceiptNo();
     receivableRange.value = buildDefaultRange();
   }
   if (typeof window !== 'undefined') {
@@ -1104,10 +1082,7 @@ onActivated(() => {
     return;
   }
   resetForm();
-  fetchReceiptNo();
-  fetchCustomers();
-  fetchSettlementMethods();
-  fetchReceiptMethods();
+  fetchBootstrapData();
   receivableRange.value = buildDefaultRange();
 });
 

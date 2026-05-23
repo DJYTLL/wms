@@ -1,6 +1,8 @@
 import { computed, ref, unref, type Ref } from 'vue'
 import request from '@/utils/request'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
+import { createRequestStateCache } from '@/composables/requestStateCacheCore'
 
 type ColumnLayout = {
   width?: number
@@ -21,11 +23,22 @@ const toSafeConfig = (value: unknown): UserTableConfig => {
   return value as UserTableConfig
 }
 
+const userTableSettingsCache = createRequestStateCache()
+
 export const useUserTableSettings = (pageKey: string | Ref<string>) => {
   const { notifyError } = useApiError()
+  const authStore = useAuthStore()
   const config = ref<UserTableConfig>({})
   const loaded = ref(false)
   const currentPageKey = computed(() => unref(pageKey))
+  const cacheKey = computed(() => {
+    const userScope = authStore.user?.id
+      ?? authStore.user?.username
+      ?? authStore.user?.name
+      ?? 'anonymous'
+    const tenantScope = authStore.tenantId ?? authStore.tenantCode ?? 'default'
+    return `user-table::${currentPageKey.value}::${tenantScope}::${userScope}`
+  })
 
   const fetchConfig = async () => {
     if (!currentPageKey.value) {
@@ -35,8 +48,11 @@ export const useUserTableSettings = (pageKey: string | Ref<string>) => {
     }
     loaded.value = false
     try {
-      const res: any = await request.get(`/user-table-settings/${currentPageKey.value}`)
-      config.value = toSafeConfig(res.data.data?.config)
+      const nextConfig = await userTableSettingsCache.getOrLoad(cacheKey.value, async () => {
+        const res: any = await request.get(`/user-table-settings/${currentPageKey.value}`)
+        return toSafeConfig(res.data.data?.config)
+      })
+      config.value = nextConfig
     } catch (error) {
       notifyError(error)
       config.value = {}
@@ -50,6 +66,7 @@ export const useUserTableSettings = (pageKey: string | Ref<string>) => {
       await request.put(`/user-table-settings/${currentPageKey.value}`, {
         config: config.value
       })
+      userTableSettingsCache.set(cacheKey.value, toSafeConfig(config.value))
     } catch (error) {
       notifyError(error)
     }

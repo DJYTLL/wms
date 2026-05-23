@@ -126,7 +126,7 @@ import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 
@@ -143,7 +143,7 @@ interface SettlementMethod {
 
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 
 const nameQuery = ref('');
 const codeQuery = ref('');
@@ -152,6 +152,9 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<SettlementMethod[]>([]);
 const allTableData = ref<SettlementMethod[]>([]);
 const showModal = ref(false);
@@ -293,13 +296,31 @@ const handleDelete = async (row: SettlementMethod) => {
   }
 };
 
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
 onMounted(() => {
-  fetchList();
-  bindPageSizeSync(size, fetchList);
   fetchTenantKeys();
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(() => {
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchList();
 });
 </script>

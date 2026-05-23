@@ -2,8 +2,10 @@ import { computed, ref, watch } from 'vue'
 import request from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import { useApiError } from '@/composables/useApiError'
+import { createRequestStateCache } from '@/composables/requestStateCacheCore'
 
 const buildStorageKey = (key: string) => `table-columns:${key}`
+const columnSettingsCache = createRequestStateCache()
 
 export const useColumnSettings = (key: string, defaultKeys: string[]) => {
   const { notifyError } = useApiError()
@@ -17,6 +19,8 @@ export const useColumnSettings = (key: string, defaultKeys: string[]) => {
     const permission = `column:${key}:${columnKey}`
     return authStore.hasPermission(permission) || authStore.hasPermission(`PERM_${permission}`)
   }
+
+  const cacheKey = computed(() => `tenant-columns::${key}::${authStore.tenantId ?? authStore.tenantCode ?? 'default'}`)
 
   const effectiveKeys = computed(() => {
     // 租户/角色权限永远优先于当前用户的列偏好；用户设置只能在允许的列集合内生效。
@@ -56,8 +60,10 @@ export const useColumnSettings = (key: string, defaultKeys: string[]) => {
 
   const fetchTenantKeys = async () => {
     try {
-      const res: any = await request.get(`/tenant-columns/${key}`)
-      const data = res.data.data
+      const data = await columnSettingsCache.getOrLoad(cacheKey.value, async () => {
+        const res: any = await request.get(`/tenant-columns/${key}`)
+        return res.data.data
+      })
       const keys = Array.isArray(data?.visibleColumns) ? data.visibleColumns : []
       const hasTenantSetting = Boolean(data?.updatedAt || data?.updatedBy)
       if (!hasTenantSetting) {
@@ -74,6 +80,11 @@ export const useColumnSettings = (key: string, defaultKeys: string[]) => {
     try {
       const payload = { visibleColumns: visibleKeys.value }
       await request.put(`/tenant-columns/${key}`, payload)
+      columnSettingsCache.set(cacheKey.value, {
+        visibleColumns: [...visibleKeys.value],
+        updatedAt: new Date().toISOString(),
+        updatedBy: authStore.user?.username || authStore.user?.name || 'current-user'
+      })
     } catch (error) {
       notifyError(error)
     }

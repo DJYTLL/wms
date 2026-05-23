@@ -182,18 +182,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated, computed, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-  import { useSystemConfig } from '@/composables/useSystemConfig';
-  import { useColumnSettings } from '@/composables/useColumnSettings';
-  import { useRouter } from 'vue-router';
-  import { ElMessageBox } from 'element-plus';
-  import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
-  import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
-  import { useAuthStore } from '@/stores/auth';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
+import { useColumnSettings } from '@/composables/useColumnSettings';
+import { useRouter } from 'vue-router';
+import { ElMessageBox } from 'element-plus';
+import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
+import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
+import { useAuthStore } from '@/stores/auth';
+import { getCachedSuppliers, invalidateErpBaseDataCache } from '@/composables/erpBaseDataCache';
+import { createInflightRequestDeduper } from '@/composables/inflightRequestDeduperCore';
 
 interface OptionItem {
   id: number;
@@ -210,11 +212,15 @@ interface PurchaseReturn {
   createdAt?: string;
 }
 
+const props = defineProps<{
+  workspace?: 'draft' | 'approved'
+}>();
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 const authStore = useAuthStore();
 
 const searchQuery = ref('');
@@ -229,16 +235,32 @@ const total = ref(0);
 const tableData = ref<PurchaseReturn[]>([]);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const initializedRoutePath = ref('');
+const pageSizeSyncReady = ref(false);
+const pendingRouteRefresh = ref(false);
+const listRequestDeduper = createInflightRequestDeduper();
 
 const supplierOptions = ref<OptionItem[]>([]);
 
 const isPurchaseReturnRoute = computed(() => route.path.startsWith('/erp/purchase-returns'));
-const isDraftPage = computed(() => route.meta.defaultStatus === 'DRAFT');
-const isApprovedPage = computed(() => route.meta.defaultStatus === 'APPROVED');
+const currentWorkspace = computed<'draft' | 'approved'>(() => {
+  if (props.workspace) return props.workspace;
+  if (route.path.includes('/erp/purchase-returns/approved')) return 'approved';
+  return 'draft';
+});
+const isCurrentWorkspaceRoute = computed(() => {
+  if (!isPurchaseReturnRoute.value) return false;
+  if (props.workspace === 'draft') return route.path === '/erp/purchase-returns/draft';
+  if (props.workspace === 'approved') return route.path === '/erp/purchase-returns/approved';
+  return route.path === '/erp/purchase-returns/draft' || route.path === '/erp/purchase-returns/approved';
+});
+const isDraftPage = computed(() => currentWorkspace.value === 'draft');
+const isApprovedPage = computed(() => currentWorkspace.value === 'approved');
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 const listEndpoint = computed(() => isApprovedPage.value ? '/erp/purchase-returns/approved/page' : '/erp/purchase-returns/draft/page');
 const detailEndpoint = computed(() => isApprovedPage.value ? '/erp/purchase-returns/approved' : '/erp/purchase-returns/draft');
 const printDocType = computed<'PURCHASE_RETURN_APPROVED' | 'PURCHASE_RETURN_DRAFT'>(() => isApprovedPage.value ? 'PURCHASE_RETURN_APPROVED' : 'PURCHASE_RETURN_DRAFT');
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const canCreate = computed(() => isDraftPage.value && hasPermission('erp-purchase-return-draft:add'));
 const canEdit = computed(() => isDraftPage.value && hasPermission('erp-purchase-return-draft:edit'));
 const canDelete = computed(() => isDraftPage.value && hasPermission('erp-purchase-return-draft:delete'));
@@ -313,16 +335,18 @@ const formatDateTime = (value?: string) => {
 const getSupplierName = (id?: number) => supplierOptions.value.find(item => item.id === id)?.name || '-';
 
 const fetchSuppliers = async () => {
+  if (!isCurrentWorkspaceRoute.value || supplierOptions.value.length > 0) {
+    return;
+  }
   try {
-    const res: any = await request.get('/erp/suppliers');
-    supplierOptions.value = res.data.data || [];
+    supplierOptions.value = await getCachedSuppliers(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
 };
 
 const fetchList = async () => {
-  if (!isPurchaseReturnRoute.value) {
+  if (!isCurrentWorkspaceRoute.value) {
     loading.value = false;
     return;
   }
@@ -341,7 +365,10 @@ const fetchList = async () => {
       params.endAt = end;
     }
 
-    const res: any = await request.get(listEndpoint.value, { params });
+    const requestKey = `${listEndpoint.value}?${JSON.stringify(params)}`;
+    const res: any = await listRequestDeduper.run(requestKey, () => (
+      request.get(listEndpoint.value, { params })
+    ));
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -376,6 +403,22 @@ const applyRouteStatus = () => {
 const handleSearch = () => {
   page.value = 1;
   fetchList();
+};
+
+const runRouteRefresh = () => {
+  if (!isCurrentWorkspaceRoute.value) {
+    return;
+  }
+  const isFirstInitForCurrentPath = initializedRoutePath.value !== route.fullPath;
+  initializedRoutePath.value = route.fullPath;
+  applyRouteStatus();
+  if (isFirstInitForCurrentPath) {
+    tableData.value = [];
+    total.value = 0;
+  }
+  void fetchSuppliers();
+  void fetchCurrentTenantKeys();
+  handleSearch();
 };
 
 const handlePageChange = (newPage: number) => {
@@ -491,37 +534,41 @@ const openPrintPage = (row: PurchaseReturn) => {
   printDialogVisible.value = true;
 };
 
-
-onMounted(() => {
-  if (!isPurchaseReturnRoute.value) return;
-  applyRouteStatus();
-  fetchSuppliers();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
-  fetchCurrentTenantKeys();
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingRouteRefresh.value) {
+      pendingRouteRefresh.value = false;
+      runRouteRefresh();
+    }
+  }
 });
 
-onActivated(() => {
-  if (!isPurchaseReturnRoute.value) return;
-  applyRouteStatus();
-  tableData.value = [];
-  total.value = 0;
-  fetchSuppliers();
-  fetchList();
-  fetchCurrentTenantKeys();
-});
+watch(
+  () => authStore.tenantId,
+  (nextTenantId, prevTenantId) => {
+    if (nextTenantId === prevTenantId) {
+      return;
+    }
+    invalidateErpBaseDataCache(prevTenantId ?? undefined);
+    supplierOptions.value = [];
+  }
+);
 
 watch(
   () => route.fullPath,
   () => {
-    if (!isPurchaseReturnRoute.value) {
+    if (!isCurrentWorkspaceRoute.value) {
       return;
     }
-    applyRouteStatus();
-    fetchCurrentTenantKeys();
-    handleSearch();
+    if (!pageSizeSyncReady.value) {
+      pendingRouteRefresh.value = true;
+      return;
+    }
+    runRouteRefresh();
   },
-  { flush: 'sync' }
+  { flush: 'sync', immediate: true }
 );
 </script>
 

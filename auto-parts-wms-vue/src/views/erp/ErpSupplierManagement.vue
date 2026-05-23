@@ -197,12 +197,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated } from 'vue';
+import { computed, ref, reactive, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
+import { getCachedEnabledPaymentMethods, getCachedEnabledSettlementMethods } from '@/composables/erpBaseDataCache';
+import { useAuthStore } from '@/stores/auth';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 
@@ -240,7 +242,9 @@ interface CodeOptionItem {
 
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
+const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const nameQuery = ref('');
 const codeQuery = ref('');
@@ -252,6 +256,9 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<ErpSupplier[]>([]);
 const allTableData = ref<ErpSupplier[]>([]);
 const showModal = ref(false);
@@ -374,8 +381,7 @@ const applyDefaultMethods = () => {
 
 const fetchSettlementMethods = async () => {
   try {
-    const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
-    settlementMethodOptions.value = res.data.data || [];
+    settlementMethodOptions.value = await getCachedEnabledSettlementMethods(tenantCacheKey.value);
     if (showModal.value && !isEditing.value) {
       applyDefaultMethods();
     }
@@ -386,8 +392,7 @@ const fetchSettlementMethods = async () => {
 
 const fetchPaymentMethods = async () => {
   try {
-    const res: any = await request.get('/erp/payment-methods', { params: { enabled: true } });
-    paymentMethodOptions.value = res.data.data || [];
+    paymentMethodOptions.value = await getCachedEnabledPaymentMethods(tenantCacheKey.value);
     if (showModal.value && !isEditing.value) {
       applyDefaultMethods();
     }
@@ -559,17 +564,33 @@ const handleDelete = async (row: ErpSupplier) => {
   }
 };
 
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
 onMounted(() => {
   fetchSettlementMethods();
   fetchPaymentMethods();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
   fetchTenantKeys();
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(() => {
-  fetchSettlementMethods();
-  fetchPaymentMethods();
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchList();
 });
 </script>

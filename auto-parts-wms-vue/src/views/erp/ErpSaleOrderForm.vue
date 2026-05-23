@@ -612,6 +612,16 @@ import { mergeOptionById } from '@/utils/erpMasterData';
 import { ElMessageBox } from 'element-plus';
 import { Delete, InfoFilled, Operation, Plus, View } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
+import {
+  getCachedCustomers,
+  getCachedCustomerCategories,
+  getCachedEnabledDeliveryMethods,
+  getCachedEnabledReceiptMethods,
+  getCachedEnabledSettlementMethods,
+  getCachedLocationOptions,
+  getCachedProductOptions,
+  getCachedWarehouseOptions
+} from '@/composables/erpBaseDataCache';
 
 interface OptionItem {
   id: number;
@@ -742,6 +752,7 @@ const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { requiredFieldMessage, positiveRowFieldMessage, invalidRowFieldMessage } = useValidationMessage();
 const authStore = useAuthStore();
 const isSaving = ref(false);
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const isEditing = computed(() => Boolean(route.params.id));
 const isApprovedWorkspace = computed(() => props.workspace === 'approved' || route.path.startsWith('/erp/sale-orders/approved'));
@@ -2310,8 +2321,7 @@ const applyCustomerChange = async (action: 'price' | 'clear' | 'cancel') => {
 
 const fetchCustomers = async () => {
   try {
-    const res: any = await request.get('/erp/customers');
-    customerOptions.value = res.data.data || [];
+    customerOptions.value = await getCachedCustomers(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -2319,8 +2329,7 @@ const fetchCustomers = async () => {
 
 const fetchCustomerCategories = async () => {
   try {
-    const res: any = await request.get('/erp/customer-categories');
-    customerCategoryOptions.value = res.data.data || [];
+    customerCategoryOptions.value = await getCachedCustomerCategories(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -2328,8 +2337,7 @@ const fetchCustomerCategories = async () => {
 
 const fetchProducts = async () => {
   try {
-    const res: any = await request.get('/erp/products/options');
-    productOptions.value = res.data.data || [];
+    productOptions.value = await getCachedProductOptions(tenantCacheKey.value);
     for (const item of formData.items) {
       await fetchStockOptions(item.productId);
       applyProductDefaults(item, false);
@@ -2368,8 +2376,7 @@ const getSelectableProductOptions = (currentProductId?: number | null) =>
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses/options');
-    warehouseOptions.value = res.data.data || [];
+    warehouseOptions.value = await getCachedWarehouseOptions(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -2377,8 +2384,7 @@ const fetchWarehouses = async () => {
 
 const fetchLocations = async () => {
   try {
-    const res: any = await request.get('/erp/locations/options');
-    locationOptions.value = res.data.data || [];
+    locationOptions.value = await getCachedLocationOptions(tenantCacheKey.value);
     formData.items.forEach(item => applyProductDefaults(item, false));
   } catch (error) {
     notifyError(error);
@@ -2567,8 +2573,7 @@ const resetForm = () => {
 
 const fetchSettlementMethods = async () => {
   try {
-    const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
-    settlementMethodOptions.value = res.data.data || [];
+    settlementMethodOptions.value = await getCachedEnabledSettlementMethods(tenantCacheKey.value);
     applyDefaultMethods();
   } catch (error) {
     notifyError(error);
@@ -2577,8 +2582,7 @@ const fetchSettlementMethods = async () => {
 
 const fetchReceiptMethods = async () => {
   try {
-    const res: any = await request.get('/erp/receipt-methods', { params: { enabled: true } });
-    receiptMethodOptions.value = res.data.data || [];
+    receiptMethodOptions.value = await getCachedEnabledReceiptMethods(tenantCacheKey.value);
     applyDefaultMethods();
   } catch (error) {
     notifyError(error);
@@ -2587,8 +2591,7 @@ const fetchReceiptMethods = async () => {
 
 const fetchDeliveryMethods = async () => {
   try {
-    const res: any = await request.get('/erp/delivery-methods', { params: { enabled: true } });
-    deliveryMethodOptions.value = res.data.data || [];
+    deliveryMethodOptions.value = await getCachedEnabledDeliveryMethods(tenantCacheKey.value);
     applyDefaultMethods();
   } catch (error) {
     notifyError(error);

@@ -184,10 +184,22 @@ const routes: Array<RouteRecordRaw> = [
         meta: { title: '系统配置', permission: 'system-config:view', role: 'super_admin' }
       },
       {
+        path: 'tenant-settings',
+        name: 'tenant-settings',
+        component: () => import('../views/system/TenantSettingManagement.vue'),
+        meta: { title: '租户设置', permission: 'tenant-setting:view' }
+      },
+      {
         path: 'tenants',
         name: 'tenants',
         component: () => import('../views/system/TenantManagement.vue'),
         meta: { title: '租户管理', permission: 'tenant:view' }
+      },
+      {
+        path: 'my/preferences',
+        name: 'my-preferences',
+        component: () => import('../views/system/MyPreferencesView.vue'),
+        meta: { title: '个人偏好' }
       },
       // --- 进销存 ---
       {

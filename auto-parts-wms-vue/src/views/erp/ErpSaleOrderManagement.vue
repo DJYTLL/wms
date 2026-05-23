@@ -336,8 +336,10 @@ import { ref, reactive, onMounted, onActivated, onDeactivated, onBeforeUnmount, 
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import request from '@/utils/request';
+import { getCachedCustomers, getCachedLocations, getCachedWarehouses, invalidateErpBaseDataCache } from '@/composables/erpBaseDataCache';
+import { createInflightRequestDeduper } from '@/composables/inflightRequestDeduperCore';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
@@ -436,7 +438,7 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 
 const searchQuery = ref('');
 const statusFilter = ref('');
@@ -464,15 +466,26 @@ const summary = reactive<SaleOrderSummary>({
 });
 
 const customerOptions = ref<OptionItem[]>([]);
-const productOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
+const returnDetailOptionsLoaded = ref(false);
+const initializedRoutePath = ref('');
+const pageSizeSyncReady = ref(false);
+const pendingRouteRefresh = ref(false);
+const listRequestDeduper = createInflightRequestDeduper();
 
 const isSaleOrderRoute = computed(() => route.path.startsWith('/erp/sale-orders'));
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const currentWorkspace = computed<'draft' | 'approved'>(() => {
-  if (route.path.includes('/erp/sale-orders/draft')) return 'draft';
+  if (props.workspace) return props.workspace;
   if (route.path.includes('/erp/sale-orders/approved')) return 'approved';
-  return props.workspace || 'draft';
+  return 'draft';
+});
+const isCurrentWorkspaceRoute = computed(() => {
+  if (!isSaleOrderRoute.value) return false;
+  if (props.workspace === 'draft') return route.path === '/erp/sale-orders/draft';
+  if (props.workspace === 'approved') return route.path === '/erp/sale-orders/approved';
+  return route.path === '/erp/sale-orders/draft' || route.path === '/erp/sale-orders/approved';
 });
 const isDraftPage = computed(() => currentWorkspace.value === 'draft');
 const isApprovedPage = computed(() => currentWorkspace.value === 'approved');
@@ -855,17 +868,7 @@ const summaryLabel = (key: 'saleAmount' | 'returnAmount' | 'netSaleAmount' | 'ne
 
 const fetchCustomers = async () => {
   try {
-    const res: any = await request.get('/erp/customers');
-    customerOptions.value = res.data.data || [];
-  } catch (error) {
-    notifyError(error);
-  }
-};
-
-const fetchProducts = async () => {
-  try {
-    const res: any = await request.get('/erp/products');
-    productOptions.value = res.data.data || [];
+    customerOptions.value = await getCachedCustomers(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -873,8 +876,7 @@ const fetchProducts = async () => {
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses');
-    warehouseOptions.value = res.data.data || [];
+    warehouseOptions.value = await getCachedWarehouses(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -882,22 +884,35 @@ const fetchWarehouses = async () => {
 
 const fetchLocations = async () => {
   try {
-    const res: any = await request.get('/erp/locations');
-    locationOptions.value = res.data.data || [];
+    locationOptions.value = await getCachedLocations(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
 };
 
+const ensureReturnDetailOptions = async () => {
+  if (returnDetailOptionsLoaded.value) {
+    return;
+  }
+  await Promise.all([
+    fetchWarehouses(),
+    fetchLocations()
+  ]);
+  returnDetailOptionsLoaded.value = true;
+};
+
 const fetchList = async () => {
-  if (!isSaleOrderRoute.value) {
+  if (!isCurrentWorkspaceRoute.value) {
     loading.value = false;
     return;
   }
   loading.value = true;
+  const params = buildListParams();
+  const requestKey = `${saleOrderApiBase.value}/page?${JSON.stringify(params)}`;
   try {
-    const params = buildListParams();
-    const res: any = await request.get(`${saleOrderApiBase.value}/page`, { params });
+    const res: any = await listRequestDeduper.run(requestKey, () => (
+      request.get(`${saleOrderApiBase.value}/page`, { params })
+    ));
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -920,6 +935,36 @@ const fetchList = async () => {
     loading.value = false;
   }
 };
+
+const runRouteRefresh = () => {
+  if (!isCurrentWorkspaceRoute.value) {
+    return;
+  }
+  const isFirstInitForCurrentPath = initializedRoutePath.value !== route.fullPath;
+  initializedRoutePath.value = route.fullPath;
+  applyRouteStatus();
+  if (showSaleSummaryBar.value) {
+    resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
+  }
+  if (isFirstInitForCurrentPath) {
+    tableData.value = [];
+    total.value = 0;
+  }
+  fetchCustomers();
+  fetchCurrentTenantKeys();
+  handleSearch();
+};
+
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingRouteRefresh.value) {
+      pendingRouteRefresh.value = false;
+      runRouteRefresh();
+    }
+  }
+});
 
 const applyRouteStatus = () => {
   if (!isSaleOrderRoute.value) {
@@ -1002,7 +1047,10 @@ const handleReturnTagClick = async (row: SaleOrder, index: number) => {
   try {
     saleReturnDetailLoading.value = true;
     saleReturnDetailDialogVisible.value = true;
-    const returns = await fetchApprovedSaleReturns(row.id);
+    const [, returns] = await Promise.all([
+      ensureReturnDetailOptions(),
+      fetchApprovedSaleReturns(row.id)
+    ]);
     const targetReturn = returns[index];
     if (!targetReturn?.id) {
       saleReturnDetailDialogVisible.value = false;
@@ -1150,31 +1198,14 @@ const rowClassName = ({ row }: { row: SaleOrder }) => {
 };
 
 onMounted(() => {
-  if (!isSaleOrderRoute.value) return;
-  applyRouteStatus();
-  fetchCustomers();
-  fetchProducts();
-  fetchWarehouses();
-  fetchLocations();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
-  fetchCurrentTenantKeys();
+  if (!isCurrentWorkspaceRoute.value) return;
   window.addEventListener('keydown', handleKeydown);
 });
 
 onActivated(() => {
-  if (!isSaleOrderRoute.value) return;
+  if (!isCurrentWorkspaceRoute.value) return;
   window.removeEventListener('keydown', handleKeydown);
   window.addEventListener('keydown', handleKeydown);
-  applyRouteStatus();
-  tableData.value = [];
-  total.value = 0;
-  fetchCustomers();
-  fetchProducts();
-  fetchWarehouses();
-  fetchLocations();
-  fetchList();
-  fetchCurrentTenantKeys();
 });
 
 onDeactivated(() => {
@@ -1186,19 +1217,32 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => route.fullPath,
-  () => {
-    if (!isSaleOrderRoute.value) {
+  () => authStore.tenantId,
+  (nextTenantId, prevTenantId) => {
+    if (nextTenantId === prevTenantId) {
       return;
     }
-    applyRouteStatus();
-    if (showSaleSummaryBar.value) {
-      resetSummary(hasSelectedDateRange.value ? 'range' : 'page');
+    invalidateErpBaseDataCache(prevTenantId ?? undefined);
+    customerOptions.value = [];
+    warehouseOptions.value = [];
+    locationOptions.value = [];
+    returnDetailOptionsLoaded.value = false;
+  }
+);
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (!isCurrentWorkspaceRoute.value) {
+      return;
     }
-    fetchCurrentTenantKeys();
-    handleSearch();
+    if (!pageSizeSyncReady.value) {
+      pendingRouteRefresh.value = true;
+      return;
+    }
+    runRouteRefresh();
   },
-  { flush: 'sync' }
+  { flush: 'sync', immediate: true }
 );
 
 watch(saleReturnDetailDialogVisible, (visible) => {

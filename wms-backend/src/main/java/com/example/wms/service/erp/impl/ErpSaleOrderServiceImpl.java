@@ -11,6 +11,7 @@ import com.example.wms.dto.erp.ErpIdAmountPair;
 import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
 import com.example.wms.dto.erp.ErpSaleOrderItemRequest;
 import com.example.wms.dto.erp.ErpSaleOrderItemCostSnapshot;
+import com.example.wms.dto.erp.ErpSaleOrderFlowSnapshot;
 import com.example.wms.dto.erp.ErpSaleOrderSummary;
 import com.example.wms.dto.erp.ErpSaleOrderUpdateRequest;
 import com.example.wms.entity.SystemConfig;
@@ -560,25 +561,30 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             .map(ErpSaleOrder::getId)
             .filter(java.util.Objects::nonNull)
             .toList();
-        Map<Long, BigDecimal> estimatedDraftCostByOrderId = estimateDraftCostsByOrderId(tenantId, orderIds);
+        Map<Long, ErpSaleOrderFlowSnapshot> flowSnapshotByOrderId = erpSaleOrderMapper.findFlowSnapshotsByIds(tenantId, orderIds)
+            .stream()
+            .filter(snapshot -> snapshot != null && snapshot.saleOrderId() != null)
+            .collect(Collectors.toMap(
+                ErpSaleOrderFlowSnapshot::saleOrderId,
+                snapshot -> snapshot,
+                (left, right) -> right
+            ));
         for (ErpSaleOrder order : orders) {
             if (order == null || order.getId() == null) {
                 continue;
             }
-            ErpAccountsReceivable receivable = erpAccountsReceivableMapper.findBySaleOrderId(tenantId, order.getId());
-            if (receivable != null) {
-                order.setReceivableStatus(receivable.getStatus());
-                order.setReceivableUnpaidAmount(receivable.getUnpaidAmount());
+            ErpSaleOrderFlowSnapshot flowSnapshot = flowSnapshotByOrderId.get(order.getId());
+            if (flowSnapshot != null && flowSnapshot.receivableStatus() != null) {
+                order.setReceivableStatus(flowSnapshot.receivableStatus());
+                order.setReceivableUnpaidAmount(flowSnapshot.receivableUnpaidAmount());
             } else if (!STATUS_RED_FLUSHED.equals(order.getStatus())) {
                 applyDraftReceivablePreview(order);
             }
-            Long approvedReturnCount = erpSaleReturnMapper.countApprovedBySaleOrderId(tenantId, order.getId());
+            Long approvedReturnCount = flowSnapshot == null ? 0L : zeroIfNull(flowSnapshot.approvedReturnCount());
             order.setApprovedReturnCount(approvedReturnCount);
-            BigDecimal returnAmount = zeroIfNull(erpSaleReturnMapper.sumApprovedAmountBySaleOrderId(tenantId, order.getId()));
-            BigDecimal saleCost = STATUS_DRAFT.equals(order.getStatus())
-                ? zeroIfNull(estimatedDraftCostByOrderId.get(order.getId()))
-                : zeroIfNull(erpStockTxnMapper.sumSaleIssueCost(tenantId, order.getId()));
-            BigDecimal returnCost = zeroIfNull(erpStockTxnMapper.sumApprovedSaleReturnCost(tenantId, order.getId()));
+            BigDecimal returnAmount = flowSnapshot == null ? BigDecimal.ZERO : zeroIfNull(flowSnapshot.cumulativeReturnAmount());
+            BigDecimal saleCost = flowSnapshot == null ? BigDecimal.ZERO : zeroIfNull(flowSnapshot.saleCost());
+            BigDecimal returnCost = flowSnapshot == null ? BigDecimal.ZERO : zeroIfNull(flowSnapshot.cumulativeReturnCost());
             BigDecimal saleAmount = zeroIfNull(order.getTotalAmountInclTax());
             BigDecimal netSaleAmount = saleAmount.subtract(returnAmount);
             BigDecimal netCost = saleCost.subtract(returnCost);
@@ -615,6 +621,10 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
 
     private BigDecimal zeroIfNull(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private Long zeroIfNull(Long value) {
+        return value == null ? 0L : value;
     }
 
     private Map<Long, BigDecimal> toAmountMap(List<ErpIdAmountPair> rows) {

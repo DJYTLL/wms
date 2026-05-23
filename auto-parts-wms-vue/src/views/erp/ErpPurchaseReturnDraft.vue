@@ -3,5 +3,5 @@ import ErpPurchaseReturnManagement from './ErpPurchaseReturnManagement.vue';
 </script>
 
 <template>
-  <ErpPurchaseReturnManagement />
+  <ErpPurchaseReturnManagement workspace="draft" />
 </template>

@@ -175,6 +175,12 @@
           <button @click="switchLanguage" class="action-btn" :title="$t('action.switchLanguage')">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
           </button>
+          <button class="action-btn" @click="router.push('/my/preferences')" :title="$t('page.myPreferences')">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
           <div class="avatar-circle">A</div>
           <button class="action-btn" @click="handleLogout" :title="$t('action.logout')">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -206,7 +212,24 @@
         </div>
       </div>
 
-      <main class="content-area" :class="{ 'content-area--embed': isEmbedded }">
+      <main ref="contentAreaRef" class="content-area" :class="{ 'content-area--embed': isEmbedded }">
+        <Teleport v-if="showPageRefreshButton && pageRefreshTeleportTarget" :to="pageRefreshTeleportTarget">
+          <button
+            class="page-refresh-button"
+            type="button"
+            :title="t('action.refresh')"
+            :aria-label="t('action.refresh')"
+            :disabled="pageRefreshReloading"
+            @click="handlePageRefresh"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+              <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+            </svg>
+          </button>
+        </Teleport>
         <router-view v-slot="{ Component }">
           <keep-alive :max="30">
             <component :is="Component" :key="route.path + ':' + (viewKeyVersions[route.path] || 0)" />
@@ -218,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, watch, ref, onMounted, onActivated, onBeforeUnmount } from 'vue';
+import { reactive, computed, watch, ref, onMounted, onActivated, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
@@ -229,6 +252,7 @@ import { useApiError } from '@/composables/useApiError';
 import request, { setTokens } from '@/utils/request';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { normalizeMenuKey } from '@/utils/i18n';
+import { createPageRefreshTargetBinder, isListRefreshRoute } from './pageRefresh';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
 const i18n = useI18n();
@@ -243,6 +267,10 @@ const { notifyError } = useApiError();
 const searchQuery = ref('');
 const menuSearchInput = ref<HTMLInputElement | null>(null);
 const showThemeDropdown = ref(false);
+const contentAreaRef = ref<HTMLElement | null>(null);
+const pageRefreshTeleportTarget = ref<HTMLElement | null>(null);
+const pageRefreshReloading = ref(false);
+let pageRefreshBinder: { sync: () => void; dispose: () => void } | null = null;
 const isEmbedded = computed(() => {
   const embed = route.query.embed;
   return embed === '1' || embed === 'true';
@@ -422,9 +450,11 @@ onMounted(() => {
     window.addEventListener('tags:close', handleCloseTagEvent as EventListener);
     window.addEventListener('keydown', handleSearchShortcut);
   }
+  bindPageRefreshTarget();
 });
 
 onBeforeUnmount(() => {
+  disposePageRefreshBinder();
   if (typeof window !== 'undefined') {
     window.removeEventListener('auth:tokens-updated', handleMenuRefresh);
     window.removeEventListener('menu:refresh', handleMenuRefresh);
@@ -438,6 +468,7 @@ onActivated(() => {
   // 可以在这里刷新 authStore 的权限，确保菜单显示最新
   // authStore.fetchPermissions(); // 如果 store 有这个方法
   findAndExpand(menuData.value);
+  bindPageRefreshTarget();
 });
 
 watch(menuData, () => {
@@ -540,6 +571,44 @@ const isMenuItemActive = (item: MenuItem): boolean => {
 const visitedViews = reactive<{ key?: string; title: string; path: string }[]>([]);
 const viewKeyVersions = reactive<Record<string, number>>({});
 
+const disposePageRefreshBinder = () => {
+  pageRefreshBinder?.dispose();
+  pageRefreshBinder = null;
+};
+
+const bindPageRefreshTarget = () => {
+  disposePageRefreshBinder();
+  pageRefreshTeleportTarget.value = null;
+  if (!contentAreaRef.value || !isListRefreshRoute(route.path)) {
+    return;
+  }
+  pageRefreshBinder = createPageRefreshTargetBinder({
+    root: contentAreaRef.value,
+    onTargetChange: (target) => {
+      pageRefreshTeleportTarget.value = target as HTMLElement | null;
+    }
+  });
+};
+
+const showPageRefreshButton = computed(() => {
+  return !isEmbedded.value && isListRefreshRoute(route.path) && !!pageRefreshTeleportTarget.value;
+});
+
+const handlePageRefresh = async () => {
+  if (!showPageRefreshButton.value || pageRefreshReloading.value) {
+    return;
+  }
+  pageRefreshReloading.value = true;
+  pageRefreshTeleportTarget.value = null;
+  disposePageRefreshBinder();
+  viewKeyVersions[route.path] = (viewKeyVersions[route.path] || 0) + 1;
+  await nextTick();
+  bindPageRefreshTarget();
+  window.setTimeout(() => {
+    pageRefreshReloading.value = false;
+  }, 200);
+};
+
 // 监听路由变化，添加标签
 watch(() => route.path, () => {
   // 查找当前路径对应的菜单标题（简单的扁平化查找，实际项目可用递归）
@@ -583,6 +652,11 @@ watch(() => route.path, () => {
     viewKeyVersions[route.path] = 0;
   }
 }, { immediate: true });
+
+watch(() => route.fullPath, async () => {
+  await nextTick();
+  bindPageRefreshTarget();
+}, { immediate: true, flush: 'post' });
 
 const closeView = (view: { id?: string; title: string; path: string }, redirectPath?: string) => {
   if (typeof window !== 'undefined') {
@@ -1622,6 +1696,38 @@ const handleSearchShortcut = (event: KeyboardEvent) => {
 
   color: var(--text-main);
 
+}
+
+.page-refresh-button {
+  order: -1;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #d9dee8;
+  border-radius: 8px;
+  background: #fff;
+  color: #606266;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.page-refresh-button:hover:not(:disabled) {
+  border-color: var(--active-blue, #409eff);
+  color: var(--active-blue, #409eff);
+  background: rgba(64, 158, 255, 0.06);
+}
+
+.page-refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.page-refresh-button svg {
+  width: 15px;
+  height: 15px;
 }
 
 

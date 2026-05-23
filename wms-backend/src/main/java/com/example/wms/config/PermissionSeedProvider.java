@@ -32,6 +32,8 @@ public final class PermissionSeedProvider {
             new PermissionSeed("menu:delete", "删除菜单", "删除菜单定义"),
 
             new PermissionSeed("audit:view", "查看审计日志", "查看系统审计日志"),
+            new PermissionSeed("tenant-setting:view", "查看租户设置", "查看租户展示默认配置"),
+            new PermissionSeed("tenant-setting:edit", "编辑租户设置", "编辑租户展示默认配置"),
             new PermissionSeed("column:edit", "配置列显示", "租户列显示配置"),
             new PermissionSeed("column:user-management:avatar", "用户管理-头像列", "用户管理头像列显示"),
             new PermissionSeed("column:user-management:username", "用户管理-用户名列", "用户管理用户名列显示"),

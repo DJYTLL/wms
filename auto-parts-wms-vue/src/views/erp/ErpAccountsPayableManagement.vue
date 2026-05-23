@@ -122,6 +122,7 @@ import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
 interface OptionItem {
@@ -143,8 +144,11 @@ const tableData = ref<any[]>([]);
 const supplierOptions = ref<OptionItem[]>([]);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 
 const { notifyError } = useApiError();
+const { bindPageSizeSync } = usePageSizePreference();
 const defaultColumns = ['supplierName', 'orderNo', 'status', 'totalAmount', 'paidAmount', 'discountAmount', 'unpaidAmount', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-ap', defaultColumns);
 const canShow = (key: string) => isVisible(key);
@@ -244,14 +248,36 @@ const formatDateTime = (value?: string) => {
   return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 };
 
-onMounted(() => {
-  fetchTenantKeys();
+const runPageLoad = () => {
   fetchSuppliers();
   fetchList();
+};
+
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      runPageLoad();
+    }
+  }
+});
+
+onMounted(() => {
+  fetchTenantKeys();
+  if (!pageSizeSyncReady.value) {
+    pendingInitialLoad.value = true;
+    return;
+  }
+  runPageLoad();
 });
 
 onActivated(() => {
-  fetchSuppliers();
-  fetchList();
+  if (!pageSizeSyncReady.value) {
+    pendingInitialLoad.value = true;
+    return;
+  }
+  runPageLoad();
 });
 </script>

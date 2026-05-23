@@ -9,6 +9,7 @@ import com.example.wms.dto.erp.ErpSaleReturnCreateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnDetail;
 import com.example.wms.dto.erp.ErpSaleReturnItemRequest;
 import com.example.wms.dto.erp.ErpSaleReturnRelatedOrder;
+import com.example.wms.dto.erp.ErpSaleReturnRefundSnapshot;
 import com.example.wms.dto.erp.ErpSaleReturnRefundSummary;
 import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderDetail;
 import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderItem;
@@ -185,33 +186,19 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         Long tenantId = TenantContext.requireTenantId();
         long finalPage = page <= 0 ? 1 : page;
         long finalSize = size <= 0 ? 20 : Math.min(size, 100);
-        QueryWrapper<ErpSaleOrder> wrapper = new QueryWrapper<ErpSaleOrder>()
-            .eq("tenant_id", tenantId)
-            .eq("status", STATUS_APPROVED)
-            .isNull("deleted_at");
-        if (customerId != null) {
-            wrapper.eq("customer_id", customerId);
-        }
-        if (keyword != null && !keyword.isBlank()) {
-            String trimmed = keyword.trim();
-            wrapper.and(qw -> qw.like("order_no", trimmed));
-        }
-        wrapper.orderByDesc("order_at").orderByDesc("id");
-        List<ErpSaleOrder> returnableOrders = erpSaleOrderMapper.selectList(wrapper).stream()
-            .filter(order -> buildSourceSaleOrderItems(tenantId, order.getId(), currentReturnId).stream()
-                .anyMatch(item -> zeroIfNull(item.remainingQty()).compareTo(BigDecimal.ZERO) > 0))
-            .toList();
-        long total = returnableOrders.size();
-        int fromIndex = (int) Math.min((finalPage - 1) * finalSize, total);
-        int toIndex = (int) Math.min(fromIndex + finalSize, total);
-        List<ErpSaleReturnSourceSaleOrderOption> items = returnableOrders.subList(fromIndex, toIndex).stream()
-            .map(order -> new ErpSaleReturnSourceSaleOrderOption(
-                order.getId(),
-                order.getOrderNo(),
-                order.getCustomerId(),
-                order.getOrderAt()
-            ))
-            .toList();
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        long total = erpSaleOrderMapper.countReturnableSourceOrders(tenantId, customerId, normalizedKeyword, currentReturnId);
+        long offset = (finalPage - 1) * finalSize;
+        List<ErpSaleReturnSourceSaleOrderOption> items = total == 0
+            ? List.of()
+            : erpSaleOrderMapper.findReturnableSourceOrdersPage(
+                tenantId,
+                customerId,
+                normalizedKeyword,
+                currentReturnId,
+                (int) finalSize,
+                offset
+            );
         return new PageResponse<>(total, finalPage, finalSize, items);
     }
 
@@ -1439,14 +1426,23 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (returns == null || returns.isEmpty()) {
             return;
         }
+        List<Long> returnIds = returns.stream()
+            .map(ErpSaleReturn::getId)
+            .filter(Objects::nonNull)
+            .toList();
+        Map<Long, ErpSaleReturnRefundSnapshot> refundSnapshotMap = returnIds.isEmpty()
+            ? Map.of()
+            : erpSaleReturnMapper.findRefundSnapshotsByReturnIds(tenantId, returnIds).stream()
+                .filter(snapshot -> snapshot != null && snapshot.returnId() != null)
+                .collect(Collectors.toMap(ErpSaleReturnRefundSnapshot::returnId, snapshot -> snapshot, (left, right) -> left));
         for (ErpSaleReturn order : returns) {
             if (order == null || order.getId() == null) {
                 continue;
             }
-            ErpAccountsReceivable receivable = findReturnReceivable(tenantId, order);
-            if (receivable != null) {
-                order.setRefundStatus(receivable.getStatus());
-                order.setRefundUnpaidAmount(receivable.getUnpaidAmount());
+            ErpSaleReturnRefundSnapshot snapshot = refundSnapshotMap.get(order.getId());
+            if (snapshot != null) {
+                order.setRefundStatus(snapshot.refundStatus());
+                order.setRefundUnpaidAmount(snapshot.refundUnpaidAmount());
             } else if (!STATUS_RED_FLUSHED.equals(order.getStatus())) {
                 applyDraftRefundPreview(order);
             }

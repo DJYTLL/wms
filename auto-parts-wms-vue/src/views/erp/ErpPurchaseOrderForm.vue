@@ -408,6 +408,15 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useValidationMessage } from '@/composables/useValidationMessage';
 import { useAuthStore } from '@/stores/auth';
+import {
+  getCachedCustomerCategories,
+  getCachedEnabledPaymentMethods,
+  getCachedEnabledSettlementMethods,
+  getCachedLocationOptions,
+  getCachedProductOptions,
+  getCachedSuppliers,
+  getCachedWarehouseOptions
+} from '@/composables/erpBaseDataCache';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import ProductHistoryDialog from '@/components/ProductHistoryDialog.vue';
@@ -508,6 +517,7 @@ const {
   invalidRowFieldMessage,
 } = useValidationMessage();
 const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const supplierOptions = ref<OptionItem[]>([]);
 const productOptions = ref<ProductOption[]>([]);
@@ -1068,8 +1078,7 @@ const applyDefaultMethods = () => {
 
 const fetchSuppliers = async () => {
   try {
-    const res: any = await request.get('/erp/suppliers');
-    supplierOptions.value = res.data.data || [];
+    supplierOptions.value = await getCachedSuppliers(tenantCacheKey.value);
     if (formData.supplierId) {
       applyMethodsForSupplier();
     }
@@ -1080,8 +1089,8 @@ const fetchSuppliers = async () => {
 
 const fetchProducts = async () => {
   try {
-    const res: any = await request.get('/erp/products/options');
-    productOptions.value = (res.data.data || []).map((product: any) => ({
+    const products = await getCachedProductOptions<any>(tenantCacheKey.value);
+    productOptions.value = (products || []).map((product: any) => ({
       id: product.id,
       name: product.name,
       defaultWarehouseId: product.defaultWarehouseId,
@@ -1096,8 +1105,7 @@ const fetchProducts = async () => {
 
 const fetchCustomerCategories = async () => {
   try {
-    const res: any = await request.get('/erp/customer-categories');
-    customerCategoryOptions.value = res.data.data || [];
+    customerCategoryOptions.value = await getCachedCustomerCategories(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -1105,8 +1113,7 @@ const fetchCustomerCategories = async () => {
 
 const fetchWarehouses = async () => {
   try {
-    const res: any = await request.get('/erp/warehouses/options');
-    warehouseOptions.value = res.data.data || [];
+    warehouseOptions.value = await getCachedWarehouseOptions(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -1114,8 +1121,7 @@ const fetchWarehouses = async () => {
 
 const fetchLocations = async () => {
   try {
-    const res: any = await request.get('/erp/locations/options');
-    locationOptions.value = res.data.data || [];
+    locationOptions.value = await getCachedLocationOptions(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -1123,8 +1129,7 @@ const fetchLocations = async () => {
 
 const fetchSettlementMethods = async () => {
   try {
-    const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
-    settlementMethodOptions.value = res.data.data || [];
+    settlementMethodOptions.value = await getCachedEnabledSettlementMethods(tenantCacheKey.value);
     if (formData.supplierId) {
       applyMethodsForSupplier();
     } else {
@@ -1137,8 +1142,7 @@ const fetchSettlementMethods = async () => {
 
 const fetchPaymentMethods = async () => {
   try {
-    const res: any = await request.get('/erp/payment-methods');
-    paymentMethodOptions.value = res.data.data || [];
+    paymentMethodOptions.value = await getCachedEnabledPaymentMethods(tenantCacheKey.value);
     if (formData.supplierId) {
       applyMethodsForSupplier();
     } else {

@@ -12,10 +12,12 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 // 系统配置服务实现
 @Service
 public class SystemConfigServiceImpl implements SystemConfigService {
+    private static final Set<String> TENANT_MANAGED_KEYS = Set.of("default.page.size");
     private final SystemConfigMapper systemConfigMapper;
 
     public SystemConfigServiceImpl(SystemConfigMapper systemConfigMapper) {
@@ -24,16 +26,23 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     @Override
     public List<SystemConfigResponse> listAll() {
-        return systemConfigMapper.findAll(TenantContext.requireTenantId()).stream().map(this::toResponse).toList();
+        return systemConfigMapper.findAll(TenantContext.requireTenantId()).stream()
+            .filter(config -> !isTenantManagedKey(config.getConfigKey()))
+            .map(this::toResponse)
+            .toList();
     }
 
     @Override
     public List<SystemConfigResponse> listPublic() {
-        return systemConfigMapper.findPublic(TenantContext.requireTenantId()).stream().map(this::toResponse).toList();
+        return systemConfigMapper.findPublic(TenantContext.requireTenantId()).stream()
+            .filter(config -> !isTenantManagedKey(config.getConfigKey()))
+            .map(this::toResponse)
+            .toList();
     }
 
     @Override
     public SystemConfigResponse getByKey(String key) {
+        rejectTenantManagedKey(key);
         SystemConfig config = loadByKey(key);
         return toResponse(config);
     }
@@ -44,6 +53,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("配置键不能为空");
         }
+        rejectTenantManagedKey(key);
         SystemConfig existing = systemConfigMapper.findByKey(tenantId, key);
         if (existing != null) {
             throw new IllegalArgumentException("配置键已存在");
@@ -59,6 +69,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     @Override
     public SystemConfigResponse update(String key, SystemConfigRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        rejectTenantManagedKey(key);
         SystemConfig config = loadByKey(tenantId, key);
         applyRequest(config, request);
         config.setUpdatedAt(Instant.now());
@@ -98,6 +109,24 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             config.setPublic(request.isPublic());
         }
     }
+
+    private void rejectTenantManagedKey(String key) {
+        if (DEFAULT_PAGE_SIZE_KEY.equals(key)) {
+            throw new IllegalArgumentException("默认分页大小请在租户设置中维护");
+        }
+        if (key != null && key.startsWith("erp.")) {
+            throw new IllegalArgumentException("ERP编码规则和单号规则请在租户设置中维护");
+        }
+    }
+
+    private boolean isTenantManagedKey(String key) {
+        if (key == null) {
+            return false;
+        }
+        return TENANT_MANAGED_KEYS.contains(key) || key.startsWith("erp.");
+    }
+
+    private static final String DEFAULT_PAGE_SIZE_KEY = "default.page.size";
 
     private SystemConfigResponse toResponse(SystemConfig config) {
         return new SystemConfigResponse(

@@ -2,6 +2,7 @@ package com.example.wms.mapper.erp;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.example.wms.dto.erp.ErpIdAmountPair;
+import com.example.wms.dto.erp.ErpSaleReturnRefundSnapshot;
 import com.example.wms.entity.erp.ErpSaleReturn;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -54,6 +55,44 @@ public interface ErpSaleReturnMapper extends BaseMapper<ErpSaleReturn> {
         """)
     List<ErpIdAmountPair> sumApprovedAmountsBySaleOrderIds(@Param("tenantId") Long tenantId,
                                                            @Param("saleOrderIds") List<Long> saleOrderIds);
+
+    @Select("""
+        <script>
+        SELECT sr.id AS return_id,
+               COALESCE(source_receivable.status, legacy_receivable.status) AS refund_status,
+               COALESCE(source_receivable.unpaid_amount, legacy_receivable.unpaid_amount) AS refund_unpaid_amount
+        FROM erp_sale_return sr
+        LEFT JOIN LATERAL (
+            SELECT ar.status, ar.unpaid_amount
+            FROM erp_accounts_receivable ar
+            WHERE ar.tenant_id = sr.tenant_id
+              AND ar.source_type = 'SALE_RETURN'
+              AND ar.source_id = sr.id
+              AND ar.deleted_at IS NULL
+            ORDER BY ar.id DESC
+            LIMIT 1
+        ) source_receivable ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT ar.status, ar.unpaid_amount
+            FROM erp_accounts_receivable ar
+            WHERE source_receivable.status IS NULL
+              AND ar.tenant_id = sr.tenant_id
+              AND ar.sale_order_id = sr.sale_order_id
+              AND ar.total_amount &lt; 0
+              AND ar.deleted_at IS NULL
+              AND ar.remark LIKE CONCAT('%', '销售退货单号:', sr.order_no, '%')
+            ORDER BY ar.id DESC
+            LIMIT 1
+        ) legacy_receivable ON TRUE
+        WHERE sr.tenant_id = #{tenantId}
+          AND sr.id IN
+          <foreach collection='returnIds' item='returnId' open='(' separator=',' close=')'>
+            #{returnId}
+          </foreach>
+        </script>
+        """)
+    List<ErpSaleReturnRefundSnapshot> findRefundSnapshotsByReturnIds(@Param("tenantId") Long tenantId,
+                                                                     @Param("returnIds") List<Long> returnIds);
 
     @Select("""
         UPDATE erp_sale_return

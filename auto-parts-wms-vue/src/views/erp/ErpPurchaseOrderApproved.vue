@@ -127,16 +127,20 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { getCachedSuppliers, invalidateErpBaseDataCache } from '@/composables/erpBaseDataCache';
+import { createInflightRequestDeduper } from '@/composables/inflightRequestDeduperCore';
+import { useAuthStore } from '@/stores/auth';
 
 interface OptionItem {
   id: number;
@@ -154,8 +158,10 @@ interface PurchaseOrder {
 
 const { t } = useI18n();
 const router = useRouter();
+const route = useRoute();
+const authStore = useAuthStore();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 
 const searchQuery = ref('');
 const supplierFilter = ref<number | null>(null);
@@ -168,9 +174,15 @@ const tableData = ref<PurchaseOrder[]>([]);
 const supplierOptions = ref<OptionItem[]>([]);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const initializedRoutePath = ref('');
+const pageSizeSyncReady = ref(false);
+const pendingRouteRefresh = ref(false);
+const listRequestDeduper = createInflightRequestDeduper();
 
 const defaultColumns = ['orderNo', 'supplier', 'status', 'totalAmount', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-purchase-approved', defaultColumns);
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
+const isCurrentWorkspaceRoute = computed(() => route.path === '/erp/purchase-orders/approved');
 
 const canShow = (key: string) => isVisible(key);
 
@@ -203,15 +215,21 @@ const formatAmount = (value?: number | string) => Number(value || 0).toFixed(2);
 const getSupplierName = (id?: number) => supplierOptions.value.find(item => item.id === id)?.name || '-';
 
 const fetchSuppliers = async () => {
+  if (!isCurrentWorkspaceRoute.value || supplierOptions.value.length > 0) {
+    return;
+  }
   try {
-    const res: any = await request.get('/erp/suppliers');
-    supplierOptions.value = res.data.data || [];
+    supplierOptions.value = await getCachedSuppliers(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
 };
 
 const fetchList = async () => {
+  if (!isCurrentWorkspaceRoute.value) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   try {
     const params: Record<string, any> = {
@@ -225,7 +243,10 @@ const fetchList = async () => {
       params.startAt = Number(dateRange.value[0]);
       params.endAt = Number(dateRange.value[1]);
     }
-    const res: any = await request.get('/erp/purchase-orders/approved/page', { params });
+    const requestKey = `/erp/purchase-orders/approved/page?${JSON.stringify(params)}`;
+    const res: any = await listRequestDeduper.run(requestKey, () => (
+      request.get('/erp/purchase-orders/approved/page', { params })
+    ));
     if (res.data.code === 200) {
       tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
@@ -240,6 +261,21 @@ const fetchList = async () => {
 const handleSearch = () => {
   page.value = 1;
   fetchList();
+};
+
+const runRouteRefresh = () => {
+  if (!isCurrentWorkspaceRoute.value) {
+    return;
+  }
+  const isFirstInitForCurrentPath = initializedRoutePath.value !== route.fullPath;
+  initializedRoutePath.value = route.fullPath;
+  if (isFirstInitForCurrentPath) {
+    tableData.value = [];
+    total.value = 0;
+  }
+  void fetchSuppliers();
+  void fetchTenantKeys();
+  handleSearch();
 };
 
 const handlePageChange = (newPage: number) => {
@@ -359,17 +395,42 @@ const rowClassName = ({ row }: { row: PurchaseOrder }) => {
   return '';
 };
 
-onMounted(() => {
-  fetchSuppliers();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
-  fetchTenantKeys();
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingRouteRefresh.value) {
+      pendingRouteRefresh.value = false;
+      runRouteRefresh();
+    }
+  }
 });
 
-onActivated(() => {
-  fetchSuppliers();
-  fetchList();
-});
+watch(
+  () => authStore.tenantId,
+  (nextTenantId, prevTenantId) => {
+    if (nextTenantId === prevTenantId) {
+      return;
+    }
+    invalidateErpBaseDataCache(prevTenantId ?? undefined);
+    supplierOptions.value = [];
+  }
+);
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (!isCurrentWorkspaceRoute.value) {
+      return;
+    }
+    if (!pageSizeSyncReady.value) {
+      pendingRouteRefresh.value = true;
+      return;
+    }
+    runRouteRefresh();
+  },
+  { flush: 'sync', immediate: true }
+);
 </script>
 
 <style scoped>

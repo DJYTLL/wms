@@ -183,11 +183,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated } from 'vue';
+import { computed, ref, reactive, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
+import { getCachedCustomerCategories, getCachedEnabledDeliveryMethods, getCachedEnabledReceiptMethods, getCachedEnabledSettlementMethods } from '@/composables/erpBaseDataCache';
+import { useAuthStore } from '@/stores/auth';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 import type { FormInstance, FormRules } from 'element-plus';
@@ -232,7 +234,9 @@ interface ContactItem {
 
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
+const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const nameQuery = ref('');
 const codeQuery = ref('');
@@ -244,6 +248,9 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<ErpCustomer[]>([]);
 const allTableData = ref<ErpCustomer[]>([]);
 const showModal = ref(false);
@@ -288,8 +295,7 @@ const getCategoryName = (id?: number) => categoryOptions.value.find(item => item
 
 const fetchCategories = async () => {
   try {
-    const res: any = await request.get('/erp/customer-categories');
-    categoryOptions.value = res.data.data || [];
+    categoryOptions.value = await getCachedCustomerCategories(tenantCacheKey.value);
     if (!formData.categoryId) {
       const defaultCategory = categoryOptions.value.find(item => item.isDefault);
       if (defaultCategory) {
@@ -303,8 +309,7 @@ const fetchCategories = async () => {
 
 const fetchSettlementMethods = async () => {
   try {
-    const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
-    settlementMethodOptions.value = res.data.data || [];
+    settlementMethodOptions.value = await getCachedEnabledSettlementMethods(tenantCacheKey.value);
     if (showModal.value && !isEditing.value) {
       applyDefaultMethods();
     }
@@ -315,8 +320,7 @@ const fetchSettlementMethods = async () => {
 
 const fetchReceiptMethods = async () => {
   try {
-    const res: any = await request.get('/erp/receipt-methods', { params: { enabled: true } });
-    receiptMethodOptions.value = res.data.data || [];
+    receiptMethodOptions.value = await getCachedEnabledReceiptMethods(tenantCacheKey.value);
     if (showModal.value && !isEditing.value) {
       applyDefaultMethods();
     }
@@ -327,8 +331,7 @@ const fetchReceiptMethods = async () => {
 
 const fetchDeliveryMethods = async () => {
   try {
-    const res: any = await request.get('/erp/delivery-methods', { params: { enabled: true } });
-    deliveryMethodOptions.value = res.data.data || [];
+    deliveryMethodOptions.value = await getCachedEnabledDeliveryMethods(tenantCacheKey.value);
     if (showModal.value && !isEditing.value) {
       applyDefaultMethods();
     }
@@ -586,21 +589,35 @@ const handleDelete = async (row: ErpCustomer) => {
   }
 };
 
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
 onMounted(() => {
   fetchCategories();
   fetchSettlementMethods();
   fetchReceiptMethods();
   fetchDeliveryMethods();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
   fetchTenantKeys();
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(() => {
-  fetchCategories();
-  fetchSettlementMethods();
-  fetchReceiptMethods();
-  fetchDeliveryMethods();
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchList();
 });
 </script>

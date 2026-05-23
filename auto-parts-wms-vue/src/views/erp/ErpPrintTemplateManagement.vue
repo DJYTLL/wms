@@ -297,7 +297,7 @@ import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import DecimalInput from '@/components/DecimalInput.vue';
 import { normalizeColumnWidths as normalizeTemplateColumnWidths, parsePrintTemplateConfig, savePrintTemplatePreview } from '@/utils/printTemplate';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
@@ -357,7 +357,7 @@ interface PreviewSampleOption {
 
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 const defaultColumns = ['code', 'name', 'docType', 'sortNo', 'enabled'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-print-template', defaultColumns);
 const canShow = (key: string) => isVisible(key);
@@ -370,6 +370,9 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<PrintTemplate[]>([]);
 const allTableData = ref<PrintTemplate[]>([]);
 
@@ -1197,13 +1200,31 @@ const handleSizeChange = (newSize: number) => {
   applySearch();
 };
 
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
 onMounted(() => {
   fetchTenantKeys();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(() => {
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchList();
 });
 

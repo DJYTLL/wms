@@ -45,3 +45,6 @@ ALTER TABLE app_system_config
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_system_config_tenant_key
     ON app_system_config (tenant_id, config_key);
+
+COMMENT ON TABLE app_system_config IS '系统配置表（租户隔离）';
+COMMENT ON COLUMN app_system_config.tenant_id IS '租户ID';
