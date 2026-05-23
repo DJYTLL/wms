@@ -364,7 +364,8 @@ import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
+import { getCachedLocationOptions, getCachedProductOptions, getCachedWarehouseOptions } from '@/composables/erpBaseDataCache';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
 import ProductStockSelect from '@/components/ProductStockSelect.vue';
@@ -406,7 +407,7 @@ const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 const authStore = useAuthStore();
 const stockCountColumns = ['countNo', 'status', 'countAt', 'adjustmentReason', 'remark', 'createdAt'];
 const stockInitColumns = ['countNo', 'status', 'countAt', 'remark', 'createdAt'];
@@ -428,6 +429,7 @@ const countNoLabel = computed(() => (countType.value === 'INIT' ? t('field.stock
 const printDocType = computed(() => (countType.value === 'INIT' ? 'STOCK_INIT' : 'STOCK_COUNT'));
 const printTitle = computed(() => (countType.value === 'INIT' ? t('page.erpStockInitPrint') : t('page.erpStockCountPrint')));
 const isFormPage = computed(() => route.meta.pageMode === 'form');
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const formMode = computed(() => String(route.meta.formMode || 'create'));
 const formPageTitle = computed(() => {
   if (formMode.value === 'edit') return t('action.edit');
@@ -451,6 +453,9 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<StockCount[]>([]);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
@@ -555,14 +560,14 @@ const formatDateTime = (value?: string) => {
 
 const fetchOptions = async () => {
   try {
-    const [productsRes, warehousesRes, locationsRes] = await Promise.all([
-      request.get('/erp/products/options'),
-      request.get('/erp/warehouses/options'),
-      request.get('/erp/locations/options')
+    const [products, warehouses, locations] = await Promise.all([
+      getCachedProductOptions(tenantCacheKey.value),
+      getCachedWarehouseOptions(tenantCacheKey.value),
+      getCachedLocationOptions(tenantCacheKey.value)
     ]);
-    productOptions.value = productsRes.data.data || [];
-    warehouseOptions.value = warehousesRes.data.data || [];
-    locationOptions.value = locationsRes.data.data || [];
+    productOptions.value = products;
+    warehouseOptions.value = warehouses;
+    locationOptions.value = locations;
   } catch (error) {
     notifyError(error);
   }
@@ -1163,15 +1168,29 @@ const handleCancel = async (row: StockCount) => {
   }
 };
 
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
 onMounted(async () => {
   if (isFormPage.value) {
     await initializeFormPage();
     return;
   }
   fetchListColumnKeys();
-  fetchOptions();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
+  await fetchOptions();
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(async () => {
@@ -1179,8 +1198,11 @@ onActivated(async () => {
     await initializeFormPage();
     return;
   }
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchListColumnKeys();
-  fetchOptions();
   fetchList();
 });
 

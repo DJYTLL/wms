@@ -9,11 +9,11 @@ import com.example.wms.mapper.PermissionMapper;
 import com.example.wms.mapper.RoleMapper;
 import com.example.wms.mapper.TenantMapper;
 import com.example.wms.mapper.UserAccountMapper;
+import com.example.wms.security.AuthenticatedUser;
 import com.example.wms.service.UserAccountService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -45,35 +45,20 @@ public class DatabaseUserServiceImpl implements UserAccountService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         // 加载用户及其角色权限
         AuthContext context = loadAuthContext(username);
-        UserAccount user = context.user();
-        List<Role> roles = context.roles();
-        List<Permission> permissions = context.permissions();
-
-        List<GrantedAuthority> authorities = new ArrayList<>();
-        for (Role role : roles) {
-            // 角色以 ROLE_ 前缀写入权限列表
-            authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getCode()));
-        }
-        for (Permission permission : permissions) {
-            // 权限以 PERM_ 前缀写入权限列表
-            authorities.add(new SimpleGrantedAuthority("PERM_" + permission.getCode()));
-        }
-
-        return new User(
-            user.getUsername(),
-            user.getPasswordHash(),
-            user.isEnabled(),
-            user.isAccountNonExpired(),
-            user.isCredentialsNonExpired(),
-            user.isAccountNonLocked(),
-            authorities
+        return AuthenticatedUser.fromDatabase(
+            context.user(),
+            buildAuthPayload(context),
+            buildAuthorities(context.roles(), context.permissions())
         );
     }
 
     @Override
     public AuthPayload loadAuthPayload(String username) {
         // 组装 JWT 载荷需要的用户对象与权限列表
-        AuthContext context = loadAuthContext(username);
+        return buildAuthPayload(loadAuthContext(username));
+    }
+
+    private AuthPayload buildAuthPayload(AuthContext context) {
         UserAccount user = context.user();
         String role = resolvePrimaryRole(context.roles());
         List<String> roleCodes = context.roles().stream()
@@ -82,7 +67,7 @@ public class DatabaseUserServiceImpl implements UserAccountService {
             .map(code -> code.toLowerCase(Locale.ROOT))
             .distinct()
             .collect(Collectors.toList());
-        UserClaim userClaim = new UserClaim(user.getUsername(), role, user.getAvatarUrl(), roleCodes);
+        UserClaim userClaim = new UserClaim(user.getId(), user.getUsername(), role, user.getAvatarUrl(), roleCodes);
         List<String> permissionCodes = context.permissions().stream()
             .map(Permission::getCode)
             .collect(Collectors.toList());
@@ -93,6 +78,17 @@ public class DatabaseUserServiceImpl implements UserAccountService {
             context.tenantCode(),
             user.getTenantId(),
             context.tenantCode());
+    }
+
+    private List<GrantedAuthority> buildAuthorities(List<Role> roles, List<Permission> permissions) {
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        for (Role role : roles) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getCode()));
+        }
+        for (Permission permission : permissions) {
+            authorities.add(new SimpleGrantedAuthority("PERM_" + permission.getCode()));
+        }
+        return authorities;
     }
 
     @Override

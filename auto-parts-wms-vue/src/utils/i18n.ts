@@ -9,6 +9,7 @@ const legacyMenuKeyMap: Record<string, string> = {
   permissions: 'nav.permissions',
   audit: 'nav.auditLogs',
   'audit-logs': 'nav.auditLogs',
+  'api-latency-monitor': 'nav.apiLatencyMonitor',
   column: 'nav.columnPermissions',
   'column-permissions': 'nav.columnPermissions',
   columnPermissions: 'nav.columnPermissions',

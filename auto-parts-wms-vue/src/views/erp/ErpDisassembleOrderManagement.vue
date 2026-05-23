@@ -144,7 +144,7 @@ import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 
 interface OptionItem {
@@ -166,12 +166,15 @@ interface AssemblyOrder {
 const { t } = useI18n();
 const router = useRouter();
 const { notifyError, notifySuccess } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 
 const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<AssemblyOrder[]>([]);
 
 const searchQuery = ref('');
@@ -320,13 +323,31 @@ const handleDelete = async (row: AssemblyOrder) => {
 
 onMounted(() => {
   fetchProducts();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
   fetchTenantKeys();
 });
 
 onActivated(() => {
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchProducts();
   fetchList();
+});
+
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
 });
 </script>

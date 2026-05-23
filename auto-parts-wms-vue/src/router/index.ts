@@ -166,6 +166,12 @@ const routes: Array<RouteRecordRaw> = [
         meta: { title: '审计日志', permission: 'audit:view' }
       },
       {
+        path: 'api-latency-monitor',
+        name: 'api-latency-monitor',
+        component: () => import('../views/system/ApiLatencyMonitorView.vue'),
+        meta: { title: '接口耗时查询', permission: 'api-latency-monitor:view' }
+      },
+      {
         path: 'column-permissions',
         name: 'column-permissions',
         component: () => import('../views/system/ColumnPermissionManagement.vue'),

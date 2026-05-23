@@ -49,12 +49,15 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useAuthStore } from '@/stores/auth';
+import { getCachedLocations, getCachedProductOptions, getCachedWarehouses } from '@/composables/erpBaseDataCache';
 import { fetchPrintTemplate, parsePrintTemplateConfig, readPrintTemplatePreview, resolvePreviewConfigKey, resolveTemplateId, type PrintTemplateConfig as TemplateConfig } from '@/utils/printTemplate';
 import { directPrintWindow } from '@/utils/directPrint';
 
 const { t } = useI18n();
 const route = useRoute();
 const { notifyError } = useApiError();
+const authStore = useAuthStore();
 
 const loading = ref(true);
 const count = ref<any>(null);
@@ -70,6 +73,7 @@ const warehouses = ref<any[]>([]);
 const locations = ref<any[]>([]);
 
 const countId = computed(() => Number(route.params.id));
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const isPreview = computed(() => route.query.preview === '1' || route.query.preview === 'true');
 const shouldAutoPrint = computed(() => route.query.auto === '1' || route.query.auto === 'true');
 
@@ -257,14 +261,14 @@ const fetchDetail = async () => {
 };
 
 const fetchOptions = async () => {
-  const [productRes, warehouseRes, locationRes] = await Promise.all([
-    request.get('/erp/products'),
-    request.get('/erp/warehouses'),
-    request.get('/erp/locations')
+  const [productList, warehouseList, locationList] = await Promise.all([
+    getCachedProductOptions(tenantCacheKey.value),
+    getCachedWarehouses(tenantCacheKey.value),
+    getCachedLocations(tenantCacheKey.value)
   ]);
-  products.value = productRes.data.data || [];
-  warehouses.value = warehouseRes.data.data || [];
-  locations.value = locationRes.data.data || [];
+  products.value = productList;
+  warehouses.value = warehouseList;
+  locations.value = locationList;
 };
 
 const recordPrint = async () => {

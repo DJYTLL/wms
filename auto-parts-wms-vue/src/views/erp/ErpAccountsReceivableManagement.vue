@@ -100,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, onMounted, ref } from 'vue';
+import { computed, onActivated, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import request from '@/utils/request';
@@ -108,6 +108,8 @@ import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { getCachedCustomers } from '@/composables/erpBaseDataCache';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
 interface OptionItem {
@@ -117,6 +119,7 @@ interface OptionItem {
 
 const { t } = useI18n();
 const router = useRouter();
+const authStore = useAuthStore();
 
 const searchQuery = ref('');
 const statusFilter = ref('');
@@ -130,6 +133,7 @@ const customerOptions = ref<OptionItem[]>([]);
 const loading = ref(false);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
 
@@ -137,6 +141,7 @@ const { notifyError } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
 const defaultColumns = ['customerName', 'orderNo', 'status', 'totalAmount', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-ar', defaultColumns);
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const canShow = (key: string) => isVisible(key);
 
 const statusOptions = [
@@ -147,10 +152,7 @@ const statusOptions = [
 
 const fetchCustomers = async () => {
   try {
-    const res: any = await request.get('/erp/customers');
-    if (res.data.code === 200) {
-      customerOptions.value = res.data.data || [];
-    }
+    customerOptions.value = await getCachedCustomers(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -254,6 +256,10 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   if (!pageSizeSyncReady.value) {
     pendingInitialLoad.value = true;
     return;

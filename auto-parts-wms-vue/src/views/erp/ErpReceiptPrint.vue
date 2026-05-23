@@ -60,12 +60,15 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { useAuthStore } from '@/stores/auth';
+import { getCachedSettlementMethods } from '@/composables/erpBaseDataCache';
 import { fetchPrintTemplate, parsePrintTemplateConfig, readPrintTemplatePreview, resolvePreviewConfigKey, resolveTemplateId, type PrintTemplateConfig as TemplateConfig } from '@/utils/printTemplate';
 import { directPrintWindow } from '@/utils/directPrint';
 
 const { t } = useI18n();
 const route = useRoute();
 const { notifyError } = useApiError();
+const authStore = useAuthStore();
 
 const loading = ref(true);
 const receipt = ref<any>(null);
@@ -80,6 +83,7 @@ const customerName = ref('');
 const settlementMethods = ref<any[]>([]);
 
 const receiptId = computed(() => Number(route.params.id));
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const isPreview = computed(() => route.query.preview === '1' || route.query.preview === 'true');
 const shouldAutoPrint = computed(() => route.query.auto === '1' || route.query.auto === 'true');
 
@@ -247,8 +251,7 @@ const fetchDetail = async () => {
 };
 
 const fetchOptions = async () => {
-  const res: any = await request.get('/erp/settlement-methods');
-  settlementMethods.value = res.data.data || [];
+  settlementMethods.value = await getCachedSettlementMethods(tenantCacheKey.value);
 };
 
 const recordPrint = async () => {

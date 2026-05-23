@@ -253,6 +253,7 @@ import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import { ElMessageBox } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
+import { getCachedEnabledDeliveryMethods, getCachedEnabledSettlementMethods } from '@/composables/erpBaseDataCache';
 
 interface OptionItem {
   id: number;
@@ -310,6 +311,7 @@ const router = useRouter();
 const route = useRoute();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const isEditing = computed(() => Boolean(route.params.id));
 const isReadOnly = computed(() => {
@@ -1030,8 +1032,7 @@ const resetForm = () => {
 
 const fetchSettlementMethods = async () => {
   try {
-    const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
-    settlementMethodOptions.value = res.data.data || [];
+    settlementMethodOptions.value = await getCachedEnabledSettlementMethods(tenantCacheKey.value);
     applyDefaultMethods();
   } catch (error) {
     notifyError(error);
@@ -1040,8 +1041,7 @@ const fetchSettlementMethods = async () => {
 
 const fetchDeliveryMethods = async () => {
   try {
-    const res: any = await request.get('/erp/delivery-methods', { params: { enabled: true } });
-    deliveryMethodOptions.value = res.data.data || [];
+    deliveryMethodOptions.value = await getCachedEnabledDeliveryMethods(tenantCacheKey.value);
     applyDefaultMethods();
   } catch (error) {
     notifyError(error);

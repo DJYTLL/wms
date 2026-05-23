@@ -26,6 +26,15 @@ public class TenantSettingServiceImpl implements TenantSettingService {
     public static final int FALLBACK_PAGE_SIZE = 20;
     private static final int MIN_PAGE_SIZE = 5;
     private static final int MAX_PAGE_SIZE = 200;
+    private static final int MAX_PREFIX_LENGTH = 8;
+    private static final int MAX_SEQUENCE_LENGTH = 8;
+    private static final Set<String> ALLOWED_DATE_FORMATS = Set.of(
+        "yyyyMMdd",
+        "yyMMdd",
+        "yyyyMM",
+        "yyyy-MM-dd",
+        "yyyyMMddHHmmss"
+    );
     private static final Set<String> INT_KEYS = Set.of(
         DEFAULT_PAGE_SIZE_KEY,
         "erp.order.no.seq-length",
@@ -280,9 +289,30 @@ public class TenantSettingServiceImpl implements TenantSettingService {
         if (trimmed.isBlank()) {
             throw new IllegalArgumentException(definition.label() + "不能为空");
         }
+        if (definition.key().endsWith(".date-format")) {
+            if (!ALLOWED_DATE_FORMATS.contains(trimmed)) {
+                throw new IllegalArgumentException(definition.label() + "必须使用受支持的日期格式");
+            }
+            return trimmed;
+        }
+        if (definition.key().endsWith(".prefix")) {
+            if (!trimmed.matches("^[A-Za-z0-9_-]+$")) {
+                throw new IllegalArgumentException(definition.label() + "仅支持字母、数字、下划线和短横线");
+            }
+            if (trimmed.length() > MAX_PREFIX_LENGTH) {
+                throw new IllegalArgumentException(definition.label() + "长度不能超过 " + MAX_PREFIX_LENGTH);
+            }
+            return trimmed.toUpperCase();
+        }
         if ("int".equals(definition.valueType()) || INT_KEYS.contains(definition.key())) {
             try {
                 int parsed = Integer.parseInt(trimmed);
+                if (definition.key().endsWith(".seq-length")) {
+                    if (parsed <= 0 || parsed > MAX_SEQUENCE_LENGTH) {
+                        throw new IllegalArgumentException(definition.label() + "必须为 1 到 " + MAX_SEQUENCE_LENGTH + " 的整数");
+                    }
+                    return String.valueOf(parsed);
+                }
                 if (parsed <= 0 || parsed > 200) {
                     throw new IllegalArgumentException(definition.label() + "必须为 1 到 200 的整数");
                 }

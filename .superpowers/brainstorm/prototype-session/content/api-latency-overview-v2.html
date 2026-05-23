@@ -1,0 +1,508 @@
+<style>
+  .proto-shell {
+    background: #fff;
+    color: #111827;
+  }
+
+  .proto-header {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .proto-title {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #0f172a;
+  }
+
+  .proto-toolbar-card,
+  .proto-table-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  }
+
+  .proto-toolbar-card {
+    padding: 18px 18px 14px;
+  }
+
+  .proto-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .proto-filters {
+    display: grid;
+    grid-template-columns: 1.3fr 0.9fr 0.9fr 0.9fr 1.15fr;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .proto-filters--advanced {
+    grid-template-columns: 1fr 0.9fr 1.15fr 0.9fr 1fr;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #eef2f7;
+  }
+
+  .proto-input {
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid #d7dce5;
+    border-radius: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    color: #1f2937;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+
+  .proto-input--muted {
+    color: #6b7280;
+  }
+
+  .proto-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .proto-btn {
+    min-width: 76px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 1px solid #d7dce5;
+    background: #fff;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .proto-btn--primary {
+    border-color: #3b82f6;
+    background: #409eff;
+    color: #fff;
+  }
+
+  .proto-table-card {
+    overflow: hidden;
+  }
+
+  .proto-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid #eef2f7;
+    background: linear-gradient(180deg, #fbfdff 0%, #f8fbff 100%);
+  }
+
+  .proto-summary-item {
+    padding: 12px 14px;
+    border: 1px solid #e6edf6;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .proto-summary-item__label {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+
+  .proto-summary-item__value {
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 8px;
+  }
+
+  .proto-summary-item__meta {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #64748b;
+  }
+
+  .proto-table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px 0;
+  }
+
+  .proto-table-header__title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .proto-table-header__subtitle {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .proto-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .proto-tag {
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  .proto-tag--blue {
+    background: #eaf3ff;
+    color: #2563eb;
+  }
+
+  .proto-tag--amber {
+    background: #fff7e8;
+    color: #b45309;
+  }
+
+  .proto-table-wrap {
+    padding: 14px 18px 18px;
+  }
+
+  .proto-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 13px;
+    color: #334155;
+  }
+
+  .proto-table th,
+  .proto-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #ebeef5;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  .proto-table th {
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .proto-table tr:nth-child(even) td {
+    background: #fcfcfd;
+  }
+
+  .proto-status,
+  .proto-method {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 54px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    box-sizing: border-box;
+  }
+
+  .proto-method--get {
+    background: #eaf3ff;
+    color: #2563eb;
+  }
+
+  .proto-method--post {
+    background: #ecfdf3;
+    color: #15803d;
+  }
+
+  .proto-status--ok {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .proto-status--warn {
+    background: #fff4d6;
+    color: #a16207;
+  }
+
+  .proto-status--fail {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+
+  .proto-duration {
+    font-weight: 700;
+  }
+
+  .proto-duration--slow {
+    color: #b91c1c;
+  }
+
+  .proto-text-ellipsis {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .proto-summary-cell {
+    position: relative;
+  }
+
+  .proto-tooltip-demo {
+    position: absolute;
+    left: 12px;
+    top: 52px;
+    width: 380px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(15, 23, 42, 0.96);
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.22);
+    color: #f8fafc;
+    font-size: 12px;
+    line-height: 1.7;
+    z-index: 2;
+  }
+
+  .proto-tooltip-demo::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 24px;
+    width: 12px;
+    height: 12px;
+    background: rgba(15, 23, 42, 0.96);
+    transform: rotate(45deg);
+  }
+
+  .proto-table-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 0 18px 16px;
+    color: #64748b;
+    font-size: 12px;
+  }
+
+  .proto-pager {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .proto-page-chip {
+    min-width: 34px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid #d7dce5;
+    border-radius: 8px;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .proto-page-chip--active {
+    border-color: #3b82f6;
+    background: #409eff;
+    color: #fff;
+  }
+</style>
+
+<div class="proto-shell">
+  <div class="proto-header">
+    <div class="proto-title">接口耗时记录</div>
+
+    <div class="proto-toolbar-card">
+      <div class="proto-toolbar">
+        <div class="proto-filters">
+          <div class="proto-input proto-input--muted">关键字：接口路径 / 页面标题 / 错误信息</div>
+          <div class="proto-input proto-input--muted">请求方法：GET / POST</div>
+          <div class="proto-input proto-input--muted">状态：成功 / 失败 / 已取消</div>
+          <div class="proto-input proto-input--muted">耗时范围：0 ~ 3000ms</div>
+          <div class="proto-input proto-input--muted">时间范围：今天 00:00 - 现在</div>
+        </div>
+        <div class="proto-actions">
+          <div class="proto-btn">更多筛选</div>
+          <div class="proto-btn proto-btn--primary">搜索</div>
+          <div class="proto-btn">导出</div>
+        </div>
+      </div>
+
+      <div class="proto-filters proto-filters--advanced">
+        <div class="proto-input proto-input--muted">页面路由：/erp/sale-orders/approved</div>
+        <div class="proto-input proto-input--muted">接口分组：销售 / 库存 / 系统</div>
+        <div class="proto-input proto-input--muted">请求 ID / Trace 标识</div>
+        <div class="proto-input proto-input--muted">客户端结果：成功 / 失败 / 超时</div>
+        <div class="proto-input proto-input--muted">响应体大小：0KB ~ 200KB</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-table-card">
+    <div class="proto-summary">
+      <div class="proto-summary-item">
+        <div class="proto-summary-item__label">总请求数</div>
+        <div class="proto-summary-item__value">12,480</div>
+        <div class="proto-summary-item__meta">当前筛选范围内采集到的前端接口请求总数，含成功、失败、取消与超时。</div>
+      </div>
+      <div class="proto-summary-item">
+        <div class="proto-summary-item__label">平均耗时</div>
+        <div class="proto-summary-item__value">286ms</div>
+        <div class="proto-summary-item__meta">统计从请求发起到响应完成的前端观测耗时，不包含页面渲染后续耗时。</div>
+      </div>
+      <div class="proto-summary-item">
+        <div class="proto-summary-item__label">慢请求占比</div>
+        <div class="proto-summary-item__value">1.47%</div>
+        <div class="proto-summary-item__meta">以 1000ms 为阈值；183 条慢请求中，最多集中在销售单分页和保存动作。</div>
+      </div>
+      <div class="proto-summary-item">
+        <div class="proto-summary-item__label">失败与超时</div>
+        <div class="proto-summary-item__value">238</div>
+        <div class="proto-summary-item__meta">失败 201 条，超时 37 条；主要分布在保存冲突、网络抖动和服务端异常场景。</div>
+      </div>
+    </div>
+
+    <div class="proto-table-header">
+      <div>
+        <div class="proto-table-header__title">请求明细</div>
+        <div class="proto-table-header__subtitle">遵循现有 ERP 列表页风格，长文本在列内省略，鼠标悬浮时展示完整内容。</div>
+      </div>
+      <div class="proto-tags">
+        <span class="proto-tag proto-tag--blue">默认按耗时倒序</span>
+        <span class="proto-tag">支持列配置</span>
+        <span class="proto-tag proto-tag--amber">摘要列启用悬浮全文</span>
+      </div>
+    </div>
+
+    <div class="proto-table-wrap">
+      <table class="proto-table">
+        <thead>
+          <tr>
+            <th style="width: 160px;">发生时间</th>
+            <th style="width: 130px;">页面</th>
+            <th style="width: 80px;">方法</th>
+            <th style="width: 240px;">接口路径</th>
+            <th style="width: 80px;">状态</th>
+            <th style="width: 90px;">耗时</th>
+            <th style="width: 90px;">请求大小</th>
+            <th style="width: 90px;">响应大小</th>
+            <th>摘要</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2026-05-23 10:42:13</td>
+            <td>销售单已审核</td>
+            <td><span class="proto-method proto-method--get">GET</span></td>
+            <td><div class="proto-text-ellipsis">/api/erp/sale-orders/page?status=APPROVED</div></td>
+            <td><span class="proto-status proto-status--warn">200</span></td>
+            <td class="proto-duration proto-duration--slow">1486ms</td>
+            <td>1.2KB</td>
+            <td>58KB</td>
+            <td class="proto-summary-cell">
+              <div class="proto-text-ellipsis">分页查询已审核销售单，附带客户、时间范围和关键字筛选；返回数据量较大，列表首屏等待明显。</div>
+              <div class="proto-tooltip-demo">
+                分页查询已审核销售单，附带客户、时间范围和关键字筛选；返回数据量较大，列表首屏等待明显。
+                <br>
+                悬浮交互示意：正式实现时这里会像项目里的 `show-overflow-tooltip` 一样展示完整文本，而不是把列宽撑开。
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>2026-05-23 10:42:11</td>
+            <td>销售单草稿</td>
+            <td><span class="proto-method proto-method--post">POST</span></td>
+            <td><div class="proto-text-ellipsis">/api/erp/sale-orders/draft</div></td>
+            <td><span class="proto-status proto-status--fail">500</span></td>
+            <td class="proto-duration proto-duration--slow">2142ms</td>
+            <td>9.4KB</td>
+            <td>0.8KB</td>
+            <td><div class="proto-text-ellipsis">保存销售单草稿失败：后端返回库存占用冲突，前端已记录接口异常消息与失败耗时。</div></td>
+          </tr>
+          <tr>
+            <td>2026-05-23 10:41:56</td>
+            <td>系统配置</td>
+            <td><span class="proto-method proto-method--get">GET</span></td>
+            <td><div class="proto-text-ellipsis">/api/system-configs</div></td>
+            <td><span class="proto-status proto-status--ok">200</span></td>
+            <td class="proto-duration">126ms</td>
+            <td>0.3KB</td>
+            <td>4.5KB</td>
+            <td><div class="proto-text-ellipsis">页面初始化加载系统配置，响应正常，适合作为快速接口参考样本。</div></td>
+          </tr>
+          <tr>
+            <td>2026-05-23 10:41:31</td>
+            <td>库存流水</td>
+            <td><span class="proto-method proto-method--get">GET</span></td>
+            <td><div class="proto-text-ellipsis">/api/erp/stock-txns?page=1&amp;size=20</div></td>
+            <td><span class="proto-status proto-status--ok">200</span></td>
+            <td class="proto-duration">342ms</td>
+            <td>0.9KB</td>
+            <td>16.2KB</td>
+            <td><div class="proto-text-ellipsis">库存流水列表分页请求，耗时中等，后续可结合页面路由筛选定位具体业务模块。</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="proto-table-footer">
+      <div>共 12,480 条，当前展示最慢请求前 4 条示意</div>
+      <div class="proto-pager">
+        <span class="proto-page-chip">10 / 页</span>
+        <span class="proto-page-chip">‹</span>
+        <span class="proto-page-chip proto-page-chip--active">1</span>
+        <span class="proto-page-chip">2</span>
+        <span class="proto-page-chip">3</span>
+        <span class="proto-page-chip">›</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="v2-accepted" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>这一版更接近项目风格</h3>
+      <p>按这个方向继续做真实页面，实现真实筛选、列表和 tooltip 交互</p>
+    </div>
+  </div>
+  <div class="option" data-choice="less-summary-more-table" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>摘要还可以再收一点</h3>
+      <p>保留摘要区，但压缩高度，把更多空间留给表格首屏可见行数</p>
+    </div>
+  </div>
+  <div class="option" data-choice="need-right-detail-drawer" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>还需要请求详情侧栏</h3>
+      <p>列表点击一行后，右侧或抽屉展示 headers、params、error 和时间拆分</p>
+    </div>
+  </div>
+</div>

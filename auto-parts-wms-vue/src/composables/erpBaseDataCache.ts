@@ -1,7 +1,7 @@
 import request from '@/utils/request';
 import { createTenantScopedResourceCache } from './erpBaseDataCacheCore';
 
-type BaseOptionItem = {
+export type BaseOptionItem = {
   id: number;
   name: string;
   code?: string;
@@ -9,23 +9,23 @@ type BaseOptionItem = {
   warehouseId?: number;
 };
 
-type CustomerOptionItem = BaseOptionItem & {
+export type CustomerOptionItem = BaseOptionItem & {
   defaultSettlementMethodCode?: string;
   defaultReceiptMethodCode?: string;
   deliveryMethodCode?: string;
 };
 
-type SupplierOptionItem = BaseOptionItem & {
+export type SupplierOptionItem = BaseOptionItem & {
   defaultSettlementMethodCode?: string;
   defaultPaymentMethodCode?: string;
 };
 
-type MethodOptionItem = BaseOptionItem & {
+export type MethodOptionItem = BaseOptionItem & {
   code: string;
   fundInputMode?: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED';
 };
 
-type ProductOptionItem = BaseOptionItem & {
+export type ProductOptionItem = BaseOptionItem & {
   defaultWarehouseId?: number;
   defaultLocationId?: number;
   costPrice?: number;
@@ -61,88 +61,88 @@ const loadResource = async <T = BaseOptionItem>(url: string) => {
   return (res.data?.data || []) as T[];
 };
 
-export const getCachedCustomers = <T = CustomerOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_CUSTOMERS, tenantId, () => loadResource<T>('/erp/customers'))
+export const getCachedCustomers = (tenantId: number | string): Promise<CustomerOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_CUSTOMERS, tenantId, () => loadResource<CustomerOptionItem>('/erp/customers'))
 );
 
-export const getCachedSuppliers = <T = SupplierOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_SUPPLIERS, tenantId, () => loadResource<T>('/erp/suppliers'))
+export const getCachedSuppliers = (tenantId: number | string): Promise<SupplierOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_SUPPLIERS, tenantId, () => loadResource<SupplierOptionItem>('/erp/suppliers'))
 );
 
-export const getCachedCategories = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_CATEGORIES, tenantId, () => loadResource<T>('/erp/categories'))
+export const getCachedCategories = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_CATEGORIES, tenantId, () => loadResource<BaseOptionItem>('/erp/categories'))
 );
 
-export const getCachedCustomerCategories = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_CUSTOMER_CATEGORIES, tenantId, () => loadResource<T>('/erp/customer-categories'))
+export const getCachedCustomerCategories = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_CUSTOMER_CATEGORIES, tenantId, () => loadResource<BaseOptionItem>('/erp/customer-categories'))
 );
 
-export const getCachedUnits = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_UNITS, tenantId, () => loadResource<T>('/erp/units'))
+export const getCachedUnits = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_UNITS, tenantId, () => loadResource<BaseOptionItem>('/erp/units'))
 );
 
-export const getCachedSettlementMethods = <T = MethodOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_SETTLEMENT_METHODS, tenantId, () => loadResource<T>('/erp/settlement-methods'))
+export const getCachedSettlementMethods = (tenantId: number | string): Promise<MethodOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_SETTLEMENT_METHODS, tenantId, () => loadResource<MethodOptionItem>('/erp/settlement-methods'))
 );
 
-export const getCachedEnabledSettlementMethods = <T = MethodOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_SETTLEMENT_METHODS_ENABLED, tenantId, () => loadResource<T>('/erp/settlement-methods?enabled=true'))
+export const getCachedEnabledSettlementMethods = (tenantId: number | string): Promise<MethodOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_SETTLEMENT_METHODS_ENABLED, tenantId, () => loadResource<MethodOptionItem>('/erp/settlement-methods?enabled=true'))
 );
 
-export const getCachedPaymentMethods = <T = MethodOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_PAYMENT_METHODS, tenantId, () => loadResource<T>('/erp/payment-methods'))
+export const getCachedPaymentMethods = (tenantId: number | string): Promise<MethodOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_PAYMENT_METHODS, tenantId, () => loadResource<MethodOptionItem>('/erp/payment-methods'))
 );
 
-export const getCachedEnabledPaymentMethods = <T = MethodOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_PAYMENT_METHODS_ENABLED, tenantId, () => loadResource<T>('/erp/payment-methods?enabled=true'))
+export const getCachedEnabledPaymentMethods = (tenantId: number | string): Promise<MethodOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_PAYMENT_METHODS_ENABLED, tenantId, () => loadResource<MethodOptionItem>('/erp/payment-methods?enabled=true'))
 );
 
-export const getCachedReceiptMethods = <T = MethodOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_RECEIPT_METHODS, tenantId, () => loadResource<T>('/erp/receipt-methods'))
+export const getCachedReceiptMethods = (tenantId: number | string): Promise<MethodOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_RECEIPT_METHODS, tenantId, () => loadResource<MethodOptionItem>('/erp/receipt-methods'))
 );
 
-export const getCachedEnabledReceiptMethods = <T = MethodOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_RECEIPT_METHODS_ENABLED, tenantId, () => loadResource<T>('/erp/receipt-methods?enabled=true'))
+export const getCachedEnabledReceiptMethods = (tenantId: number | string): Promise<MethodOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_RECEIPT_METHODS_ENABLED, tenantId, () => loadResource<MethodOptionItem>('/erp/receipt-methods?enabled=true'))
 );
 
-export const getCachedDeliveryMethods = <T = MethodOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_DELIVERY_METHODS, tenantId, () => loadResource<T>('/erp/delivery-methods'))
+export const getCachedDeliveryMethods = (tenantId: number | string): Promise<MethodOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_DELIVERY_METHODS, tenantId, () => loadResource<MethodOptionItem>('/erp/delivery-methods'))
 );
 
-export const getCachedEnabledDeliveryMethods = <T = MethodOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_DELIVERY_METHODS_ENABLED, tenantId, () => loadResource<T>('/erp/delivery-methods?enabled=true'))
+export const getCachedEnabledDeliveryMethods = (tenantId: number | string): Promise<MethodOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_DELIVERY_METHODS_ENABLED, tenantId, () => loadResource<MethodOptionItem>('/erp/delivery-methods?enabled=true'))
 );
 
-export const getCachedWarehouses = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_WAREHOUSES, tenantId, () => loadResource<T>('/erp/warehouses'))
+export const getCachedWarehouses = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_WAREHOUSES, tenantId, () => loadResource<BaseOptionItem>('/erp/warehouses'))
 );
 
-export const getCachedWarehouseOptions = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_WAREHOUSES_OPTIONS, tenantId, () => loadResource<T>('/erp/warehouses/options'))
+export const getCachedWarehouseOptions = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_WAREHOUSES_OPTIONS, tenantId, () => loadResource<BaseOptionItem>('/erp/warehouses/options'))
 );
 
-export const getCachedLocations = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_LOCATIONS, tenantId, () => loadResource<T>('/erp/locations'))
+export const getCachedLocations = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_LOCATIONS, tenantId, () => loadResource<BaseOptionItem>('/erp/locations'))
 );
 
-export const getCachedLocationOptions = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_LOCATIONS_OPTIONS, tenantId, () => loadResource<T>('/erp/locations/options'))
+export const getCachedLocationOptions = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_LOCATIONS_OPTIONS, tenantId, () => loadResource<BaseOptionItem>('/erp/locations/options'))
 );
 
-export const getCachedProductOptions = <T = ProductOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_PRODUCTS_OPTIONS, tenantId, () => loadResource<T>('/erp/products/options'))
+export const getCachedProductOptions = (tenantId: number | string): Promise<ProductOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_PRODUCTS_OPTIONS, tenantId, () => loadResource<ProductOptionItem>('/erp/products/options'))
 );
 
-export const getCachedVehicleBrands = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_VEHICLE_BRANDS, tenantId, () => loadResource<T>('/erp/vehicle-brands'))
+export const getCachedVehicleBrands = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_VEHICLE_BRANDS, tenantId, () => loadResource<BaseOptionItem>('/erp/vehicle-brands'))
 );
 
-export const getCachedVehicleSeries = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_VEHICLE_SERIES, tenantId, () => loadResource<T>('/erp/vehicle-series'))
+export const getCachedVehicleSeries = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_VEHICLE_SERIES, tenantId, () => loadResource<BaseOptionItem>('/erp/vehicle-series'))
 );
 
-export const getCachedVehicleModels = <T = BaseOptionItem>(tenantId: number | string) => (
-  cache.getOrLoad(RESOURCE_VEHICLE_MODELS, tenantId, () => loadResource<T>('/erp/vehicle-models'))
+export const getCachedVehicleModels = (tenantId: number | string): Promise<BaseOptionItem[]> => (
+  cache.getOrLoad(RESOURCE_VEHICLE_MODELS, tenantId, () => loadResource<BaseOptionItem>('/erp/vehicle-models'))
 );
 
 export const invalidateErpBaseDataCache = (tenantId?: number | string) => {

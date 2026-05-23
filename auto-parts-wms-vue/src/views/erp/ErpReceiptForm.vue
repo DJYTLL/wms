@@ -274,6 +274,9 @@ const receivablePreviewDetail = ref<ReceivableSourceDetail | null>(null);
 const saving = ref(false);
 const pagePath = ref(route.path);
 const createdReceiptId = ref<number | null>(null);
+const hasActivatedOnce = ref(false);
+const bootstrapLoaded = ref(false);
+const bootstrapTenantKey = ref<number | string | null>(null);
 const allocationMap = reactive<Record<number, { amount: string; discount: string }>>({});
 const updatingFromLines = ref(false);
 const updatingFromTotals = ref(false);
@@ -367,6 +370,7 @@ const receiptId = computed(() => {
 });
 const isReceiptRoute = computed(() => route.path.startsWith('/erp/receipts'));
 const isEditing = computed(() => Boolean(receiptId.value));
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 const canViewSourceReceivables = computed(() => hasPermission('erp-receipt:source-view') || hasPermission('erp-ar:view'));
 const receivablePreviewTitle = computed(() => {
@@ -697,10 +701,19 @@ const fetchBootstrapData = async () => {
     const res: any = await request.get('/erp/receipts/bootstrap');
     if (res.data.code === 200) {
       applyReceiptBootstrapData(res.data.data || {});
+      bootstrapLoaded.value = true;
+      bootstrapTenantKey.value = tenantCacheKey.value;
     }
   } catch (error) {
     notifyError(error);
   }
+};
+
+const ensureBootstrapData = async (force = false) => {
+  if (!force && bootstrapLoaded.value && bootstrapTenantKey.value === tenantCacheKey.value) {
+    return;
+  }
+  await fetchBootstrapData();
 };
 
 const fetchReceivables = async (customerId: number | null) => {
@@ -1061,7 +1074,7 @@ const handleTagClosing = (event: Event) => {
 onMounted(() => {
   pagePath.value = route.path;
   resetForm();
-  fetchBootstrapData();
+  ensureBootstrapData();
   if (isReceiptRoute.value && isEditing.value) {
     loadReceiptDetail();
   } else {
@@ -1077,12 +1090,16 @@ onActivated(() => {
   if (!isReceiptRoute.value) {
     return;
   }
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   if (isEditing.value) {
     loadReceiptDetail();
     return;
   }
   resetForm();
-  fetchBootstrapData();
+  ensureBootstrapData();
   receivableRange.value = buildDefaultRange();
 });
 

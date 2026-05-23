@@ -5,6 +5,7 @@ import com.example.wms.dto.MyListPreferencesUpdateRequest;
 import com.example.wms.entity.UserAccount;
 import com.example.wms.entity.UserTableSetting;
 import com.example.wms.mapper.UserTableSettingMapper;
+import com.example.wms.security.AuthenticatedUser;
 import com.example.wms.service.TenantSettingService;
 import com.example.wms.service.UserAccountService;
 import com.example.wms.service.impl.MyPreferenceServiceImpl;
@@ -23,6 +24,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -80,6 +82,36 @@ class MyPreferenceServiceImplTest {
         verify(userTableSettingMapper).insert(captor.capture());
         assertThat(captor.getValue().getPageKey()).isEqualTo("my-list-preferences");
         assertThat(captor.getValue().getConfigJson()).contains("\"pageSize\":100");
+    }
+
+    @Test
+    void effectiveListPreferenceUsesAuthenticatedPrincipalWithoutReloadingUser() {
+        TenantContext.setTenantId(7L);
+        UserAccount user = user("alice", 18L);
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                AuthenticatedUser.fromDatabase(
+                    user,
+                    null,
+                    List.of()
+                ),
+                "n/a",
+                List.of()
+            )
+        );
+        when(userTableSettingMapper.findOne(7L, 18L, "my-list-preferences"))
+            .thenReturn(setting("{\"pageSize\":60}"));
+
+        MyPreferenceServiceImpl service = new MyPreferenceServiceImpl(
+            userTableSettingMapper,
+            userAccountService,
+            tenantSettingService,
+            new ObjectMapper()
+        );
+        EffectiveListPreferencesResponse result = service.getEffectiveListPreferences();
+
+        assertThat(result.pageSize()).isEqualTo(60);
+        verifyNoInteractions(userAccountService);
     }
 
     private UserAccount user(String username, Long id) {

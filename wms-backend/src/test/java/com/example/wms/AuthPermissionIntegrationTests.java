@@ -24,6 +24,7 @@ import com.example.wms.mapper.TenantColumnSettingMapper;
 import com.example.wms.mapper.TenantMenuMapper;
 import com.example.wms.mapper.UserAccountMapper;
 import com.example.wms.mapper.UserRoleMapper;
+import com.example.wms.security.AuthenticatedUser;
 import com.example.wms.security.JwtAuthenticationFilter;
 import com.example.wms.security.JwtTokenService;
 import com.example.wms.service.RefreshTokenService;
@@ -68,6 +69,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -161,6 +163,38 @@ class AuthPermissionIntegrationTests {
             .contains("HttpOnly")
             .contains("Path=/api")
             .contains("SameSite=Strict");
+    }
+
+    @Test
+    void loginSuccessReusesAuthenticatedPrincipalInsteadOfReloadingUserContext() throws Exception {
+        Tenant tenant = tenant(1L, "default");
+        UserAccount user = user(10L, 1L, "admin");
+        AuthPayload payload = authPayload("admin", 1L, "default", List.of("super_admin"));
+        TokenPairResponse issued = new TokenPairResponse("access-token", "refresh-token", payload);
+        AuthenticatedUser principal = AuthenticatedUser.fromDatabase(
+            user,
+            payload,
+            List.of(new SimpleGrantedAuthority("ROLE_super_admin"))
+        );
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(
+            authenticationManager, userAccountService, refreshTokenService, tenantMapper, userAccountMapper
+        )).build();
+
+        when(tenantMapper.findByCode("default")).thenReturn(tenant);
+        when(userAccountMapper.findActiveByUsername(1L, "admin")).thenReturn(user);
+        when(authenticationManager.authenticate(any())).thenReturn(
+            new UsernamePasswordAuthenticationToken(principal, "password", principal.getAuthorities())
+        );
+        when(refreshTokenService.issueTokens(user, payload)).thenReturn(issued);
+
+        mockMvc.perform(post("/api/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"tenantCode":"default","username":"admin","password":"password"}
+                    """))
+            .andExpect(status().isOk());
+
+        verifyNoInteractions(userAccountService);
     }
 
     @Test
@@ -481,6 +515,47 @@ class AuthPermissionIntegrationTests {
     }
 
     @Test
+    void jwtFilterBuildsAuthenticationFromTokenClaimsWithoutReloadingAuthorities() throws Exception {
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtTokenService, userAccountService);
+        DefaultClaims claims = new DefaultClaims();
+        claims.setSubject("sysadmin");
+        claims.put("uid", 9L);
+        claims.put("tid", 2L);
+        claims.put("tcode", "tenant-b");
+        claims.put("utid", 1L);
+        claims.put("utcode", "default");
+        claims.put("av", 3L);
+        claims.put("perms", List.of("user:view", "user:edit"));
+        claims.put("user", java.util.Map.of(
+            "username", "sysadmin",
+            "role", "super_admin",
+            "avatar", "avatar.png",
+            "roles", List.of("super_admin")
+        ));
+
+        when(jwtTokenService.parseToken("token")).thenReturn(claims);
+        when(userAccountService.loadAuthVersion("sysadmin")).thenReturn(3L);
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (req, res) -> {
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+            assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal())
+                .isInstanceOf(AuthenticatedUser.class);
+            AuthenticatedUser principal =
+                (AuthenticatedUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            assertThat(principal.getUserId()).isEqualTo(9L);
+            assertThat(principal.getAuthorities())
+                .extracting(authority -> authority.getAuthority())
+                .contains("ROLE_super_admin", "PERM_user:view", "PERM_user:edit");
+        });
+
+        verify(userAccountService, never()).loadUserByUsername("sysadmin");
+    }
+
+    @Test
     void userControllerListRequiresUserViewPermission() throws Exception {
         Method method = UserController.class.getMethod("list");
         PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
@@ -573,7 +648,7 @@ class AuthPermissionIntegrationTests {
 
     private AuthPayload authPayload(String username, Long tenantId, String tenantCode, List<String> roles) {
         return new AuthPayload(
-            new UserClaim(username, roles.isEmpty() ? null : roles.get(0), null, roles),
+            new UserClaim(10L, username, roles.isEmpty() ? null : roles.get(0), null, roles),
             List.of("PERM_user:view"),
             0L,
             tenantId,

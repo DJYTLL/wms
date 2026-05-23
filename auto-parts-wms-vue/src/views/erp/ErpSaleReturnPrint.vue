@@ -262,17 +262,6 @@ const applyTemplate = (tpl?: any) => {
   columnWidths.value = { ...resolved.columnWidths };
 };
 
-const fetchOptions = async () => {
-  const [customerRes, warehouseRes, locationRes] = await Promise.all([
-    request.get('/erp/customers'),
-    request.get('/erp/warehouses'),
-    request.get('/erp/locations')
-  ]);
-  customers.value = customerRes.data.data || [];
-  warehouses.value = warehouseRes.data.data || [];
-  locations.value = locationRes.data.data || [];
-};
-
 const fetchSaleOrderNo = async (id?: number) => {
   if (!id) return;
   try {
@@ -300,14 +289,21 @@ const fetchTemplate = async () => {
   }
 };
 
-const fetchDetail = async () => {
-  const res: any = await request.get(detailEndpoint.value);
+const fetchBootstrap = async () => {
+  const bootstrapEndpoint = detailEndpoint.value.endsWith('/print')
+    ? `${detailEndpoint.value}-bootstrap`
+    : `${detailEndpoint.value}/print-bootstrap`;
+  const res: any = await request.get(bootstrapEndpoint);
   const data = res.data.data || {};
-  order.value = data.order || null;
-  items.value = data.items || [];
-  saleOrderNo.value = data.order?.saleOrderNo || '';
-  if (data.order?.saleOrderId && !saleOrderNo.value) {
-    await fetchSaleOrderNo(data.order.saleOrderId);
+  const detail = data.detail || {};
+  order.value = detail.order || null;
+  items.value = detail.items || [];
+  customers.value = data.customers || [];
+  warehouses.value = data.warehouses || [];
+  locations.value = data.locations || [];
+  saleOrderNo.value = detail.order?.saleOrderNo || '';
+  if (detail.order?.saleOrderId && !saleOrderNo.value) {
+    await fetchSaleOrderNo(detail.order.saleOrderId);
   }
 };
 
@@ -337,7 +333,7 @@ const closeWindow = () => {
 const init = async () => {
   loading.value = true;
   try {
-    await Promise.all([fetchDetail(), fetchOptions()]);
+    await fetchBootstrap();
     await fetchTemplate();
   } catch (error) {
     notifyError(error);

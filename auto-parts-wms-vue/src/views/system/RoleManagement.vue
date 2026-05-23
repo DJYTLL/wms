@@ -330,7 +330,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useMenuStore, type MenuItem } from '@/stores/menu';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 
 // --- 类型定义 ---
@@ -373,7 +373,10 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
-const { bindPageSizeSync } = useSystemConfig();
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
+const { bindPageSizeSync } = usePageSizePreference();
 const canUsePlatformPermissions = computed(() => authStore.hasRole('super_admin'));
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 
@@ -1360,18 +1363,35 @@ const resetUnavailableSelectedPage = () => {
 };
 
 onMounted(() => {
-  fetchRoles();
   fetchPermissions();
   loadTreeMenus();
-  bindPageSizeSync(size, fetchRoles);
+  if (pageSizeSyncReady.value) {
+    fetchRoles();
+  } else {
+    pendingInitialLoad.value = true;
+  }
   fetchTenantKeys();
 });
 
 onActivated(() => {
-  // 当组件被激活时，刷新数据以确保权限树和角色列表是最新的
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchRoles();
   fetchPermissions();
   loadTreeMenus();
+});
+
+bindPageSizeSync(size, fetchRoles, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchRoles();
+    }
+  }
 });
 
 // --- 方法 ---

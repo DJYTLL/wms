@@ -44,6 +44,8 @@ public class JwtTokenService {
             .setIssuedAt(Date.from(now))
             .setExpiration(Date.from(now.plus(expirationMinutes, ChronoUnit.MINUTES)))
             .claim("user", userClaim)
+            .claim("uid", userClaim.get("id"))
+            .claim("perms", payload.permissions())
             .claim("av", payload.authVersion())
             .claim("tid", payload.tenantId())
             .claim("tcode", payload.tenantCode())
@@ -65,6 +67,7 @@ public class JwtTokenService {
     // 组装 user 载荷对象
     private Map<String, Object> buildUserClaim(UserClaim user) {
         Map<String, Object> claim = new HashMap<>();
+        claim.put("id", user.id());
         claim.put("username", user.username());
         claim.put("role", user.role());
         claim.put("avatar", user.avatar());

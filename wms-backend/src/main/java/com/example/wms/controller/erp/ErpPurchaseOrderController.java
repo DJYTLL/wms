@@ -7,10 +7,12 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPurchaseOrderCreateRequest;
 import com.example.wms.dto.erp.ErpPurchaseOrderDetail;
 import com.example.wms.dto.erp.ErpPurchaseOrderHistoryItem;
+import com.example.wms.dto.erp.ErpPurchaseOrderPrintBootstrapData;
 import com.example.wms.dto.erp.ErpPurchaseOrderRecentItem;
 import com.example.wms.dto.erp.ErpPurchaseOrderUpdateRequest;
 import com.example.wms.entity.erp.ErpPurchaseOrder;
 import com.example.wms.service.erp.ErpPurchaseOrderService;
+import com.example.wms.service.erp.support.ErpDocumentPrintBootstrapService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,9 +43,12 @@ public class ErpPurchaseOrderController {
             + " or hasAuthority('PERM_erp-purchase-return-approved:print')";
 
     private final ErpPurchaseOrderService erpPurchaseOrderService;
+    private final ErpDocumentPrintBootstrapService printBootstrapService;
 
-    public ErpPurchaseOrderController(ErpPurchaseOrderService erpPurchaseOrderService) {
+    public ErpPurchaseOrderController(ErpPurchaseOrderService erpPurchaseOrderService,
+                                      ErpDocumentPrintBootstrapService printBootstrapService) {
         this.erpPurchaseOrderService = erpPurchaseOrderService;
+        this.printBootstrapService = printBootstrapService;
     }
 
     // 查询采购单列表
@@ -112,6 +117,12 @@ public class ErpPurchaseOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseOrderService.getDraftDetail(id)));
     }
 
+    @GetMapping("/draft/{id}/print-bootstrap")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-draft:print')")
+    public ResponseEntity<ApiResponse<ErpPurchaseOrderPrintBootstrapData>> printDraftBootstrap(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(printBootstrapService.getPurchaseOrderBootstrap(id, false)));
+    }
+
     @PostMapping("/draft")
     @PreAuthorize("hasAuthority('PERM_erp-purchase-draft:add')")
     public ResponseEntity<ApiResponse<ErpPurchaseOrderDetail>> createDraft(@Valid @RequestBody ErpPurchaseOrderCreateRequest request) {
@@ -174,6 +185,12 @@ public class ErpPurchaseOrderController {
     @PreAuthorize("hasAuthority('PERM_erp-purchase-approved:print')")
     public ResponseEntity<ApiResponse<ErpPurchaseOrderDetail>> printApproved(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseOrderService.getApprovedDetail(id)));
+    }
+
+    @GetMapping("/approved/{id}/print-bootstrap")
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-approved:print')")
+    public ResponseEntity<ApiResponse<ErpPurchaseOrderPrintBootstrapData>> printApprovedBootstrap(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(printBootstrapService.getPurchaseOrderBootstrap(id, true)));
     }
 
     @PostMapping("/approved/{id}/copy")

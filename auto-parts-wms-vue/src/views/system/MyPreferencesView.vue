@@ -69,6 +69,73 @@
         <article class="preference-panel preference-panel--secondary">
           <div class="preference-panel__header">
             <div>
+              <h2 class="preference-panel__title">{{ t('message.preferenceUiTitle') }}</h2>
+              <p class="preference-panel__subtitle">{{ t('message.preferenceUiHint') }}</p>
+            </div>
+          </div>
+
+          <div class="preference-setting preference-setting--stacked">
+            <div class="preference-setting__info">
+              <div class="preference-setting__label-row">
+                <span class="preference-setting__label">{{ t('message.preferenceLocaleTitle') }}</span>
+              </div>
+              <p class="preference-setting__description">
+                {{ t('message.preferenceLocaleHint') }}
+              </p>
+            </div>
+            <div class="preference-setting__control preference-setting__control--full">
+              <el-select v-model="localeValue" style="width: 100%" @change="handleLocaleChange">
+                <el-option :label="t('message.preferenceLocaleZh')" value="zh" />
+                <el-option label="English" value="en" />
+              </el-select>
+            </div>
+          </div>
+
+          <div class="preference-setting preference-setting--stacked">
+            <div class="preference-setting__info">
+              <div class="preference-setting__label-row">
+                <span class="preference-setting__label">{{ t('message.preferenceThemeTitle') }}</span>
+              </div>
+              <p class="preference-setting__description">
+                {{ t('message.preferenceThemeHint') }}
+              </p>
+            </div>
+            <div class="theme-palette">
+              <button
+                v-for="color in themeStore.themeColors"
+                :key="color.value"
+                type="button"
+                class="theme-palette__swatch"
+                :class="{ 'theme-palette__swatch--active': themeStore.primaryColor === color.value }"
+                :style="{ backgroundColor: color.value }"
+                :title="color.name"
+                @click="selectTheme(color.value)"
+              >
+                <span class="theme-palette__check" v-if="themeStore.primaryColor === color.value">✓</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="preference-setting preference-setting--stacked">
+            <div class="preference-setting__info">
+              <div class="preference-setting__label-row">
+                <span class="preference-setting__label">{{ t('message.preferenceColumnCacheTitle') }}</span>
+              </div>
+              <p class="preference-setting__description">
+                {{ t('message.preferenceColumnCacheHint') }}
+              </p>
+            </div>
+            <div class="preference-setting__control preference-setting__control--full">
+              <el-button plain @click="resetLocalColumnPreferences">
+                {{ t('message.preferenceColumnCacheAction') }}
+              </el-button>
+            </div>
+          </div>
+        </article>
+
+        <article class="preference-panel preference-panel--secondary">
+          <div class="preference-panel__header">
+            <div>
               <h2 class="preference-panel__title">{{ t('message.preferenceRoadmapTitle') }}</h2>
               <p class="preference-panel__subtitle">{{ t('message.preferenceRoadmapHint') }}</p>
             </div>
@@ -92,14 +159,18 @@ import DecimalInput from '@/components/DecimalInput.vue'
 import { useApiError } from '@/composables/useApiError'
 import { usePageSizePreference } from '@/composables/pageSizePreference'
 import { sanitizePageSize, type PageSizePreferenceSource } from '@/composables/pageSizePreferenceCore'
+import { setLocale } from '@/i18n'
+import { useThemeStore } from '@/stores/theme'
 
 const { t } = useI18n()
 const { notifyError, notifySuccess, notifyWarning } = useApiError()
 const { fetchMyListPreferences, fetchEffectiveListPreferences, updateMyListPreferences } = usePageSizePreference()
+const themeStore = useThemeStore()
 
 const loading = ref(false)
 const saving = ref(false)
 const effectiveSource = ref<PageSizePreferenceSource>('DEFAULT')
+const localeValue = ref<'zh' | 'en'>('zh')
 const form = reactive({
   pageSize: 20
 })
@@ -132,6 +203,7 @@ const fetchSettings = async () => {
     form.pageSize = mine.pageSize ?? effective.pageSize ?? 20
     pageSizeInput.value = String(form.pageSize)
     effectiveSource.value = mine.pageSize != null ? 'USER' : effective.source || 'DEFAULT'
+    localeValue.value = document.documentElement.lang === 'zh' ? 'zh' : ((localStorage.getItem('locale') === 'zh') ? 'zh' : 'en')
   } catch (error) {
     notifyError(error)
   } finally {
@@ -158,6 +230,31 @@ const save = async () => {
   } finally {
     saving.value = false
   }
+}
+
+const handleLocaleChange = async (value: 'zh' | 'en') => {
+  try {
+    await setLocale(value)
+    document.documentElement.lang = value
+    notifySuccess()
+  } catch (error) {
+    notifyError(error)
+  }
+}
+
+const selectTheme = (color: string) => {
+  themeStore.setPrimaryColor(color)
+  notifySuccess()
+}
+
+const resetLocalColumnPreferences = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  Object.keys(window.localStorage)
+    .filter((key) => key.startsWith('table-columns:') || key.startsWith('user-table::'))
+    .forEach((key) => window.localStorage.removeItem(key))
+  notifySuccess()
 }
 
 fetchSettings()
@@ -319,6 +416,11 @@ fetchSettings()
   border: 1px solid rgba(191, 219, 254, 0.8);
 }
 
+.preference-setting--stacked {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
 .preference-setting__info {
   flex: 1;
   min-width: 0;
@@ -369,6 +471,11 @@ fetchSettings()
   align-items: center;
 }
 
+.preference-setting__control--full {
+  width: 100%;
+  justify-content: flex-start;
+}
+
 .preference-setting__input {
   width: 180px;
 }
@@ -398,6 +505,37 @@ fetchSettings()
   color: #334155;
   font-size: 14px;
   line-height: 1.7;
+}
+
+.theme-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.theme-palette__swatch {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65), 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.theme-palette__swatch--active {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.92), 0 10px 22px rgba(15, 23, 42, 0.16);
+}
+
+.theme-palette__check {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 @media (max-width: 1024px) {

@@ -236,7 +236,7 @@ import request from '@/utils/request';
 import { ElMessageBox } from 'element-plus';
 import { useI18n } from 'vue-i18n';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useAuthStore } from '@/stores/auth';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 
@@ -280,8 +280,11 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 const defaultColumns = ['avatar', 'username', 'displayName', 'roles', 'contact', 'status', 'loginTime'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('user-management', defaultColumns);
 const columnPermissionMap: Record<string, string> = {
@@ -377,15 +380,33 @@ const fetchRoles = async () => {
 };
 
 onMounted(() => {
-  fetchUsers();
   fetchRoles();
-  bindPageSizeSync(size, fetchUsers);
+  if (pageSizeSyncReady.value) {
+    fetchUsers();
+  } else {
+    pendingInitialLoad.value = true;
+  }
   fetchTenantKeys();
 });
 
 onActivated(() => {
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchUsers();
   fetchRoles();
+});
+
+bindPageSizeSync(size, fetchUsers, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchUsers();
+    }
+  }
 });
 
 // --- 操作方法 ---

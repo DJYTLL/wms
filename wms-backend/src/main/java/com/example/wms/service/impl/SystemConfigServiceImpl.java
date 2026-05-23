@@ -17,6 +17,11 @@ import java.util.Set;
 // 系统配置服务实现
 @Service
 public class SystemConfigServiceImpl implements SystemConfigService {
+    private static final Set<String> PLATFORM_ALLOWED_KEYS = Set.of(
+        "audit.retention.days",
+        "login.max.retry",
+        "password.min.length"
+    );
     private static final Set<String> TENANT_MANAGED_KEYS = Set.of("default.page.size");
     private final SystemConfigMapper systemConfigMapper;
 
@@ -42,6 +47,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     @Override
     public SystemConfigResponse getByKey(String key) {
+        rejectUnsupportedPlatformKey(key);
         rejectTenantManagedKey(key);
         SystemConfig config = loadByKey(key);
         return toResponse(config);
@@ -53,6 +59,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("配置键不能为空");
         }
+        rejectUnsupportedPlatformKey(key);
         rejectTenantManagedKey(key);
         SystemConfig existing = systemConfigMapper.findByKey(tenantId, key);
         if (existing != null) {
@@ -69,6 +76,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     @Override
     public SystemConfigResponse update(String key, SystemConfigRequest request) {
         Long tenantId = TenantContext.requireTenantId();
+        rejectUnsupportedPlatformKey(key);
         rejectTenantManagedKey(key);
         SystemConfig config = loadByKey(tenantId, key);
         applyRequest(config, request);
@@ -116,6 +124,15 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         if (key != null && key.startsWith("erp.")) {
             throw new IllegalArgumentException("ERP编码规则和单号规则请在租户设置中维护");
+        }
+    }
+
+    private void rejectUnsupportedPlatformKey(String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        if (!PLATFORM_ALLOWED_KEYS.contains(key) && !isTenantManagedKey(key)) {
+            throw new IllegalArgumentException("该配置项不属于平台配置，请在对应设置域维护");
         }
     }
 

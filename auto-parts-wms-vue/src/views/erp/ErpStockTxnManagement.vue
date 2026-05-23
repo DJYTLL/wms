@@ -121,13 +121,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated } from 'vue';
+import { computed, ref, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { useAuthStore } from '@/stores/auth';
+import { getCachedLocations, getCachedProductOptions, getCachedWarehouses } from '@/composables/erpBaseDataCache';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
@@ -159,20 +161,20 @@ interface StockTxn {
 }
 
 type PrintDocType = 'SALE_ORDER' | 'PURCHASE_ORDER' | 'SALE_RETURN' | 'PURCHASE_RETURN' | 'STOCK_COUNT' | 'STOCK_TRANSFER' | 'STOCK_INIT';
-type DocRouteInfo = {
-  endpoint: string;
-  noPath: Array<'order' | 'count' | 'transfer' | 'orderNo' | 'countNo' | 'transferNo'>;
-};
 
 const { t } = useI18n();
 const router = useRouter();
 const { notifyError } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
+const authStore = useAuthStore();
 
 const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<StockTxn[]>([]);
 
 const productOptions = ref<OptionItem[]>([]);
@@ -189,6 +191,7 @@ const printPreviewTitle = ref('');
 
 const defaultColumns = ['docNo', 'bizType', 'product', 'warehouse', 'location', 'adjustmentReason', 'qtyDelta', 'qtyBefore', 'qtyAfter', 'operator', 'remark', 'unitCost', 'totalCost', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-stock-txn', defaultColumns);
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const canShow = (key: string) => isVisible(key);
 
@@ -264,29 +267,6 @@ const assemblyViewRouteMap: Record<string, string> = {
   DISASSEMBLE_IN: 'erp-disassemble-order-view'
 };
 
-const docRouteMap: Record<string, DocRouteInfo> = {
-  PURCHASE_APPROVE: { endpoint: 'purchase-orders', noPath: ['order', 'orderNo'] },
-  PURCHASE_UNAPPROVE: { endpoint: 'purchase-orders', noPath: ['order', 'orderNo'] },
-  PURCHASE_CANCEL: { endpoint: 'purchase-orders', noPath: ['order', 'orderNo'] },
-  PURCHASE_RETURN: { endpoint: 'purchase-returns', noPath: ['order', 'orderNo'] },
-  PURCHASE_RETURN_SCRAP: { endpoint: 'purchase-returns', noPath: ['order', 'orderNo'] },
-  PURCHASE_RETURN_RED_FLUSH: { endpoint: 'purchase-returns', noPath: ['order', 'orderNo'] },
-  SALE_APPROVE: { endpoint: 'sale-orders', noPath: ['order', 'orderNo'] },
-  SALE_RED_FLUSH: { endpoint: 'sale-orders', noPath: ['order', 'orderNo'] },
-  SALE_RETURN_RESTOCK: { endpoint: 'sale-returns', noPath: ['order', 'orderNo'] },
-  SALE_RETURN_SCRAP: { endpoint: 'sale-returns', noPath: ['order', 'orderNo'] },
-  SALE_RETURN_RED_FLUSH: { endpoint: 'sale-returns', noPath: ['order', 'orderNo'] },
-  STOCK_COUNT: { endpoint: 'stock-counts', noPath: ['count', 'countNo'] },
-  STOCK_TRANSFER_OUT: { endpoint: 'stock-transfers', noPath: ['transfer', 'transferNo'] },
-  STOCK_TRANSFER_IN: { endpoint: 'stock-transfers', noPath: ['transfer', 'transferNo'] },
-  STOCK_INIT: { endpoint: 'stock-inits', noPath: ['count', 'countNo'] },
-  STOCK_INIT_RED_FLUSH: { endpoint: 'stock-inits', noPath: ['count', 'countNo'] },
-  ASSEMBLE_OUT: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] },
-  ASSEMBLE_IN: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] },
-  DISASSEMBLE_OUT: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] },
-  DISASSEMBLE_IN: { endpoint: 'assembly-orders', noPath: ['order', 'orderNo'] }
-};
-
 const canPreviewDoc = (row: StockTxn) => {
   if (!row.bizType || !row.bizId) return false;
   return !!previewDocTypeMap[row.bizType] || !!assemblyViewRouteMap[row.bizType];
@@ -308,52 +288,16 @@ const handlePreviewDoc = (row: StockTxn) => {
   }
 };
 
-const pickDocNo = (detail: any, noPath: DocRouteInfo['noPath']) => {
-  let current = detail;
-  for (const key of noPath) {
-    current = current?.[key];
-  }
-  return typeof current === 'string' && current.trim() ? current.trim() : '';
-};
-
-const resolveDocNos = async (items: StockTxn[]) => {
-  const cache = new Map<string, Promise<string>>();
-  const resolveOne = (row: StockTxn) => {
-    if (row.docNo || !row.bizType || !row.bizId) {
-      return Promise.resolve(row.docNo || '');
-    }
-    const routeInfo = docRouteMap[row.bizType];
-    if (!routeInfo) {
-      return Promise.resolve('');
-    }
-    const cacheKey = `${routeInfo.endpoint}:${row.bizId}`;
-    if (!cache.has(cacheKey)) {
-      cache.set(cacheKey, request.get(`/erp/${routeInfo.endpoint}/${row.bizId}`)
-        .then((res: any) => pickDocNo(res.data?.data, routeInfo.noPath))
-        .catch(() => ''));
-    }
-    return cache.get(cacheKey)!;
-  };
-
-  await Promise.all(items.map(async (row) => {
-    const docNo = await resolveOne(row);
-    if (docNo) {
-      row.docNo = docNo;
-    }
-  }));
-  return items;
-};
-
 const fetchOptions = async () => {
   try {
-    const [productsRes, warehousesRes, locationsRes] = await Promise.all([
-      request.get('/erp/products'),
-      request.get('/erp/warehouses'),
-      request.get('/erp/locations')
+    const [products, warehouses, locations] = await Promise.all([
+      getCachedProductOptions(tenantCacheKey.value),
+      getCachedWarehouses(tenantCacheKey.value),
+      getCachedLocations(tenantCacheKey.value)
     ]);
-    productOptions.value = productsRes.data.data || [];
-    warehouseOptions.value = warehousesRes.data.data || [];
-    locationOptions.value = locationsRes.data.data || [];
+    productOptions.value = products;
+    warehouseOptions.value = warehouses;
+    locationOptions.value = locations;
   } catch (error) {
     notifyError(error);
   }
@@ -379,7 +323,7 @@ const fetchList = async () => {
 
     const res: any = await request.get('/erp/stock/txns/page', { params });
     if (res.data.code === 200) {
-      tableData.value = await resolveDocNos(res.data.data.items || []);
+      tableData.value = res.data.data.items || [];
       total.value = res.data.data.total || 0;
     }
   } catch (error) {
@@ -405,15 +349,32 @@ const handleSizeChange = (newSize: number) => {
   fetchList();
 };
 
-onMounted(() => {
-  fetchOptions();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
+onMounted(async () => {
   fetchTenantKeys();
+  await fetchOptions();
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(() => {
-  fetchOptions();
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchList();
 });
 </script>

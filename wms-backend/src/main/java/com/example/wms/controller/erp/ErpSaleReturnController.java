@@ -7,12 +7,14 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
 import com.example.wms.dto.erp.ErpSaleReturnCreateRequest;
 import com.example.wms.dto.erp.ErpSaleReturnDetail;
+import com.example.wms.dto.erp.ErpSaleReturnPrintBootstrapData;
 import com.example.wms.dto.erp.ErpSaleReturnRefundSummary;
 import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderDetail;
 import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderOption;
 import com.example.wms.dto.erp.ErpSaleReturnUpdateRequest;
 import com.example.wms.entity.erp.ErpSaleReturn;
 import com.example.wms.service.erp.ErpSaleReturnService;
+import com.example.wms.service.erp.support.ErpDocumentPrintBootstrapService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,9 +28,12 @@ import java.util.List;
 @RequestMapping("/api/erp/sale-returns")
 public class ErpSaleReturnController {
     private final ErpSaleReturnService erpSaleReturnService;
+    private final ErpDocumentPrintBootstrapService printBootstrapService;
 
-    public ErpSaleReturnController(ErpSaleReturnService erpSaleReturnService) {
+    public ErpSaleReturnController(ErpSaleReturnService erpSaleReturnService,
+                                   ErpDocumentPrintBootstrapService printBootstrapService) {
         this.erpSaleReturnService = erpSaleReturnService;
+        this.printBootstrapService = printBootstrapService;
     }
 
     @PreAuthorize("hasAnyAuthority('PERM_erp-sale-return-draft:view','PERM_erp-sale-return-approved:view')")
@@ -154,6 +159,12 @@ public class ErpSaleReturnController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getDraftDetail(id)));
     }
 
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:print')")
+    @GetMapping("/draft/{id}/print-bootstrap")
+    public ResponseEntity<ApiResponse<ErpSaleReturnPrintBootstrapData>> getDraftPrintBootstrap(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(printBootstrapService.getSaleReturnBootstrap(id, false)));
+    }
+
     @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:view')")
     @GetMapping("/approved/{id}")
     public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> getApproved(@PathVariable Long id) {
@@ -164,6 +175,12 @@ public class ErpSaleReturnController {
     @GetMapping("/approved/{id}/print")
     public ResponseEntity<ApiResponse<ErpSaleReturnDetail>> getApprovedPrint(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleReturnService.getApprovedDetail(id)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-sale-return-approved:print')")
+    @GetMapping("/approved/{id}/print-bootstrap")
+    public ResponseEntity<ApiResponse<ErpSaleReturnPrintBootstrapData>> getApprovedPrintBootstrap(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(printBootstrapService.getSaleReturnBootstrap(id, true)));
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-sale-return-draft:add')")

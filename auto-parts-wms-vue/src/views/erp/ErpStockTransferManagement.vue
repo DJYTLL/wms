@@ -350,7 +350,8 @@ import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
+import { getCachedLocationOptions, getCachedProductOptions, getCachedWarehouseOptions } from '@/composables/erpBaseDataCache';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
@@ -396,16 +397,20 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
 const authStore = useAuthStore();
 const defaultColumns = ['transferNo', 'status', 'transferAt', 'remark', 'printCount', 'lastPrintedAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-stock-transfer', defaultColumns);
 const canShow = (key: string) => isVisible(key);
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<StockTransferHeader[]>([]);
 
 const searchQuery = ref('');
@@ -546,14 +551,14 @@ const queryQtyAvailable = async (productId: number, warehouseId: number, locatio
 
 const fetchOptions = async () => {
   try {
-    const [productsRes, warehousesRes, locationsRes] = await Promise.all([
-      request.get('/erp/products/options'),
-      request.get('/erp/warehouses/options'),
-      request.get('/erp/locations/options')
+    const [products, warehouses, locations] = await Promise.all([
+      getCachedProductOptions(tenantCacheKey.value),
+      getCachedWarehouseOptions(tenantCacheKey.value),
+      getCachedLocationOptions(tenantCacheKey.value)
     ]);
-    productOptions.value = productsRes.data.data || [];
-    warehouseOptions.value = warehousesRes.data.data || [];
-    locationOptions.value = locationsRes.data.data || [];
+    productOptions.value = products;
+    warehouseOptions.value = warehouses;
+    locationOptions.value = locations;
   } catch (error) {
     notifyError(error);
   }
@@ -1074,15 +1079,29 @@ const handleCancel = async (row: StockTransferHeader) => {
   }
 };
 
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
 onMounted(async () => {
   if (isFormPage.value) {
     await initializeFormPage();
     return;
   }
   fetchTenantKeys();
-  fetchOptions();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
+  await fetchOptions();
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(async () => {
@@ -1090,8 +1109,11 @@ onActivated(async () => {
     await initializeFormPage();
     return;
   }
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchTenantKeys();
-  fetchOptions();
   fetchList();
 });
 

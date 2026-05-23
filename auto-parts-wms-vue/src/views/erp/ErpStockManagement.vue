@@ -64,12 +64,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated } from 'vue';
+import { computed, ref, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { useAuthStore } from '@/stores/auth';
+import { getCachedLocations, getCachedProductOptions, getCachedWarehouses } from '@/composables/erpBaseDataCache';
 
 interface OptionItem {
   id: number;
@@ -88,12 +90,16 @@ interface StockBalance {
 
 const { t } = useI18n();
 const { notifyError } = useApiError();
-const { bindPageSizeSync } = useSystemConfig();
+const { bindPageSizeSync } = usePageSizePreference();
+const authStore = useAuthStore();
 
 const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const hasActivatedOnce = ref(false);
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
 const tableData = ref<StockBalance[]>([]);
 
 const productOptions = ref<OptionItem[]>([]);
@@ -106,6 +112,7 @@ const locationFilter = ref<number | null>(null);
 
 const defaultColumns = ['product', 'warehouse', 'location', 'qty', 'updatedAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-stock', defaultColumns);
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const canShow = (key: string) => isVisible(key);
 
@@ -130,14 +137,14 @@ const getLocationOptions = (warehouseId?: number) => {
 
 const fetchOptions = async () => {
   try {
-    const [productsRes, warehousesRes, locationsRes] = await Promise.all([
-      request.get('/erp/products'),
-      request.get('/erp/warehouses'),
-      request.get('/erp/locations')
+    const [products, warehouses, locations] = await Promise.all([
+      getCachedProductOptions(tenantCacheKey.value),
+      getCachedWarehouses(tenantCacheKey.value),
+      getCachedLocations(tenantCacheKey.value)
     ]);
-    productOptions.value = productsRes.data.data || [];
-    warehouseOptions.value = warehousesRes.data.data || [];
-    locationOptions.value = locationsRes.data.data || [];
+    productOptions.value = products;
+    warehouseOptions.value = warehouses;
+    locationOptions.value = locations;
   } catch (error) {
     notifyError(error);
   }
@@ -187,15 +194,32 @@ const handleSizeChange = (newSize: number) => {
   fetchList();
 };
 
-onMounted(() => {
-  fetchOptions();
-  fetchList();
-  bindPageSizeSync(size, fetchList);
+bindPageSizeSync(size, fetchList, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchList();
+    }
+  }
+});
+
+onMounted(async () => {
   fetchTenantKeys();
+  await fetchOptions();
+  if (pageSizeSyncReady.value) {
+    fetchList();
+  } else {
+    pendingInitialLoad.value = true;
+  }
 });
 
 onActivated(() => {
-  fetchOptions();
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   fetchList();
 });
 </script>

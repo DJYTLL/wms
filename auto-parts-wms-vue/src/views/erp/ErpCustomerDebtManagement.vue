@@ -76,7 +76,7 @@ const applySearch = () => {
 };
 
 const handleSearch = () => {
-  fetchData();
+  applySearch();
 };
 
 onMounted(() => {

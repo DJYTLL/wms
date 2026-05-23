@@ -208,6 +208,9 @@ const payablePreviewDetail = ref<PayableSourceDetail | null>(null);
 const saving = ref(false);
 const pagePath = ref(route.path);
 const createdPaymentId = ref<number | null>(null);
+const hasActivatedOnce = ref(false);
+const bootstrapLoaded = ref(false);
+const bootstrapTenantKey = ref<number | string | null>(null);
 const allocationMap = reactive<Record<number, { amount: string; discount: string }>>({});
 const updatingFromLines = ref(false);
 const updatingFromTotals = ref(false);
@@ -278,6 +281,7 @@ const paymentId = computed(() => {
 });
 const isPaymentRoute = computed(() => route.path.startsWith('/erp/payments'));
 const isEditing = computed(() => Boolean(paymentId.value));
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const hasPermission = (code: string) => authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 const canViewSourcePayables = computed(() => hasPermission('erp-payment:source-view') || hasPermission('erp-ap:view'));
 const payablePreviewTitle = computed(() => {
@@ -554,10 +558,19 @@ const fetchBootstrapData = async () => {
     const res: any = await request.get('/erp/payments/bootstrap');
     if (res.data.code === 200) {
       applyPaymentBootstrapData(res.data.data || {});
+      bootstrapLoaded.value = true;
+      bootstrapTenantKey.value = tenantCacheKey.value;
     }
   } catch (error) {
     notifyError(error);
   }
+};
+
+const ensureBootstrapData = async (force = false) => {
+  if (!force && bootstrapLoaded.value && bootstrapTenantKey.value === tenantCacheKey.value) {
+    return;
+  }
+  await fetchBootstrapData();
 };
 
 const fetchPayables = async (supplierId: number | null) => {
@@ -794,7 +807,7 @@ const handleTagClosing = (event: Event) => {
 onMounted(() => {
   pagePath.value = route.path;
   resetForm();
-  fetchBootstrapData();
+  ensureBootstrapData();
   if (isPaymentRoute.value && isEditing.value) {
     loadPaymentDetail();
   }
@@ -808,12 +821,16 @@ onActivated(() => {
   if (!isPaymentRoute.value) {
     return;
   }
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   if (isEditing.value) {
     loadPaymentDetail();
     return;
   }
   resetForm();
-  fetchBootstrapData();
+  ensureBootstrapData();
 });
 
 onBeforeUnmount(() => {

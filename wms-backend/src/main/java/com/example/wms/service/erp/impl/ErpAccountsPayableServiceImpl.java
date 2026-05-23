@@ -72,13 +72,8 @@ public class ErpAccountsPayableServiceImpl implements ErpAccountsPayableService 
         if (payable == null) {
             throw new IllegalArgumentException("应付单不存在");
         }
-        String supplierName = "-";
-        if (payable.getSupplierId() != null) {
-            ErpSupplier supplier = erpSupplierMapper.selectById(payable.getSupplierId());
-            if (supplier != null) {
-                supplierName = supplier.getName();
-            }
-        }
+        Map<Long, String> supplierNameMap = loadSupplierNameMap(payable.getSupplierId() == null ? Set.of() : Set.of(payable.getSupplierId()));
+        String supplierName = supplierNameMap.getOrDefault(payable.getSupplierId(), "-");
         List<ErpPaymentView> payments = loadPayments(tenantId, payable.getId(), supplierName);
         return new ErpAccountsPayableDetail(payable, supplierName, payments);
     }
@@ -112,13 +107,7 @@ public class ErpAccountsPayableServiceImpl implements ErpAccountsPayableService 
             .map(ErpAccountsPayable::getSupplierId)
             .filter(Objects::nonNull)
             .collect(Collectors.toSet());
-        Map<Long, String> supplierNameMap = new HashMap<>();
-        if (!supplierIds.isEmpty()) {
-            List<ErpSupplier> suppliers = erpSupplierMapper.selectBatchIds(supplierIds);
-            for (ErpSupplier supplier : suppliers) {
-                supplierNameMap.put(supplier.getId(), supplier.getName());
-            }
-        }
+        Map<Long, String> supplierNameMap = loadSupplierNameMap(supplierIds);
         return items.stream()
             .map(item -> new ErpAccountsPayableView(
                 item.getId(),
@@ -213,5 +202,20 @@ public class ErpAccountsPayableServiceImpl implements ErpAccountsPayableService 
         } catch (Exception ex) {
             return List.of();
         }
+    }
+
+    private Map<Long, String> loadSupplierNameMap(Set<Long> supplierIds) {
+        Set<Long> effectiveIds = supplierIds == null
+            ? Set.of()
+            : supplierIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (effectiveIds.isEmpty()) {
+            return Map.of();
+        }
+        List<ErpSupplier> suppliers = erpSupplierMapper.selectBatchIds(effectiveIds);
+        Map<Long, String> supplierNameMap = new HashMap<>();
+        for (ErpSupplier supplier : suppliers) {
+            supplierNameMap.put(supplier.getId(), supplier.getName());
+        }
+        return supplierNameMap;
     }
 }

@@ -9,7 +9,6 @@ import com.example.wms.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -17,7 +16,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,24 +28,35 @@ class SystemConfigServiceImplTest {
     }
 
     @Test
-    void createAllowsSameKeyInDifferentTenants() {
+    void createRejectsTenantManagedErpKey() {
         TenantContext.setTenantId(1L);
-        when(systemConfigMapper.findByKey(1L, "erp.order.no.sale.prefix")).thenReturn(null);
 
         SystemConfigServiceImpl service = new SystemConfigServiceImpl(systemConfigMapper);
-        service.create("erp.order.no.sale.prefix", new SystemConfigRequest("A-SO", "string", "销售单号前缀", false));
-
-        ArgumentCaptor<SystemConfig> captor = ArgumentCaptor.forClass(SystemConfig.class);
-        verify(systemConfigMapper).insert(captor.capture());
-        assertThat(captor.getValue().getTenantId()).isEqualTo(1L);
-        assertThat(captor.getValue().getConfigKey()).isEqualTo("erp.order.no.sale.prefix");
+        assertThatThrownBy(() -> service.create(
+            "erp.order.no.sale.prefix",
+            new SystemConfigRequest("A-SO", "string", "销售单号前缀", false)
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("ERP编码规则和单号规则请在租户设置中维护");
     }
 
     @Test
-    void listAllExcludesTenantManagedPageSizeConfig() {
+    void createRejectsUnsupportedPlatformKey() {
+        TenantContext.setTenantId(1L);
+
+        SystemConfigServiceImpl service = new SystemConfigServiceImpl(systemConfigMapper);
+        assertThatThrownBy(() -> service.create(
+            "feature.toggle.experimental",
+            new SystemConfigRequest("true", "bool", "实验开关", false)
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("该配置项不属于平台配置，请在对应设置域维护");
+    }
+
+    @Test
+    void listAllExcludesTenantManagedPageSizeAndErpConfigs() {
         TenantContext.setTenantId(1L);
         when(systemConfigMapper.findAll(1L)).thenReturn(List.of(
             config("default.page.size", "20", true),
+            config("erp.order.no.sale.prefix", "SO", false),
             config("audit.retention.days", "180", false)
         ));
 
@@ -69,6 +78,32 @@ class SystemConfigServiceImplTest {
             new SystemConfigRequest("50", "int", "默认分页大小", false)
         )).isInstanceOf(IllegalArgumentException.class)
             .hasMessage("默认分页大小请在租户设置中维护");
+    }
+
+    @Test
+    void updateRejectsTenantManagedErpKey() {
+        TenantContext.setTenantId(1L);
+
+        SystemConfigServiceImpl service = new SystemConfigServiceImpl(systemConfigMapper);
+
+        assertThatThrownBy(() -> service.update(
+            "erp.product.code.prefix",
+            new SystemConfigRequest("PR", "string", "商品编码前缀", false)
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("ERP编码规则和单号规则请在租户设置中维护");
+    }
+
+    @Test
+    void updateRejectsUnsupportedPlatformKey() {
+        TenantContext.setTenantId(1L);
+
+        SystemConfigServiceImpl service = new SystemConfigServiceImpl(systemConfigMapper);
+
+        assertThatThrownBy(() -> service.update(
+            "feature.toggle.experimental",
+            new SystemConfigRequest("true", "bool", "实验开关", false)
+        )).isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("该配置项不属于平台配置，请在对应设置域维护");
     }
 
     private SystemConfig config(String key, String value, boolean isPublic) {

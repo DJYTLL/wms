@@ -8,6 +8,7 @@ import com.example.wms.entity.Tenant;
 import com.example.wms.entity.UserAccount;
 import com.example.wms.mapper.TenantMapper;
 import com.example.wms.mapper.UserAccountMapper;
+import com.example.wms.security.AuthenticatedUser;
 import com.example.wms.service.RefreshTokenService;
 import com.example.wms.service.UserAccountService;
 import com.example.wms.tenant.TenantContext;
@@ -69,12 +70,20 @@ public class AuthController {
             if (!auth.isAuthenticated()) {
                 return ResponseEntity.status(401).body(ApiResponse.error(401, "用户名或密码错误"));
             }
+            AuthenticatedUser authenticatedUser = auth.getPrincipal() instanceof AuthenticatedUser principal
+                ? principal
+                : null;
             // 登录成功后更新最近登录时间
             userAccountMapper.updateLastLoginAt(tenant.getId(), user.getId());
             // 生成 JWT 并返回
-            AuthPayload payload = userAccountService.loadAuthPayload(request.username());
+            AuthPayload payload = authenticatedUser != null && authenticatedUser.getAuthPayload() != null
+                ? authenticatedUser.getAuthPayload()
+                : userAccountService.loadAuthPayload(request.username());
+            UserAccount tokenUser = authenticatedUser != null && authenticatedUser.getUserAccount() != null
+                ? authenticatedUser.getUserAccount()
+                : userAccountService.loadUserAccount(request.username());
             TokenPairResponse tokens = refreshTokenService.issueTokens(
-                userAccountService.loadUserAccount(request.username()),
+                tokenUser,
                 payload
             );
             writeRefreshTokenCookie(httpResponse, tokens.refreshToken(), httpRequest.isSecure());

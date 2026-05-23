@@ -31,7 +31,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 // 供应商服务实现（ERP进销存）
 @Service
@@ -252,11 +256,28 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
     }
 
     private void enrichRecentTransactionAt(Long tenantId, List<ErpSupplier> suppliers) {
+        if (suppliers == null || suppliers.isEmpty()) {
+            return;
+        }
+        List<Long> supplierIds = suppliers.stream()
+            .map(ErpSupplier::getId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        if (supplierIds.isEmpty()) {
+            return;
+        }
+        Map<Long, Instant> recentTransactionMap = new HashMap<>();
+        for (ErpSupplier row : erpSupplierMapper.findRecentTransactionRows(tenantId, supplierIds)) {
+            if (row.getId() != null) {
+                recentTransactionMap.put(row.getId(), row.getRecentTransactionAt());
+            }
+        }
         for (ErpSupplier supplier : suppliers) {
             if (supplier.getId() == null) {
                 continue;
             }
-            supplier.setRecentTransactionAt(erpSupplierMapper.findRecentTransactionAt(tenantId, supplier.getId()));
+            supplier.setRecentTransactionAt(recentTransactionMap.get(supplier.getId()));
         }
     }
 

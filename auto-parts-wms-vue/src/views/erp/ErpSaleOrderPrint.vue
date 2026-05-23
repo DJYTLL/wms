@@ -270,21 +270,6 @@ const applyTemplate = (tpl?: any) => {
   columnWidths.value = { ...resolved.columnWidths };
 };
 
-const fetchOptions = async () => {
-  const [customerRes, warehouseRes, locationRes, settlementRes, deliveryRes] = await Promise.all([
-    request.get('/erp/customers'),
-    request.get('/erp/warehouses'),
-    request.get('/erp/locations'),
-    request.get('/erp/settlement-methods'),
-    request.get('/erp/delivery-methods')
-  ]);
-  customers.value = customerRes.data.data || [];
-  warehouses.value = warehouseRes.data.data || [];
-  locations.value = locationRes.data.data || [];
-  settlementMethods.value = settlementRes.data.data || [];
-  deliveryMethods.value = deliveryRes.data.data || [];
-};
-
 const fetchTemplate = async () => {
   try {
     const previewTemplate = readPrintTemplatePreview(resolvePreviewConfigKey(route.query.previewConfigKey));
@@ -301,14 +286,20 @@ const fetchTemplate = async () => {
   }
 };
 
-const fetchDetail = async () => {
-  const res: any = await request.get(`${detailApiBase.value}/${orderId.value}/print`);
+const fetchBootstrap = async () => {
+  const res: any = await request.get(`${detailApiBase.value}/${orderId.value}/print-bootstrap`);
   const data = res.data.data || {};
-  order.value = data.order || null;
+  const detail = data.detail || {};
+  order.value = detail.order || null;
   if (order.value) {
-    order.value._customerDebtTotal = data.customerDebtTotal;
+    order.value._customerDebtTotal = detail.customerDebtTotal;
   }
-  items.value = data.items || [];
+  items.value = detail.items || [];
+  customers.value = data.customers || [];
+  warehouses.value = data.warehouses || [];
+  locations.value = data.locations || [];
+  settlementMethods.value = data.settlementMethods || [];
+  deliveryMethods.value = data.deliveryMethods || [];
 };
 
 const recordPrint = async () => {
@@ -337,7 +328,7 @@ const closeWindow = () => {
 const init = async () => {
   loading.value = true;
   try {
-    await Promise.all([fetchDetail(), fetchOptions(), fetchTemplate()]);
+    await Promise.all([fetchBootstrap(), fetchTemplate()]);
   } catch (error) {
     notifyError(error);
   } finally {

@@ -9,6 +9,10 @@ import java.util.List;
  */
 public record UserClaim(
     /**
+     * 表示用户 ID。
+     */
+    Long id,
+    /**
      * 表示用户登录名。
      */
     String username,

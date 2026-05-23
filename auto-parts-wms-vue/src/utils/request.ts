@@ -1,5 +1,14 @@
-import axios, { type AxiosError, type AxiosInstance } from 'axios'
+import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessageBox } from 'element-plus'
+
+import { useApiLatencyMonitor } from '../composables/useApiLatencyMonitor'
+import {
+  buildLatencySummaryText,
+  estimatePayloadBytes,
+  normalizeLatencyStatus,
+  type ApiLatencyStatusCategory,
+} from '../composables/apiLatencyMonitorCore'
+import { createRequestRefreshQueue } from './requestRefreshQueueCore'
 
 type DeletePromptConfig = {
   skipDeleteReasonPrompt?: boolean
@@ -15,6 +24,22 @@ type DeletePromptContext = {
   placeholder: string
   confirmButtonText: string
 }
+
+type LatencyRequestMeta = {
+  startedAtMs: number
+  startedAtIso: string
+  routePath: string
+  routeTitle: string
+  normalizedPath: string
+  requestBytes: number | null
+}
+
+type LatencyAwareRequestConfig = InternalAxiosRequestConfig & {
+  _latencyMeta?: LatencyRequestMeta
+  _retry?: boolean
+}
+
+let routerModulePromise: Promise<typeof import('../router')> | null = null
 
 const request: AxiosInstance = axios.create({
   baseURL: '/api',
@@ -142,6 +167,95 @@ const normalizeRequestUrl = (url?: string) => {
   return path.startsWith('/api/') ? path.slice(4) : path
 }
 
+const getRouterModule = async () => {
+  if (!routerModulePromise) {
+    routerModulePromise = import('../router')
+  }
+  return routerModulePromise
+}
+
+const readCurrentRouteContext = async () => {
+  const fallbackPath = typeof window !== 'undefined' ? window.location.pathname : ''
+
+  try {
+    const routerModule = await getRouterModule()
+    const currentRoute = routerModule.default.currentRoute.value
+    const routePath = String(currentRoute.path || fallbackPath || '')
+    const rawTitle = currentRoute.meta?.title
+    const routeTitle = typeof rawTitle === 'string' && rawTitle.trim()
+      ? rawTitle.trim()
+      : routePath
+
+    return {
+      routePath,
+      routeTitle,
+    }
+  } catch {
+    return {
+      routePath: fallbackPath,
+      routeTitle: fallbackPath,
+    }
+  }
+}
+
+const buildLatencyMeta = async (config: LatencyAwareRequestConfig): Promise<LatencyRequestMeta> => {
+  const routeContext = await readCurrentRouteContext()
+  return {
+    startedAtMs: performance.now(),
+    startedAtIso: new Date().toISOString(),
+    routePath: routeContext.routePath,
+    routeTitle: routeContext.routeTitle,
+    normalizedPath: normalizeRequestUrl(config.url),
+    requestBytes: estimatePayloadBytes(config.data),
+  }
+}
+
+const finalizeLatencyRecord = (
+  config: LatencyAwareRequestConfig | undefined,
+  payload: {
+    finishedAtIso: string
+    durationMs: number
+    statusCategory: ApiLatencyStatusCategory
+    httpStatus?: number | null
+    responseBytes?: number | null
+    errorMessage?: string | null
+  },
+) => {
+  const meta = config?._latencyMeta as LatencyRequestMeta | undefined
+  if (!meta) {
+    return
+  }
+
+  const method = String(config?.method || 'GET').toUpperCase()
+  const record = {
+    id: `${meta.startedAtIso}-${method}-${meta.normalizedPath || config?.url || ''}`,
+    startedAt: meta.startedAtIso,
+    finishedAt: payload.finishedAtIso,
+    durationMs: payload.durationMs,
+    requestMethod: method,
+    requestUrl: String(config?.url || ''),
+    normalizedPath: meta.normalizedPath,
+    routePath: meta.routePath,
+    routeTitle: meta.routeTitle,
+    statusCategory: payload.statusCategory,
+    httpStatus: payload.httpStatus ?? null,
+    requestBytes: meta.requestBytes,
+    responseBytes: payload.responseBytes ?? null,
+    errorMessage: payload.errorMessage ?? null,
+    summary: '',
+  }
+
+  record.summary = buildLatencySummaryText(record)
+  useApiLatencyMonitor().addRecord(record)
+}
+
+const buildLatencyDurationMs = (meta?: LatencyRequestMeta) => {
+  if (!meta) {
+    return 0
+  }
+  return Math.max(0, Math.round(performance.now() - meta.startedAtMs))
+}
+
 const resolveDeletePromptContext = (config: DeletePromptConfig & { url?: string }) => {
   const matchedEntity = DELETE_PROMPT_ROUTES.find(({ pattern }) => pattern.test(normalizeRequestUrl(config.url)))
     ?.entityName
@@ -157,7 +271,7 @@ const resolveDeletePromptContext = (config: DeletePromptConfig & { url?: string 
   } satisfies DeletePromptContext
 }
 
-const ensureDeleteReason = async (config: any & DeletePromptConfig) => {
+const ensureDeleteReason = async (config: LatencyAwareRequestConfig & DeletePromptConfig) => {
   const method = (config.method || 'get').toLowerCase()
   if (method !== 'delete' || isAuthEndpoint(config.url) || config.skipDeleteReasonPrompt) {
     return config
@@ -191,7 +305,8 @@ const ensureDeleteReason = async (config: any & DeletePromptConfig) => {
 
 // 请求拦截器：自动带上 token
 request.interceptors.request.use(
-  async (config) => {
+  async (config: LatencyAwareRequestConfig) => {
+    config._latencyMeta = await buildLatencyMeta(config)
     const token = getToken()
     if (token) {
       config.headers = config.headers || {}
@@ -213,40 +328,70 @@ request.interceptors.request.use(
 )
 
 let isRefreshing = false
-let pendingQueue: Array<(token: string) => void> = []
+const refreshQueue = createRequestRefreshQueue()
 
 // 响应拦截器：401 刷新 token 并重试
 request.interceptors.response.use(
   (response) => {
     const data = response.data
+    const responseConfig = response.config as LatencyAwareRequestConfig
+    const latencyMeta = responseConfig._latencyMeta
 
     if (response.config.responseType === 'blob') {
+      finalizeLatencyRecord(responseConfig, {
+        finishedAtIso: new Date().toISOString(),
+        durationMs: buildLatencyDurationMs(latencyMeta),
+        statusCategory: 'SUCCESS',
+        httpStatus: response.status,
+        responseBytes: estimatePayloadBytes(response.data),
+      })
       return response
     }
 
     if (data && typeof data.code === 'number' && data.code !== 200) {
+      const responseErrorMessage = resolveResponseErrorMessage(data) || data.message || 'Error'
+      finalizeLatencyRecord(responseConfig, {
+        finishedAtIso: new Date().toISOString(),
+        durationMs: buildLatencyDurationMs(latencyMeta),
+        statusCategory: 'FAIL',
+        httpStatus: response.status,
+        responseBytes: estimatePayloadBytes(response.data),
+        errorMessage: responseErrorMessage,
+      })
       if (data.code === 401) {
         clearTokens()
         window.location.href = '/login'
       }
-      return Promise.reject(new Error(data.message || 'Error'))
+      return Promise.reject(new Error(responseErrorMessage))
     }
+
+    finalizeLatencyRecord(responseConfig, {
+      finishedAtIso: new Date().toISOString(),
+      durationMs: buildLatencyDurationMs(latencyMeta),
+      statusCategory: 'SUCCESS',
+      httpStatus: response.status,
+      responseBytes: estimatePayloadBytes(response.data),
+    })
 
     return response
   },
   async (error: AxiosError) => {
-    const original = error.config as any
+    const original = error.config as LatencyAwareRequestConfig | undefined
     const status = error.response?.status
 
     if (status === 401 && original && !original._retry && !isAuthEndpoint(original.url)) {
       original._retry = true
 
       if (isRefreshing) {
-        return new Promise((resolve) => {
-          pendingQueue.push((newToken: string) => {
-            original.headers = original.headers || {}
-            original.headers.Authorization = `Bearer ${newToken}`
-            resolve(request(original))
+        return new Promise((resolve, reject) => {
+          refreshQueue.enqueue({
+            resolve,
+            reject,
+            retry: async (newToken: string) => {
+              original.headers = original.headers || {}
+              original.headers.Authorization = `Bearer ${newToken}`
+              return request(original)
+            },
           })
         })
       }
@@ -263,13 +408,21 @@ request.interceptors.response.use(
         const { token, authPayload } = refreshData.data
         setTokens(token, authPayload)
 
-        pendingQueue.forEach((cb) => cb(token))
-        pendingQueue = []
+        refreshQueue.resolveAll(token)
 
         original.headers = original.headers || {}
         original.headers.Authorization = `Bearer ${token}`
         return request(original)
       } catch (e) {
+        refreshQueue.rejectAll(e)
+        finalizeLatencyRecord(original, {
+          finishedAtIso: new Date().toISOString(),
+          durationMs: buildLatencyDurationMs(original?._latencyMeta as LatencyRequestMeta | undefined),
+          statusCategory: normalizeLatencyStatus(e as AxiosError),
+          httpStatus: (e as AxiosError).response?.status ?? status ?? null,
+          responseBytes: estimatePayloadBytes((e as AxiosError).response?.data),
+          errorMessage: (e as Error).message,
+        })
         clearTokens()
         window.location.href = '/login'
         return Promise.reject(e)
@@ -282,6 +435,15 @@ request.interceptors.response.use(
     if (apiMessage) {
       error.message = apiMessage
     }
+
+    finalizeLatencyRecord(original, {
+      finishedAtIso: new Date().toISOString(),
+      durationMs: buildLatencyDurationMs(original?._latencyMeta as LatencyRequestMeta | undefined),
+      statusCategory: normalizeLatencyStatus(error),
+      httpStatus: error.response?.status ?? null,
+      responseBytes: estimatePayloadBytes(error.response?.data),
+      errorMessage: error.message,
+    })
 
     console.error('Request Error:', error)
     return Promise.reject(error)

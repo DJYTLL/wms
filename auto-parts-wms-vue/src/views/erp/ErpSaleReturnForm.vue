@@ -704,6 +704,7 @@ import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { ElMessageBox } from 'element-plus';
 import { Delete, Plus } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
+import { getCachedEnabledReceiptMethods, getCachedEnabledSettlementMethods } from '@/composables/erpBaseDataCache';
 import { mergeOptionById } from '@/utils/erpMasterData';
 
 interface OptionItem {
@@ -848,6 +849,7 @@ const route = useRoute();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { requiredFieldMessage, positiveRowFieldMessage, invalidRowFieldMessage } = useValidationMessage();
 const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const isSaving = ref(false);
 
 const isEditing = computed(() => Boolean(route.params.id));
@@ -2637,8 +2639,7 @@ const resetForm = () => {
 
 const fetchSettlementMethods = async () => {
   try {
-    const res: any = await request.get('/erp/settlement-methods', { params: { enabled: true } });
-    settlementMethodOptions.value = res.data.data || [];
+    settlementMethodOptions.value = await getCachedEnabledSettlementMethods(tenantCacheKey.value);
     applyDefaultMethods();
   } catch (error) {
     notifyError(error);
@@ -2647,8 +2648,7 @@ const fetchSettlementMethods = async () => {
 
 const fetchReceiptMethods = async () => {
   try {
-    const res: any = await request.get('/erp/receipt-methods', { params: { enabled: true } });
-    receiptMethodOptions.value = res.data.data || [];
+    receiptMethodOptions.value = await getCachedEnabledReceiptMethods(tenantCacheKey.value);
     applyDefaultMethods();
   } catch (error) {
     notifyError(error);

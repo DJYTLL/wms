@@ -7,6 +7,7 @@ import com.example.wms.dto.MyListPreferencesUpdateRequest;
 import com.example.wms.entity.UserAccount;
 import com.example.wms.entity.UserTableSetting;
 import com.example.wms.mapper.UserTableSettingMapper;
+import com.example.wms.security.AuthenticatedUser;
 import com.example.wms.service.MyPreferenceService;
 import com.example.wms.service.TenantSettingService;
 import com.example.wms.service.UserAccountService;
@@ -61,14 +62,14 @@ public class MyPreferenceServiceImpl implements MyPreferenceService {
             throw new IllegalArgumentException("每页显示条数必须为 5 到 200 的整数");
         }
         Long tenantId = TenantContext.requireTenantId();
-        UserAccount currentUser = resolveCurrentUser();
-        UserTableSetting existing = userTableSettingMapper.findOne(tenantId, currentUser.getId(), PAGE_KEY);
+        CurrentUserRef currentUser = resolveCurrentUser();
+        UserTableSetting existing = userTableSettingMapper.findOne(tenantId, currentUser.id(), PAGE_KEY);
         UserTableSetting setting = existing == null ? new UserTableSetting() : existing;
         setting.setTenantId(tenantId);
-        setting.setUserId(currentUser.getId());
+        setting.setUserId(currentUser.id());
         setting.setPageKey(PAGE_KEY);
         setting.setConfigJson(writeConfig(Map.of(PAGE_SIZE_KEY, pageSize)));
-        setting.setUpdatedBy(currentUser.getUsername());
+        setting.setUpdatedBy(currentUser.username());
         setting.setUpdatedAt(Instant.now());
         if (existing == null) {
             userTableSettingMapper.insert(setting);
@@ -93,8 +94,8 @@ public class MyPreferenceServiceImpl implements MyPreferenceService {
 
     private UserTableSetting findCurrentSetting() {
         Long tenantId = TenantContext.requireTenantId();
-        UserAccount currentUser = resolveCurrentUser();
-        return userTableSettingMapper.findOne(tenantId, currentUser.getId(), PAGE_KEY);
+        CurrentUserRef currentUser = resolveCurrentUser();
+        return userTableSettingMapper.findOne(tenantId, currentUser.id(), PAGE_KEY);
     }
 
     private Integer readPageSize(String configJson) {
@@ -124,23 +125,32 @@ public class MyPreferenceServiceImpl implements MyPreferenceService {
         }
     }
 
-    private UserAccount resolveCurrentUser() {
+    private CurrentUserRef resolveCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
             throw new IllegalStateException("当前用户未登录");
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof AuthenticatedUser authenticatedUser && authenticatedUser.getUserId() != null) {
+            return new CurrentUserRef(authenticatedUser.getUserId(), authenticatedUser.getUsername());
         }
         Long tenantId = TenantContext.requireTenantId();
         RequestAuditContext auditContext = RequestAuditContext.get();
         Long authTenantId = auditContext == null ? tenantId : auditContext.getAuthTenantId();
         Long lookupTenantId = authTenantId == null ? tenantId : authTenantId;
         if (Objects.equals(lookupTenantId, tenantId)) {
-            return userAccountService.loadUserAccount(authentication.getName());
+            UserAccount currentUser = userAccountService.loadUserAccount(authentication.getName());
+            return new CurrentUserRef(currentUser.getId(), currentUser.getUsername());
         }
         try {
             TenantContext.setTenantId(lookupTenantId);
-            return userAccountService.loadUserAccount(authentication.getName());
+            UserAccount currentUser = userAccountService.loadUserAccount(authentication.getName());
+            return new CurrentUserRef(currentUser.getId(), currentUser.getUsername());
         } finally {
             TenantContext.setTenantId(tenantId);
         }
+    }
+
+    private record CurrentUserRef(Long id, String username) {
     }
 }

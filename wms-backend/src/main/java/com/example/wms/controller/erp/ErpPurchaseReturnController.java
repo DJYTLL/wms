@@ -7,12 +7,14 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpPurchaseOrderRecentItem;
 import com.example.wms.dto.erp.ErpPurchaseReturnCreateRequest;
 import com.example.wms.dto.erp.ErpPurchaseReturnDetail;
+import com.example.wms.dto.erp.ErpPurchaseReturnPrintBootstrapData;
 import com.example.wms.dto.erp.ErpPurchaseReturnRefundSummary;
 import com.example.wms.dto.erp.ErpPurchaseReturnSourcePurchaseOrderDetail;
 import com.example.wms.dto.erp.ErpPurchaseReturnSourcePurchaseOrderOption;
 import com.example.wms.dto.erp.ErpPurchaseReturnUpdateRequest;
 import com.example.wms.entity.erp.ErpPurchaseReturn;
 import com.example.wms.service.erp.ErpPurchaseReturnService;
+import com.example.wms.service.erp.support.ErpDocumentPrintBootstrapService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,9 +28,12 @@ import java.util.List;
 @RequestMapping("/api/erp/purchase-returns")
 public class ErpPurchaseReturnController {
     private final ErpPurchaseReturnService erpPurchaseReturnService;
+    private final ErpDocumentPrintBootstrapService printBootstrapService;
 
-    public ErpPurchaseReturnController(ErpPurchaseReturnService erpPurchaseReturnService) {
+    public ErpPurchaseReturnController(ErpPurchaseReturnService erpPurchaseReturnService,
+                                       ErpDocumentPrintBootstrapService printBootstrapService) {
         this.erpPurchaseReturnService = erpPurchaseReturnService;
+        this.printBootstrapService = printBootstrapService;
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:view')")
@@ -72,6 +77,12 @@ public class ErpPurchaseReturnController {
     @GetMapping("/draft/{id}/print")
     public ResponseEntity<ApiResponse<ErpPurchaseReturnDetail>> draftPrint(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getDraftDetail(id)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:print')")
+    @GetMapping("/draft/{id}/print-bootstrap")
+    public ResponseEntity<ApiResponse<ErpPurchaseReturnPrintBootstrapData>> draftPrintBootstrap(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(printBootstrapService.getPurchaseReturnBootstrap(id, false)));
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-purchase-return-draft:edit')")
@@ -160,6 +171,12 @@ public class ErpPurchaseReturnController {
     @GetMapping("/approved/{id}/print")
     public ResponseEntity<ApiResponse<ErpPurchaseReturnDetail>> approvedPrint(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpPurchaseReturnService.getApprovedDetail(id)));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-purchase-return-approved:print')")
+    @GetMapping("/approved/{id}/print-bootstrap")
+    public ResponseEntity<ApiResponse<ErpPurchaseReturnPrintBootstrapData>> approvedPrintBootstrap(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(printBootstrapService.getPurchaseReturnBootstrap(id, true)));
     }
 
     @PreAuthorize("hasAuthority('PERM_erp-purchase-return-approved:copy') and hasAuthority('PERM_erp-purchase-return-draft:add')")

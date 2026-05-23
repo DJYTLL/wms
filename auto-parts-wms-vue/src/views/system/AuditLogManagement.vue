@@ -200,7 +200,7 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useAuthStore } from '@/stores/auth';
 import { useColumnSettings } from '@/composables/useColumnSettings';
-import { useSystemConfig } from '@/composables/useSystemConfig';
+import { usePageSizePreference } from '@/composables/pageSizePreference';
 
 type AuditLogItem = {
   id: number;
@@ -234,7 +234,9 @@ const items = ref<AuditLogItem[]>([]);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
-const { bindPageSizeSync } = useSystemConfig();
+const pageSizeSyncReady = ref(false);
+const pendingInitialLoad = ref(false);
+const { bindPageSizeSync } = usePageSizePreference();
 
 const keyword = ref('');
 const actorUsername = ref('');
@@ -527,9 +529,23 @@ const onSizeChange = (newSize: number) => {
 
 onMounted(() => {
   fetchTenants();
-  fetchLogs();
+  if (pageSizeSyncReady.value) {
+    fetchLogs();
+  } else {
+    pendingInitialLoad.value = true;
+  }
   fetchTenantKeys();
-  bindPageSizeSync(size, fetchLogs);
+});
+
+bindPageSizeSync(size, fetchLogs, {
+  reloadOnInitialSync: false,
+  onInitialSyncComplete: () => {
+    pageSizeSyncReady.value = true;
+    if (pendingInitialLoad.value) {
+      pendingInitialLoad.value = false;
+      fetchLogs();
+    }
+  }
 });
 
 </script>

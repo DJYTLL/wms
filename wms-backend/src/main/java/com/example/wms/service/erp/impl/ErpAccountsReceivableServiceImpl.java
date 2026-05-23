@@ -72,13 +72,8 @@ public class ErpAccountsReceivableServiceImpl implements ErpAccountsReceivableSe
         if (receivable == null) {
             throw new IllegalArgumentException("应收单不存在");
         }
-        String customerName = "-";
-        if (receivable.getCustomerId() != null) {
-            ErpCustomer customer = erpCustomerMapper.selectById(receivable.getCustomerId());
-            if (customer != null) {
-                customerName = customer.getName();
-            }
-        }
+        Map<Long, String> customerNameMap = loadCustomerNameMap(receivable.getCustomerId() == null ? Set.of() : Set.of(receivable.getCustomerId()));
+        String customerName = customerNameMap.getOrDefault(receivable.getCustomerId(), "-");
         List<ErpReceiptView> receipts = loadReceipts(tenantId, receivable.getId(), customerName);
         return new ErpAccountsReceivableDetail(receivable, customerName, receipts);
     }
@@ -112,13 +107,7 @@ public class ErpAccountsReceivableServiceImpl implements ErpAccountsReceivableSe
             .map(ErpAccountsReceivable::getCustomerId)
             .filter(Objects::nonNull)
             .collect(Collectors.toSet());
-        Map<Long, String> customerNameMap = new HashMap<>();
-        if (!customerIds.isEmpty()) {
-            List<ErpCustomer> customers = erpCustomerMapper.selectBatchIds(customerIds);
-            for (ErpCustomer customer : customers) {
-                customerNameMap.put(customer.getId(), customer.getName());
-            }
-        }
+        Map<Long, String> customerNameMap = loadCustomerNameMap(customerIds);
         return items.stream()
             .map(item -> new ErpAccountsReceivableView(
                 item.getId(),
@@ -213,5 +202,20 @@ public class ErpAccountsReceivableServiceImpl implements ErpAccountsReceivableSe
         } catch (Exception ex) {
             return List.of();
         }
+    }
+
+    private Map<Long, String> loadCustomerNameMap(Set<Long> customerIds) {
+        Set<Long> effectiveIds = customerIds == null
+            ? Set.of()
+            : customerIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (effectiveIds.isEmpty()) {
+            return Map.of();
+        }
+        List<ErpCustomer> customers = erpCustomerMapper.selectBatchIds(effectiveIds);
+        Map<Long, String> customerNameMap = new HashMap<>();
+        for (ErpCustomer customer : customers) {
+            customerNameMap.put(customer.getId(), customer.getName());
+        }
+        return customerNameMap;
     }
 }

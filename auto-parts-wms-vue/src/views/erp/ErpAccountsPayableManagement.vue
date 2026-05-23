@@ -115,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, onMounted, ref } from 'vue';
+import { computed, onActivated, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
@@ -123,6 +123,8 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
+import { useAuthStore } from '@/stores/auth';
+import { getCachedSuppliers } from '@/composables/erpBaseDataCache';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 
 interface OptionItem {
@@ -132,6 +134,7 @@ interface OptionItem {
 
 const { t } = useI18n();
 const router = useRouter();
+const authStore = useAuthStore();
 
 const searchQuery = ref('');
 const statusFilter = ref('');
@@ -144,6 +147,7 @@ const tableData = ref<any[]>([]);
 const supplierOptions = ref<OptionItem[]>([]);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
+const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
 
@@ -151,6 +155,7 @@ const { notifyError } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
 const defaultColumns = ['supplierName', 'orderNo', 'status', 'totalAmount', 'paidAmount', 'discountAmount', 'unpaidAmount', 'createdAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-ap', defaultColumns);
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const canShow = (key: string) => isVisible(key);
 const statusOptions = [
   { value: 'OPEN', label: t('status.open') },
@@ -160,10 +165,7 @@ const statusOptions = [
 
 const fetchSuppliers = async () => {
   try {
-    const res: any = await request.get('/erp/suppliers');
-    if (res.data.code === 200) {
-      supplierOptions.value = res.data.data || [];
-    }
+    supplierOptions.value = await getCachedSuppliers(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -274,6 +276,10 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  if (!hasActivatedOnce.value) {
+    hasActivatedOnce.value = true;
+    return;
+  }
   if (!pageSizeSyncReady.value) {
     pendingInitialLoad.value = true;
     return;

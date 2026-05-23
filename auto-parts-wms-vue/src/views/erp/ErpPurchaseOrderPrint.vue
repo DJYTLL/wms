@@ -261,19 +261,6 @@ const applyTemplate = (tpl?: any) => {
   columnWidths.value = { ...resolved.columnWidths };
 };
 
-const fetchOptions = async () => {
-  const [supplierRes, warehouseRes, locationRes, paymentRes] = await Promise.all([
-    request.get('/erp/suppliers'),
-    request.get('/erp/warehouses'),
-    request.get('/erp/locations'),
-    request.get('/erp/payment-methods')
-  ]);
-  suppliers.value = supplierRes.data.data || [];
-  warehouses.value = warehouseRes.data.data || [];
-  locations.value = locationRes.data.data || [];
-  paymentMethods.value = paymentRes.data.data || [];
-};
-
 const fetchTemplate = async () => {
   try {
     const previewTemplate = readPrintTemplatePreview(resolvePreviewConfigKey(route.query.previewConfigKey));
@@ -290,11 +277,19 @@ const fetchTemplate = async () => {
   }
 };
 
-const fetchDetail = async () => {
-  const res: any = await request.get(purchaseDetailUrl.value);
+const fetchBootstrap = async () => {
+  const bootstrapUrl = isDraftPrint.value
+    ? `/erp/purchase-orders/draft/${orderId.value}/print-bootstrap`
+    : `/erp/purchase-orders/approved/${orderId.value}/print-bootstrap`;
+  const res: any = await request.get(bootstrapUrl);
   const data = res.data.data || {};
-  order.value = data.order || null;
-  items.value = data.items || [];
+  const detail = data.detail || {};
+  order.value = detail.order || null;
+  items.value = detail.items || [];
+  suppliers.value = data.suppliers || [];
+  warehouses.value = data.warehouses || [];
+  locations.value = data.locations || [];
+  paymentMethods.value = data.paymentMethods || [];
 };
 
 const recordPrint = async () => {
@@ -323,7 +318,7 @@ const closeWindow = () => {
 const init = async () => {
   loading.value = true;
   try {
-    await Promise.all([fetchDetail(), fetchOptions(), fetchTemplate()]);
+    await Promise.all([fetchBootstrap(), fetchTemplate()]);
   } catch (error) {
     notifyError(error);
   } finally {

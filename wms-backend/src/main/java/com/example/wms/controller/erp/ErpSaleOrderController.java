@@ -7,11 +7,13 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSaleOrderCreateRequest;
 import com.example.wms.dto.erp.ErpSaleOrderDetail;
 import com.example.wms.dto.erp.ErpSaleOrderHistoryItem;
+import com.example.wms.dto.erp.ErpSaleOrderPrintBootstrapData;
 import com.example.wms.dto.erp.ErpSaleOrderRecentItem;
 import com.example.wms.dto.erp.ErpSaleOrderSummary;
 import com.example.wms.dto.erp.ErpSaleOrderUpdateRequest;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.service.erp.ErpSaleOrderService;
+import com.example.wms.service.erp.support.ErpDocumentPrintBootstrapService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,9 +27,12 @@ import java.util.List;
 @RequestMapping("/api/erp/sale-orders")
 public class ErpSaleOrderController {
     private final ErpSaleOrderService erpSaleOrderService;
+    private final ErpDocumentPrintBootstrapService printBootstrapService;
 
-    public ErpSaleOrderController(ErpSaleOrderService erpSaleOrderService) {
+    public ErpSaleOrderController(ErpSaleOrderService erpSaleOrderService,
+                                  ErpDocumentPrintBootstrapService printBootstrapService) {
         this.erpSaleOrderService = erpSaleOrderService;
+        this.printBootstrapService = printBootstrapService;
     }
 
     // 查询销售单列表
@@ -142,6 +147,12 @@ public class ErpSaleOrderController {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.getDraftDetail(id)));
     }
 
+    @GetMapping("/draft/{id}/print-bootstrap")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-draft:print')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderPrintBootstrapData>> getDraftPrintBootstrap(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(printBootstrapService.getSaleOrderBootstrap(id, false)));
+    }
+
     @GetMapping("/approved/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-sale-approved:view')")
     public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> getApproved(@PathVariable Long id) {
@@ -152,6 +163,12 @@ public class ErpSaleOrderController {
     @PreAuthorize("hasAuthority('PERM_erp-sale-approved:print')")
     public ResponseEntity<ApiResponse<ErpSaleOrderDetail>> getApprovedPrint(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(erpSaleOrderService.getApprovedDetail(id)));
+    }
+
+    @GetMapping("/approved/{id}/print-bootstrap")
+    @PreAuthorize("hasAuthority('PERM_erp-sale-approved:print')")
+    public ResponseEntity<ApiResponse<ErpSaleOrderPrintBootstrapData>> getApprovedPrintBootstrap(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(printBootstrapService.getSaleOrderBootstrap(id, true)));
     }
 
     // 最近包含指定商品的销售单明细（退货参考）

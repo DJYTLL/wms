@@ -67,10 +67,30 @@
                   <article v-for="item in group.items" :key="item.key" class="tenant-setting-card">
                     <div class="tenant-setting-card__meta">
                       <span class="tenant-setting-card__label">{{ item.label }}</span>
-                      <span class="tenant-setting-card__hint">{{ item.description }}</span>
+                      <span class="tenant-setting-card__hint">{{ resolveSettingHint(item) }}</span>
+                      <span class="tenant-setting-card__example">{{ resolveSettingExample(item) }}</span>
                     </div>
+                    <el-input
+                      v-if="isPrefixRule(item)"
+                      v-model="item.value"
+                      class="tenant-setting-card__input"
+                      :maxlength="8"
+                      :placeholder="item.defaultValue"
+                    />
+                    <el-select
+                      v-else-if="isDateFormatRule(item)"
+                      v-model="item.value"
+                      class="tenant-setting-card__input"
+                    >
+                      <el-option
+                        v-for="option in dateFormatOptions"
+                        :key="option"
+                        :label="option"
+                        :value="option"
+                      />
+                    </el-select>
                     <DecimalInput
-                      v-if="item.valueType === 'int'"
+                      v-else-if="item.valueType === 'int'"
                       v-model="item.numberInputValue"
                       input-mode="numeric"
                       :scale="0"
@@ -114,10 +134,30 @@
                   <article v-for="item in group.items" :key="item.key" class="tenant-setting-card">
                     <div class="tenant-setting-card__meta">
                       <span class="tenant-setting-card__label">{{ item.label }}</span>
-                      <span class="tenant-setting-card__hint">{{ item.description }}</span>
+                      <span class="tenant-setting-card__hint">{{ resolveSettingHint(item) }}</span>
+                      <span class="tenant-setting-card__example">{{ resolveSettingExample(item) }}</span>
                     </div>
+                    <el-input
+                      v-if="isPrefixRule(item)"
+                      v-model="item.value"
+                      class="tenant-setting-card__input"
+                      :maxlength="8"
+                      :placeholder="item.defaultValue"
+                    />
+                    <el-select
+                      v-else-if="isDateFormatRule(item)"
+                      v-model="item.value"
+                      class="tenant-setting-card__input"
+                    >
+                      <el-option
+                        v-for="option in dateFormatOptions"
+                        :key="option"
+                        :label="option"
+                        :value="option"
+                      />
+                    </el-select>
                     <DecimalInput
-                      v-if="item.valueType === 'int'"
+                      v-else-if="item.valueType === 'int'"
                       v-model="item.numberInputValue"
                       input-mode="numeric"
                       :scale="0"
@@ -195,6 +235,7 @@ const displayForm = reactive({
 const displayPageSizeInput = ref('20')
 const codeRules = ref<TenantBusinessSettingItem[]>([])
 const orderRules = ref<TenantBusinessSettingItem[]>([])
+const dateFormatOptions = ['yyyyMMdd', 'yyMMdd', 'yyyyMM', 'yyyy-MM-dd', 'yyyyMMddHHmmss']
 
 const { t } = useI18n()
 const { notifyError, notifySuccess, notifyWarning } = useApiError()
@@ -283,6 +324,36 @@ const resolveOrderRuleGroupTitle = (item: TenantBusinessSettingItem) => {
 const groupedCodeRules = computed(() => buildGroups(codeRules.value, resolveCodeRuleGroupTitle))
 const groupedOrderRules = computed(() => buildGroups(orderRules.value, resolveOrderRuleGroupTitle))
 
+const isPrefixRule = (item: TenantBusinessSettingItem) => item.key.endsWith('.prefix')
+const isDateFormatRule = (item: TenantBusinessSettingItem) => item.key.endsWith('.date-format')
+const isSequenceRule = (item: TenantBusinessSettingItem) => item.key.endsWith('.seq-length')
+
+const resolveSettingHint = (item: TenantBusinessSettingItem) => {
+  if (isPrefixRule(item)) {
+    return '建议使用 2 到 8 位大写字母或数字，可包含短横线和下划线。'
+  }
+  if (isDateFormatRule(item)) {
+    return '请选择统一受支持的日期格式，避免不同模块生成编号不一致。'
+  }
+  if (isSequenceRule(item)) {
+    return '序列长度建议控制在 1 到 8 位之间。'
+  }
+  return item.description
+}
+
+const resolveSettingExample = (item: TenantBusinessSettingItem) => {
+  if (isPrefixRule(item)) {
+    return `示例：${item.defaultValue || 'SO'}`
+  }
+  if (isDateFormatRule(item)) {
+    return '可选：yyyyMMdd、yyMMdd、yyyyMM、yyyy-MM-dd、yyyyMMddHHmmss'
+  }
+  if (isSequenceRule(item)) {
+    return `默认：${item.defaultValue || '4'} 位`
+  }
+  return `默认值：${item.defaultValue || '-'}`
+}
+
 const sanitizeBusinessInt = (value: string): number | null => {
   if (value == null || value.trim() === '') {
     return null
@@ -347,7 +418,18 @@ const saveBusiness = async (scope: 'codeRules' | 'orderRules') => {
   const targetItems = scope === 'codeRules' ? codeRules.value : orderRules.value
   const invalidIntItem = targetItems.find((item) => item.valueType === 'int' && sanitizeBusinessInt(item.numberInputValue) == null)
   if (invalidIntItem) {
-    notifyWarning(`${invalidIntItem.label}必须为 1 到 200 的整数`)
+    const rangeHint = isSequenceRule(invalidIntItem) ? '1 到 8' : '1 到 200'
+    notifyWarning(`${invalidIntItem.label}必须为 ${rangeHint} 的整数`)
+    return
+  }
+  const invalidPrefixItem = targetItems.find((item) => isPrefixRule(item) && !/^[A-Za-z0-9_-]{1,8}$/.test((item.value || '').trim()))
+  if (invalidPrefixItem) {
+    notifyWarning(`${invalidPrefixItem.label}仅支持 1 到 8 位字母、数字、下划线和短横线`)
+    return
+  }
+  const invalidDateFormatItem = targetItems.find((item) => isDateFormatRule(item) && !dateFormatOptions.includes((item.value || '').trim()))
+  if (invalidDateFormatItem) {
+    notifyWarning(`${invalidDateFormatItem.label}必须使用受支持的日期格式`)
     return
   }
   savingBusiness.value = true

@@ -39,7 +39,9 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -598,11 +600,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         if (payable == null) {
             throw new IllegalArgumentException("应付单不存在");
         }
-        String supplierName = "";
-        if (payable.getSupplierId() != null) {
-            ErpSupplier supplier = erpSupplierMapper.selectById(payable.getSupplierId());
-            supplierName = supplier == null ? "" : supplier.getName();
-        }
+        String supplierName = loadSupplierNameMap(singletonIdSet(payable.getSupplierId())).getOrDefault(payable.getSupplierId(), "");
         return new ErpPaymentSourcePayableDetail(
             payable.getId(),
             payable.getOrderNo(),
@@ -702,22 +700,11 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
     }
 
     private ErpPaymentDetail buildDetail(Long tenantId, ErpPayment receipt) {
-        String supplierName = "-";
-        if (receipt.getSupplierId() != null) {
-            ErpSupplier supplier = erpSupplierMapper.selectById(receipt.getSupplierId());
-            if (supplier != null) {
-                supplierName = supplier.getName();
-            }
-        }
-        String orderNo = null;
-        if (receipt.getPurchaseOrderId() != null) {
-            ErpPurchaseOrder order = erpPurchaseOrderMapper.selectOne(new QueryWrapper<ErpPurchaseOrder>()
-                .eq("tenant_id", tenantId)
-                .eq("id", receipt.getPurchaseOrderId()));
-            if (order != null) {
-                orderNo = order.getOrderNo();
-            }
-        }
+        Map<Long, String> supplierNameMap = loadSupplierNameMap(singletonIdSet(receipt.getSupplierId()));
+        String supplierName = supplierNameMap.getOrDefault(receipt.getSupplierId(), "-");
+        Map<Long, ErpPurchaseOrder> purchaseOrderMap = loadPurchaseOrderMap(tenantId, singletonIdSet(receipt.getPurchaseOrderId()));
+        ErpPurchaseOrder order = purchaseOrderMap.get(receipt.getPurchaseOrderId());
+        String orderNo = order == null ? null : order.getOrderNo();
         List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, receipt.getId());
         List<ErpAccountsPayable> payables = loadPayables(tenantId, receipt, allocations);
         List<ErpPaymentPayableView> payableViews = buildPayableViews(payables, allocations);
@@ -742,9 +729,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         if (ids.isEmpty()) {
             return List.of();
         }
-        return erpAccountsPayableMapper.selectList(new QueryWrapper<ErpAccountsPayable>()
-            .eq("tenant_id", tenantId)
-            .in("id", ids));
+        return new ArrayList<>(loadPayableMap(tenantId, ids).values());
     }
 
     private List<ErpPaymentPayableView> buildPayableViews(List<ErpAccountsPayable> payables,
@@ -865,16 +850,22 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         validateCashSettlementMethod(tenantId, payment.getSettlementMethod());
         List<ErpPaymentPayable> allocations = erpPaymentPayableMapper.findByPaymentId(tenantId, payment.getId());
         if (allocations != null && !allocations.isEmpty()) {
+            Map<Long, BigDecimal> payableDeltas = new LinkedHashMap<>();
             for (ErpPaymentPayable allocation : allocations) {
-                ensurePayableCapacity(tenantId, allocation.getPayableId(), allocation.getAllocatedTotal());
+                if (allocation == null) {
+                    continue;
+                }
+                Long payableId = allocation.getPayableId();
+                BigDecimal delta = allocation.getAllocatedTotal();
+                validatePayableDelta(payableId, delta);
+                payableDeltas.merge(payableId, delta, BigDecimal::add);
             }
+            ensurePayableCapacities(tenantId, payableDeltas);
             return;
         }
-        ensurePayableCapacity(
-            tenantId,
-            payment.getPayableId(),
-            resolvePaymentTotal(payment.getAmount(), payment.getDiscountAmount())
-        );
+        Map<Long, BigDecimal> payableDeltas = new LinkedHashMap<>();
+        payableDeltas.put(payment.getPayableId(), resolvePaymentTotal(payment.getAmount(), payment.getDiscountAmount()));
+        ensurePayableCapacities(tenantId, payableDeltas);
     }
 
     private void validateCashSettlementMethod(Long tenantId, String settlementMethodCode) {
@@ -891,25 +882,84 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
     }
 
     private void ensurePayableCapacity(Long tenantId, Long payableId, BigDecimal delta) {
+        Map<Long, BigDecimal> payableDeltas = new LinkedHashMap<>();
+        payableDeltas.put(payableId, delta);
+        ensurePayableCapacities(tenantId, payableDeltas);
+    }
+
+    private void ensurePayableCapacities(Long tenantId, Map<Long, BigDecimal> payableDeltas) {
+        if (payableDeltas == null || payableDeltas.isEmpty()) {
+            throw new IllegalArgumentException("应付单不存在");
+        }
+        for (Map.Entry<Long, BigDecimal> entry : payableDeltas.entrySet()) {
+            validatePayableDelta(entry.getKey(), entry.getValue());
+        }
+        Map<Long, ErpAccountsPayable> payableMap = loadPayableMap(tenantId, payableDeltas.keySet());
+        for (Map.Entry<Long, BigDecimal> entry : payableDeltas.entrySet()) {
+            ErpAccountsPayable payable = payableMap.get(entry.getKey());
+            if (payable == null) {
+                throw new IllegalArgumentException("应付单不存在");
+            }
+            if (STATUS_RED_FLUSHED.equals(payable.getStatus())) {
+                throw new IllegalArgumentException("红冲应付单不可付款");
+            }
+            BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
+            if (!isAllocationWithinUnpaid(payable, entry.getValue(), unpaid)) {
+                throw new IllegalArgumentException("付款金额不能大于未付金额");
+            }
+        }
+    }
+
+    private void validatePayableDelta(Long payableId, BigDecimal delta) {
         if (payableId == null) {
             throw new IllegalArgumentException("应付单不存在");
         }
         if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
             throw new IllegalArgumentException("付款金额或优惠金额必须大于0");
         }
-        ErpAccountsPayable payable = erpAccountsPayableMapper.selectOne(new QueryWrapper<ErpAccountsPayable>()
-            .eq("tenant_id", tenantId)
-            .eq("id", payableId));
-        if (payable == null) {
-            throw new IllegalArgumentException("应付单不存在");
+    }
+
+    private Map<Long, String> loadSupplierNameMap(Set<Long> supplierIds) {
+        Set<Long> effectiveIds = supplierIds == null
+            ? Set.of()
+            : supplierIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (effectiveIds.isEmpty()) {
+            return Map.of();
         }
-        if (STATUS_RED_FLUSHED.equals(payable.getStatus())) {
-            throw new IllegalArgumentException("红冲应付单不可付款");
+        return erpSupplierMapper.selectBatchIds(effectiveIds).stream()
+            .collect(Collectors.toMap(ErpSupplier::getId, ErpSupplier::getName, (a, b) -> a));
+    }
+
+    private Map<Long, ErpPurchaseOrder> loadPurchaseOrderMap(Long tenantId, Set<Long> purchaseOrderIds) {
+        Set<Long> effectiveIds = purchaseOrderIds == null
+            ? Set.of()
+            : purchaseOrderIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (effectiveIds.isEmpty()) {
+            return Map.of();
         }
-        BigDecimal unpaid = payable.getUnpaidAmount() == null ? BigDecimal.ZERO : payable.getUnpaidAmount();
-        if (!isAllocationWithinUnpaid(payable, delta, unpaid)) {
-            throw new IllegalArgumentException("付款金额不能大于未付金额");
+        return erpPurchaseOrderMapper.selectList(new QueryWrapper<ErpPurchaseOrder>()
+                .eq("tenant_id", tenantId)
+                .in("id", effectiveIds))
+            .stream()
+            .collect(Collectors.toMap(ErpPurchaseOrder::getId, item -> item, (a, b) -> a));
+    }
+
+    private Map<Long, ErpAccountsPayable> loadPayableMap(Long tenantId, Collection<Long> payableIds) {
+        Set<Long> effectiveIds = payableIds == null
+            ? Set.of()
+            : payableIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (effectiveIds.isEmpty()) {
+            return Map.of();
         }
+        return erpAccountsPayableMapper.selectList(new QueryWrapper<ErpAccountsPayable>()
+                .eq("tenant_id", tenantId)
+                .in("id", effectiveIds))
+            .stream()
+            .collect(Collectors.toMap(ErpAccountsPayable::getId, item -> item, (a, b) -> a));
+    }
+
+    private Set<Long> singletonIdSet(Long id) {
+        return id == null ? Set.of() : Set.of(id);
     }
 
     private BigDecimal resolvePaymentTotal(BigDecimal amount, BigDecimal discountAmount) {

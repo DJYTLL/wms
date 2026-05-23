@@ -1089,8 +1089,8 @@ const fetchSuppliers = async () => {
 
 const fetchProducts = async () => {
   try {
-    const products = await getCachedProductOptions<any>(tenantCacheKey.value);
-    productOptions.value = (products || []).map((product: any) => ({
+    const products = await getCachedProductOptions(tenantCacheKey.value);
+    productOptions.value = (products || []).map((product) => ({
       id: product.id,
       name: product.name,
       defaultWarehouseId: product.defaultWarehouseId,

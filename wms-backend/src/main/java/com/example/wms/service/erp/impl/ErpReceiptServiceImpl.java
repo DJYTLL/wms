@@ -39,7 +39,9 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -169,11 +171,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         if (receivable == null) {
             throw new IllegalArgumentException("应收单不存在");
         }
-        String customerName = "";
-        if (receivable.getCustomerId() != null) {
-            ErpCustomer customer = erpCustomerMapper.selectById(receivable.getCustomerId());
-            customerName = customer == null ? "" : customer.getName();
-        }
+        String customerName = loadCustomerNameMap(singletonIdSet(receivable.getCustomerId())).getOrDefault(receivable.getCustomerId(), "");
         return new ErpReceiptSourceReceivableDetail(
             receivable.getId(),
             receivable.getOrderNo(),
@@ -725,22 +723,11 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
     }
 
     private ErpReceiptDetail buildDetail(Long tenantId, ErpReceipt receipt) {
-        String customerName = "-";
-        if (receipt.getCustomerId() != null) {
-            ErpCustomer customer = erpCustomerMapper.selectById(receipt.getCustomerId());
-            if (customer != null) {
-                customerName = customer.getName();
-            }
-        }
-        String orderNo = null;
-        if (receipt.getSaleOrderId() != null) {
-            ErpSaleOrder order = erpSaleOrderMapper.selectOne(new QueryWrapper<ErpSaleOrder>()
-                .eq("tenant_id", tenantId)
-                .eq("id", receipt.getSaleOrderId()));
-            if (order != null) {
-                orderNo = order.getOrderNo();
-            }
-        }
+        Map<Long, String> customerNameMap = loadCustomerNameMap(singletonIdSet(receipt.getCustomerId()));
+        String customerName = customerNameMap.getOrDefault(receipt.getCustomerId(), "-");
+        Map<Long, ErpSaleOrder> saleOrderMap = loadSaleOrderMap(tenantId, singletonIdSet(receipt.getSaleOrderId()));
+        ErpSaleOrder order = saleOrderMap.get(receipt.getSaleOrderId());
+        String orderNo = order == null ? null : order.getOrderNo();
         List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceiptId(tenantId, receipt.getId());
         List<ErpAccountsReceivable> receivables = loadReceivables(tenantId, receipt, allocations);
         List<ErpReceiptReceivableView> receivableViews = buildReceivableViews(receivables, allocations);
@@ -765,9 +752,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         if (ids.isEmpty()) {
             return List.of();
         }
-        return erpAccountsReceivableMapper.selectList(new QueryWrapper<ErpAccountsReceivable>()
-            .eq("tenant_id", tenantId)
-            .in("id", ids));
+        return new ArrayList<>(loadReceivableMap(tenantId, ids).values());
     }
 
     private List<ErpReceiptReceivableView> buildReceivableViews(List<ErpAccountsReceivable> receivables,
@@ -846,16 +831,22 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         validateCashSettlementMethod(tenantId, receipt.getSettlementMethod());
         List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceiptId(tenantId, receipt.getId());
         if (allocations != null && !allocations.isEmpty()) {
+            Map<Long, BigDecimal> receivableDeltas = new LinkedHashMap<>();
             for (ErpReceiptReceivable allocation : allocations) {
-                ensureReceivableCapacity(tenantId, allocation.getReceivableId(), allocation.getAllocatedTotal());
+                if (allocation == null) {
+                    continue;
+                }
+                Long receivableId = allocation.getReceivableId();
+                BigDecimal delta = allocation.getAllocatedTotal();
+                validateReceivableDelta(receivableId, delta);
+                receivableDeltas.merge(receivableId, delta, BigDecimal::add);
             }
+            ensureReceivableCapacities(tenantId, receivableDeltas);
             return;
         }
-        ensureReceivableCapacity(
-            tenantId,
-            receipt.getReceivableId(),
-            resolveReceiptTotal(receipt.getAmount(), receipt.getDiscountAmount())
-        );
+        Map<Long, BigDecimal> receivableDeltas = new LinkedHashMap<>();
+        receivableDeltas.put(receipt.getReceivableId(), resolveReceiptTotal(receipt.getAmount(), receipt.getDiscountAmount()));
+        ensureReceivableCapacities(tenantId, receivableDeltas);
     }
 
     private void validateCashSettlementMethod(Long tenantId, String settlementMethodCode) {
@@ -872,25 +863,85 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
     }
 
     private void ensureReceivableCapacity(Long tenantId, Long receivableId, BigDecimal delta) {
+        Map<Long, BigDecimal> receivableDeltas = new LinkedHashMap<>();
+        receivableDeltas.put(receivableId, delta);
+        ensureReceivableCapacities(tenantId, receivableDeltas);
+    }
+
+    private void ensureReceivableCapacities(Long tenantId, Map<Long, BigDecimal> receivableDeltas) {
+        if (receivableDeltas == null || receivableDeltas.isEmpty()) {
+            throw new IllegalArgumentException("应收单不存在");
+        }
+        for (Map.Entry<Long, BigDecimal> entry : receivableDeltas.entrySet()) {
+            validateReceivableDelta(entry.getKey(), entry.getValue());
+        }
+        Map<Long, ErpAccountsReceivable> receivableMap = loadReceivableMap(tenantId, receivableDeltas.keySet());
+        for (Map.Entry<Long, BigDecimal> entry : receivableDeltas.entrySet()) {
+            ErpAccountsReceivable receivable = receivableMap.get(entry.getKey());
+            if (receivable == null) {
+                throw new IllegalArgumentException("应收单不存在");
+            }
+            if (STATUS_RED_FLUSHED.equals(receivable.getStatus())) {
+                throw new IllegalArgumentException("红冲应收单不可收款");
+            }
+            BigDecimal unpaid = receivable.getUnpaidAmount() == null ? BigDecimal.ZERO : receivable.getUnpaidAmount();
+            BigDecimal delta = entry.getValue();
+            if (unpaid.compareTo(BigDecimal.ZERO) == 0 || delta.signum() != unpaid.signum() || delta.abs().compareTo(unpaid.abs()) > 0) {
+                throw new IllegalArgumentException("收款金额不能大于未收金额");
+            }
+        }
+    }
+
+    private void validateReceivableDelta(Long receivableId, BigDecimal delta) {
         if (receivableId == null) {
             throw new IllegalArgumentException("应收单不存在");
         }
         if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
             throw new IllegalArgumentException("收款金额或优惠金额必须大于0");
         }
-        ErpAccountsReceivable receivable = erpAccountsReceivableMapper.selectOne(new QueryWrapper<ErpAccountsReceivable>()
-            .eq("tenant_id", tenantId)
-            .eq("id", receivableId));
-        if (receivable == null) {
-            throw new IllegalArgumentException("应收单不存在");
+    }
+
+    private Map<Long, String> loadCustomerNameMap(Set<Long> customerIds) {
+        Set<Long> effectiveIds = customerIds == null
+            ? Set.of()
+            : customerIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (effectiveIds.isEmpty()) {
+            return Map.of();
         }
-        if (STATUS_RED_FLUSHED.equals(receivable.getStatus())) {
-            throw new IllegalArgumentException("红冲应收单不可收款");
+        return erpCustomerMapper.selectBatchIds(effectiveIds).stream()
+            .collect(Collectors.toMap(ErpCustomer::getId, ErpCustomer::getName, (a, b) -> a));
+    }
+
+    private Set<Long> singletonIdSet(Long id) {
+        return id == null ? Set.of() : Set.of(id);
+    }
+
+    private Map<Long, ErpSaleOrder> loadSaleOrderMap(Long tenantId, Set<Long> saleOrderIds) {
+        Set<Long> effectiveIds = saleOrderIds == null
+            ? Set.of()
+            : saleOrderIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (effectiveIds.isEmpty()) {
+            return Map.of();
         }
-        BigDecimal unpaid = receivable.getUnpaidAmount() == null ? BigDecimal.ZERO : receivable.getUnpaidAmount();
-        if (unpaid.compareTo(BigDecimal.ZERO) == 0 || delta.signum() != unpaid.signum() || delta.abs().compareTo(unpaid.abs()) > 0) {
-            throw new IllegalArgumentException("收款金额不能大于未收金额");
+        return erpSaleOrderMapper.selectList(new QueryWrapper<ErpSaleOrder>()
+                .eq("tenant_id", tenantId)
+                .in("id", effectiveIds))
+            .stream()
+            .collect(Collectors.toMap(ErpSaleOrder::getId, item -> item, (a, b) -> a));
+    }
+
+    private Map<Long, ErpAccountsReceivable> loadReceivableMap(Long tenantId, Collection<Long> receivableIds) {
+        Set<Long> effectiveIds = receivableIds == null
+            ? Set.of()
+            : receivableIds.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        if (effectiveIds.isEmpty()) {
+            return Map.of();
         }
+        return erpAccountsReceivableMapper.selectList(new QueryWrapper<ErpAccountsReceivable>()
+                .eq("tenant_id", tenantId)
+                .in("id", effectiveIds))
+            .stream()
+            .collect(Collectors.toMap(ErpAccountsReceivable::getId, item -> item, (a, b) -> a));
     }
 
     private BigDecimal resolveReceiptTotal(BigDecimal amount, BigDecimal discountAmount) {

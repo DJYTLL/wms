@@ -1,6 +1,8 @@
 package com.example.wms.security;
 
 import com.example.wms.audit.RequestAuditContext;
+import com.example.wms.dto.AuthPayload;
+import com.example.wms.dto.UserClaim;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -9,6 +11,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -18,6 +22,10 @@ import com.example.wms.service.UserAccountService;
 import com.example.wms.tenant.TenantContext;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 // 每次请求解析 JWT 并写入安全上下文
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -84,7 +92,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             return;
                         }
 
-                        UserDetails userDetails = userAccountService.loadUserByUsername(username);
+                        UserDetails userDetails = buildUserDetailsFromClaims(claims, username);
+                        if (userDetails == null) {
+                            userDetails = userAccountService.loadUserByUsername(username);
+                        }
                         if (authTenantId != null
                             && targetTenantId != null
                             && !authTenantId.equals(targetTenantId)
@@ -128,5 +139,67 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 TenantContext.clear();
             }
         }
+    }
+
+    private UserDetails buildUserDetailsFromClaims(Claims claims, String username) {
+        Number userIdValue = claims.get("uid", Number.class);
+        Object userClaimValue = claims.get("user");
+        Object permissionsValue = claims.get("perms");
+        if (!(userClaimValue instanceof Map<?, ?> userMap) || !(permissionsValue instanceof Collection<?> permissions)) {
+            return null;
+        }
+        List<String> roles = readStringList(userMap.get("roles"));
+        if (roles.isEmpty()) {
+            return null;
+        }
+        Collection<GrantedAuthority> authorities = new ArrayList<>();
+        for (String role : roles) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+        }
+        for (String permission : readStringList(permissions)) {
+            authorities.add(new SimpleGrantedAuthority("PERM_" + permission));
+        }
+        UserClaim userClaim = new UserClaim(
+            userIdValue == null ? null : userIdValue.longValue(),
+            resolveString(userMap.get("username"), username),
+            resolveString(userMap.get("role"), null),
+            resolveString(userMap.get("avatar"), null),
+            roles
+        );
+        AuthPayload authPayload = new AuthPayload(
+            userClaim,
+            readStringList(permissions),
+            readLong(claims.get("av")),
+            readNullableLong(claims.get("tid")),
+            claims.get("tcode", String.class),
+            readNullableLong(claims.get("utid")),
+            claims.get("utcode", String.class)
+        );
+        return AuthenticatedUser.fromToken(userClaim.id(), userClaim.username(), authPayload, authorities);
+    }
+
+    private long readLong(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
+    }
+
+    private Long readNullableLong(Object value) {
+        return value instanceof Number number ? number.longValue() : null;
+    }
+
+    private String resolveString(Object value, String fallback) {
+        return value instanceof String text && StringUtils.hasText(text) ? text : fallback;
+    }
+
+    private List<String> readStringList(Object value) {
+        if (!(value instanceof Collection<?> items)) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (Object item : items) {
+            if (item instanceof String text && StringUtils.hasText(text)) {
+                result.add(text);
+            }
+        }
+        return result;
     }
 }
