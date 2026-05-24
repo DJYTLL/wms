@@ -124,6 +124,12 @@ public class ErpReceiptController {
         return ResponseEntity.ok(ApiResponse.ok(erpReceiptService.approve(id)));
     }
 
+    @PostMapping("/{id}/restore-system-default")
+    @PreAuthorize("hasAuthority('PERM_erp-receipt:add')")
+    public ResponseEntity<ApiResponse<ErpReceiptDetail>> restoreSystemDefault(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpReceiptService.restoreSystemDefault(id)));
+    }
+
     @PostMapping("/{id}/red-flush")
     @PreAuthorize("hasAuthority('PERM_erp-receipt:red-flush')")
     public ResponseEntity<ApiResponse<ErpReceiptDetail>> redFlush(@PathVariable Long id,

@@ -48,8 +48,11 @@ import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
+import com.example.wms.service.TenantSettingService;
 import com.example.wms.service.erp.ErpSaleReturnService;
 import com.example.wms.service.erp.support.ErpCostService;
+import com.example.wms.service.erp.support.FinanceAutoFlowMode;
+import com.example.wms.service.erp.support.FinanceAutoFlowSupport;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -112,6 +115,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
     private final ErpSaleOrderMapper erpSaleOrderMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final ErpCostService erpCostService;
+    private final TenantSettingService tenantSettingService;
 
     public ErpSaleReturnServiceImpl(ErpSaleReturnMapper erpSaleReturnMapper,
                                     ErpSaleReturnItemMapper erpSaleReturnItemMapper,
@@ -130,7 +134,8 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
                                     ErpSaleOrderItemMapper erpSaleOrderItemMapper,
                                     ErpSaleOrderMapper erpSaleOrderMapper,
                                     SystemConfigMapper systemConfigMapper,
-                                    ErpCostService erpCostService) {
+                                    ErpCostService erpCostService,
+                                    TenantSettingService tenantSettingService) {
         this.erpSaleReturnMapper = erpSaleReturnMapper;
         this.erpSaleReturnItemMapper = erpSaleReturnItemMapper;
         this.erpProductMapper = erpProductMapper;
@@ -149,6 +154,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         this.erpSaleOrderMapper = erpSaleOrderMapper;
         this.systemConfigMapper = systemConfigMapper;
         this.erpCostService = erpCostService;
+        this.tenantSettingService = tenantSettingService;
     }
 
     @Override
@@ -1758,30 +1764,36 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return;
         }
+        FinanceAutoFlowMode mode = tenantSettingService.getFinanceAutoFlowMode();
         BigDecimal negative = amount.negate();
         BigDecimal refundAmount = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
         BigDecimal discountAmount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
         BigDecimal applied = refundAmount.add(discountAmount);
         BigDecimal negativeApplied = applied.negate();
-        BigDecimal unpaid = negative.subtract(negativeApplied);
+        boolean autoReceiptApproved = FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT == mode;
+        BigDecimal receivablePaid = autoReceiptApproved ? negativeApplied : BigDecimal.ZERO;
+        BigDecimal unpaid = negative.subtract(receivablePaid);
         ErpAccountsReceivable ar = new ErpAccountsReceivable();
         ar.setTenantId(tenantId);
         ar.setSaleOrderId(order.getSaleOrderId());
         ar.setOrderNo(generateReceivableNo(tenantId));
         ar.setCustomerId(order.getCustomerId());
         ar.setTotalAmount(negative);
-        ar.setPaidAmount(negativeApplied);
+        ar.setPaidAmount(receivablePaid);
         ar.setUnpaidAmount(unpaid);
         ar.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
         ar.setSettlementMethod(order.getSettlementMethod());
         ar.setSourceType(SOURCE_SALE_RETURN);
         ar.setSourceId(order.getId());
+        FinanceAutoFlowSupport.markReceivable(ar, FinanceAutoFlowSupport.SOURCE_SALE_RETURN, order.getId(), mode);
         ar.setRemark("销售退货单号:" + order.getOrderNo());
         ar.setCreatedAt(Instant.now());
         ar.setUpdatedAt(Instant.now());
         erpAccountsReceivableMapper.insert(ar);
 
-        if (applied.compareTo(BigDecimal.ZERO) > 0 && REFUND_ACTION_REFUND.equals(order.getRefundAction())) {
+        if (FinanceAutoFlowSupport.shouldGeneratePaymentDocument(mode)
+            && applied.compareTo(BigDecimal.ZERO) > 0
+            && REFUND_ACTION_REFUND.equals(order.getRefundAction())) {
             ErpReceipt receipt = new ErpReceipt();
             receipt.setTenantId(tenantId);
             receipt.setReceivableId(ar.getId());
@@ -1792,8 +1804,9 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
             receipt.setDiscountAmount(discountAmount.negate());
             receipt.setSettlementMethod(order.getSettlementMethod());
             receipt.setReceiptMethodCode(order.getReceiptMethodCode());
-            receipt.setStatus(STATUS_APPROVED);
-            receipt.setReceivedAt(Instant.now());
+            receipt.setStatus(FinanceAutoFlowSupport.paymentDocumentStatus(mode));
+            receipt.setReceivedAt(autoReceiptApproved ? Instant.now() : null);
+            FinanceAutoFlowSupport.markReceipt(receipt, FinanceAutoFlowSupport.SOURCE_SALE_RETURN, order.getId(), mode);
             receipt.setRemark("销售退货单审核自动退款/优惠:" + order.getOrderNo());
             receipt.setCreatedAt(Instant.now());
             receipt.setCreatedBy(operator);

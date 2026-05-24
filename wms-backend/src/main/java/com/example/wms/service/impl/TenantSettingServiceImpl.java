@@ -8,6 +8,7 @@ import com.example.wms.dto.TenantDisplaySettingsResponse;
 import com.example.wms.dto.TenantDisplaySettingsUpdateRequest;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.mapper.SystemConfigMapper;
+import com.example.wms.service.erp.support.FinanceAutoFlowMode;
 import com.example.wms.service.TenantSettingService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import java.util.Set;
 @Service
 public class TenantSettingServiceImpl implements TenantSettingService {
     public static final String DEFAULT_PAGE_SIZE_KEY = "default.page.size";
+    public static final String FINANCE_AUTO_FLOW_MODE_KEY = "erp.finance.auto-flow.mode";
     public static final int FALLBACK_PAGE_SIZE = 20;
     private static final int MIN_PAGE_SIZE = 5;
     private static final int MAX_PAGE_SIZE = 200;
@@ -119,7 +121,8 @@ public class TenantSettingServiceImpl implements TenantSettingService {
         definition("erp.order.no.stock-count.prefix", "库存调整前缀", "string", "SC", "库存调整单号前缀"),
         definition("erp.order.no.stock-init.prefix", "初始库存前缀", "string", "SI", "初始库存单号前缀"),
         definition("erp.order.no.stock-transfer.prefix", "库存移库前缀", "string", "ST", "库存移库单号前缀"),
-        definition("erp.order.no.assembly.prefix", "组装单前缀", "string", "AO", "组装单号前缀")
+        definition("erp.order.no.assembly.prefix", "组装单前缀", "string", "AO", "组装单号前缀"),
+        definition(FINANCE_AUTO_FLOW_MODE_KEY, "审核后财务联动模式", "string", "AR_AP_WITH_APPROVED_PAYMENT", "审核后自动生成往来和收付款的全局模式")
     );
 
     private final SystemConfigMapper systemConfigMapper;
@@ -201,6 +204,21 @@ public class TenantSettingServiceImpl implements TenantSettingService {
             upsertTenantConfig(tenantId, definition, sanitized);
         });
         return getBusinessSettings();
+    }
+
+    @Override
+    public FinanceAutoFlowMode getFinanceAutoFlowMode() {
+        Long tenantId = TenantContext.requireTenantId();
+        SystemConfig config = systemConfigMapper.findByKey(tenantId, FINANCE_AUTO_FLOW_MODE_KEY);
+        String rawValue = config == null ? null : config.getConfigValue();
+        if (rawValue == null || rawValue.isBlank()) {
+            return FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT;
+        }
+        try {
+            return FinanceAutoFlowMode.fromValue(rawValue);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException(FINANCE_AUTO_FLOW_MODE_KEY + " 配置值无效: " + rawValue, ex);
+        }
     }
 
     public static Integer sanitizePageSize(Integer value) {
@@ -294,6 +312,13 @@ public class TenantSettingServiceImpl implements TenantSettingService {
                 throw new IllegalArgumentException(definition.label() + "必须使用受支持的日期格式");
             }
             return trimmed;
+        }
+        if (FINANCE_AUTO_FLOW_MODE_KEY.equals(definition.key())) {
+            try {
+                return FinanceAutoFlowMode.fromValue(trimmed).name();
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException(definition.label() + "必须为受支持的联动模式");
+            }
         }
         if (definition.key().endsWith(".prefix")) {
             if (!trimmed.matches("^[A-Za-z0-9_-]+$")) {

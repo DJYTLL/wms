@@ -42,8 +42,11 @@ import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
+import com.example.wms.service.TenantSettingService;
 import com.example.wms.service.erp.ErpPurchaseReturnService;
 import com.example.wms.service.erp.support.ErpCostService;
+import com.example.wms.service.erp.support.FinanceAutoFlowMode;
+import com.example.wms.service.erp.support.FinanceAutoFlowSupport;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -102,6 +105,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
     private final ErpSupplierMapper erpSupplierMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final ErpCostService erpCostService;
+    private final TenantSettingService tenantSettingService;
 
     public ErpPurchaseReturnServiceImpl(ErpPurchaseReturnMapper erpPurchaseReturnMapper,
                                         ErpPurchaseReturnItemMapper erpPurchaseReturnItemMapper,
@@ -118,7 +122,8 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                                         ErpSettlementMethodMapper erpSettlementMethodMapper,
                                         ErpSupplierMapper erpSupplierMapper,
                                         SystemConfigMapper systemConfigMapper,
-                                        ErpCostService erpCostService) {
+                                        ErpCostService erpCostService,
+                                        TenantSettingService tenantSettingService) {
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
         this.erpPurchaseReturnItemMapper = erpPurchaseReturnItemMapper;
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
@@ -135,6 +140,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         this.erpSupplierMapper = erpSupplierMapper;
         this.systemConfigMapper = systemConfigMapper;
         this.erpCostService = erpCostService;
+        this.tenantSettingService = tenantSettingService;
     }
 
     @Override
@@ -1473,12 +1479,15 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             return;
         }
         BigDecimal negative = amount.negate();
+        FinanceAutoFlowMode mode = tenantSettingService.getFinanceAutoFlowMode();
         BigDecimal refundAmount = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
         BigDecimal discountAmount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
         BigDecimal applied = refundAmount.add(discountAmount);
         BigDecimal negativeApplied = applied.negate();
-        BigDecimal paidCash = refundAmount.negate();
-        BigDecimal discount = discountAmount.negate();
+        boolean refundAction = REFUND_ACTION_REFUND.equals(order.getRefundAction());
+        boolean applyImmediately = !refundAction || FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT == mode;
+        BigDecimal paidCash = applyImmediately ? refundAmount.negate() : BigDecimal.ZERO;
+        BigDecimal discount = applyImmediately ? discountAmount.negate() : BigDecimal.ZERO;
         BigDecimal unpaid = negative.subtract(paidCash.add(discount));
         ErpAccountsPayable payable = erpAccountsPayableMapper.findByPurchaseReturnId(tenantId, order.getId());
         if (payable == null) {
@@ -1493,6 +1502,7 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             payable.setUnpaidAmount(unpaid);
             payable.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
             payable.setSettlementMethod(order.getSettlementMethod());
+            FinanceAutoFlowSupport.markPayable(payable, FinanceAutoFlowSupport.SOURCE_PURCHASE_RETURN, order.getId(), mode);
             payable.setRemark("采购退货单号:" + order.getOrderNo());
             payable.setCreatedAt(Instant.now());
             payable.setUpdatedAt(Instant.now());
@@ -1504,13 +1514,14 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
             payable.setUnpaidAmount(unpaid);
             payable.setStatus(unpaid.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
             payable.setSettlementMethod(order.getSettlementMethod());
+            FinanceAutoFlowSupport.markPayable(payable, FinanceAutoFlowSupport.SOURCE_PURCHASE_RETURN, order.getId(), mode);
             if (payable.getOrderNo() == null || payable.getOrderNo().isBlank()) {
                 payable.setOrderNo(generatePayableNo(tenantId));
             }
             payable.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.updateById(payable);
         }
-        createAutoReturnPayment(tenantId, order, payable, refundAmount, discountAmount, negativeApplied, operator);
+        createAutoReturnPayment(tenantId, order, payable, refundAmount, discountAmount, negativeApplied, operator, mode);
     }
 
     private void createAutoReturnPayment(Long tenantId,
@@ -1519,8 +1530,11 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
                                          BigDecimal refundAmount,
                                          BigDecimal discountAmount,
                                          BigDecimal negativeApplied,
-                                         String operator) {
-        if (negativeApplied.compareTo(BigDecimal.ZERO) == 0 || !REFUND_ACTION_REFUND.equals(order.getRefundAction())) {
+                                         String operator,
+                                         FinanceAutoFlowMode mode) {
+        if (!FinanceAutoFlowSupport.shouldGeneratePaymentDocument(mode)
+            || negativeApplied.compareTo(BigDecimal.ZERO) == 0
+            || !REFUND_ACTION_REFUND.equals(order.getRefundAction())) {
             return;
         }
         ErpPayment payment = new ErpPayment();
@@ -1533,8 +1547,9 @@ public class ErpPurchaseReturnServiceImpl implements ErpPurchaseReturnService {
         payment.setDiscountAmount(discountAmount.negate());
         payment.setSettlementMethod(order.getSettlementMethod());
         payment.setPaymentMethodCode(order.getPaymentMethodCode());
-        payment.setStatus(STATUS_APPROVED);
-        payment.setPaidAt(Instant.now());
+        payment.setStatus(FinanceAutoFlowSupport.paymentDocumentStatus(mode));
+        payment.setPaidAt(mode == FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT ? Instant.now() : null);
+        FinanceAutoFlowSupport.markPayment(payment, FinanceAutoFlowSupport.SOURCE_PURCHASE_RETURN, order.getId(), mode);
         payment.setRemark(AUTO_RETURN_PAYMENT_REMARK + ":" + order.getOrderNo());
         payment.setCreatedAt(Instant.now());
         payment.setCreatedBy(operator);

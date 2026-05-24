@@ -30,5 +30,7 @@ public interface ErpReceiptService {
 
     ErpReceiptDetail approve(Long id);
 
+    ErpReceiptDetail restoreSystemDefault(Long id);
+
     ErpReceiptDetail redFlush(Long id, String reason);
 }

@@ -30,5 +30,7 @@ public interface ErpPaymentService {
 
     ErpPaymentDetail approve(Long id);
 
+    ErpPaymentDetail restoreSystemDefault(Long id);
+
     ErpPaymentDetail redFlush(Long id, String reason);
 }

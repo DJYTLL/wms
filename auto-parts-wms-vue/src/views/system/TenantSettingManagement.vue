@@ -78,6 +78,18 @@
                       :placeholder="item.defaultValue"
                     />
                     <el-select
+                      v-else-if="isFinanceAutoFlowModeRule(item)"
+                      v-model="item.value"
+                      class="tenant-setting-card__input"
+                    >
+                      <el-option
+                        v-for="option in financeAutoFlowModeOptions"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                    <el-select
                       v-else-if="isDateFormatRule(item)"
                       v-model="item.value"
                       class="tenant-setting-card__input"
@@ -236,6 +248,11 @@ const displayPageSizeInput = ref('20')
 const codeRules = ref<TenantBusinessSettingItem[]>([])
 const orderRules = ref<TenantBusinessSettingItem[]>([])
 const dateFormatOptions = ['yyyyMMdd', 'yyMMdd', 'yyyyMM', 'yyyy-MM-dd', 'yyyyMMddHHmmss']
+const financeAutoFlowModeOptions = [
+  { label: '仅生成应收/应付', value: 'AR_AP_ONLY' },
+  { label: '生成应收/应付 + 草稿收付款', value: 'AR_AP_WITH_DRAFT_PAYMENT' },
+  { label: '生成应收/应付 + 自动审核收付款', value: 'AR_AP_WITH_APPROVED_PAYMENT' }
+]
 
 const { t } = useI18n()
 const { notifyError, notifySuccess, notifyWarning } = useApiError()
@@ -310,6 +327,9 @@ const resolveCodeRuleGroupTitle = (item: TenantBusinessSettingItem) => {
 }
 
 const resolveOrderRuleGroupTitle = (item: TenantBusinessSettingItem) => {
+  if (item.key === 'erp.finance.auto-flow.mode') {
+    return '财务联动'
+  }
   if (item.key === 'erp.order.no.date-format' || item.key === 'erp.order.no.seq-length') {
     return ORDER_RULE_GROUP_TITLES.common ?? '通用规则'
   }
@@ -327,6 +347,7 @@ const groupedOrderRules = computed(() => buildGroups(orderRules.value, resolveOr
 const isPrefixRule = (item: TenantBusinessSettingItem) => item.key.endsWith('.prefix')
 const isDateFormatRule = (item: TenantBusinessSettingItem) => item.key.endsWith('.date-format')
 const isSequenceRule = (item: TenantBusinessSettingItem) => item.key.endsWith('.seq-length')
+const isFinanceAutoFlowModeRule = (item: TenantBusinessSettingItem) => item.key === 'erp.finance.auto-flow.mode'
 
 const resolveSettingHint = (item: TenantBusinessSettingItem) => {
   if (isPrefixRule(item)) {
@@ -337,6 +358,9 @@ const resolveSettingHint = (item: TenantBusinessSettingItem) => {
   }
   if (isSequenceRule(item)) {
     return '序列长度建议控制在 1 到 8 位之间。'
+  }
+  if (isFinanceAutoFlowModeRule(item)) {
+    return '控制四类单据审核后是否自动生成草稿或已审核的收付款单。'
   }
   return item.description
 }
@@ -350,6 +374,9 @@ const resolveSettingExample = (item: TenantBusinessSettingItem) => {
   }
   if (isSequenceRule(item)) {
     return `默认：${item.defaultValue || '4'} 位`
+  }
+  if (isFinanceAutoFlowModeRule(item)) {
+    return '默认：生成应收/应付 + 自动审核收付款'
   }
   return `默认值：${item.defaultValue || '-'}`
 }
@@ -430,6 +457,14 @@ const saveBusiness = async (scope: 'codeRules' | 'orderRules') => {
   const invalidDateFormatItem = targetItems.find((item) => isDateFormatRule(item) && !dateFormatOptions.includes((item.value || '').trim()))
   if (invalidDateFormatItem) {
     notifyWarning(`${invalidDateFormatItem.label}必须使用受支持的日期格式`)
+    return
+  }
+  const invalidFinanceAutoFlowModeItem = targetItems.find((item) => (
+    isFinanceAutoFlowModeRule(item)
+    && !financeAutoFlowModeOptions.some((option) => option.value === (item.value || '').trim())
+  ))
+  if (invalidFinanceAutoFlowModeItem) {
+    notifyWarning(`${invalidFinanceAutoFlowModeItem.label}必须选择受支持的联动模式`)
     return
   }
   savingBusiness.value = true

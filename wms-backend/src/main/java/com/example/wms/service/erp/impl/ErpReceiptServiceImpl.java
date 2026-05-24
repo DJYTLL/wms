@@ -27,6 +27,7 @@ import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.security.CurrentActor;
 import com.example.wms.service.erp.ErpReceiptService;
+import com.example.wms.service.erp.support.FinanceAutoFlowSupport;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -476,6 +477,7 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
         receipt.setReceiptMethodCode(request.receiptMethodCode());
         receipt.setReceivedAt(parseReceivedAt(request.receivedAt()));
         receipt.setRemark(request.remark());
+        FinanceAutoFlowSupport.markReceiptManualTakeover(receipt);
         receipt.setUpdatedAt(Instant.now());
         receipt.setUpdatedBy(CurrentActor.username());
         erpReceiptMapper.updateById(receipt);
@@ -629,6 +631,11 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
             throw new IllegalArgumentException("收款单状态已变化，请刷新重试");
         }
         receipt = approvedReceipt;
+        if (receipt.getReceivedAt() == null) {
+            receipt.setReceivedAt(Instant.now());
+        }
+        FinanceAutoFlowSupport.markReceiptManualTakeover(receipt);
+        erpReceiptMapper.updateById(receipt);
 
         List<ErpReceiptReceivable> allocations = erpReceiptReceivableMapper.findByReceiptId(tenantId, receipt.getId());
         if (allocations != null && !allocations.isEmpty()) {
@@ -640,6 +647,24 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
                 .add(receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount());
             applyReceivablePaidAmount(tenantId, receipt.getReceivableId(), totalDelta);
         }
+        return buildDetail(tenantId, receipt);
+    }
+
+    @Override
+    @Transactional
+    public ErpReceiptDetail restoreSystemDefault(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpReceipt receipt = loadReceipt(tenantId, id);
+        if (!Boolean.TRUE.equals(receipt.getAutoFlowGenerated())) {
+            throw new IllegalArgumentException("仅系统自动生成的收款单支持恢复系统默认");
+        }
+        if (!STATUS_DRAFT.equals(receipt.getStatus())) {
+            throw new IllegalArgumentException("仅自动生成的草稿收款单可直接恢复系统默认，已审核收款单请先红冲");
+        }
+        receipt.setAutoFlowManagedState(FinanceAutoFlowSupport.MANAGED_BY_SYSTEM);
+        receipt.setUpdatedAt(Instant.now());
+        receipt.setUpdatedBy(CurrentActor.username());
+        erpReceiptMapper.updateById(receipt);
         return buildDetail(tenantId, receipt);
     }
 
@@ -668,6 +693,8 @@ public class ErpReceiptServiceImpl implements ErpReceiptService {
             throw new IllegalArgumentException("收款单状态已变化，请刷新重试");
         }
         receipt = redFlushedReceipt;
+        receipt.setAutoFlowManagedState(FinanceAutoFlowSupport.RED_FLUSHED);
+        erpReceiptMapper.updateById(receipt);
 
         ErpReceipt redReceipt = new ErpReceipt();
         redReceipt.setTenantId(tenantId);

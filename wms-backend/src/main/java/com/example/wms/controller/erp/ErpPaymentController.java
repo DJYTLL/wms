@@ -124,6 +124,12 @@ public class ErpPaymentController {
         return ResponseEntity.ok(ApiResponse.ok(erpPaymentService.approve(id)));
     }
 
+    @PostMapping("/{id}/restore-system-default")
+    @PreAuthorize("hasAuthority('PERM_erp-payment:add')")
+    public ResponseEntity<ApiResponse<ErpPaymentDetail>> restoreSystemDefault(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(erpPaymentService.restoreSystemDefault(id)));
+    }
+
     @PostMapping("/{id}/red-flush")
     @PreAuthorize("hasAuthority('PERM_erp-payment:red-flush')")
     public ResponseEntity<ApiResponse<ErpPaymentDetail>> redFlush(@PathVariable Long id,

@@ -37,8 +37,11 @@ import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
+import com.example.wms.service.TenantSettingService;
 import com.example.wms.service.erp.ErpPurchaseOrderService;
 import com.example.wms.service.erp.support.ErpCostService;
+import com.example.wms.service.erp.support.FinanceAutoFlowMode;
+import com.example.wms.service.erp.support.FinanceAutoFlowSupport;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -88,6 +91,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     private final ErpSettlementMethodMapper erpSettlementMethodMapper;
     private final ErpSupplierMapper erpSupplierMapper;
     private final ErpCostService erpCostService;
+    private final TenantSettingService tenantSettingService;
 
     public ErpPurchaseOrderServiceImpl(ErpPurchaseOrderMapper erpPurchaseOrderMapper,
                                        ErpPurchaseOrderItemMapper erpPurchaseOrderItemMapper,
@@ -103,7 +107,8 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                                        ErpPurchaseReturnMapper erpPurchaseReturnMapper,
                                        ErpSettlementMethodMapper erpSettlementMethodMapper,
                                        ErpSupplierMapper erpSupplierMapper,
-                                       ErpCostService erpCostService) {
+                                       ErpCostService erpCostService,
+                                       TenantSettingService tenantSettingService) {
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
         this.erpPurchaseOrderItemMapper = erpPurchaseOrderItemMapper;
         this.erpProductMapper = erpProductMapper;
@@ -119,6 +124,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         this.erpSettlementMethodMapper = erpSettlementMethodMapper;
         this.erpSupplierMapper = erpSupplierMapper;
         this.erpCostService = erpCostService;
+        this.tenantSettingService = tenantSettingService;
     }
 
     @Override
@@ -802,6 +808,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
     }
 
     private void ensurePayableAndPayment(Long tenantId, ErpPurchaseOrder order, String operator) {
+        FinanceAutoFlowMode mode = tenantSettingService.getFinanceAutoFlowMode();
         BigDecimal total = resolvePayableTotal(order);
         BigDecimal discount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
         BigDecimal paidCash = order.getPaidAmount() == null ? BigDecimal.ZERO : order.getPaidAmount();
@@ -838,6 +845,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             payable.setUnpaidAmount(payableAmount);
             payable.setStatus(STATUS_OPEN);
             payable.setSettlementMethod(order.getSettlementMethod());
+            FinanceAutoFlowSupport.markPayable(payable, FinanceAutoFlowSupport.SOURCE_PURCHASE_ORDER, order.getId(), mode);
             payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setCreatedAt(Instant.now());
             payable.setUpdatedAt(Instant.now());
@@ -852,13 +860,15 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
             if (!STATUS_RED_FLUSHED.equals(payable.getStatus())) {
                 payable.setStatus(payableAmount.compareTo(BigDecimal.ZERO) == 0 ? STATUS_SETTLED : STATUS_OPEN);
             }
+            FinanceAutoFlowSupport.markPayable(payable, FinanceAutoFlowSupport.SOURCE_PURCHASE_ORDER, order.getId(), mode);
             payable.setRemark(AUTO_PAYABLE_REMARK);
             payable.setUpdatedAt(Instant.now());
             erpAccountsPayableMapper.updateById(payable);
         }
 
         ErpPayment paymentExisting = erpPaymentMapper.findByPurchaseOrderId(tenantId, order.getId());
-        if (paidCash.compareTo(BigDecimal.ZERO) > 0) {
+        if (FinanceAutoFlowSupport.shouldGeneratePaymentDocument(mode) && paidCash.compareTo(BigDecimal.ZERO) > 0) {
+            FinanceAutoFlowSupport.assertPaymentCanBeOverwritten(paymentExisting, order.getOrderNo(), AUTO_PAYMENT_REMARK);
             if (paymentExisting == null) {
                 ErpPayment payment = new ErpPayment();
                 payment.setTenantId(tenantId);
@@ -870,23 +880,25 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                 payment.setDiscountAmount(BigDecimal.ZERO);
                 payment.setSettlementMethod(order.getSettlementMethod());
                 payment.setPaymentMethodCode(order.getPaymentMethodCode());
-                payment.setStatus(STATUS_APPROVED);
-                payment.setPaidAt(Instant.now());
+                payment.setStatus(FinanceAutoFlowSupport.paymentDocumentStatus(mode));
+                payment.setPaidAt(mode == FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT ? Instant.now() : null);
+                FinanceAutoFlowSupport.markPayment(payment, FinanceAutoFlowSupport.SOURCE_PURCHASE_ORDER, order.getId(), mode);
                 payment.setRemark(AUTO_PAYMENT_REMARK);
                 payment.setCreatedAt(Instant.now());
                 payment.setCreatedBy(operator);
                 payment.setUpdatedAt(Instant.now());
                 payment.setUpdatedBy(operator);
                 erpPaymentMapper.insert(payment);
-            } else if (AUTO_PAYMENT_REMARK.equals(paymentExisting.getRemark())) {
+            } else if (FinanceAutoFlowSupport.isSystemManaged(paymentExisting, AUTO_PAYMENT_REMARK)) {
                 paymentExisting.setPayableId(null);
                 paymentExisting.setSupplierId(order.getSupplierId());
                 paymentExisting.setAmount(paidCash);
                 paymentExisting.setDiscountAmount(BigDecimal.ZERO);
                 paymentExisting.setSettlementMethod(order.getSettlementMethod());
                 paymentExisting.setPaymentMethodCode(order.getPaymentMethodCode());
-                paymentExisting.setStatus(STATUS_APPROVED);
-                paymentExisting.setPaidAt(Instant.now());
+                paymentExisting.setStatus(FinanceAutoFlowSupport.paymentDocumentStatus(mode));
+                paymentExisting.setPaidAt(mode == FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT ? Instant.now() : null);
+                FinanceAutoFlowSupport.markPayment(paymentExisting, FinanceAutoFlowSupport.SOURCE_PURCHASE_ORDER, order.getId(), mode);
                 paymentExisting.setRemark(AUTO_PAYMENT_REMARK);
                 paymentExisting.setUpdatedAt(Instant.now());
                 paymentExisting.setUpdatedBy(operator);
@@ -896,15 +908,18 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
                     .eq("tenant_id", tenantId)
                     .eq("payment_id", paymentExisting.getId()));
             }
-        } else if (paymentExisting != null && AUTO_PAYMENT_REMARK.equals(paymentExisting.getRemark())) {
+        } else if (FinanceAutoFlowSupport.shouldGeneratePaymentDocument(mode)
+            && paymentExisting != null
+            && FinanceAutoFlowSupport.isSystemManaged(paymentExisting, AUTO_PAYMENT_REMARK)) {
             paymentExisting.setPayableId(null);
             paymentExisting.setSupplierId(order.getSupplierId());
             paymentExisting.setAmount(BigDecimal.ZERO);
             paymentExisting.setDiscountAmount(BigDecimal.ZERO);
             paymentExisting.setSettlementMethod(order.getSettlementMethod());
             paymentExisting.setPaymentMethodCode(null);
-            paymentExisting.setStatus(STATUS_APPROVED);
-            paymentExisting.setPaidAt(Instant.now());
+            paymentExisting.setStatus(FinanceAutoFlowSupport.paymentDocumentStatus(mode));
+            paymentExisting.setPaidAt(mode == FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT ? Instant.now() : null);
+            FinanceAutoFlowSupport.markPayment(paymentExisting, FinanceAutoFlowSupport.SOURCE_PURCHASE_ORDER, order.getId(), mode);
             paymentExisting.setUpdatedAt(Instant.now());
             paymentExisting.setUpdatedBy(operator);
             erpPaymentMapper.updateById(paymentExisting);

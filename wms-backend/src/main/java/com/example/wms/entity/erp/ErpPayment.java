@@ -43,6 +43,24 @@ public class ErpPayment extends TenantAuditableSoftDeleteEntity {
     @TableField("remark")
     private String remark;
 
+    @TableField("source_document_type")
+    private String sourceDocumentType;
+
+    @TableField("source_document_id")
+    private Long sourceDocumentId;
+
+    @TableField("source_business_flow")
+    private String sourceBusinessFlow;
+
+    @TableField("auto_flow_generated")
+    private Boolean autoFlowGenerated;
+
+    @TableField("auto_flow_mode")
+    private String autoFlowMode;
+
+    @TableField("auto_flow_managed_state")
+    private String autoFlowManagedState;
+
     @TableField("print_count")
     private Integer printCount;
 
@@ -141,6 +159,54 @@ public class ErpPayment extends TenantAuditableSoftDeleteEntity {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getSourceDocumentType() {
+        return sourceDocumentType;
+    }
+
+    public void setSourceDocumentType(String sourceDocumentType) {
+        this.sourceDocumentType = sourceDocumentType;
+    }
+
+    public Long getSourceDocumentId() {
+        return sourceDocumentId;
+    }
+
+    public void setSourceDocumentId(Long sourceDocumentId) {
+        this.sourceDocumentId = sourceDocumentId;
+    }
+
+    public String getSourceBusinessFlow() {
+        return sourceBusinessFlow;
+    }
+
+    public void setSourceBusinessFlow(String sourceBusinessFlow) {
+        this.sourceBusinessFlow = sourceBusinessFlow;
+    }
+
+    public Boolean getAutoFlowGenerated() {
+        return autoFlowGenerated;
+    }
+
+    public void setAutoFlowGenerated(Boolean autoFlowGenerated) {
+        this.autoFlowGenerated = autoFlowGenerated;
+    }
+
+    public String getAutoFlowMode() {
+        return autoFlowMode;
+    }
+
+    public void setAutoFlowMode(String autoFlowMode) {
+        this.autoFlowMode = autoFlowMode;
+    }
+
+    public String getAutoFlowManagedState() {
+        return autoFlowManagedState;
+    }
+
+    public void setAutoFlowManagedState(String autoFlowManagedState) {
+        this.autoFlowManagedState = autoFlowManagedState;
     }
 
     public Integer getPrintCount() {

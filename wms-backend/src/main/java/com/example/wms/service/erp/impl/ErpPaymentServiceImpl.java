@@ -27,6 +27,7 @@ import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.security.CurrentActor;
 import com.example.wms.service.erp.ErpPaymentService;
+import com.example.wms.service.erp.support.FinanceAutoFlowSupport;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -424,6 +425,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         receipt.setPaymentMethodCode(request.paymentMethodCode());
         receipt.setPaidAt(parsePaidAt(request.paidAt()));
         receipt.setRemark(request.remark());
+        FinanceAutoFlowSupport.markPaymentManualTakeover(receipt);
         receipt.setUpdatedAt(Instant.now());
         receipt.setUpdatedBy(CurrentActor.username());
         erpPaymentMapper.updateById(receipt);
@@ -569,6 +571,10 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
         }
         validatePaymentApproval(tenantId, receipt);
         receipt.setStatus(STATUS_APPROVED);
+        if (receipt.getPaidAt() == null) {
+            receipt.setPaidAt(Instant.now());
+        }
+        FinanceAutoFlowSupport.markPaymentManualTakeover(receipt);
         receipt.setUpdatedAt(Instant.now());
         receipt.setUpdatedBy(CurrentActor.username());
         erpPaymentMapper.updateById(receipt);
@@ -588,6 +594,24 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             BigDecimal discountDelta = receipt.getDiscountAmount() == null ? BigDecimal.ZERO : receipt.getDiscountAmount();
             applyPayablePaidAmount(tenantId, receipt.getPayableId(), amountDelta, discountDelta);
         }
+        return buildDetail(tenantId, receipt);
+    }
+
+    @Override
+    @Transactional
+    public ErpPaymentDetail restoreSystemDefault(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
+        ErpPayment receipt = loadPayment(tenantId, id);
+        if (!Boolean.TRUE.equals(receipt.getAutoFlowGenerated())) {
+            throw new IllegalArgumentException("仅系统自动生成的付款单支持恢复系统默认");
+        }
+        if (!STATUS_DRAFT.equals(receipt.getStatus())) {
+            throw new IllegalArgumentException("仅自动生成的草稿付款单可直接恢复系统默认，已审核付款单请先红冲");
+        }
+        receipt.setAutoFlowManagedState(FinanceAutoFlowSupport.MANAGED_BY_SYSTEM);
+        receipt.setUpdatedAt(Instant.now());
+        receipt.setUpdatedBy(CurrentActor.username());
+        erpPaymentMapper.updateById(receipt);
         return buildDetail(tenantId, receipt);
     }
 
@@ -632,6 +656,7 @@ public class ErpPaymentServiceImpl implements ErpPaymentService {
             throw new IllegalArgumentException("请填写红冲原因");
         }
         receipt.setStatus(STATUS_RED_FLUSHED);
+        receipt.setAutoFlowManagedState(FinanceAutoFlowSupport.RED_FLUSHED);
         String originRemark = receipt.getRemark();
         if (originRemark == null || originRemark.isBlank()) {
             receipt.setRemark("红冲原因：" + reasonText);

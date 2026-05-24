@@ -33,8 +33,11 @@ import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
+import com.example.wms.service.TenantSettingService;
 import com.example.wms.service.erp.ErpSaleOrderService;
 import com.example.wms.service.erp.support.ErpCostService;
+import com.example.wms.service.erp.support.FinanceAutoFlowMode;
+import com.example.wms.service.erp.support.FinanceAutoFlowSupport;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -91,6 +94,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     private final ErpSaleReturnMapper erpSaleReturnMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final ErpCostService erpCostService;
+    private final TenantSettingService tenantSettingService;
 
     public ErpSaleOrderServiceImpl(ErpSaleOrderMapper erpSaleOrderMapper,
                                    ErpSaleOrderItemMapper erpSaleOrderItemMapper,
@@ -109,7 +113,8 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                                     ErpReceiptReceivableMapper erpReceiptReceivableMapper,
                                     ErpSaleReturnMapper erpSaleReturnMapper,
                                     SystemConfigMapper systemConfigMapper,
-                                    ErpCostService erpCostService) {
+                                    ErpCostService erpCostService,
+                                    TenantSettingService tenantSettingService) {
         this.erpSaleOrderMapper = erpSaleOrderMapper;
         this.erpSaleOrderItemMapper = erpSaleOrderItemMapper;
         this.erpProductMapper = erpProductMapper;
@@ -128,6 +133,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         this.erpSaleReturnMapper = erpSaleReturnMapper;
         this.systemConfigMapper = systemConfigMapper;
         this.erpCostService = erpCostService;
+        this.tenantSettingService = tenantSettingService;
     }
 
     @Override
@@ -1298,6 +1304,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
     }
 
     private void ensureReceivableAndReceipt(Long tenantId, ErpSaleOrder order, String operator) {
+        FinanceAutoFlowMode mode = tenantSettingService.getFinanceAutoFlowMode();
         BigDecimal total = order.getTotalAmountInclTax() == null ? BigDecimal.ZERO : order.getTotalAmountInclTax();
         BigDecimal discount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount();
         if (discount.compareTo(total) > 0) {
@@ -1337,6 +1344,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             ar.setSettlementMethod(order.getSettlementMethod());
             ar.setSourceType(SOURCE_SALE_ORDER);
             ar.setSourceId(order.getId());
+            FinanceAutoFlowSupport.markReceivable(ar, FinanceAutoFlowSupport.SOURCE_SALE_ORDER, order.getId(), mode);
             ar.setRemark(AUTO_RECEIVABLE_REMARK);
             ar.setCreatedAt(Instant.now());
             ar.setUpdatedAt(Instant.now());
@@ -1352,13 +1360,15 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             existing.setSettlementMethod(order.getSettlementMethod());
             existing.setSourceType(SOURCE_SALE_ORDER);
             existing.setSourceId(order.getId());
+            FinanceAutoFlowSupport.markReceivable(existing, FinanceAutoFlowSupport.SOURCE_SALE_ORDER, order.getId(), mode);
             existing.setRemark(AUTO_RECEIVABLE_REMARK);
             existing.setUpdatedAt(Instant.now());
             erpAccountsReceivableMapper.updateById(existing);
         }
 
         ErpReceipt receiptExisting = erpReceiptMapper.findBySaleOrderId(tenantId, order.getId());
-        if (paidCash.compareTo(BigDecimal.ZERO) > 0) {
+        if (FinanceAutoFlowSupport.shouldGeneratePaymentDocument(mode) && paidCash.compareTo(BigDecimal.ZERO) > 0) {
+            FinanceAutoFlowSupport.assertReceiptCanBeOverwritten(receiptExisting, order.getOrderNo(), AUTO_RECEIPT_REMARK);
             if (receiptExisting == null) {
                 ErpReceipt receipt = new ErpReceipt();
                 receipt.setTenantId(tenantId);
@@ -1370,23 +1380,25 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                 receipt.setDiscountAmount(BigDecimal.ZERO);
                 receipt.setSettlementMethod(order.getSettlementMethod());
                 receipt.setReceiptMethodCode(order.getReceiptMethodCode());
-                receipt.setStatus(STATUS_APPROVED);
-                receipt.setReceivedAt(Instant.now());
+                receipt.setStatus(FinanceAutoFlowSupport.paymentDocumentStatus(mode));
+                receipt.setReceivedAt(mode == FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT ? Instant.now() : null);
+                FinanceAutoFlowSupport.markReceipt(receipt, FinanceAutoFlowSupport.SOURCE_SALE_ORDER, order.getId(), mode);
                 receipt.setRemark(AUTO_RECEIPT_REMARK);
                 receipt.setCreatedAt(Instant.now());
                 receipt.setCreatedBy(operator);
                 receipt.setUpdatedAt(Instant.now());
                 receipt.setUpdatedBy(operator);
                 erpReceiptMapper.insert(receipt);
-            } else if (AUTO_RECEIPT_REMARK.equals(receiptExisting.getRemark())) {
+            } else if (FinanceAutoFlowSupport.isSystemManaged(receiptExisting, AUTO_RECEIPT_REMARK)) {
                 receiptExisting.setReceivableId(null);
                 receiptExisting.setCustomerId(order.getCustomerId());
                 receiptExisting.setAmount(paidCash);
                 receiptExisting.setDiscountAmount(BigDecimal.ZERO);
                 receiptExisting.setSettlementMethod(order.getSettlementMethod());
                 receiptExisting.setReceiptMethodCode(order.getReceiptMethodCode());
-                receiptExisting.setStatus(STATUS_APPROVED);
-                receiptExisting.setReceivedAt(Instant.now());
+                receiptExisting.setStatus(FinanceAutoFlowSupport.paymentDocumentStatus(mode));
+                receiptExisting.setReceivedAt(mode == FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT ? Instant.now() : null);
+                FinanceAutoFlowSupport.markReceipt(receiptExisting, FinanceAutoFlowSupport.SOURCE_SALE_ORDER, order.getId(), mode);
                 receiptExisting.setRemark(AUTO_RECEIPT_REMARK);
                 receiptExisting.setUpdatedAt(Instant.now());
                 receiptExisting.setUpdatedBy(operator);
@@ -1396,15 +1408,18 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
                     .eq("tenant_id", tenantId)
                     .eq("receipt_id", receiptExisting.getId()));
             }
-        } else if (receiptExisting != null && AUTO_RECEIPT_REMARK.equals(receiptExisting.getRemark())) {
+        } else if (FinanceAutoFlowSupport.shouldGeneratePaymentDocument(mode)
+            && receiptExisting != null
+            && FinanceAutoFlowSupport.isSystemManaged(receiptExisting, AUTO_RECEIPT_REMARK)) {
             receiptExisting.setReceivableId(null);
             receiptExisting.setCustomerId(order.getCustomerId());
             receiptExisting.setAmount(BigDecimal.ZERO);
             receiptExisting.setDiscountAmount(BigDecimal.ZERO);
             receiptExisting.setSettlementMethod(order.getSettlementMethod());
             receiptExisting.setReceiptMethodCode(null);
-            receiptExisting.setStatus(STATUS_APPROVED);
-            receiptExisting.setReceivedAt(Instant.now());
+            receiptExisting.setStatus(FinanceAutoFlowSupport.paymentDocumentStatus(mode));
+            receiptExisting.setReceivedAt(mode == FinanceAutoFlowMode.AR_AP_WITH_APPROVED_PAYMENT ? Instant.now() : null);
+            FinanceAutoFlowSupport.markReceipt(receiptExisting, FinanceAutoFlowSupport.SOURCE_SALE_ORDER, order.getId(), mode);
             receiptExisting.setUpdatedAt(Instant.now());
             receiptExisting.setUpdatedBy(operator);
             erpReceiptMapper.updateById(receiptExisting);
