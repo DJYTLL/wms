@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>供应商管理搜索区布局稿</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --line: #e4e9f2;
+      --line-strong: #d8e0ec;
+      --text: #1f2937;
+      --muted: #8a97aa;
+      --blue: #409eff;
+      --blue-soft: #ecf5ff;
+      --shadow: 0 8px 24px rgba(31, 41, 55, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+      font-size: 14px;
+    }
+
+    .page {
+      width: 1600px;
+      min-height: 900px;
+      padding: 24px 30px 34px;
+    }
+
+    .title {
+      margin: 0 0 14px;
+      font-size: 24px;
+      line-height: 32px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .toolbar-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: 12px;
+      align-items: start;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .toolbar-flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .field {
+      position: relative;
+      height: 32px;
+      flex: 0 0 140px;
+      min-width: 140px;
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .field--select {
+      flex-basis: 150px;
+      min-width: 150px;
+    }
+
+    .field__text {
+      position: absolute;
+      inset: 0 34px 0 12px;
+      display: flex;
+      align-items: center;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .field__arrow {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-right: 1.5px solid #a6b1c2;
+      border-bottom: 1.5px solid #a6b1c2;
+      transform: translateY(-65%) rotate(45deg);
+    }
+
+    .search-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex: 0 0 auto;
+      justify-content: flex-end;
+      margin-left: auto;
+    }
+
+    .icon-button,
+    .button {
+      height: 32px;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      background: #fff;
+      color: #3f4a5f;
+      font-weight: 600;
+      cursor: default;
+    }
+
+    .icon-button {
+      width: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #657186;
+    }
+
+    .icon-button svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .button {
+      min-width: 72px;
+      padding: 0 16px;
+    }
+
+    .button--primary {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .button--soft {
+      border-color: #cfe5ff;
+      background: var(--blue-soft);
+      color: #1c6fc9;
+    }
+
+    .table-card {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .table-tools {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 16px;
+      color: #667085;
+      font-size: 13px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      height: 50px;
+      padding: 0 12px;
+      border-right: 1px solid #edf1f6;
+      border-bottom: 1px solid #edf1f6;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    th {
+      height: 44px;
+      background: #fbfcfe;
+      color: #4b5565;
+      font-weight: 700;
+    }
+
+    tr:nth-child(even) td {
+      background: #fafafa;
+    }
+
+    .link {
+      color: #1d7afc;
+      margin-right: 14px;
+    }
+
+    .danger {
+      color: #ff4d4f;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <h1 class="title">供应商管理</h1>
+
+    <section class="toolbar-card" aria-label="供应商搜索筛选区">
+      <div class="toolbar-flow">
+        <div class="field"><span class="field__text">名称</span></div>
+        <div class="field"><span class="field__text">编码</span></div>
+        <div class="field"><span class="field__text">简称</span></div>
+        <div class="field"><span class="field__text">联系人</span></div>
+        <div class="field"><span class="field__text">电话</span></div>
+        <div class="field field--select"><span class="field__text">供应商类型</span><span class="field__arrow"></span></div>
+        <div class="field field--select"><span class="field__text">往来类别</span><span class="field__arrow"></span></div>
+        <div class="field field--select"><span class="field__text">状态：全部</span><span class="field__arrow"></span></div>
+      </div>
+      <div class="search-actions">
+        <button class="icon-button" aria-label="刷新">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+            <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+          </svg>
+        </button>
+        <button class="button button--primary">搜索</button>
+        <button class="button">重置默认</button>
+        <button class="button button--soft">新增</button>
+      </div>
+    </section>
+
+    <section class="table-card">
+      <div class="table-tools">列设置</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 70px;">序号</th>
+            <th style="width: 120px;">编码</th>
+            <th style="width: 160px;">名称</th>
+            <th style="width: 140px;">供应商类型</th>
+            <th style="width: 120px;">区域</th>
+            <th style="width: 120px;">联系人</th>
+            <th style="width: 130px;">电话</th>
+            <th style="width: 130px;">手机</th>
+            <th style="width: 140px;">微信客服</th>
+            <th style="width: 120px;">采购员</th>
+            <th style="width: 140px;">往来类别</th>
+            <th style="width: 160px;">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>SUP-001</td><td>供应商1</td><td>-</td><td></td><td>联系人1</td><td>021-70000001</td><td>13700000001</td><td></td><td></td><td>供应商</td><td><span class="link">编辑</span><span class="danger">删除</span></td></tr>
+          <tr><td>2</td><td>SUP-002</td><td>供应商2</td><td>-</td><td></td><td>联系人2</td><td>021-70000002</td><td>13700000002</td><td></td><td></td><td>供应商</td><td><span class="link">编辑</span><span class="danger">删除</span></td></tr>
+          <tr><td>3</td><td>SUP-003</td><td>供应商3</td><td>-</td><td></td><td>联系人3</td><td>021-70000003</td><td>13700000003</td><td></td><td></td><td>供应商</td><td><span class="link">编辑</span><span class="danger">删除</span></td></tr>
+          <tr><td>4</td><td>SUP-004</td><td>供应商4</td><td>-</td><td></td><td>联系人4</td><td>021-70000004</td><td>13700000004</td><td></td><td></td><td>供应商</td><td><span class="link">编辑</span><span class="danger">删除</span></td></tr>
+          <tr><td>5</td><td>SUP-005</td><td>供应商5</td><td>-</td><td></td><td>联系人5</td><td>021-70000005</td><td>13700000005</td><td></td><td></td><td>供应商</td><td><span class="link">编辑</span><span class="danger">删除</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

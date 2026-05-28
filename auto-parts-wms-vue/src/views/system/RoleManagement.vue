@@ -327,7 +327,7 @@ import { ref, computed, reactive, onMounted, onActivated, watch } from 'vue';
 import { ElMessageBox } from 'element-plus';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
-import { useMenuStore, type MenuItem } from '@/stores/menu';
+import { type MenuItem } from '@/stores/menu';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
@@ -365,7 +365,6 @@ interface Role {
 // --- 初始化 ---
 const { t } = useI18n();
 const authStore = useAuthStore();
-const menuStore = useMenuStore();
 // --- 状态 ---
 const searchQuery = ref('');
 const statusFilter = ref<'all' | 'enabled' | 'disabled'>('all');
@@ -1398,16 +1397,10 @@ const decorateTreeMenus = (items: MenuItem[]): MenuItem[] => {
 
 const loadTreeMenus = async () => {
   try {
-    if (actorIsSuperAdmin.value) {
-      const res: any = await request.get('/menus/all');
-      const data = res.data.data || [];
-      const normalized = Array.isArray(data) ? data.map((item: any) => normalizeTreeMenu(item)) : [];
-      treeMenus.value = decorateTreeMenus(normalized);
-      resetUnavailableSelectedPage();
-      return;
-    }
-    await menuStore.fetchMenus();
-    treeMenus.value = decorateTreeMenus(menuStore.menus);
+    const res: any = await request.get('/menus/all');
+    const data = res.data.data || [];
+    const normalized = Array.isArray(data) ? data.map((item: any) => normalizeTreeMenu(item)) : [];
+    treeMenus.value = decorateTreeMenus(normalized);
     resetUnavailableSelectedPage();
   } catch (error) {
     notifyError(error);
@@ -1759,7 +1752,7 @@ watch(pageOptions, () => {
 
 .permission-workspace {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1fr);
   gap: 12px;
   min-height: 360px;
 }
@@ -1813,7 +1806,7 @@ watch(pageOptions, () => {
   background: transparent;
   color: #303133;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   text-align: left;
   cursor: pointer;
@@ -1838,9 +1831,10 @@ watch(pageOptions, () => {
 .permission-tree-label__text {
   min-width: 0;
   flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .permission-tree-label__count {
@@ -1877,7 +1871,7 @@ watch(pageOptions, () => {
 
 .permission-tree-label--root {
   min-height: 40px;
-  padding: 0 10px;
+  padding: 8px 10px;
   border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
@@ -1986,7 +1980,7 @@ watch(pageOptions, () => {
   }
 
   .permission-workspace {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1fr);
   }
 }
 
