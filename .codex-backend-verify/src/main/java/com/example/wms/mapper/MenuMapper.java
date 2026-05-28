@@ -1,0 +1,30 @@
+package com.example.wms.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.example.wms.entity.Menu;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
+
+// 菜单 Mapper
+@Mapper
+public interface MenuMapper extends BaseMapper<Menu> {
+    @Select("SELECT * FROM app_menu WHERE code = #{code} AND deleted_at IS NULL")
+    Menu findByCode(String code);
+
+    @Select("SELECT * FROM app_menu WHERE is_enabled = TRUE AND deleted_at IS NULL ORDER BY sort ASC, id ASC")
+    List<Menu> listEnabled();
+
+    @Select("SELECT * FROM app_menu WHERE deleted_at IS NULL ORDER BY sort ASC, id ASC")
+    List<Menu> listAllOrdered();
+
+    @Select("""
+        SELECT COUNT(1)
+        FROM app_menu
+        WHERE permission_code = #{permissionCode}
+          AND deleted_at IS NULL
+        """)
+    long countActiveMenusByPermissionCode(@Param("permissionCode") String permissionCode);
+}

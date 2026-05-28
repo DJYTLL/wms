@@ -332,6 +332,9 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import {
+  canEditRolePermissions,
+} from './rolePermissionPolicy';
 
 // --- 类型定义 ---
 interface Permission {
@@ -349,6 +352,14 @@ interface Role {
   description: string;
   enabled: boolean;
   permissionIds?: number[];
+  capabilities?: {
+    canEdit?: boolean;
+    canDelete?: boolean;
+    canEditPermissions?: boolean;
+    canManageColumnPermissions?: boolean;
+    editDisabledReason?: string;
+    deleteDisabledReason?: string;
+  };
 }
 
 // --- 初始化 ---
@@ -369,6 +380,7 @@ const permissionTreeSearch = ref('');
 
 const roleList = ref<Role[]>([]);
 const permissionList = ref<Permission[]>([]);
+const assignablePermissionIds = ref<number[] | null>(null);
 const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
@@ -377,7 +389,7 @@ const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
 const { bindPageSizeSync } = usePageSizePreference();
-const canUsePlatformPermissions = computed(() => authStore.hasRole('super_admin'));
+const actorIsSuperAdmin = computed(() => authStore.hasRole('super_admin'));
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 
 const defaultColumns = ['name', 'code', 'description', 'status'];
@@ -418,11 +430,15 @@ const permissionPrefixPageMap: Array<{ prefix: string; pageKeys: string[] }> = [
   { prefix: 'audit:', pageKeys: ['audit-logs'] },
   { prefix: 'menu:', pageKeys: ['menu-management'] },
   { prefix: 'system-config:', pageKeys: ['system-configs'] },
+  { prefix: 'tenant-setting:', pageKeys: ['tenant-setting'] },
+  { prefix: 'api-latency-monitor:', pageKeys: ['api-latency-monitor'] },
   { prefix: 'tenant:', pageKeys: ['tenant-management'] },
   { prefix: 'erp-product:', pageKeys: ['erp-product'] },
   { prefix: 'erp-customer:', pageKeys: ['erp-customer'] },
   { prefix: 'erp-customer-category:', pageKeys: ['erp-customer-category'] },
   { prefix: 'erp-supplier:', pageKeys: ['erp-supplier'] },
+  { prefix: 'erp-supplier-type:', pageKeys: ['erp-supplier-type'] },
+  { prefix: 'erp-counterparty-subject:', pageKeys: ['erp-counterparty-subject'] },
   { prefix: 'erp-warehouse:', pageKeys: ['erp-warehouse'] },
   { prefix: 'erp-location:', pageKeys: ['erp-location'] },
   { prefix: 'erp-category:', pageKeys: ['erp-category'] },
@@ -447,9 +463,10 @@ const permissionPrefixPageMap: Array<{ prefix: string; pageKeys: string[] }> = [
   { prefix: 'erp-ap:', pageKeys: ['erp-ap'] },
   { prefix: 'erp-receipt:', pageKeys: ['erp-receipt'] },
   { prefix: 'erp-payment:', pageKeys: ['erp-payment'] },
-  { prefix: 'erp-finance-summary:', pageKeys: ['erp-finance-customer-debt'] },
+  { prefix: 'erp-finance-summary:', pageKeys: ['erp-finance-customer-debt', 'erp-finance-counterparty-subject'] },
   { prefix: 'erp-finance-customer-debt:', pageKeys: ['erp-finance-customer-debt'] },
   { prefix: 'erp-finance-supplier-debt:', pageKeys: ['erp-finance-supplier-debt'] },
+  { prefix: 'erp-finance-counterparty-subject:', pageKeys: ['erp-finance-counterparty-subject'] },
   { prefix: 'erp-print-template:', pageKeys: ['erp-print-template'] },
   { prefix: 'erp-stock-warning:', pageKeys: ['erp-stock-warning'] },
   { prefix: 'erp-stock-transfer:', pageKeys: ['erp-stock-transfer'] },
@@ -478,6 +495,8 @@ const menuPageKeyMap: Record<string, string[]> = {
   menu: ['menu-management'],
   'menu-management': ['menu-management'],
   'system-config': ['system-configs'],
+  'tenant-setting': ['tenant-setting'],
+  'api-latency-monitor': ['api-latency-monitor'],
   tenant: ['tenant-management'],
   tenants: ['tenant-management'],
   'erp-product': ['erp-product'],
@@ -486,6 +505,8 @@ const menuPageKeyMap: Record<string, string[]> = {
   'erp-customer': ['erp-customer'],
   'erp-customer-category': ['erp-customer-category'],
   'erp-supplier': ['erp-supplier'],
+  'erp-supplier-type': ['erp-supplier-type'],
+  'erp-counterparty-subject': ['erp-counterparty-subject'],
   'erp-warehouse': ['erp-warehouse'],
   'erp-location': ['erp-location'],
   'erp-category': ['erp-category'],
@@ -513,8 +534,9 @@ const menuPageKeyMap: Record<string, string[]> = {
   'erp-disassemble-order': ['erp-disassemble-order'],
   'erp-ar': ['erp-ar'],
   'erp-finance-customer-debt': ['erp-finance-customer-debt'],
-  'erp-finance-summary': ['erp-finance-customer-debt'],
+  'erp-finance-summary': ['erp-finance-customer-debt', 'erp-finance-counterparty-subject'],
   'erp-finance-supplier-debt': ['erp-finance-supplier-debt'],
+  'erp-finance-counterparty-subject': ['erp-finance-counterparty-subject'],
   'erp-ap': ['erp-ap'],
   'erp-receipt': ['erp-receipt'],
   'erp-payment': ['erp-payment'],
@@ -530,12 +552,16 @@ const menuPathKeyMap: Record<string, string> = {
   '/column-permissions': 'column',
   '/menus': 'menu',
   '/system-config': 'system-config',
+  '/tenant-settings': 'tenant-setting',
+  '/api-latency-monitor': 'api-latency-monitor',
   '/tenants': 'tenant',
   '/erp/products': 'erp-product',
   '/erp/vehicle-fitments': 'erp-product-fitment',
   '/erp/customers': 'erp-customer',
   '/erp/customer-categories': 'erp-customer-category',
   '/erp/suppliers': 'erp-supplier',
+  '/erp/supplier-types': 'erp-supplier-type',
+  '/erp/counterparty-subjects': 'erp-counterparty-subject',
   '/erp/warehouses': 'erp-warehouse',
   '/erp/locations': 'erp-location',
   '/erp/categories': 'erp-category',
@@ -563,6 +589,7 @@ const menuPathKeyMap: Record<string, string> = {
   '/erp/disassemble-orders': 'erp-disassemble-order',
   '/erp/finance/customer-debts': 'erp-finance-customer-debt',
   '/erp/finance/supplier-debts': 'erp-finance-supplier-debt',
+  '/erp/finance/counterparty-subjects': 'erp-finance-counterparty-subject',
   '/erp/ar': 'erp-ar',
   '/erp/ap': 'erp-ap',
   '/erp/receipts': 'erp-receipt',
@@ -577,12 +604,16 @@ const menuTitleKeyMap: Record<string, string> = {
   '列权限配置': 'column',
   '菜单管理': 'menu',
   '系统配置': 'system-config',
+  '租户设置': 'tenant-setting',
+  '接口耗时查询': 'api-latency-monitor',
   '租户管理': 'tenant',
   '商品管理': 'erp-product',
   '车型适配管理': 'erp-product-fitment',
   '客户管理': 'erp-customer',
   '客户类别': 'erp-customer-category',
   '供应商管理': 'erp-supplier',
+  '供应商类型': 'erp-supplier-type',
+  '往来主体管理': 'erp-counterparty-subject',
   '仓库管理': 'erp-warehouse',
   '库位管理': 'erp-location',
   '分类管理': 'erp-category',
@@ -610,6 +641,7 @@ const menuTitleKeyMap: Record<string, string> = {
   '拆分单': 'erp-disassemble-order',
   '客户欠款': 'erp-finance-customer-debt',
   '供应商欠款': 'erp-finance-supplier-debt',
+  '往来主体财务汇总': 'erp-finance-counterparty-subject',
   '应收管理': 'erp-ar',
   '应付管理': 'erp-ap',
   '收款单': 'erp-receipt',
@@ -629,17 +661,6 @@ const currentId = ref<number | null>(null);
 // --- 计算属性 ---
 const filteredData = computed(() => roleList.value);
 
-const canManageReservedRole = (code?: string) => {
-  const normalized = (code || '').trim().toLowerCase();
-  if (normalized === 'super_admin') {
-    return authStore.hasRole('super_admin');
-  }
-  if (normalized === 'admin') {
-    return authStore.hasRole('super_admin');
-  }
-  return true;
-};
-
 const currentUserRoleCodes = computed(() => {
   const roles = (authStore.user as { roles?: Array<string | { code?: string }> } | null)?.roles;
   if (!Array.isArray(roles)) return [] as string[];
@@ -654,20 +675,40 @@ const currentUserRoleCodes = computed(() => {
 
 const isCurrentUserRole = (role?: Role) => {
   if (!role?.code) return false;
+  if (actorIsSuperAdmin.value) return false;
+  if (
+    authStore.userTenantId != null
+    && authStore.tenantId != null
+    && authStore.userTenantId !== authStore.tenantId
+  ) {
+    return false;
+  }
   return currentUserRoleCodes.value.includes(role.code.trim().toLowerCase());
 };
 
 const canEditRole = (role?: Role) => {
-  if (isCurrentUserRole(role)) return false;
-  return !isReservedRole(role?.code) || canManageReservedRole(role?.code);
+  return canEditRolePermissions({
+    actorIsSuperAdmin: actorIsSuperAdmin.value,
+    actorTenantId: authStore.userTenantId,
+    currentTenantId: authStore.tenantId,
+    actorRoleCodes: currentUserRoleCodes.value,
+    targetRoleCode: role?.code,
+    backendCanEditPermissions: role?.capabilities?.canEditPermissions,
+  });
 };
 
 const canDeleteRole = (role?: Role) => {
+  if (role?.capabilities?.canDelete != null) {
+    return role.capabilities.canDelete;
+  }
   if (isCurrentUserRole(role)) return false;
   return !isReservedRole(role?.code);
 };
 
 const editDisabledReason = (role?: Role) => {
+  if (role?.capabilities?.editDisabledReason) {
+    return role.capabilities.editDisabledReason;
+  }
   if (isCurrentUserRole(role)) {
     return '不能修改当前登录账号所属角色';
   }
@@ -682,6 +723,9 @@ const editDisabledReason = (role?: Role) => {
 };
 
 const deleteDisabledReason = (role?: Role) => {
+  if (role?.capabilities?.deleteDisabledReason) {
+    return role.capabilities.deleteDisabledReason;
+  }
   if (isCurrentUserRole(role)) {
     return '不能修改当前登录账号所属角色';
   }
@@ -700,6 +744,8 @@ const pageLabelMap = computed<Record<string, string>>(() => ({
   'tenant-management': t('page.tenantManagement'),
   'audit-logs': t('page.auditLogManagement'),
   'system-configs': t('page.systemConfigManagement'),
+  'tenant-setting': t('page.tenantSettingManagement'),
+  'api-latency-monitor': t('page.apiLatencyMonitor'),
   'erp-product': t('page.erpProductManagement'),
   'erp-customer': t('page.erpCustomerManagement'),
   'erp-customer-category': t('page.erpCustomerCategoryManagement'),
@@ -709,6 +755,8 @@ const pageLabelMap = computed<Record<string, string>>(() => ({
   'erp-vehicle-model': `${t('page.erpVehicleFitmentManagement')} - ${t('field.vehicleModel')}`,
   'erp-product-fitment': `${t('page.erpVehicleFitmentManagement')} - ${t('field.productFitment')}`,
   'erp-supplier': t('page.erpSupplierManagement'),
+  'erp-supplier-type': t('page.erpSupplierTypeManagement'),
+  'erp-counterparty-subject': t('page.erpCounterpartySubjectManagement'),
   'erp-warehouse': t('page.erpWarehouseManagement'),
   'erp-location': t('page.erpLocationManagement'),
   'erp-category': t('page.erpCategoryManagement'),
@@ -731,6 +779,7 @@ const pageLabelMap = computed<Record<string, string>>(() => ({
   'erp-payment': t('page.erpPaymentManagement'),
   'erp-finance-customer-debt': t('page.erpCustomerDebtManagement'),
   'erp-finance-supplier-debt': t('page.erpSupplierDebtManagement'),
+  'erp-finance-counterparty-subject': t('page.erpCounterpartyFinanceSummary'),
   'erp-print-template': t('page.erpPrintTemplateManagement'),
   'erp-stock': t('page.erpStockManagement'),
   'erp-stock-txn': t('page.erpStockTxnManagement'),
@@ -829,11 +878,11 @@ const resolveSelectedPermissionPageKeys = (key: string) => {
 };
 
 const assignablePermissionSource = computed(() => {
-  return canUsePlatformPermissions.value
-    ? permissionList.value
-    : permissionList.value.filter(
-      p => !p.code.startsWith('tenant:') && !p.code.startsWith('system-config:')
-    );
+  if (!assignablePermissionIds.value) {
+    return permissionList.value;
+  }
+  const ids = new Set(assignablePermissionIds.value);
+  return permissionList.value.filter((permission) => ids.has(permission.id));
 });
 
 const baseVisiblePermissionList = computed(() => {
@@ -1299,6 +1348,22 @@ const fetchPermissions = async () => {
   }
 };
 
+const fetchAssignablePermissions = async (roleCode: string) => {
+  try {
+    const res: any = await request.get('/permissions/assignable', {
+      params: { roleCode },
+    });
+    if (res.data.code === 200) {
+      const permissions = Array.isArray(res.data.data) ? res.data.data : [];
+      assignablePermissionIds.value = permissions.map((permission: Permission) => permission.id);
+      resetUnavailableSelectedPage();
+    }
+  } catch (error) {
+    assignablePermissionIds.value = [];
+    notifyError(error);
+  }
+};
+
 const resolveTreeMenuKey = (item: any): string => {
   const candidates = [
     item?.code,
@@ -1333,7 +1398,7 @@ const decorateTreeMenus = (items: MenuItem[]): MenuItem[] => {
 
 const loadTreeMenus = async () => {
   try {
-    if (canUsePlatformPermissions.value) {
+    if (actorIsSuperAdmin.value) {
       const res: any = await request.get('/menus/all');
       const data = res.data.data || [];
       const normalized = Array.isArray(data) ? data.map((item: any) => normalizeTreeMenu(item)) : [];
@@ -1423,6 +1488,7 @@ const openAddModal = () => {
   selectedPermissionIds.value = [];
   originalPermissionIds.value = [];
   pageKey.value = '';
+  fetchAssignablePermissions('');
 };
 
 const openEditModal = async (row: Role) => {
@@ -1443,7 +1509,10 @@ const openEditModal = async (row: Role) => {
   permissionTreeSearch.value = '';
   selectedPermissionIds.value = [];
   originalPermissionIds.value = [];
+  assignablePermissionIds.value = null;
   pageKey.value = '';
+
+  await fetchAssignablePermissions(row.code);
 
   // 获取该角色的权限列表
   try {
@@ -1452,6 +1521,7 @@ const openEditModal = async (row: Role) => {
       selectedPermissionIds.value = res.data.data
         .filter((p: any) => !isConcreteColumnPermission(String(p.code || '')))
         .map((p: any) => p.id);
+      selectedPermissionIds.value = sanitizeSelectedPermissionIds(selectedPermissionIds.value);
       originalPermissionIds.value = [...selectedPermissionIds.value];
     }
   } catch (e) {
@@ -1467,6 +1537,7 @@ const resetForm = () => {
   isPermissionOnlyMode.value = false;
   selectedPermissionIds.value = [];
   originalPermissionIds.value = [];
+  assignablePermissionIds.value = null;
   permissionTreeSearch.value = '';
 };
 
@@ -1509,8 +1580,10 @@ const saveData = async () => {
       roleId = isEditing.value ? currentId.value : res.data.data.id;
     }
 
-    const permissionIds = [...selectedPermissionIds.value];
+    const permissionIds = sanitizeSelectedPermissionIds(selectedPermissionIds.value);
     await request.put(`/roles/${roleId}/permissions`, { permissionIds });
+    await authStore.loadAuthorizations();
+    window.dispatchEvent(new Event('menu:refresh'));
 
     notifySuccess();
     showModal.value = false;
@@ -1518,6 +1591,14 @@ const saveData = async () => {
   } catch (error) {
     notifyError(error);
   }
+};
+
+const sanitizeSelectedPermissionIds = (selectedIds: number[]) => {
+  if (!assignablePermissionIds.value) {
+    return selectedIds;
+  }
+  const ids = new Set(assignablePermissionIds.value);
+  return selectedIds.filter((id) => ids.has(id));
 };
 
 const handleDelete = (row: Role) => {

@@ -113,7 +113,7 @@
               <el-button link type="primary" size="small" v-permission="'erp-sale-approved:print'" @click="openPrintPage(row)">
                 {{ $t('action.print') }}
               </el-button>
-              <el-button link type="primary" size="small" v-permission="'erp-sale-approved:copy'" @click="handleCopy(row)">
+              <el-button v-if="canCopy" link type="primary" size="small" @click="handleCopy(row)">
                 {{ $t('action.copy') }}
               </el-button>
               <el-button
@@ -518,6 +518,10 @@ const hasPermission = (code: string) => {
 const canCreate = computed(() => {
   return isDraftPage.value && hasPermission('erp-sale-draft:add');
 });
+
+const canCopy = computed(() => isApprovedPage.value
+  && hasPermission('erp-sale-approved:copy')
+  && hasPermission('erp-sale-draft:add'));
 
 const canViewSaleReturn = computed(() => hasPermission('erp-sale-return:view'));
 

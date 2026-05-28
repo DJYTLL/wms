@@ -266,11 +266,9 @@
 </template>
 
 <script setup lang="ts">
-import axios from 'axios'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import request from '@/utils/request'
-import { setTokens } from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore, type MenuItem } from '@/stores/menu'
 import { useApiError } from '@/composables/useApiError'
@@ -396,6 +394,8 @@ const menuPageKeyMap: Record<string, string[]> = {
   'erp-customer': ['erp-customer'],
   'erp-customer-category': ['erp-customer-category'],
   'erp-supplier': ['erp-supplier'],
+  'erp-supplier-type': ['erp-supplier-type'],
+  'erp-counterparty-subject': ['erp-counterparty-subject'],
   'erp-warehouse': ['erp-warehouse'],
   'erp-location': ['erp-location'],
   'erp-category': ['erp-category'],
@@ -423,8 +423,9 @@ const menuPageKeyMap: Record<string, string[]> = {
   'erp-disassemble-order': ['erp-disassemble-order'],
   'erp-ar': ['erp-ar'],
   'erp-finance-customer-debt': ['erp-finance-customer-debt'],
-  'erp-finance-summary': ['erp-finance-customer-debt'],
+  'erp-finance-summary': ['erp-finance-customer-debt', 'erp-finance-counterparty-subject'],
   'erp-finance-supplier-debt': ['erp-finance-supplier-debt'],
+  'erp-finance-counterparty-subject': ['erp-finance-counterparty-subject'],
   'erp-ap': ['erp-ap'],
   'erp-receipt': ['erp-receipt'],
   'erp-payment': ['erp-payment'],
@@ -452,6 +453,8 @@ const pageLabelMap = computed<Record<string, string>>(() => ({
   'erp-vehicle-model': `${t('page.erpVehicleFitmentManagement')} - ${t('field.vehicleModel')}`,
   'erp-product-fitment': `${t('page.erpVehicleFitmentManagement')} - ${t('field.productFitment')}`,
   'erp-supplier': t('page.erpSupplierManagement'),
+  'erp-supplier-type': t('page.erpSupplierTypeManagement'),
+  'erp-counterparty-subject': t('page.erpCounterpartySubjectManagement'),
   'erp-warehouse': t('page.erpWarehouseManagement'),
   'erp-location': t('page.erpLocationManagement'),
   'erp-category': t('page.erpCategoryManagement'),
@@ -475,6 +478,7 @@ const pageLabelMap = computed<Record<string, string>>(() => ({
   'erp-payment': t('page.erpPaymentManagement'),
   'erp-finance-customer-debt': t('page.erpCustomerDebtManagement'),
   'erp-finance-supplier-debt': t('page.erpSupplierDebtManagement'),
+  'erp-finance-counterparty-subject': t('page.erpCounterpartyFinanceSummary'),
   'erp-print-template': t('page.erpPrintTemplateManagement'),
   'erp-stock': t('page.erpStockManagement'),
   'erp-stock-txn': t('page.erpStockTxnManagement'),
@@ -858,12 +862,10 @@ const isEditingCurrentUserRole = computed(() => {
 })
 
 const refreshCurrentSession = async () => {
-  const res: any = await axios.post('/api/refresh', {}, { withCredentials: true })
-  const refreshData = res?.data
-  if (!refreshData || refreshData.code !== 200 || !refreshData.data?.token) {
-    throw new Error(refreshData?.message || '刷新登录态失败')
+  const restored = await authStore.restoreSession()
+  if (!restored || !authStore.authorizationReady) {
+    throw new Error('刷新登录态失败')
   }
-  setTokens(refreshData.data.token, refreshData.data.authPayload)
 }
 
 const clampRoleSelections = () => {

@@ -39,7 +39,6 @@
             <el-button
               v-if="canCreate"
               type="primary"
-              v-permission="'erp-sale-return-draft:add'"
               @click="openCreatePage"
             >
               {{ $t('action.add') }}
@@ -107,10 +106,10 @@
                   {{ $t('action.print') }}
                 </el-button>
                 <el-button
+                  v-if="canCopy"
                   link
                   type="primary"
                   size="small"
-                  v-permission="'erp-sale-return-approved:copy'"
                   @click="handleCopy(row)"
                 >
                   {{ $t('action.copy') }}
@@ -303,6 +302,10 @@ const pageTitle = computed(() => {
   return key ? t(key) : t('page.erpSaleReturnManagement');
 });
 
+const hasPermission = (code: string) => {
+  return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
+};
+
 const canCreate = computed(() => {
   const defaultStatus = route.meta.defaultStatus as string | undefined;
   if (defaultStatus === 'APPROVED') {
@@ -311,8 +314,12 @@ const canCreate = computed(() => {
   if (statusLocked.value && statusFilter.value === 'APPROVED') {
     return false;
   }
-  return true;
+  return hasPermission('erp-sale-return-draft:add');
 });
+
+const canCopy = computed(() => isApprovedPage.value
+  && hasPermission('erp-sale-return-approved:copy')
+  && hasPermission('erp-sale-return-draft:add'));
 
 const defaultColumns = ['orderNo', 'customer', 'status', 'totalAmount', 'refundStatus', 'createdAt'];
 const draftColumnSettings = useColumnSettings('erp-sale-return-draft', defaultColumns);

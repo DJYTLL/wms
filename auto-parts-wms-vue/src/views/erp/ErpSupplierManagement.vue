@@ -7,7 +7,7 @@
           <div class="erp-basic-filters erp-basic-filters--6">
             <el-input
               v-model="nameQuery"
-              placeholder="名称"
+              :placeholder="$t('field.name')"
               class="table-search erp-basic-field--narrow"
               clearable
               @clear="handleSearch"
@@ -15,7 +15,7 @@
             />
             <el-input
               v-model="codeQuery"
-              placeholder="编码"
+              :placeholder="$t('field.code')"
               class="table-search erp-basic-field--narrow"
               clearable
               @clear="handleSearch"
@@ -23,7 +23,7 @@
             />
             <el-input
               v-model="shortNameQuery"
-              placeholder="简称"
+              :placeholder="$t('field.shortName')"
               class="table-search erp-basic-field--narrow"
               clearable
               @clear="handleSearch"
@@ -45,6 +45,28 @@
               @clear="handleSearch"
               @keyup.enter="handleSearch"
             />
+            <el-select
+              v-model="supplierTypeFilter"
+              :placeholder="$t('field.supplierType')"
+              class="table-search erp-basic-field--narrow"
+              clearable
+            >
+              <el-option
+                v-for="item in supplierTypeOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
+              />
+            </el-select>
+            <el-select
+              v-model="businessScopeFilter"
+              :placeholder="$t('field.businessScope')"
+              class="table-search erp-basic-field--narrow"
+              clearable
+            >
+              <el-option label="供应商" value="SUPPLIER" />
+              <el-option label="客户兼供应商" value="CUSTOMER_SUPPLIER" />
+            </el-select>
             <el-select
               v-model="statusFilter"
               :placeholder="$t('field.status')"
@@ -71,9 +93,27 @@
           <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" fixed="left" />
           <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" fixed="left" />
           <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="160" fixed="left" />
+          <ErpDataTableColumn v-if="canShow('supplierTypeId')" :label="$t('field.supplierType')" min-width="140">
+            <template #default="{ row }">
+              {{ formatSupplierType(row.supplierTypeId) }}
+            </template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('region')" prop="region" :label="$t('field.region')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('contact')" prop="contact" :label="$t('field.contactPerson')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('phone')" prop="phone" :label="$t('field.phone')" min-width="130" />
           <ErpDataTableColumn v-if="canShow('mobile')" prop="mobile" :label="$t('field.mobile')" min-width="130" />
+          <ErpDataTableColumn v-if="canShow('wechat')" prop="wechat" :label="$t('field.wechat')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('purchaser')" prop="purchaser" :label="$t('field.purchaser')" min-width="120" />
+          <ErpDataTableColumn v-if="canShow('businessScope')" :label="$t('field.businessScope')" min-width="140">
+            <template #default="{ row }">
+              {{ formatBusinessScope(row.businessScope) }}
+            </template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('counterpartySubjectId')" :label="$t('field.counterpartySubject')" min-width="160">
+            <template #default="{ row }">
+              {{ formatCounterpartySubject(row.counterpartySubjectId) }}
+            </template>
+          </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('email')" prop="email" :label="$t('field.email')" min-width="180" />
           <ErpDataTableColumn v-if="canShow('taxNo')" prop="taxNo" :label="$t('field.taxNo')" min-width="180" />
           <ErpDataTableColumn v-if="canShow('address')" prop="address" :label="$t('field.openingAddress')" min-width="220" />
@@ -133,6 +173,19 @@
         <el-form-item :label="$t('field.shortName')">
           <el-input v-model="formData.shortName" />
         </el-form-item>
+        <el-form-item :label="$t('field.supplierType')">
+          <el-select v-model="formData.supplierTypeId" clearable style="width: 100%">
+            <el-option
+              v-for="item in supplierTypeOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('field.region')">
+          <el-input v-model="formData.region" />
+        </el-form-item>
         <el-form-item :label="$t('field.contactPerson')">
           <el-input v-model="formData.contact" />
         </el-form-item>
@@ -141,6 +194,37 @@
         </el-form-item>
         <el-form-item :label="$t('field.mobile')">
           <el-input v-model="formData.mobile" />
+        </el-form-item>
+        <el-form-item :label="$t('field.contactInfo')">
+          <el-input v-model="formData.contactInfo" type="textarea" :rows="2" />
+        </el-form-item>
+        <el-form-item :label="$t('field.wechat')">
+          <el-input v-model="formData.wechat" />
+        </el-form-item>
+        <el-form-item :label="$t('field.purchaser')">
+          <el-input v-model="formData.purchaser" />
+        </el-form-item>
+        <el-form-item :label="$t('field.businessScope')">
+          <el-select v-model="formData.businessScope" style="width: 100%">
+            <el-option label="供应商" value="SUPPLIER" />
+            <el-option label="客户兼供应商" value="CUSTOMER_SUPPLIER" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('field.counterpartySubject')">
+          <el-select
+            v-model="formData.counterpartySubjectId"
+            clearable
+            filterable
+            style="width: 100%"
+            :placeholder="$t('placeholder.selectCounterpartySubject')"
+          >
+            <el-option
+              v-for="item in counterpartySubjectOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item :label="$t('field.email')">
           <el-input v-model="formData.email" />
@@ -156,6 +240,12 @@
         </el-form-item>
         <el-form-item :label="$t('field.bankAccount')">
           <el-input v-model="formData.bankAccount" />
+        </el-form-item>
+        <el-form-item :label="$t('field.sourceCreatedBy')">
+          <el-input v-model="formData.sourceCreatedBy" />
+        </el-form-item>
+        <el-form-item :label="$t('field.sourceCreatedAt')">
+          <el-input v-model="formData.sourceCreatedAt" disabled :placeholder="$t('placeholder.importedSourceCreatedAt')" />
         </el-form-item>
         <el-form-item :label="$t('field.defaultSettlementMethod')">
           <el-select v-model="formData.defaultSettlementMethodCode" clearable style="width: 100%">
@@ -215,9 +305,18 @@ interface ErpSupplier {
   code: string;
   name: string;
   shortName?: string;
+  supplierTypeId?: number;
+  region?: string;
   contact?: string;
   phone?: string;
   mobile?: string;
+  wechat?: string;
+  purchaser?: string;
+  contactInfo?: string;
+  businessScope?: string;
+  counterpartySubjectId?: number;
+  sourceCreatedBy?: string;
+  sourceCreatedAt?: string;
   email?: string;
   address?: string;
   taxNo?: string;
@@ -240,6 +339,11 @@ interface CodeOptionItem {
   isDefault?: boolean;
 }
 
+interface CounterpartySubjectOption {
+  id: number;
+  name: string;
+}
+
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
@@ -251,6 +355,8 @@ const codeQuery = ref('');
 const shortNameQuery = ref('');
 const contactQuery = ref('');
 const phoneQuery = ref('');
+const supplierTypeFilter = ref<number | undefined>(undefined);
+const businessScopeFilter = ref<string>('');
 const statusFilter = ref<'all' | SupplierStatus>('all');
 const loading = ref(false);
 const page = ref(1);
@@ -266,13 +372,21 @@ const isEditing = ref(false);
 const currentId = ref<number | null>(null);
 const settlementMethodOptions = ref<CodeOptionItem[]>([]);
 const paymentMethodOptions = ref<CodeOptionItem[]>([]);
+const supplierTypeOptions = ref<CodeOptionItem[]>([]);
+const counterpartySubjectOptions = ref<CounterpartySubjectOption[]>([]);
 
 const defaultColumns = [
   'code',
   'name',
+  'supplierTypeId',
+  'region',
   'contact',
   'phone',
   'mobile',
+  'wechat',
+  'purchaser',
+  'businessScope',
+  'counterpartySubjectId',
   'email',
   'taxNo',
   'address',
@@ -288,9 +402,18 @@ const formData = reactive({
   code: '',
   name: '',
   shortName: '',
+  supplierTypeId: undefined as number | undefined,
+  region: '',
   contact: '',
   phone: '',
   mobile: '',
+  wechat: '',
+  purchaser: '',
+  contactInfo: '',
+  businessScope: 'SUPPLIER',
+  counterpartySubjectId: undefined as number | undefined,
+  sourceCreatedBy: '',
+  sourceCreatedAt: '',
   email: '',
   address: '',
   taxNo: '',
@@ -303,6 +426,22 @@ const formData = reactive({
 });
 
 const canShow = (key: string) => isVisible(key);
+
+const formatSupplierType = (supplierTypeId?: number) => {
+  if (!supplierTypeId) return '-';
+  return supplierTypeOptions.value.find(item => item.id === supplierTypeId)?.name || String(supplierTypeId);
+};
+
+const formatBusinessScope = (scope?: string) => {
+  if (scope === 'CUSTOMER_SUPPLIER') return t('option.customerSupplier');
+  if (scope === 'SUPPLIER') return t('option.supplierOnly');
+  return scope || '-';
+};
+
+const formatCounterpartySubject = (subjectId?: number) => {
+  if (!subjectId) return '-';
+  return counterpartySubjectOptions.value.find(item => item.id === subjectId)?.name || `#${subjectId}`;
+};
 
 const resolveStatus = (row: ErpSupplier): SupplierStatus => {
   if (row.blacklisted) return 'blacklisted';
@@ -349,9 +488,18 @@ const buildPayload = () => ({
   code: formData.code,
   name: formData.name,
   shortName: formData.shortName || undefined,
+  supplierTypeId: formData.supplierTypeId,
+  region: formData.region || undefined,
   contact: formData.contact || undefined,
   phone: formData.phone || undefined,
   mobile: formData.mobile || undefined,
+  wechat: formData.wechat || undefined,
+  purchaser: formData.purchaser || undefined,
+  contactInfo: formData.contactInfo || undefined,
+  businessScope: formData.businessScope || undefined,
+  counterpartySubjectId: formData.counterpartySubjectId,
+  sourceCreatedBy: formData.sourceCreatedBy || undefined,
+  sourceCreatedAt: formData.sourceCreatedAt || undefined,
   email: formData.email || undefined,
   address: formData.address || undefined,
   taxNo: formData.taxNo || undefined,
@@ -401,6 +549,28 @@ const fetchPaymentMethods = async () => {
   }
 };
 
+const fetchSupplierTypes = async () => {
+  try {
+    const res: any = await request.get('/erp/supplier-types');
+    if (res.data.code === 200) {
+      supplierTypeOptions.value = res.data.data || [];
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const fetchCounterpartySubjects = async () => {
+  try {
+    const res: any = await request.get('/erp/counterparty-subjects');
+    if (res.data.code === 200) {
+      counterpartySubjectOptions.value = res.data.data || [];
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
 const fetchNextSupplierCode = async () => {
   try {
     const res: any = await request.get('/erp/suppliers/next-code');
@@ -415,6 +585,8 @@ const fetchNextSupplierCode = async () => {
 const applySearch = () => {
   let filtered = allTableData.value.slice();
   if (statusFilter.value !== 'all') filtered = filtered.filter(row => resolveStatus(row) === statusFilter.value);
+  if (supplierTypeFilter.value) filtered = filtered.filter(row => row.supplierTypeId === supplierTypeFilter.value);
+  if (businessScopeFilter.value) filtered = filtered.filter(row => (row.businessScope || 'SUPPLIER') === businessScopeFilter.value);
   filtered = filterByFuzzyKeyword(filtered, nameQuery.value, row => [row.name]);
   filtered = filterByFuzzyKeyword(filtered, codeQuery.value, row => [row.code]);
   filtered = filterByFuzzyKeyword(filtered, shortNameQuery.value, row => [row.shortName]);
@@ -451,6 +623,8 @@ const handleReset = () => {
   shortNameQuery.value = '';
   contactQuery.value = '';
   phoneQuery.value = '';
+  supplierTypeFilter.value = undefined;
+  businessScopeFilter.value = '';
   statusFilter.value = 'all';
   handleSearch();
 };
@@ -481,9 +655,18 @@ const openEditModal = (row: ErpSupplier) => {
   formData.code = row.code;
   formData.name = row.name;
   formData.shortName = row.shortName || '';
+  formData.supplierTypeId = row.supplierTypeId;
+  formData.region = row.region || '';
   formData.contact = row.contact || '';
   formData.phone = row.phone || '';
   formData.mobile = row.mobile || '';
+  formData.wechat = row.wechat || '';
+  formData.purchaser = row.purchaser || '';
+  formData.contactInfo = row.contactInfo || '';
+  formData.businessScope = row.businessScope || 'SUPPLIER';
+  formData.counterpartySubjectId = row.counterpartySubjectId;
+  formData.sourceCreatedBy = row.sourceCreatedBy || '';
+  formData.sourceCreatedAt = row.sourceCreatedAt || '';
   formData.email = row.email || '';
   formData.address = row.address || '';
   formData.taxNo = row.taxNo || '';
@@ -500,9 +683,18 @@ const resetForm = () => {
   formData.code = '';
   formData.name = '';
   formData.shortName = '';
+  formData.supplierTypeId = undefined;
+  formData.region = '';
   formData.contact = '';
   formData.phone = '';
   formData.mobile = '';
+  formData.wechat = '';
+  formData.purchaser = '';
+  formData.contactInfo = '';
+  formData.businessScope = 'SUPPLIER';
+  formData.counterpartySubjectId = undefined;
+  formData.sourceCreatedBy = '';
+  formData.sourceCreatedAt = '';
   formData.email = '';
   formData.address = '';
   formData.taxNo = '';
@@ -543,7 +735,7 @@ const handleDelete = async (row: ErpSupplier) => {
       {
         inputPlaceholder: t('action.deleteReason'),
         inputPattern: /^(?=.*\S).{2,500}$/,
-        inputErrorMessage: '删除原因至少 2 个字符',
+        inputErrorMessage: t('message.deleteReasonMin'),
         confirmButtonText: t('action.confirm'),
         cancelButtonText: t('action.cancel'),
         type: 'warning',
@@ -578,6 +770,8 @@ bindPageSizeSync(size, fetchList, {
 onMounted(() => {
   fetchSettlementMethods();
   fetchPaymentMethods();
+  fetchSupplierTypes();
+  fetchCounterpartySubjects();
   fetchTenantKeys();
   if (pageSizeSyncReady.value) {
     fetchList();

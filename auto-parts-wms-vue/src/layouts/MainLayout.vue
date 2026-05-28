@@ -253,6 +253,7 @@ import request, { setTokens } from '@/utils/request';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { normalizeMenuKey } from '@/utils/i18n';
 import { createPageRefreshTargetBinder, isListRefreshRoute } from './pageRefresh';
+import { resetTabsForTenantSwitch } from './tenantSwitchTabs';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
 const i18n = useI18n();
@@ -364,12 +365,28 @@ const switchTenantByCode = async (tenantCode: string) => {
     if (res.data.code === 200) {
       const newToken = res.data?.data?.token;
       if (typeof newToken === 'string' && newToken) {
-        setTokens(newToken, res.data?.data?.authPayload);
+        setTokens(newToken);
+        await authStore.loadAuthorizations();
       }
+      resetTabsForTenantSwitch({
+        visitedViews,
+        viewKeyVersions,
+        currentPath: route.path,
+        homeView: { key: 'dashboard', title: t('nav.dashboard'), path: '/' },
+        onClosePath: (path) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('tags:closing', { detail: { path } }));
+          }
+        },
+      });
+      pageRefreshTeleportTarget.value = null;
+      disposePageRefreshBinder();
       tenantSwitchLoaded.value = false;
       switchableTenants.value = [];
+      menuStore.clearMenus();
+      await refreshMenus(true);
       ElMessage.success(t('message.success'));
-      router.push('/');
+      await router.push('/');
     }
   } catch (error) {
     notifyError(error);
@@ -445,7 +462,6 @@ const handleMenuRefresh = () => {
 onMounted(() => {
   refreshMenus();
   if (typeof window !== 'undefined') {
-    window.addEventListener('auth:tokens-updated', handleMenuRefresh);
     window.addEventListener('menu:refresh', handleMenuRefresh);
     window.addEventListener('tags:close', handleCloseTagEvent as EventListener);
     window.addEventListener('keydown', handleSearchShortcut);
@@ -456,7 +472,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposePageRefreshBinder();
   if (typeof window !== 'undefined') {
-    window.removeEventListener('auth:tokens-updated', handleMenuRefresh);
     window.removeEventListener('menu:refresh', handleMenuRefresh);
     window.removeEventListener('tags:close', handleCloseTagEvent as EventListener);
     window.removeEventListener('keydown', handleSearchShortcut);

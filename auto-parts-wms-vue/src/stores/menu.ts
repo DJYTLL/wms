@@ -2,6 +2,8 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 import request from '@/utils/request';
 import { useAuthStore } from '@/stores/auth';
+import { buildMenuUserKey } from './menuCacheKey';
+import { filterMenusByPermission } from './menuVisibilityPolicy';
 
 export interface MenuItem {
   id: number;
@@ -28,10 +30,14 @@ export const useMenuStore = defineStore('menu', () => {
   const fetchMenus = async (force = false) => {
     const authStore = useAuthStore();
     const currentTenantCode = authStore.tenantCode || null;
-    const currentUserKey = `${currentTenantCode || ''}:${authStore.user?.username || ''}`;
+    const currentUserKey = buildMenuUserKey({
+      tenantCode: currentTenantCode,
+      username: authStore.user?.username,
+      authVersion: authStore.authVersion,
+    });
     const hasToken = !!authStore.token;
 
-    if (!hasToken) {
+    if (!hasToken || !authStore.authorizationReady) {
       clearMenus();
       return menus.value;
     }
@@ -54,31 +60,6 @@ export const useMenuStore = defineStore('menu', () => {
     } finally {
       loading.value = false;
     }
-  };
-
-  const filterMenusByPermission = (items: MenuItem[], authStore: ReturnType<typeof useAuthStore>): MenuItem[] => {
-    return items.reduce<MenuItem[]>((acc, item) => {
-      const requiredPermission = item.permissionCode;
-      const hasPermission = !requiredPermission || authStore.hasPermission(requiredPermission);
-      if (!hasPermission) {
-        return acc;
-      }
-
-      if (item.children && item.children.length > 0) {
-        const filteredChildren = filterMenusByPermission(item.children, authStore);
-        if (filteredChildren.length > 0) {
-          acc.push({ ...item, children: filteredChildren });
-          return acc;
-        }
-        if (item.path) {
-          acc.push({ ...item, children: [] });
-        }
-        return acc;
-      }
-
-      acc.push(item);
-      return acc;
-    }, []);
   };
 
   return {

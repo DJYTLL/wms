@@ -21,6 +21,10 @@ public record ErpSupplierCreateRequest(
      */
     String shortName,
     /**
+     * 表示供应商类型ID。
+     */
+    Long supplierTypeId,
+    /**
      * 表示联系人。
      */
     String contact,
@@ -40,6 +44,22 @@ public record ErpSupplierCreateRequest(
      * 表示地址。
      */
     String address,
+    /**
+     * 表示区域。
+     */
+    String region,
+    /**
+     * 表示微信客服。
+     */
+    String wechat,
+    /**
+     * 表示采购员。
+     */
+    String purchaser,
+    /**
+     * 表示原始联系方式。
+     */
+    String contactInfo,
     /**
      * 表示税务编号。
      */
@@ -72,6 +92,22 @@ public record ErpSupplierCreateRequest(
      * 表示拉黑。
      */
     Boolean blacklisted,
+    /**
+     * 表示来源创建时间。
+     */
+    String sourceCreatedAt,
+    /**
+     * 表示来源创建人。
+     */
+    String sourceCreatedBy,
+    /**
+     * 表示往来类别。
+     */
+    String businessScope,
+    /**
+     * 表示往来主体ID。
+     */
+    Long counterpartySubjectId,
     /**
      * 表示备注说明。
      */

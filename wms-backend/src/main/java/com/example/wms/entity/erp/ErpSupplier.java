@@ -34,6 +34,10 @@ public class ErpSupplier {
     @TableField("short_name")
     private String shortName;
 
+    // 供应商类型ID
+    @TableField("supplier_type_id")
+    private Long supplierTypeId;
+
     // 联系人
     @TableField("contact")
     private String contact;
@@ -53,6 +57,22 @@ public class ErpSupplier {
     // 地址
     @TableField("address")
     private String address;
+
+    // 区域
+    @TableField("region")
+    private String region;
+
+    // 微信客服
+    @TableField("wechat")
+    private String wechat;
+
+    // 采购员
+    @TableField("purchaser")
+    private String purchaser;
+
+    // 原始联系方式
+    @TableField("contact_info")
+    private String contactInfo;
 
     // 税号
     @TableField("tax_no")
@@ -89,6 +109,22 @@ public class ErpSupplier {
     // 备注
     @TableField("remark")
     private String remark;
+
+    // 来源创建时间
+    @TableField("source_created_at")
+    private Instant sourceCreatedAt;
+
+    // 来源创建人
+    @TableField("source_created_by")
+    private String sourceCreatedBy;
+
+    // 往来类别
+    @TableField("business_scope")
+    private String businessScope;
+
+    // 往来主体ID
+    @TableField("counterparty_subject_id")
+    private Long counterpartySubjectId;
 
     // 创建时间
     @TableField("created_at")
@@ -152,6 +188,14 @@ public class ErpSupplier {
         this.shortName = shortName;
     }
 
+    public Long getSupplierTypeId() {
+        return supplierTypeId;
+    }
+
+    public void setSupplierTypeId(Long supplierTypeId) {
+        this.supplierTypeId = supplierTypeId;
+    }
+
     public String getContact() {
         return contact;
     }
@@ -190,6 +234,38 @@ public class ErpSupplier {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
+    }
+
+    public String getWechat() {
+        return wechat;
+    }
+
+    public void setWechat(String wechat) {
+        this.wechat = wechat;
+    }
+
+    public String getPurchaser() {
+        return purchaser;
+    }
+
+    public void setPurchaser(String purchaser) {
+        this.purchaser = purchaser;
+    }
+
+    public String getContactInfo() {
+        return contactInfo;
+    }
+
+    public void setContactInfo(String contactInfo) {
+        this.contactInfo = contactInfo;
     }
 
     public String getTaxNo() {
@@ -262,6 +338,38 @@ public class ErpSupplier {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public Instant getSourceCreatedAt() {
+        return sourceCreatedAt;
+    }
+
+    public void setSourceCreatedAt(Instant sourceCreatedAt) {
+        this.sourceCreatedAt = sourceCreatedAt;
+    }
+
+    public String getSourceCreatedBy() {
+        return sourceCreatedBy;
+    }
+
+    public void setSourceCreatedBy(String sourceCreatedBy) {
+        this.sourceCreatedBy = sourceCreatedBy;
+    }
+
+    public String getBusinessScope() {
+        return businessScope;
+    }
+
+    public void setBusinessScope(String businessScope) {
+        this.businessScope = businessScope;
+    }
+
+    public Long getCounterpartySubjectId() {
+        return counterpartySubjectId;
+    }
+
+    public void setCounterpartySubjectId(Long counterpartySubjectId) {
+        this.counterpartySubjectId = counterpartySubjectId;
     }
 
     public Instant getCreatedAt() {

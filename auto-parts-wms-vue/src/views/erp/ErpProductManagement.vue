@@ -60,6 +60,14 @@
           <ErpDataTableColumn type="index" :label="$t('table.index')" width="70" />
           <ErpDataTableColumn v-if="canShow('code')" prop="code" :label="$t('field.code')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('manufacturerCode')" prop="manufacturerCode" :label="$t('field.manufacturerCode')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('manufacturerModel')" prop="manufacturerModel" :label="$t('field.manufacturerModel')" min-width="140" />
+          <ErpDataTableColumn v-if="canShow('manufacturerName')" prop="manufacturerName" :label="$t('field.manufacturerName')" min-width="160" />
+          <ErpDataTableColumn v-if="canShow('sourceSupplier')" :label="$t('field.sourceSupplier')" min-width="160" column-key="sourceSupplier">
+            <template #default="{ row }">
+              {{ getSourceSupplierName(row.sourceSupplierId) }}
+            </template>
+          </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('productType')" label="商品类型" min-width="120" column-key="productType">
             <template #default="{ row }">
               <el-tag size="small" :type="row.productType === 'ASSEMBLY' ? 'warning' : 'info'">
@@ -101,6 +109,7 @@
               </el-button>
             </template>
           </ErpDataTableColumn>
+          <ErpDataTableColumn v-if="canShow('weight')" prop="weight" :label="$t('field.weight')" min-width="110" />
           <ErpDataTableColumn v-if="canShow('minStock')" prop="minStock" :label="$t('field.minStock')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('maxStock')" prop="maxStock" :label="$t('field.maxStock')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
@@ -232,6 +241,34 @@
                 <el-col :span="12">
                   <el-form-item :label="$t('field.origin')">
                     <el-input v-model="formData.origin" :placeholder="$t('field.origin')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.manufacturerCode')">
+                    <el-input v-model="formData.manufacturerCode" :placeholder="$t('field.manufacturerCode')" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.manufacturerModel')">
+                    <el-input v-model="formData.manufacturerModel" :placeholder="$t('field.manufacturerModel')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.manufacturerName')">
+                    <el-input v-model="formData.manufacturerName" :placeholder="$t('field.manufacturerName')" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item :label="$t('field.sourceSupplier')">
+                    <el-select v-model="formData.sourceSupplierId" clearable filterable style="width: 100%" :placeholder="$t('field.sourceSupplier')">
+                      <el-option v-for="item in supplierOptions" :key="item.id" :label="item.name" :value="item.id" />
+                    </el-select>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -475,6 +512,34 @@
               <el-col :span="12">
                 <el-form-item :label="$t('field.origin')">
                   <el-input v-model="formData.origin" :placeholder="$t('field.origin')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.manufacturerCode')">
+                  <el-input v-model="formData.manufacturerCode" :placeholder="$t('field.manufacturerCode')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item :label="$t('field.manufacturerModel')">
+                  <el-input v-model="formData.manufacturerModel" :placeholder="$t('field.manufacturerModel')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.manufacturerName')">
+                  <el-input v-model="formData.manufacturerName" :placeholder="$t('field.manufacturerName')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item :label="$t('field.sourceSupplier')">
+                  <el-select v-model="formData.sourceSupplierId" clearable filterable style="width: 100%" :placeholder="$t('field.sourceSupplier')">
+                    <el-option v-for="item in supplierOptions" :key="item.id" :label="item.name" :value="item.id" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -809,7 +874,7 @@ import { useApiError } from '@/composables/useApiError';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useAuthStore } from '@/stores/auth';
-import { getCachedCategories, getCachedCustomerCategories, getCachedLocationOptions, getCachedUnits, getCachedWarehouseOptions } from '@/composables/erpBaseDataCache';
+import { getCachedCategories, getCachedCustomerCategories, getCachedLocationOptions, getCachedSuppliers, getCachedUnits, getCachedWarehouseOptions } from '@/composables/erpBaseDataCache';
 import DecimalInput from '@/components/DecimalInput.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
@@ -839,6 +904,10 @@ interface ErpProduct {
   sku?: string;
   brand?: string;
   origin?: string;
+  manufacturerCode?: string;
+  manufacturerModel?: string;
+  manufacturerName?: string;
+  sourceSupplierId?: number;
   weight?: number;
   volume?: number;
   salePrice?: number;
@@ -943,6 +1012,7 @@ const purchaseOrderProductNameMap = ref<Record<number, string>>({});
 
 const categoryOptions = ref<OptionItem[]>([]);
 const customerCategoryOptions = ref<OptionItem[]>([]);
+const supplierOptions = ref<OptionItem[]>([]);
 const unitOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<LocationOption[]>([]);
@@ -950,7 +1020,7 @@ const priceItems = ref<ProductPriceItem[]>([]);
 const currentPriceMap = ref<Map<number, string>>(new Map());
 const customFields = ref<CustomField[]>([]);
 
-const defaultColumns = ['code', 'name', 'productType', 'category', 'unit', 'defaultWarehouse', 'defaultLocation', 'price', 'costPrice', 'minStock', 'maxStock', 'status'];
+const defaultColumns = ['code', 'name', 'manufacturerCode', 'manufacturerModel', 'manufacturerName', 'sourceSupplier', 'productType', 'category', 'unit', 'defaultWarehouse', 'defaultLocation', 'price', 'costPrice', 'weight', 'minStock', 'maxStock', 'status'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-product', defaultColumns);
 
 const formData = reactive({
@@ -968,6 +1038,10 @@ const formData = reactive({
   sku: '',
   brand: '',
   origin: '',
+  manufacturerCode: '',
+  manufacturerModel: '',
+  manufacturerName: '',
+  sourceSupplierId: null as number | null,
   weight: '' as string,
   volume: '' as string,
   salePrice: undefined as number | undefined,
@@ -1007,6 +1081,7 @@ const getCategoryName = (id?: number) => categoryOptions.value.find(item => item
 const getUnitName = (id?: number) => unitOptions.value.find(item => item.id === id)?.name || '-';
 const getWarehouseName = (id?: number) => warehouseOptions.value.find(item => item.id === id)?.name || '-';
 const getLocationName = (id?: number) => locationOptions.value.find(item => item.id === id)?.name || '-';
+const getSourceSupplierName = (id?: number) => supplierOptions.value.find(item => item.id === id)?.name || '-';
 const formatMoney = (value?: number) => {
   if (value == null || Number.isNaN(value)) return '-';
   return Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -1176,6 +1251,14 @@ const fetchCustomerCategories = async () => {
   try {
     customerCategoryOptions.value = await getCachedCustomerCategories(tenantCacheKey.value);
     buildPriceItems();
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const fetchSuppliers = async () => {
+  try {
+    supplierOptions.value = await getCachedSuppliers(tenantCacheKey.value);
   } catch (error) {
     notifyError(error);
   }
@@ -1435,6 +1518,10 @@ const applyProductDetail = (row: ErpProduct) => {
   formData.sku = row.sku || '';
   formData.brand = row.brand || '';
   formData.origin = row.origin || '';
+  formData.manufacturerCode = row.manufacturerCode || '';
+  formData.manufacturerModel = row.manufacturerModel || '';
+  formData.manufacturerName = row.manufacturerName || '';
+  formData.sourceSupplierId = row.sourceSupplierId || null;
   formData.weight = row.weight == null ? '' : String(row.weight);
   formData.volume = row.volume == null ? '' : String(row.volume);
   formData.salePrice = row.salePrice;
@@ -1486,6 +1573,10 @@ const resetForm = () => {
   formData.sku = '';
   formData.brand = '';
   formData.origin = '';
+  formData.manufacturerCode = '';
+  formData.manufacturerModel = '';
+  formData.manufacturerName = '';
+  formData.sourceSupplierId = null;
   formData.weight = '';
   formData.volume = '';
   formData.salePrice = undefined;
@@ -1577,6 +1668,7 @@ bindPageSizeSync(size, fetchList, {
 onMounted(() => {
   fetchCategories();
   fetchCustomerCategories();
+  fetchSuppliers();
   fetchUnits();
   fetchWarehouses();
   fetchLocations();

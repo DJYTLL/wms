@@ -375,6 +375,8 @@ const menuResourceKeyMap: Record<string, string[]> = {
   menu: ['menu'],
   'menu-management': ['menu'],
   'system-config': ['system-config'],
+  'tenant-setting': ['tenant-setting'],
+  'api-latency-monitor': ['api-latency-monitor'],
   tenant: ['tenant'],
   tenants: ['tenant'],
   erp: [],

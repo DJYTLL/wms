@@ -10,6 +10,7 @@ import com.example.wms.dto.erp.ErpProductPriceItemRequest;
 import com.example.wms.dto.erp.ErpProductUpdateRequest;
 import com.example.wms.dto.erp.ErpSettlementMethodCreateRequest;
 import com.example.wms.dto.erp.ErpSupplierCreateRequest;
+import com.example.wms.entity.erp.ErpSupplierType;
 import com.example.wms.dto.erp.ErpVehicleBrandCreateRequest;
 import com.example.wms.dto.erp.ErpVehicleModelCreateRequest;
 import com.example.wms.dto.erp.ErpVehicleSeriesCreateRequest;
@@ -48,6 +49,7 @@ import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpSaleReturnMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
+import com.example.wms.mapper.erp.ErpSupplierTypeMapper;
 import com.example.wms.mapper.erp.ErpUnitMapper;
 import com.example.wms.mapper.erp.ErpVehicleBrandMapper;
 import com.example.wms.mapper.erp.ErpVehicleModelMapper;
@@ -62,6 +64,7 @@ import com.example.wms.service.erp.impl.ErpPrintTemplateServiceImpl;
 import com.example.wms.service.erp.impl.ErpProductServiceImpl;
 import com.example.wms.service.erp.impl.ErpSettlementMethodServiceImpl;
 import com.example.wms.service.erp.impl.ErpSupplierServiceImpl;
+import com.example.wms.service.erp.impl.ErpSupplierTypeServiceImpl;
 import com.example.wms.service.erp.impl.ErpUnitServiceImpl;
 import com.example.wms.service.erp.impl.ErpVehicleBrandServiceImpl;
 import com.example.wms.service.erp.impl.ErpVehicleModelServiceImpl;
@@ -98,6 +101,7 @@ class ErpMasterDataGuardTests {
 
     @Mock private ErpCustomerMapper customerMapper;
     @Mock private ErpSupplierMapper supplierMapper;
+    @Mock private ErpSupplierTypeMapper supplierTypeMapper;
     @Mock private ErpSaleOrderMapper saleOrderMapper;
     @Mock private ErpSaleReturnMapper saleReturnMapper;
     @Mock private ErpReceiptMapper receiptMapper;
@@ -145,10 +149,38 @@ class ErpMasterDataGuardTests {
         when(locationMapper.selectOne(any())).thenReturn(location);
 
         ErpProductUpdateRequest request = new ErpProductUpdateRequest(
-            "P-007", "product", null, null, null, null, null,
-            10L, 20L, null, null, null, null, null, null,
-            null, null, null, null, null, null, null,
-            null, true, null, null, null
+            "P-007",
+            "product",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            10L,
+            20L,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            null,
+            null,
+            null
         );
 
         assertThatThrownBy(() -> service.update(7L, request))
@@ -163,10 +195,37 @@ class ErpMasterDataGuardTests {
         when(customerCategoryMapper.selectCount(any())).thenReturn(1L);
 
         ErpProductCreateRequest request = new ErpProductCreateRequest(
-            "P-008", "product", null, null, null, null, null,
-            null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null,
-            null, true, null, null,
+            "P-008",
+            "product",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            null,
+            null,
             List.of(
                 new ErpProductPriceItemRequest(1L, new BigDecimal("10")),
                 new ErpProductPriceItemRequest(1L, new BigDecimal("12"))
@@ -176,6 +235,52 @@ class ErpMasterDataGuardTests {
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("客户类别价格存在重复项");
+    }
+
+    @Test
+    void productCreateRejectsSourceSupplierOutsideTenant() {
+        ErpProductServiceImpl service = productService();
+        when(productMapper.findByCode(1L, "P-009")).thenReturn(null);
+        when(supplierMapper.selectCount(any())).thenReturn(0L);
+
+        ErpProductCreateRequest request = new ErpProductCreateRequest(
+            "P-009",
+            "product",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "M-CODE",
+            "M-MODEL",
+            "M-NAME",
+            9L,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            null,
+            null,
+            null
+        );
+
+        assertThatThrownBy(() -> service.create(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("来源供应商不存在");
     }
 
     @Test
@@ -251,6 +356,17 @@ class ErpMasterDataGuardTests {
         assertThatThrownBy(() -> service.delete(6L))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("供应商已被采购单引用，不能删除");
+    }
+
+    @Test
+    void supplierTypeDeleteRejectsReferencedSupplier() {
+        ErpSupplierTypeServiceImpl service = supplierTypeService();
+        when(supplierTypeMapper.selectOne(any())).thenReturn(supplierType(7L));
+        when(supplierMapper.selectCount(any())).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.delete(7L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("供应商类型已被供应商引用，不能删除");
     }
 
     @Test
@@ -350,6 +466,7 @@ class ErpMasterDataGuardTests {
             warehouseMapper,
             locationMapper,
             customerCategoryMapper,
+            supplierMapper,
             objectMapper
         );
     }
@@ -377,6 +494,8 @@ class ErpMasterDataGuardTests {
             purchaseReturnMapper,
             paymentMapper,
             accountsPayableMapper,
+            settlementMethodMapper,
+            paymentMethodMapper,
             orderSequenceMapper,
             systemConfigMapper,
             objectMapper
@@ -397,6 +516,10 @@ class ErpMasterDataGuardTests {
             accountsPayableMapper,
             codeGenerator()
         );
+    }
+
+    private ErpSupplierTypeServiceImpl supplierTypeService() {
+        return new ErpSupplierTypeServiceImpl(supplierTypeMapper, supplierMapper);
     }
 
     private ErpPaymentMethodServiceImpl paymentMethodService() {
@@ -434,6 +557,14 @@ class ErpMasterDataGuardTests {
         supplier.setCode("SU-" + id);
         supplier.setName("Supplier-" + id);
         return supplier;
+    }
+
+    private ErpSupplierType supplierType(Long id) {
+        ErpSupplierType supplierType = new ErpSupplierType();
+        supplierType.setId(id);
+        supplierType.setCode("ST-" + id);
+        supplierType.setName("SupplierType-" + id);
+        return supplierType;
     }
 
     private ErpVehicleBrand vehicleBrand(Long id) {

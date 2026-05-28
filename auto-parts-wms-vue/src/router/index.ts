@@ -5,21 +5,6 @@ import { useAuthStore } from '@/stores/auth'
 import MainLayout from '../layouts/MainLayout.vue'
 import LoginView from '../views/LoginView.vue'
 
-// --- 临时占位组件 ---
-// 在实际开发中，请删除这里，并在 routes 中引用真实的 .vue 文件
-// 这样做的目的是为了让你复制进去后，点击菜单不会报错，能看到效果
-const TempComponent = (title: string) => ({
-  template: `
-    <div style="padding: 20px;">
-      <h2>${title}</h2>
-      <p>这是一个演示页面，用于测试路由跳转和多标签页功能。</p>
-      <div style="margin-top: 20px; padding: 20px; background: #f9f9f9; border-radius: 8px;">
-        当前路径: {{ $route.path }}
-      </div>
-    </div>
-  `
-})
-
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/login',
@@ -31,13 +16,13 @@ const routes: Array<RouteRecordRaw> = [
     path: '/erp/sale-orders/:id/print',
     name: 'erp-sale-order-print',
     component: () => import('../views/erp/ErpSaleOrderPrintRedirect.vue'),
-    meta: { title: '销售单打印' }
+    meta: { title: '销售单打印', permissionsAny: ['erp-sale-draft:print', 'erp-sale-approved:print'] }
   },
   {
     path: '/erp/purchase-orders/:id/print',
     name: 'erp-purchase-order-print',
     component: () => import('../views/erp/ErpPurchaseOrderPrint.vue'),
-    meta: { title: '采购单打印' }
+    meta: { title: '采购单打印', permissionsAny: ['erp-purchase-draft:print', 'erp-purchase-approved:print'] }
   },
   {
     path: '/erp/purchase-orders/draft/:id/print',
@@ -54,8 +39,8 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/erp/sale-returns/:id/print',
     name: 'erp-sale-return-print',
-    component: () => import('../views/erp/ErpSaleReturnPrint.vue'),
-    meta: { title: '销售退货单打印', permission: 'erp-sale-return:view' }
+    component: () => import('../views/erp/ErpSaleReturnLegacyPrintRedirect.vue'),
+    meta: { title: '销售退货单打印', permissionsAny: ['erp-sale-return-draft:print', 'erp-sale-return-approved:print'] }
   },
   {
     path: '/erp/sale-returns/draft/:id/print',
@@ -85,7 +70,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/erp/purchase-returns/:id/print',
     name: 'erp-purchase-return-print',
     component: () => import('../views/erp/ErpPurchaseReturnLegacyPrintRedirect.vue'),
-    meta: { title: '采购退货单打印' }
+    meta: { title: '采购退货单打印', permissionsAny: ['erp-purchase-return-draft:print', 'erp-purchase-return-approved:print'] }
   },
   {
     path: '/erp/receipts/:id/print',
@@ -237,6 +222,18 @@ const routes: Array<RouteRecordRaw> = [
         name: 'erp-suppliers',
         component: () => import('../views/erp/ErpSupplierManagement.vue'),
         meta: { title: 'ERP供应商管理', permission: 'erp-supplier:view' }
+      },
+      {
+        path: 'erp/supplier-types',
+        name: 'erp-supplier-types',
+        component: () => import('../views/erp/ErpSupplierTypeManagement.vue'),
+        meta: { title: '供应商类型管理', permission: 'erp-supplier-type:view', titleKey: 'page.erpSupplierTypeManagement' }
+      },
+      {
+        path: 'erp/counterparty-subjects',
+        name: 'erp-counterparty-subjects',
+        component: () => import('../views/erp/ErpCounterpartySubjectManagement.vue'),
+        meta: { title: '往来主体管理', permission: 'erp-counterparty-subject:view', titleKey: 'page.erpCounterpartySubjectManagement' }
       },
       {
         path: 'erp/warehouses',
@@ -674,6 +671,12 @@ const routes: Array<RouteRecordRaw> = [
         meta: { title: '供应商欠款', permission: 'erp-finance-supplier-debt:view', titleKey: 'page.erpSupplierDebtManagement' }
       },
       {
+        path: 'erp/finance/counterparty-subjects',
+        name: 'erp-finance-counterparty-subjects',
+        component: () => import('../views/erp/ErpCounterpartyFinanceSummary.vue'),
+        meta: { title: '往来主体财务汇总', permission: 'erp-finance-summary:view', titleKey: 'page.erpCounterpartyFinanceSummary' }
+      },
+      {
         path: 'erp/ar/:id',
         name: 'erp-ar-detail',
         component: () => import('../views/erp/ErpAccountsReceivableDetail.vue'),
@@ -781,6 +784,10 @@ router.beforeEach(async (to, from, next) => {
     await authStore.restoreSession();
   }
 
+  if (to.name !== 'login' && authStore.isAuthenticated && !authStore.authorizationReady) {
+    await authStore.loadAuthorizations();
+  }
+
   // 1. 认证拦截
   if (to.name !== 'login' && !authStore.isAuthenticated) {
     next({ name: 'login' });
@@ -802,6 +809,16 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // 3. 权限拦截
+  const permissionsAny = to.meta.permissionsAny as string[] | undefined;
+  if (Array.isArray(permissionsAny) && permissionsAny.length > 0) {
+    const hasAnyPermission = permissionsAny.some(permission => authStore.hasPermission(permission));
+    if (!hasAnyPermission && to.path !== '/') {
+      console.warn(`Access denied to ${to.path}. Missing one of permissions: ${permissionsAny.join(', ')}`);
+      next({ path: '/' });
+      return;
+    }
+  }
+
   if (to.meta.permission && !authStore.hasPermission(to.meta.permission as string)) {
     // 如果没有权限，重定向到首页（Dashboard通常是所有人可见，或者至少是最安全的默认页）
     // 为了防止无限循环（如果用户连 dashboard 权限都没有），这里可以加一个判断

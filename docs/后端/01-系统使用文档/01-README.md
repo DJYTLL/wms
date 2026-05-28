@@ -81,3 +81,10 @@ Default account in a fresh system:
 - tenant code: `default`
 - username: `admin`
 - password: `password`
+
+## Docs
+
+- `01-README.md`: overview
+- `03-API.md`: backend API documentation
+- `04-ERP_INTEGRATION.md`: ERP integration notes
+- `05-NAS_POSTGRESQL_SETUP.md`: NAS PostgreSQL connection, migration, and operational notes

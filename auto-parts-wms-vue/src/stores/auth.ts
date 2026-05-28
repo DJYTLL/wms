@@ -13,9 +13,16 @@ import request, { clearTokens, getToken, setTokens } from '@/utils/request';
 let listenersRegistered = false;
 const AUTH_CONTEXT_STORAGE_KEY = 'auth-context';
 
+const dispatchAuthorizationChanged = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('menu:refresh'));
+  }
+};
+
 type StoredAuthContext = {
   user?: any;
   permissions?: string[];
+  authVersion?: number | null;
   tenantId?: number | null;
   tenantCode?: string | null;
   userTenantId?: number | null;
@@ -33,11 +40,13 @@ export const useAuthStore = defineStore('auth', () => {
   
   // 用户权限列表的响应式状态 (例如：['erp-warehouse:view', 'erp-product:add'])。
   const permissions = ref<string[]>([]);
+  const authVersion = ref<number | null>(null);
   const tenantId = ref<number | null>(null);
   const tenantCode = ref<string | null>(null);
   const userTenantId = ref<number | null>(null);
   const userTenantCode = ref<string | null>(null);
   const initialized = ref(false);
+  const authorizationReady = ref(false);
   let restorePromise: Promise<boolean> | null = null;
 
   const readStoredAuthContext = (): StoredAuthContext | null => {
@@ -67,13 +76,30 @@ export const useAuthStore = defineStore('auth', () => {
     window.localStorage.setItem(AUTH_CONTEXT_STORAGE_KEY, JSON.stringify(context));
   };
 
+  const clearAuthorizationContext = () => {
+    user.value = null;
+    permissions.value = [];
+    authVersion.value = null;
+    tenantId.value = null;
+    tenantCode.value = null;
+    userTenantId.value = null;
+    userTenantCode.value = null;
+    authorizationReady.value = false;
+    persistAuthContext(null);
+  };
+
   const applyAuthContext = (authPayload?: any) => {
     if (!authPayload) {
       permissions.value = [];
+      authorizationReady.value = false;
       return false;
     }
+    const previousUser = user.value?.username || null;
+    const previousTenantCode = tenantCode.value;
+    const previousAuthVersion = authVersion.value;
     user.value = authPayload.user || null;
     permissions.value = Array.isArray(authPayload.permissions) ? authPayload.permissions : [];
+    authVersion.value = typeof authPayload.authVersion === 'number' ? authPayload.authVersion : null;
     tenantId.value = typeof authPayload.tenantId === 'number' ? authPayload.tenantId : null;
     tenantCode.value = typeof authPayload.tenantCode === 'string' ? authPayload.tenantCode : null;
     userTenantId.value = typeof authPayload.userTenantId === 'number' ? authPayload.userTenantId : null;
@@ -81,24 +107,27 @@ export const useAuthStore = defineStore('auth', () => {
     persistAuthContext({
       user: user.value,
       permissions: permissions.value,
+      authVersion: authVersion.value,
       tenantId: tenantId.value,
       tenantCode: tenantCode.value,
       userTenantId: userTenantId.value,
       userTenantCode: userTenantCode.value,
     });
+    authorizationReady.value = true;
+    if (
+      previousUser !== (user.value?.username || null)
+      || previousTenantCode !== tenantCode.value
+      || previousAuthVersion !== authVersion.value
+    ) {
+      dispatchAuthorizationChanged();
+    }
     return true;
   };
 
   const applyToken = (newToken: string | null, authPayload?: any) => {
     token.value = newToken;
     if (!newToken) {
-      user.value = null;
-      permissions.value = [];
-      tenantId.value = null;
-      tenantCode.value = null;
-      userTenantId.value = null;
-      userTenantCode.value = null;
-      persistAuthContext(null);
+      clearAuthorizationContext();
       return;
     }
 
@@ -117,6 +146,8 @@ export const useAuthStore = defineStore('auth', () => {
         const payload = JSON.parse(atob(base64));
         user.value = payload.user;
         permissions.value = [];
+        authVersion.value = typeof payload.av === 'number' ? payload.av : null;
+        authorizationReady.value = false;
         tenantId.value = typeof payload.tid === 'number' ? payload.tid : null;
         tenantCode.value = typeof payload.tcode === 'string' ? payload.tcode : null;
         userTenantId.value = typeof payload.utid === 'number' ? payload.utid : null;
@@ -124,7 +155,7 @@ export const useAuthStore = defineStore('auth', () => {
         const storedContext = readStoredAuthContext();
         if (storedContext && storedContext.user?.username === payload.user?.username) {
           user.value = storedContext.user || user.value;
-          permissions.value = Array.isArray(storedContext.permissions) ? storedContext.permissions : [];
+          authVersion.value = typeof storedContext.authVersion === 'number' ? storedContext.authVersion : authVersion.value;
           tenantId.value = typeof storedContext.tenantId === 'number' ? storedContext.tenantId : tenantId.value;
           tenantCode.value = typeof storedContext.tenantCode === 'string' ? storedContext.tenantCode : tenantCode.value;
           userTenantId.value = typeof storedContext.userTenantId === 'number' ? storedContext.userTenantId : userTenantId.value;
@@ -171,9 +202,11 @@ export const useAuthStore = defineStore('auth', () => {
         username,
         password
       });
-      const { token: newToken, authPayload } = res.data.data;
-      setTokens(newToken, authPayload);
-      applyToken(newToken, authPayload);
+      const { token: newToken } = res.data.data;
+      setTokens(newToken);
+      applyToken(newToken);
+      await loadAuthorizations();
+      initialized.value = true;
       return true;
     } catch (error: any) {
       console.error('Login error:', error);
@@ -181,16 +214,35 @@ export const useAuthStore = defineStore('auth', () => {
     }
   };
 
-  const restoreSession = async () => {
-    if (token.value) {
-      initialized.value = true;
-      return true;
+  const loadAuthorizations = async () => {
+    if (!token.value) {
+      clearAuthorizationContext();
+      return false;
     }
+    const res: any = await request.get('/me/authorizations');
+    const payload = res?.data?.data;
+    if (!payload) {
+      clearAuthorizationContext();
+      return false;
+    }
+    applyAuthContext(payload);
+    return true;
+  };
+
+  const restoreSession = async () => {
     if (restorePromise) {
       return restorePromise;
     }
     restorePromise = (async () => {
       try {
+        if (token.value) {
+          const loaded = await loadAuthorizations();
+          if (!loaded) {
+            clearTokens();
+            return false;
+          }
+          return true;
+        }
         const res: any = await axios.post('/api/refresh', {}, { withCredentials: true });
         const refreshData = res.data;
         if (!refreshData || refreshData.code !== 200 || !refreshData.data?.token) {
@@ -199,7 +251,7 @@ export const useAuthStore = defineStore('auth', () => {
         }
         setTokens(refreshData.data.token, refreshData.data.authPayload);
         applyToken(refreshData.data.token, refreshData.data.authPayload);
-        return true;
+        return await loadAuthorizations();
       } catch (_error) {
         clearTokens();
         return false;
@@ -263,13 +315,16 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     user,
     permissions,
+    authVersion,
     tenantId,
     tenantCode,
     userTenantId,
     userTenantCode,
     initialized,
+    authorizationReady,
     isAuthenticated,
     login,
+    loadAuthorizations,
     restoreSession,
     logout,
     hasPermission,

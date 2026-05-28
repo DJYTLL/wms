@@ -87,7 +87,6 @@ const handleLogin = async () => {
 
   try {
     await authStore.login(tenantCode.value.trim(), username.value.trim(), password.value);
-    console.log('Login successful');
     router.push('/');
   } catch (error: any) {
     console.error('Login failed', error);

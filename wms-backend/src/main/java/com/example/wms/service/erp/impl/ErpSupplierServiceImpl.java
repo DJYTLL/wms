@@ -26,9 +26,11 @@ import com.example.wms.tenant.TenantContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -41,6 +43,7 @@ import java.util.stream.Collectors;
 @Service
 public class ErpSupplierServiceImpl implements ErpSupplierService {
     private static final String SUPPLIER_CODE_TYPE = "SUPPLIER";
+    private static final String DEFAULT_BUSINESS_SCOPE = "SUPPLIER";
 
     private final ErpSupplierMapper erpSupplierMapper;
     private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
@@ -115,6 +118,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
 
     @Override
     @AuditLog(action = "ERP_SUPPLIER_CREATE", entityType = "erp_supplier", entityId = "{result.id}", detail = "code={arg0.code}")
+@Transactional
     public ErpSupplier create(ErpSupplierCreateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
         ErpSupplier existing = erpSupplierMapper.findByCode(tenantId, request.code());
@@ -134,6 +138,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
 
     @Override
     @AuditLog(action = "ERP_SUPPLIER_UPDATE", entityType = "erp_supplier", entityId = "{arg0}", detail = "code={arg1.code}")
+@Transactional
     public ErpSupplier update(Long id, ErpSupplierUpdateRequest request) {
         Long tenantId = TenantContext.requireTenantId();
         ErpSupplier supplier = erpSupplierMapper.selectOne(new QueryWrapper<ErpSupplier>()
@@ -158,6 +163,7 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
 
     @Override
     @AuditLog(action = "ERP_SUPPLIER_DELETE", entityType = "erp_supplier", entityId = "{arg0}")
+@Transactional
     public void delete(Long id) {
         Long tenantId = TenantContext.requireTenantId();
         ErpSupplier supplier = erpSupplierMapper.selectOne(new QueryWrapper<ErpSupplier>()
@@ -285,17 +291,26 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         supplier.setCode(request.code());
         supplier.setName(request.name());
         supplier.setShortName(request.shortName());
+        supplier.setSupplierTypeId(request.supplierTypeId());
         supplier.setContact(request.contact());
         supplier.setPhone(request.phone());
         supplier.setMobile(request.mobile());
         supplier.setEmail(request.email());
         supplier.setAddress(request.address());
+        supplier.setRegion(request.region());
+        supplier.setWechat(request.wechat());
+        supplier.setPurchaser(request.purchaser());
+        supplier.setContactInfo(request.contactInfo());
         supplier.setTaxNo(request.taxNo());
         supplier.setBankName(request.bankName());
         supplier.setBankAccount(request.bankAccount());
         supplier.setDefaultSettlementMethodCode(request.defaultSettlementMethodCode());
         supplier.setDefaultPaymentMethodCode(request.defaultPaymentMethodCode());
         supplier.setContacts(parseContacts(request.contacts()));
+        supplier.setSourceCreatedAt(parseSourceCreatedAt(request.sourceCreatedAt()));
+        supplier.setSourceCreatedBy(request.sourceCreatedBy());
+        supplier.setBusinessScope(normalizeBusinessScope(request.businessScope()));
+        supplier.setCounterpartySubjectId(request.counterpartySubjectId());
         supplier.setRemark(request.remark());
     }
 
@@ -303,17 +318,26 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         supplier.setCode(request.code());
         supplier.setName(request.name());
         supplier.setShortName(request.shortName());
+        supplier.setSupplierTypeId(request.supplierTypeId());
         supplier.setContact(request.contact());
         supplier.setPhone(request.phone());
         supplier.setMobile(request.mobile());
         supplier.setEmail(request.email());
         supplier.setAddress(request.address());
+        supplier.setRegion(request.region());
+        supplier.setWechat(request.wechat());
+        supplier.setPurchaser(request.purchaser());
+        supplier.setContactInfo(request.contactInfo());
         supplier.setTaxNo(request.taxNo());
         supplier.setBankName(request.bankName());
         supplier.setBankAccount(request.bankAccount());
         supplier.setDefaultSettlementMethodCode(request.defaultSettlementMethodCode());
         supplier.setDefaultPaymentMethodCode(request.defaultPaymentMethodCode());
         supplier.setContacts(parseContacts(request.contacts()));
+        supplier.setSourceCreatedAt(parseSourceCreatedAt(request.sourceCreatedAt()));
+        supplier.setSourceCreatedBy(request.sourceCreatedBy());
+        supplier.setBusinessScope(normalizeBusinessScope(request.businessScope()));
+        supplier.setCounterpartySubjectId(request.counterpartySubjectId());
         supplier.setRemark(request.remark());
     }
 
@@ -341,6 +365,34 @@ public class ErpSupplierServiceImpl implements ErpSupplierService {
         } catch (Exception ex) {
             throw new IllegalArgumentException("联系人列表格式不正确", ex);
         }
+    }
+
+    private Instant parseSourceCreatedAt(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        try {
+            if (trimmed.matches("^\\d+$")) {
+                return Instant.ofEpochMilli(Long.parseLong(trimmed));
+            }
+            if (trimmed.contains("T")) {
+                return Instant.parse(trimmed);
+            }
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            return LocalDateTime.parse(trimmed, formatter)
+                .atZone(ZoneId.systemDefault())
+                .toInstant();
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("来源创建时间格式不正确", ex);
+        }
+    }
+
+    private String normalizeBusinessScope(String businessScope) {
+        if (businessScope == null || businessScope.isBlank()) {
+            return DEFAULT_BUSINESS_SCOPE;
+        }
+        return businessScope.trim();
     }
 
     private String generateSupplierCode(Long tenantId) {

@@ -375,27 +375,27 @@
   }
 
   .erp-basic-filters--2 {
-    grid-template-columns: 200px 140px;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .erp-basic-filters--3 {
-    grid-template-columns: repeat(3, 140px);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .erp-basic-filters--4 {
-    grid-template-columns: repeat(4, 140px);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .erp-basic-filters--5 {
-    grid-template-columns: repeat(5, 140px);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .erp-basic-filters--6 {
-    grid-template-columns: repeat(6, 140px);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .erp-basic-filters--7 {
-    grid-template-columns: repeat(7, 140px);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
   .erp-basic-actions {

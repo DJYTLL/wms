@@ -197,7 +197,27 @@
                       :disabled="!formData.customerId"
                       @change="handleProductChange(row)"
                     >
-                      <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
+                      <el-option
+                        v-for="item in getSelectableProductOptions(row.productId)"
+                        :key="item.id"
+                        :label="item.name"
+                        :value="item.id"
+                      >
+                        <div class="product-option-row">
+                          <span class="product-option-row__name">{{ item.name }}</span>
+                          <el-button
+                            v-if="canEditProductInline"
+                            class="product-option-row__edit"
+                            link
+                            type="primary"
+                            title="编辑商品详情"
+                            @mousedown.prevent.stop
+                            @click.prevent.stop="openProductEditFromOption(row, item.id)"
+                          >
+                            <el-icon><EditPen /></el-icon>
+                          </el-button>
+                        </div>
+                      </el-option>
                     </el-select>
                     <el-tag
                       class="history-inline history-tag history-tag--inline"
@@ -398,6 +418,12 @@
         @filter-change="handleHistoryDialogFilterChange"
         @page-change="handleHistoryDialogPageChange"
         @size-change="handleHistoryDialogSizeChange"
+      />
+
+      <ErpProductEditDrawer
+        v-model="productEditDrawerVisible"
+        :product-id="productEditProductId"
+        @saved="handleInlineProductSaved"
       />
 
       <el-dialog
@@ -604,13 +630,14 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useValidationMessage } from '@/composables/useValidationMessage';
 import DecimalInput from '@/components/DecimalInput.vue';
+import ErpProductEditDrawer from '@/components/ErpProductEditDrawer.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import ProductHistoryDialog from '@/components/ProductHistoryDialog.vue';
 import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
 import { ElMessageBox } from 'element-plus';
-import { Delete, InfoFilled, Operation, Plus, View } from '@element-plus/icons-vue';
+import { Delete, EditPen, InfoFilled, Operation, Plus, View } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import {
   getCachedCustomers,
@@ -634,6 +661,17 @@ interface OptionItem {
 }
 
 interface ProductOption {
+  id: number;
+  name: string;
+  productType?: string;
+  defaultWarehouseId?: number;
+  defaultLocationId?: number;
+  salePrice?: number;
+  costPrice?: number;
+  enabled?: boolean;
+}
+
+interface ErpProductDetail {
   id: number;
   name: string;
   productType?: string;
@@ -884,6 +922,9 @@ const selectedItems = ref<SaleOrderItem[]>([]);
 const productSelectRefs = ref<any[]>([]);
 const customerCategoryOptions = ref<OptionItem[]>([]);
 const assemblyTemplateMap = ref<Record<number, AssemblyTemplateOption[]>>({});
+const productEditDrawerVisible = ref(false);
+const productEditProductId = ref<number | null>(null);
+const productEditRow = ref<SaleOrderItem | null>(null);
 const assemblyQuickDialogVisible = ref(false);
 const assemblyQuickLoading = ref(false);
 const assemblyQuickSaving = ref(false);
@@ -938,6 +979,7 @@ const canViewProfit = computed(() => {
 
 const canShowProfit = computed(() => canViewProfit.value && showProfitColumn.value);
 const canShowDiscountAllocated = computed(() => hasPermission('column:erp-sale-form:discountAllocated'));
+const canEditProductInline = computed(() => !isReadOnly.value && hasPermission('erp-product:edit'));
 const canUseQuickAssembly = computed(() => {
   return !isReadOnly.value
     && hasPermission('erp-assemble-order:view')
@@ -2262,6 +2304,39 @@ const openHistoryForRow = async (row: SaleOrderItem) => {
   } catch (error) {
     notifyError(error);
   }
+};
+
+const openProductEditFromOption = (row: SaleOrderItem, productId: number) => {
+  if (!canEditProductInline.value || !productId) return;
+  activeRowIndex.value = formData.items.indexOf(row);
+  productEditRow.value = row;
+  productEditProductId.value = productId;
+  productEditDrawerVisible.value = true;
+};
+
+const handleInlineProductSaved = async (product: ErpProductDetail) => {
+  const row = productEditRow.value;
+  productOptions.value = mergeOptionById(productOptions.value, {
+    id: product.id,
+    name: product.name,
+    productType: product.productType,
+    defaultWarehouseId: product.defaultWarehouseId,
+    defaultLocationId: product.defaultLocationId,
+    salePrice: product.salePrice,
+    costPrice: product.costPrice,
+    enabled: product.enabled
+  });
+  await fetchProducts();
+  await fetchAssemblyTemplatesByProductId(product.id, true);
+  if (row?.productId === product.id) {
+    row.productName = product.name;
+    applyProductDefaults(row, false);
+    await fetchStockOptions(product.id, true);
+    syncStockKey(row);
+    await applyPriceForRow(row, false);
+  }
+  productEditRow.value = null;
+  productEditProductId.value = null;
 };
 
 const handleStockLocationChange = (row: SaleOrderItem) => {
@@ -3702,6 +3777,34 @@ onBeforeUnmount(() => {
 .product-cell__select {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.product-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.product-option-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-option-row__edit {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.product-option-row__edit :deep(.el-icon) {
+  font-size: 14px;
 }
 
 .history-inline {

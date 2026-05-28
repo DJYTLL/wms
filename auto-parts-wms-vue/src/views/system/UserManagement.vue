@@ -514,11 +514,6 @@ const saveData = async () => {
     const res: any = await method(url, body);
     
     if (res.data.code === 200) {
-      const userId = isEditing.value ? currentId.value : res.data.data.id;
-
-      // 保存角色
-      await request.put(`/users/${userId}/roles`, { roleIds: formData.roleIds });
-
       notifySuccess();
       showModal.value = false;
       fetchUsers();

@@ -14,10 +14,12 @@ import com.example.wms.entity.erp.ErpPurchaseReturnItem;
 import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpReceiptReceivable;
 import com.example.wms.entity.erp.ErpStockBalance;
+import com.example.wms.dto.erp.ErpCounterpartyFinanceSummaryView;
 import com.example.wms.dto.erp.ErpPaymentCreateRequest;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
+import com.example.wms.mapper.erp.ErpCounterpartySubjectMapper;
 import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpPaymentMapper;
@@ -33,6 +35,7 @@ import com.example.wms.mapper.erp.ErpSaleOrderMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
+import com.example.wms.service.erp.impl.ErpFinanceServiceImpl;
 import com.example.wms.service.erp.impl.ErpPaymentServiceImpl;
 import com.example.wms.service.erp.impl.ErpPurchaseOrderServiceImpl;
 import com.example.wms.service.erp.impl.ErpPurchaseReturnServiceImpl;
@@ -87,6 +90,8 @@ class ErpFinanceWorkflowTests {
     private ErpSupplierMapper supplierMapper;
     @Mock
     private ErpAccountsPayableMapper payableMapper;
+    @Mock
+    private ErpCounterpartySubjectMapper counterpartySubjectMapper;
     @Mock
     private ErpPurchaseOrderMapper purchaseOrderMapper;
     @Mock
@@ -526,6 +531,49 @@ class ErpFinanceWorkflowTests {
         assertThat(String.valueOf(captor.getValue().getSqlSegment())).doesNotContain("amount");
     }
 
+    @Test
+    void counterpartySubjectSummaryUsesTenantScopedAggregationView() {
+        ErpFinanceServiceImpl service = financeService();
+        ErpCounterpartyFinanceSummaryView summary = new ErpCounterpartyFinanceSummaryView(
+            501L,
+            "昆明坤润汽车维修服务有限公司",
+            new BigDecimal("1200.50"),
+            new BigDecimal("300.25"),
+            new BigDecimal("900.25"),
+            2,
+            1
+        );
+        when(counterpartySubjectMapper.listFinanceSummaries(1L)).thenReturn(List.of(summary));
+
+        List<ErpCounterpartyFinanceSummaryView> result = service.listCounterpartySubjectSummaries();
+
+        assertThat(result).containsExactly(summary);
+        verify(counterpartySubjectMapper).listFinanceSummaries(1L);
+    }
+
+    @Test
+    void counterpartySubjectSummaryReturnsZeroValuesForSubjectsWithoutReceivableOrPayable() {
+        ErpFinanceServiceImpl service = financeService();
+        ErpCounterpartyFinanceSummaryView summary = new ErpCounterpartyFinanceSummaryView(
+            502L,
+            "仅建主体未挂财务单据",
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            0,
+            0
+        );
+        when(counterpartySubjectMapper.listFinanceSummaries(1L)).thenReturn(List.of(summary));
+
+        List<ErpCounterpartyFinanceSummaryView> result = service.listCounterpartySubjectSummaries();
+
+        assertThat(result).singleElement().satisfies(item -> {
+            assertThat(item.getReceivableTotal()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(item.getPayableTotal()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(item.getNetAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        });
+    }
+
     private ErpReceiptServiceImpl receiptService() {
         return new ErpReceiptServiceImpl(
             receiptMapper,
@@ -547,6 +595,14 @@ class ErpFinanceWorkflowTests {
             purchaseOrderMapper,
             orderSequenceMapper,
             systemConfigMapper
+        );
+    }
+
+    private ErpFinanceServiceImpl financeService() {
+        return new ErpFinanceServiceImpl(
+            receivableMapper,
+            payableMapper,
+            counterpartySubjectMapper
         );
     }
 

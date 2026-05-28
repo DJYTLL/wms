@@ -1,0 +1,26 @@
+ALTER TABLE erp_purchase_order ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_purchase_order ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);
+
+ALTER TABLE erp_sale_order ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_sale_order ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);
+
+ALTER TABLE erp_purchase_return ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_purchase_return ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);
+
+ALTER TABLE erp_sale_return ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_sale_return ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);
+
+ALTER TABLE erp_receipt ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_receipt ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);
+
+ALTER TABLE erp_payment ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_payment ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);
+
+ALTER TABLE erp_assembly_order ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_assembly_order ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);
+
+ALTER TABLE erp_stock_count ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_stock_count ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);
+
+ALTER TABLE erp_stock_transfer ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE erp_stock_transfer ADD COLUMN IF NOT EXISTS updated_by VARCHAR(100);

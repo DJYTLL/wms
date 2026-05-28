@@ -76,7 +76,7 @@
               <el-button link type="primary" size="small" v-permission="'erp-purchase-approved:print'" @click="openPrintPage(row)">
                 {{ $t('action.print') }}
               </el-button>
-              <el-button link type="primary" size="small" v-permission="'erp-purchase-approved:copy'" @click="handleCopy(row)">
+              <el-button v-if="canCopy" link type="primary" size="small" @click="handleCopy(row)">
                 {{ $t('action.copy') }}
               </el-button>
               <el-button
@@ -183,6 +183,15 @@ const defaultColumns = ['orderNo', 'supplier', 'status', 'totalAmount', 'created
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-purchase-approved', defaultColumns);
 const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const isCurrentWorkspaceRoute = computed(() => route.path === '/erp/purchase-orders/approved');
+
+const hasPermission = (code: string) => {
+  return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
+};
+
+const canCopy = computed(() =>
+  hasPermission('erp-purchase-approved:copy')
+  && hasPermission('erp-purchase-draft:add')
+);
 
 const canShow = (key: string) => isVisible(key);
 

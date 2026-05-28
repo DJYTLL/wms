@@ -1,11 +1,13 @@
 package com.example.wms.service.erp.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.example.wms.dto.erp.ErpCounterpartyFinanceSummaryView;
 import com.example.wms.dto.erp.ErpFinanceSummary;
 import com.example.wms.dto.erp.ErpCustomerDebtView;
 import com.example.wms.dto.erp.ErpSupplierDebtView;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
+import com.example.wms.mapper.erp.ErpCounterpartySubjectMapper;
 import com.example.wms.service.erp.ErpFinanceService;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
@@ -20,11 +22,14 @@ public class ErpFinanceServiceImpl implements ErpFinanceService {
 
     private final ErpAccountsReceivableMapper erpAccountsReceivableMapper;
     private final ErpAccountsPayableMapper erpAccountsPayableMapper;
+    private final ErpCounterpartySubjectMapper erpCounterpartySubjectMapper;
 
     public ErpFinanceServiceImpl(ErpAccountsReceivableMapper erpAccountsReceivableMapper,
-                                 ErpAccountsPayableMapper erpAccountsPayableMapper) {
+                                 ErpAccountsPayableMapper erpAccountsPayableMapper,
+                                 ErpCounterpartySubjectMapper erpCounterpartySubjectMapper) {
         this.erpAccountsReceivableMapper = erpAccountsReceivableMapper;
         this.erpAccountsPayableMapper = erpAccountsPayableMapper;
+        this.erpCounterpartySubjectMapper = erpCounterpartySubjectMapper;
     }
 
     @Override
@@ -45,6 +50,12 @@ public class ErpFinanceServiceImpl implements ErpFinanceService {
     public java.util.List<ErpSupplierDebtView> listSupplierDebts(String keyword) {
         Long tenantId = TenantContext.requireTenantId();
         return erpAccountsPayableMapper.listSupplierDebt(tenantId, keyword);
+    }
+
+    @Override
+    public List<ErpCounterpartyFinanceSummaryView> listCounterpartySubjectSummaries() {
+        Long tenantId = TenantContext.requireTenantId();
+        return erpCounterpartySubjectMapper.listFinanceSummaries(tenantId);
     }
 
     private BigDecimal sumReceivable(Long tenantId) {

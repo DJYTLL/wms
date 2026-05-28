@@ -1,14 +1,15 @@
 package com.example.wms.controller.erp;
 
 import com.example.wms.dto.ApiResponse;
+import com.example.wms.dto.erp.ErpCounterpartyFinanceSummaryView;
 import com.example.wms.dto.erp.ErpCustomerDebtView;
 import com.example.wms.dto.erp.ErpFinanceSummary;
 import com.example.wms.dto.erp.ErpSupplierDebtView;
 import com.example.wms.service.erp.ErpFinanceService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -44,5 +45,11 @@ public class ErpFinanceController {
             System.out.println(e);
         }
         return null;
+    }
+
+    @GetMapping("/counterparty-subjects/summary")
+    @PreAuthorize("hasAuthority('PERM_erp-finance-summary:view')")
+    public ApiResponse<List<ErpCounterpartyFinanceSummaryView>> counterpartySubjectSummaries() {
+        return ApiResponse.ok(erpFinanceService.listCounterpartySubjectSummaries());
     }
 }
