@@ -103,7 +103,7 @@ public class ErpLocationServiceImpl implements ErpLocationService {
     @Override
     public List<ErpLocation> listAll(String keyword, Boolean enabled, Long warehouseId) {
         QueryWrapper<ErpLocation> wrapper = baseWrapper(keyword, enabled, warehouseId);
-        wrapper.orderByAsc("id");
+        wrapper.orderByDesc("is_default").orderByAsc("id");
         return erpLocationMapper.selectList(wrapper);
     }
 
@@ -111,7 +111,7 @@ public class ErpLocationServiceImpl implements ErpLocationService {
     public PageResponse<ErpLocation> page(long page, long size, String keyword, Boolean enabled, Long warehouseId) {
         Page<ErpLocation> pageReq = Page.of(page, size);
         QueryWrapper<ErpLocation> wrapper = baseWrapper(keyword, enabled, warehouseId);
-        wrapper.orderByAsc("id");
+        wrapper.orderByDesc("is_default").orderByAsc("id");
         Page<ErpLocation> result = erpLocationMapper.selectPage(pageReq, wrapper);
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
     }
@@ -150,6 +150,9 @@ public class ErpLocationServiceImpl implements ErpLocationService {
         location.setEnabled(request.enabled() == null || request.enabled());
         location.setCreatedAt(Instant.now());
         location.setUpdatedAt(Instant.now());
+        if (Boolean.TRUE.equals(request.isDefault())) {
+            erpLocationMapper.clearDefault(tenantId, location.getWarehouseId(), null);
+        }
         erpLocationMapper.insert(location);
         return location;
     }
@@ -179,6 +182,7 @@ public class ErpLocationServiceImpl implements ErpLocationService {
             location.setEnabled(request.enabled());
         }
         location.setUpdatedAt(Instant.now());
+        handleDefault(tenantId, location.getWarehouseId(), location.getId(), request.isDefault());
         erpLocationMapper.updateById(location);
         return location;
     }
@@ -231,6 +235,7 @@ public class ErpLocationServiceImpl implements ErpLocationService {
         location.setAisle(ErpMasterDataRules.normalizeOptionalText(request.aisle()));
         location.setRack(ErpMasterDataRules.normalizeOptionalText(request.rack()));
         location.setBin(ErpMasterDataRules.normalizeOptionalText(request.bin()));
+        location.setIsDefault(Boolean.TRUE.equals(request.isDefault()));
         location.setRemark(ErpMasterDataRules.normalizeOptionalText(request.remark()));
     }
 
@@ -241,7 +246,16 @@ public class ErpLocationServiceImpl implements ErpLocationService {
         location.setAisle(ErpMasterDataRules.normalizeOptionalText(request.aisle()));
         location.setRack(ErpMasterDataRules.normalizeOptionalText(request.rack()));
         location.setBin(ErpMasterDataRules.normalizeOptionalText(request.bin()));
+        if (request.isDefault() != null) {
+            location.setIsDefault(request.isDefault());
+        }
         location.setRemark(ErpMasterDataRules.normalizeOptionalText(request.remark()));
+    }
+
+    private void handleDefault(Long tenantId, Long warehouseId, Long locationId, Boolean isDefault) {
+        if (Boolean.TRUE.equals(isDefault)) {
+            erpLocationMapper.clearDefault(tenantId, warehouseId, locationId);
+        }
     }
 
     private void ensureLocationNotReferenced(Long tenantId, Long locationId) {

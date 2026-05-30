@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="page-title">{{ $t('page.erpLocationManagement') }}</div>
       <div class="page-toolbar-card">
-        <div class="erp-basic-toolbar">
+        <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions">
           <div class="erp-basic-filters erp-basic-filters--7">
           <el-input
             v-model="nameQuery"
@@ -76,6 +76,12 @@
           <ErpDataTableColumn v-if="canShow('aisle')" prop="aisle" :label="$t('field.aisle')" min-width="100" />
           <ErpDataTableColumn v-if="canShow('rack')" prop="rack" :label="$t('field.rack')" min-width="100" />
           <ErpDataTableColumn v-if="canShow('bin')" prop="bin" :label="$t('field.bin')" min-width="100" />
+          <ErpDataTableColumn v-if="canShow('default')" :label="$t('field.default')" width="100" column-key="default">
+            <template #default="{ row }">
+              <el-tag v-if="row.isDefault" type="warning" size="small">{{ $t('field.default') }}</el-tag>
+              <span v-else>-</span>
+            </template>
+          </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
@@ -130,6 +136,9 @@
         <el-form-item :label="$t('field.status')">
           <el-switch v-model="formData.enabled" />
         </el-form-item>
+        <el-form-item :label="$t('field.default')">
+          <el-switch v-model="formData.isDefault" />
+        </el-form-item>
         <el-form-item :label="$t('field.remark')">
           <el-input v-model="formData.remark" type="textarea" />
         </el-form-item>
@@ -167,6 +176,7 @@ interface ErpLocation {
   rack?: string;
   bin?: string;
   enabled: boolean;
+  isDefault?: boolean;
   remark?: string;
 }
 
@@ -196,7 +206,7 @@ const currentId = ref<number | null>(null);
 
 const warehouseOptions = ref<OptionItem[]>([]);
 
-const defaultColumns = ['code', 'name', 'warehouse', 'aisle', 'rack', 'bin', 'status'];
+const defaultColumns = ['code', 'name', 'warehouse', 'aisle', 'rack', 'bin', 'default', 'status'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-location', defaultColumns);
 
 const formData = reactive({
@@ -207,6 +217,7 @@ const formData = reactive({
   rack: '',
   bin: '',
   enabled: true,
+  isDefault: false,
   remark: ''
 });
 
@@ -297,6 +308,7 @@ const openEditModal = (row: ErpLocation) => {
   formData.rack = row.rack || '';
   formData.bin = row.bin || '';
   formData.enabled = row.enabled;
+  formData.isDefault = Boolean(row.isDefault);
   formData.remark = row.remark || '';
   showModal.value = true;
 };
@@ -309,6 +321,7 @@ const resetForm = () => {
   formData.rack = '';
   formData.bin = '';
   formData.enabled = true;
+  formData.isDefault = false;
   formData.remark = '';
 };
 

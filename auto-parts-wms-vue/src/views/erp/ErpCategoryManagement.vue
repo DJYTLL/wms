@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="page-title">{{ $t('page.erpCategoryManagement') }}</div>
       <div class="page-toolbar-card">
-        <div class="erp-basic-toolbar">
+        <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions">
           <div class="erp-basic-filters erp-basic-filters--4">
           <el-input
             v-model="nameQuery"
@@ -56,6 +56,12 @@
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('level')" prop="level" :label="$t('field.level')" width="100" />
           <ErpDataTableColumn v-if="canShow('sort')" prop="sortNo" :label="$t('field.sortNo')" width="120" />
+          <ErpDataTableColumn v-if="canShow('default')" prop="isDefault" :label="$t('field.isDefault')" width="110">
+            <template #default="{ row }">
+              <el-tag v-if="row.isDefault" type="warning" size="small">{{ $t('field.isDefault') }}</el-tag>
+              <span v-else>-</span>
+            </template>
+          </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
@@ -105,6 +111,9 @@
         <el-form-item :label="$t('field.sortNo')">
           <el-input v-model="formData.sortNo" type="number" />
         </el-form-item>
+        <el-form-item :label="$t('field.isDefault')">
+          <el-switch v-model="formData.isDefault" />
+        </el-form-item>
         <el-form-item :label="$t('field.status')">
           <el-switch v-model="formData.enabled" />
         </el-form-item>
@@ -141,6 +150,7 @@ interface ErpCategory {
   parentId?: number | null;
   level?: number;
   sortNo?: number;
+  isDefault?: boolean;
   enabled: boolean;
   remark?: string;
 }
@@ -168,7 +178,7 @@ const currentId = ref<number | null>(null);
 
 const categoryOptions = ref<OptionItem[]>([]);
 
-const defaultColumns = ['code', 'name', 'parent', 'level', 'sort', 'status'];
+const defaultColumns = ['code', 'name', 'parent', 'level', 'sort', 'default', 'status'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-category', defaultColumns);
 
 const formData = reactive({
@@ -177,6 +187,7 @@ const formData = reactive({
   parentId: null as number | null,
   level: undefined as number | undefined,
   sortNo: undefined as number | undefined,
+  isDefault: false,
   enabled: true,
   remark: ''
 });
@@ -256,6 +267,7 @@ const openEditModal = (row: ErpCategory) => {
   formData.parentId = row.parentId ?? null;
   formData.level = row.level;
   formData.sortNo = row.sortNo;
+  formData.isDefault = !!row.isDefault;
   formData.enabled = row.enabled;
   formData.remark = row.remark || '';
   showModal.value = true;
@@ -267,6 +279,7 @@ const resetForm = () => {
   formData.parentId = null;
   formData.level = undefined;
   formData.sortNo = undefined;
+  formData.isDefault = false;
   formData.enabled = true;
   formData.remark = '';
 };

@@ -2,6 +2,7 @@ package com.example.wms.mapper.erp;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.example.wms.entity.erp.ErpProductPrice;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -31,4 +32,17 @@ public interface ErpProductPriceMapper extends BaseMapper<ErpProductPrice> {
           AND deleted_at IS NULL
         """)
     int deleteByProduct(@Param("tenantId") Long tenantId, @Param("productId") Long productId);
+
+    @Insert("""
+        INSERT INTO erp_product_price (tenant_id, product_id, customer_category_id, sale_price, created_at, updated_at, deleted_at)
+        VALUES (#{tenantId}, #{productId}, #{customerCategoryId}, #{salePrice}, NOW(), NOW(), NULL)
+        ON CONFLICT (tenant_id, product_id, customer_category_id) WHERE deleted_at IS NULL
+        DO UPDATE SET
+            sale_price = EXCLUDED.sale_price,
+            updated_at = NOW()
+        """)
+    int upsertActivePrice(@Param("tenantId") Long tenantId,
+                          @Param("productId") Long productId,
+                          @Param("customerCategoryId") Long customerCategoryId,
+                          @Param("salePrice") java.math.BigDecimal salePrice);
 }

@@ -47,7 +47,7 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
     @Override
     public List<ErpCategory> listAll(String keyword, Boolean enabled) {
         QueryWrapper<ErpCategory> wrapper = baseWrapper(keyword, enabled);
-        wrapper.orderByAsc("sort_no", "id");
+        wrapper.orderByDesc("is_default").orderByAsc("sort_no", "id");
         return erpCategoryMapper.selectList(wrapper);
     }
 
@@ -55,7 +55,7 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
     public PageResponse<ErpCategory> page(long page, long size, String keyword, Boolean enabled) {
         Page<ErpCategory> pageReq = Page.of(page, size);
         QueryWrapper<ErpCategory> wrapper = baseWrapper(keyword, enabled);
-        wrapper.orderByAsc("sort_no", "id");
+        wrapper.orderByDesc("is_default").orderByAsc("sort_no", "id");
         Page<ErpCategory> result = erpCategoryMapper.selectPage(pageReq, wrapper);
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
     }
@@ -93,6 +93,9 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
         category.setEnabled(request.enabled() == null || request.enabled());
         category.setCreatedAt(Instant.now());
         category.setUpdatedAt(Instant.now());
+        if (Boolean.TRUE.equals(request.isDefault())) {
+            erpCategoryMapper.clearDefault(tenantId);
+        }
         erpCategoryMapper.insert(category);
         return category;
     }
@@ -119,6 +122,7 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
         }
         category.setUpdatedAt(Instant.now());
         erpCategoryMapper.updateById(category);
+        handleDefault(tenantId, category.getId(), request.isDefault());
         return category;
     }
 
@@ -196,6 +200,7 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
         category.setParentId(request.parentId());
         category.setLevel(request.level());
         category.setSortNo(request.sortNo());
+        category.setIsDefault(Boolean.TRUE.equals(request.isDefault()));
         category.setRemark(request.remark());
     }
 
@@ -205,7 +210,16 @@ public class ErpCategoryServiceImpl implements ErpCategoryService {
         category.setParentId(request.parentId());
         category.setLevel(request.level());
         category.setSortNo(request.sortNo());
+        if (request.isDefault() != null) {
+            category.setIsDefault(request.isDefault());
+        }
         category.setRemark(request.remark());
+    }
+
+    private void handleDefault(Long tenantId, Long categoryId, Boolean isDefault) {
+        if (Boolean.TRUE.equals(isDefault)) {
+            erpCategoryMapper.clearDefault(tenantId, categoryId);
+        }
     }
 
     private String generateCategoryCode(Long tenantId) {

@@ -100,6 +100,7 @@ public final class PermissionSeedProvider {
             new PermissionSeed("erp-product:add", "新增商品(ERP)", "新增ERP商品"),
             new PermissionSeed("erp-product:edit", "编辑商品(ERP)", "编辑ERP商品"),
             new PermissionSeed("erp-product:delete", "删除商品(ERP)", "删除ERP商品"),
+            new PermissionSeed("erp-product:import", "导入商品(ERP)", "导入ERP商品历史数据"),
             new PermissionSeed("erp-product:cost:view", "查看商品成本价(ERP)", "查看ERP商品成本价"),
             new PermissionSeed("erp-product:cost:edit", "编辑商品成本价(ERP)", "编辑ERP商品成本价"),
 
@@ -107,6 +108,7 @@ public final class PermissionSeedProvider {
             new PermissionSeed("erp-customer:add", "新增客户(ERP)", "新增ERP客户"),
             new PermissionSeed("erp-customer:edit", "编辑客户(ERP)", "编辑ERP客户"),
             new PermissionSeed("erp-customer:delete", "删除客户(ERP)", "删除ERP客户"),
+            new PermissionSeed("erp-customer:import", "导入客户(ERP)", "导入ERP客户历史数据"),
 
             new PermissionSeed("erp-customer-category:view", "查看客户类别(ERP)", "查看ERP客户类别"),
             new PermissionSeed("erp-customer-category:add", "新增客户类别(ERP)", "新增ERP客户类别"),
@@ -393,6 +395,7 @@ public final class PermissionSeedProvider {
             new PermissionSeed("column:erp-warehouse:address", "ERP仓库-地址列", "ERP仓库地址列显示"),
             new PermissionSeed("column:erp-warehouse:manager", "ERP仓库-负责人列", "ERP仓库负责人列显示"),
             new PermissionSeed("column:erp-warehouse:phone", "ERP仓库-电话列", "ERP仓库电话列显示"),
+            new PermissionSeed("column:erp-warehouse:default", "ERP仓库-默认列", "ERP仓库默认列显示"),
             new PermissionSeed("column:erp-warehouse:status", "ERP仓库-状态列", "ERP仓库状态列显示"),
 
             new PermissionSeed("column:erp-location:code", "ERP库位-编码列", "ERP库位编码列显示"),
@@ -401,6 +404,7 @@ public final class PermissionSeedProvider {
             new PermissionSeed("column:erp-location:aisle", "ERP库位-巷道列", "ERP库位巷道列显示"),
             new PermissionSeed("column:erp-location:rack", "ERP库位-货架列", "ERP库位货架列显示"),
             new PermissionSeed("column:erp-location:bin", "ERP库位-货位列", "ERP库位货位列显示"),
+            new PermissionSeed("column:erp-location:default", "ERP库位-默认列", "ERP库位默认列显示"),
             new PermissionSeed("column:erp-location:status", "ERP库位-状态列", "ERP库位状态列显示"),
 
             new PermissionSeed("column:erp-category:code", "ERP分类-编码列", "ERP分类编码列显示"),
@@ -408,6 +412,7 @@ public final class PermissionSeedProvider {
             new PermissionSeed("column:erp-category:parent", "ERP分类-上级列", "ERP分类上级列显示"),
             new PermissionSeed("column:erp-category:level", "ERP分类-层级列", "ERP分类层级列显示"),
             new PermissionSeed("column:erp-category:sort", "ERP分类-排序列", "ERP分类排序列显示"),
+            new PermissionSeed("column:erp-category:default", "ERP分类-默认列", "ERP分类默认列显示"),
             new PermissionSeed("column:erp-category:status", "ERP分类-状态列", "ERP分类状态列显示"),
 
             new PermissionSeed("column:erp-unit:code", "ERP单位-编码列", "ERP单位编码列显示"),

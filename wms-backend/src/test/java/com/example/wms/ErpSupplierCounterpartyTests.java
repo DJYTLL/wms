@@ -19,6 +19,9 @@ import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
+import com.example.wms.mapper.erp.ErpSupplierImportBatchMapper;
+import com.example.wms.mapper.erp.ErpSupplierImportItemMapper;
+import com.example.wms.mapper.erp.ErpSupplierTypeMapper;
 import com.example.wms.service.erp.impl.ErpCounterpartySubjectServiceImpl;
 import com.example.wms.service.erp.impl.ErpSupplierServiceImpl;
 import com.example.wms.tenant.TenantContext;
@@ -55,6 +58,9 @@ class ErpSupplierCounterpartyTests {
     @Mock private ErpPaymentMethodMapper paymentMethodMapper;
     @Mock private ErpOrderSequenceMapper orderSequenceMapper;
     @Mock private SystemConfigMapper systemConfigMapper;
+    @Mock private ErpSupplierTypeMapper supplierTypeMapper;
+    @Mock private ErpSupplierImportBatchMapper supplierImportBatchMapper;
+    @Mock private ErpSupplierImportItemMapper supplierImportItemMapper;
     @Mock private ErpCounterpartySubjectMapper counterpartySubjectMapper;
     @Mock private ErpCounterpartySubjectLinkMapper counterpartySubjectLinkMapper;
     @Mock private ErpCustomerMapper customerMapper;
@@ -168,9 +174,63 @@ class ErpSupplierCounterpartyTests {
     }
 
     @Test
+    void createSyncsPrimaryContactFieldsFromContactsJson() {
+        ErpSupplierServiceImpl service = supplierService();
+        when(supplierMapper.findByCode(1L, "SU-202605280003")).thenReturn(null);
+
+        ErpSupplierCreateRequest request = new ErpSupplierCreateRequest(
+            "SU-202605280003",
+            "多联系人供应商",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            """
+            [
+              {"name":"财务联系人","phone":"0871-6666666","mobile":"13900001111","wechat":"finance-wechat","email":"finance@example.com","remark":"财务","isPrimary":false},
+              {"name":"采购联系人","phone":"0871-8888888","mobile":"13800002222","wechat":"buyer-wechat","email":"buyer@example.com","remark":"采购","isPrimary":true}
+            ]
+            """,
+            true,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        service.create(request);
+
+        ArgumentCaptor<ErpSupplier> captor = ArgumentCaptor.forClass(ErpSupplier.class);
+        verify(supplierMapper).insert(captor.capture());
+        ErpSupplier inserted = captor.getValue();
+
+        assertThat(inserted.getContact()).isEqualTo("采购联系人");
+        assertThat(inserted.getPhone()).isEqualTo("0871-8888888");
+        assertThat(inserted.getMobile()).isEqualTo("13800002222");
+        assertThat(inserted.getWechat()).isEqualTo("buyer-wechat");
+        assertThat(inserted.getEmail()).isEqualTo("buyer@example.com");
+        assertThat(inserted.getContactInfo()).contains("采购联系人");
+        assertThat(inserted.getContactInfo()).contains("13800002222");
+        assertThat(inserted.getContacts()).isNotNull();
+    }
+
+    @Test
     void createSubjectPersistsFields() {
         ErpCounterpartySubjectServiceImpl service = counterpartySubjectService();
-        when(counterpartySubjectMapper.selectOne(any())).thenReturn(null);
 
         ErpCounterpartySubjectCreateRequest request = new ErpCounterpartySubjectCreateRequest(
             "昆明坤润汽车维修服务有限公司",
@@ -243,7 +303,7 @@ class ErpSupplierCounterpartyTests {
         assertThat(insertedLink.getPrimary()).isTrue();
         assertThat(insertedLink.getRemark()).isEqualTo("主供应商");
 
-        verify(supplierMapper).updateById(argThat(updated ->
+        verify(supplierMapper).updateById(argThat((ErpSupplier updated) ->
             updated.getId().equals(88L) && updated.getCounterpartySubjectId().equals(20L)
         ));
     }
@@ -312,6 +372,10 @@ class ErpSupplierCounterpartyTests {
             paymentMethodMapper,
             orderSequenceMapper,
             systemConfigMapper,
+            supplierTypeMapper,
+            supplierImportBatchMapper,
+            supplierImportItemMapper,
+            counterpartySubjectLinkMapper,
             objectMapper
         );
     }
@@ -321,7 +385,15 @@ class ErpSupplierCounterpartyTests {
             counterpartySubjectMapper,
             counterpartySubjectLinkMapper,
             supplierMapper,
-            customerMapper
+            customerMapper,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
         );
     }
 }

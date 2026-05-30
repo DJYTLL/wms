@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="page-title">{{ $t('page.erpCounterpartySubjectManagement') }}</div>
       <div class="page-toolbar-card">
-        <div class="erp-basic-toolbar">
+        <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions">
           <div class="erp-basic-filters erp-basic-filters--4">
             <el-input v-model="nameQuery" :placeholder="$t('field.name')" class="table-search erp-basic-field--narrow" clearable @clear="handleSearch" @keyup.enter="handleSearch" />
             <el-input v-model="regionQuery" :placeholder="$t('field.region')" class="table-search erp-basic-field--narrow" clearable @clear="handleSearch" @keyup.enter="handleSearch" />
@@ -30,6 +30,13 @@
           <ErpDataTableColumn v-if="canShow('name')" prop="name" :label="$t('field.name')" min-width="180" />
           <ErpDataTableColumn v-if="canShow('region')" prop="region" :label="$t('field.region')" min-width="140" />
           <ErpDataTableColumn v-if="canShow('unifiedCreditCode')" prop="unifiedCreditCode" :label="$t('field.unifiedCreditCode')" min-width="220" />
+          <ErpDataTableColumn v-if="canShow('customerCount')" prop="customerCount" :label="$t('field.customerCount')" width="110" />
+          <ErpDataTableColumn v-if="canShow('supplierCount')" prop="supplierCount" :label="$t('field.supplierCount')" width="110" />
+          <ErpDataTableColumn v-if="canShow('bindingStatus')" label="绑定状态" min-width="120">
+            <template #default="{ row }">
+              {{ (row.customerCount || 0) + (row.supplierCount || 0) > 0 ? '已绑定' : '未绑定' }}
+            </template>
+          </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
@@ -46,6 +53,7 @@
           </ErpDataTableColumn>
           <ErpDataTableColumn :label="$t('table.actions')" width="160" fixed="right" column-key="actions">
             <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="openDetail(row)">绑定明细</el-button>
               <el-button link type="primary" size="small" v-permission="'erp-counterparty-subject:edit'" @click="openEditModal(row)">{{ $t('action.edit') }}</el-button>
               <el-button link type="danger" size="small" v-permission="'erp-counterparty-subject:delete'" @click="handleDelete(row)">{{ $t('action.delete') }}</el-button>
             </template>
@@ -70,11 +78,53 @@
         <el-button type="primary" @click="saveData">{{ $t('action.save') }}</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="detailVisible" title="主体绑定明细" size="55%">
+      <div class="detail-section">
+        <div class="detail-section__title">供应商</div>
+        <ErpDataTable :data="detailSuppliers" stripe :empty-text="$t('table.empty')" table-key="erp-counterparty-subject-suppliers">
+          <ErpDataTableColumn prop="code" :label="$t('field.code')" min-width="140" />
+          <ErpDataTableColumn prop="name" :label="$t('field.name')" min-width="180" />
+          <ErpDataTableColumn prop="contact" :label="$t('field.contactPerson')" min-width="120" />
+          <ErpDataTableColumn label="解绑校验" min-width="220">
+            <template #default="{ row }">
+              <el-tag v-if="row.unbindCheck?.allowed" type="success" size="small">可解绑</el-tag>
+              <el-button v-else link type="warning" size="small" @click="showUnbindCheck(row, 'supplier')">查看阻塞原因</el-button>
+            </template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn label="操作" width="120">
+            <template #default="{ row }">
+              <el-button link type="danger" size="small" @click="attemptUnbind(row, 'supplier')">解绑</el-button>
+            </template>
+          </ErpDataTableColumn>
+        </ErpDataTable>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section__title">客户</div>
+        <ErpDataTable :data="detailCustomers" stripe :empty-text="$t('table.empty')" table-key="erp-counterparty-subject-customers">
+          <ErpDataTableColumn prop="code" :label="$t('field.code')" min-width="140" />
+          <ErpDataTableColumn prop="name" :label="$t('field.name')" min-width="180" />
+          <ErpDataTableColumn prop="contact" :label="$t('field.contactPerson')" min-width="120" />
+          <ErpDataTableColumn label="解绑校验" min-width="220">
+            <template #default="{ row }">
+              <el-tag v-if="row.unbindCheck?.allowed" type="success" size="small">可解绑</el-tag>
+              <el-button v-else link type="warning" size="small" @click="showUnbindCheck(row, 'customer')">查看阻塞原因</el-button>
+            </template>
+          </ErpDataTableColumn>
+          <ErpDataTableColumn label="操作" width="120">
+            <template #default="{ row }">
+              <el-button link type="danger" size="small" @click="attemptUnbind(row, 'customer')">解绑</el-button>
+            </template>
+          </ErpDataTableColumn>
+        </ErpDataTable>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onActivated, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
@@ -88,13 +138,42 @@ interface ErpCounterpartySubject {
   name: string;
   region?: string;
   unifiedCreditCode?: string;
+  customerCount?: number;
+  supplierCount?: number;
   enabled: boolean;
   remark?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
+interface CounterpartySubjectMember {
+  id: number;
+  code: string;
+  name: string;
+  contact?: string;
+  unbindCheck?: {
+    allowed: boolean;
+    blockingReasons: string[];
+    pendingDocs: Array<{
+      docType: string;
+      docId: number;
+      orderNo: string;
+      status: string;
+      routeKey: string;
+    }>;
+  };
+}
+
+interface PendingDocItem {
+  docType: string;
+  docId: number;
+  orderNo: string;
+  status: string;
+  routeKey: string;
+}
+
 const { t } = useI18n();
+const router = useRouter();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
 
@@ -114,8 +193,12 @@ const allTableData = ref<ErpCounterpartySubject[]>([]);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
+const detailVisible = ref(false);
+const currentDetailSubjectId = ref<number | null>(null);
+const detailCustomers = ref<CounterpartySubjectMember[]>([]);
+const detailSuppliers = ref<CounterpartySubjectMember[]>([]);
 
-const defaultColumns = ['name', 'region', 'unifiedCreditCode', 'status', 'remark', 'createdAt', 'updatedAt'];
+const defaultColumns = ['name', 'region', 'unifiedCreditCode', 'customerCount', 'supplierCount', 'bindingStatus', 'status', 'remark', 'createdAt', 'updatedAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-counterparty-subject', defaultColumns);
 
 const formData = reactive({
@@ -213,6 +296,141 @@ const openEditModal = (row: ErpCounterpartySubject) => {
   showModal.value = true;
 };
 
+const openDetail = async (row: ErpCounterpartySubject) => {
+  detailVisible.value = true;
+  currentDetailSubjectId.value = row.id;
+  try {
+    const res: any = await request.get(`/erp/counterparty-subjects/${row.id}/detail`);
+    if (res.data.code === 200) {
+      detailCustomers.value = res.data.data?.customers || [];
+      detailSuppliers.value = res.data.data?.suppliers || [];
+    }
+  } catch (error) {
+    notifyError(error);
+  }
+};
+
+const getDocTypeLabel = (docType?: string) => {
+  switch (docType) {
+    case 'SALE_ORDER':
+      return '未完成销售单';
+    case 'SALE_RETURN':
+      return '未完成销售退货单';
+    case 'RECEIPT':
+      return '未完成收款单';
+    case 'ACCOUNTS_RECEIVABLE':
+      return '未完成应收单';
+    case 'PURCHASE_ORDER':
+      return '未完成采购单';
+    case 'PURCHASE_RETURN':
+      return '未完成采购退货单';
+    case 'PAYMENT':
+      return '未完成付款单';
+    case 'ACCOUNTS_PAYABLE':
+      return '未完成应付单';
+    default:
+      return docType || '未完成业务';
+  }
+};
+
+const buildUnbindCheckHtml = (docs: PendingDocItem[], reasons: string[]) => {
+  const sections: string[] = [];
+  if (reasons.length) {
+    sections.push([
+      '<div style="margin-bottom: 12px;">',
+      '<div style="font-weight: 600; margin-bottom: 6px;">阻塞原因</div>',
+      ...reasons.map(reason => `<div style="margin-top: 4px;">${reason}</div>`),
+      '</div>'
+    ].join(''));
+  }
+
+  if (docs.length) {
+    const groupedDocs = docs.reduce<Record<string, Array<{ doc: PendingDocItem; index: number }>>>((acc, doc, index) => {
+      const key = doc.docType || 'UNKNOWN';
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push({ doc, index });
+      return acc;
+    }, {});
+
+    const groupedHtml = Object.entries(groupedDocs).map(([docType, items]) => [
+      '<div style="margin-bottom: 12px;">',
+      `<div style="font-weight: 600; margin-bottom: 6px;">${getDocTypeLabel(docType)}</div>`,
+      ...items.map(({ doc, index }) => {
+        const label = `${doc.orderNo || doc.docType || '未命名单据'}（${doc.status || '-'}）`;
+        return `<div style="margin-top: 4px; padding-left: 8px;"><a href="#" data-doc-index="${index}">${label}</a></div>`;
+      }),
+      '</div>'
+    ].join(''));
+    sections.push(groupedHtml.join(''));
+  }
+
+  if (!sections.length) {
+    sections.push('<div>当前没有阻塞原因</div>');
+  }
+
+  return sections.join('');
+};
+
+const showUnbindCheck = async (member: CounterpartySubjectMember, type: 'supplier' | 'customer') => {
+  const reasons = member.unbindCheck?.blockingReasons || [];
+  const docs = member.unbindCheck?.pendingDocs || [];
+  const html = buildUnbindCheckHtml(docs, reasons);
+  try {
+    await ElMessageBox.alert(html, `${type === 'supplier' ? '供应商' : '客户'}解绑校验`, {
+      dangerouslyUseHTMLString: true,
+      confirmButtonText: '知道了',
+      callback: () => undefined
+    });
+  } finally {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.el-message-box a[data-doc-index]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+          event.preventDefault();
+          const index = Number((event.currentTarget as HTMLElement).getAttribute('data-doc-index'));
+          const doc = docs[index];
+          if (doc) {
+            router.push({ name: doc.routeKey, params: { id: doc.docId } });
+          }
+        }, { once: true });
+      });
+    });
+  }
+};
+
+const attemptUnbind = async (member: CounterpartySubjectMember, type: 'supplier' | 'customer') => {
+  if (!currentDetailSubjectId.value) return;
+  try {
+    const checkUrl = type === 'supplier'
+      ? `/erp/counterparty-subjects/${currentDetailSubjectId.value}/bind-supplier/${member.id}/check`
+      : `/erp/counterparty-subjects/${currentDetailSubjectId.value}/bind-customer/${member.id}/check`;
+    const res: any = await request.get(checkUrl);
+    const check = res.data?.data;
+    member.unbindCheck = check;
+    if (!check?.allowed) {
+      await showUnbindCheck(member, type);
+      return;
+    }
+    await ElMessageBox.confirm(`确认解绑${type === 'supplier' ? '供应商' : '客户'}“${member.name}”吗？`, '确认解绑', {
+      type: 'warning',
+      confirmButtonText: '确认',
+      cancelButtonText: '取消'
+    });
+    const unbindUrl = type === 'supplier'
+      ? `/erp/counterparty-subjects/${currentDetailSubjectId.value}/bind-supplier/${member.id}`
+      : `/erp/counterparty-subjects/${currentDetailSubjectId.value}/bind-customer/${member.id}`;
+    await request.delete(unbindUrl);
+    notifySuccess();
+    await fetchList();
+    await openDetail({ id: currentDetailSubjectId.value } as ErpCounterpartySubject);
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      notifyError(error);
+    }
+  }
+};
+
 const resetForm = () => {
   formData.name = '';
   formData.region = '';
@@ -305,3 +523,15 @@ onActivated(() => {
   fetchList();
 });
 </script>
+
+<style scoped>
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section__title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+</style>

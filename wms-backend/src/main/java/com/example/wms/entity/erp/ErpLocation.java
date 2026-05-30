@@ -48,6 +48,10 @@ public class ErpLocation {
     @TableField("is_enabled")
     private Boolean enabled;
 
+    // 是否默认库位
+    @TableField("is_default")
+    private Boolean isDefault;
+
     // 备注
     @TableField("remark")
     private String remark;
@@ -141,6 +145,14 @@ public class ErpLocation {
 
     public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public Boolean getIsDefault() {
+        return isDefault;
+    }
+
+    public void setIsDefault(Boolean isDefault) {
+        this.isDefault = isDefault;
     }
 
     public String getRemark() {

@@ -1,6 +1,7 @@
 package com.example.wms;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.example.wms.controller.erp.ErpSupplierController;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpAccountsPayable;
 import com.example.wms.entity.erp.ErpAccountsReceivable;
@@ -14,7 +15,13 @@ import com.example.wms.entity.erp.ErpPurchaseReturnItem;
 import com.example.wms.entity.erp.ErpReceipt;
 import com.example.wms.entity.erp.ErpReceiptReceivable;
 import com.example.wms.entity.erp.ErpStockBalance;
+import com.example.wms.entity.erp.ErpSupplier;
+import com.example.wms.entity.erp.ErpSupplierImportBatch;
+import com.example.wms.entity.erp.ErpSupplierImportItem;
+import com.example.wms.entity.erp.ErpSupplierType;
+import com.example.wms.dto.erp.ErpFinanceSummary;
 import com.example.wms.dto.erp.ErpCounterpartyFinanceSummaryView;
+import com.example.wms.dto.erp.ErpCounterpartyFinanceDetailRow;
 import com.example.wms.dto.erp.ErpPaymentCreateRequest;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsPayableMapper;
@@ -23,6 +30,7 @@ import com.example.wms.mapper.erp.ErpCounterpartySubjectMapper;
 import com.example.wms.mapper.erp.ErpCustomerMapper;
 import com.example.wms.mapper.erp.ErpOrderSequenceMapper;
 import com.example.wms.mapper.erp.ErpPaymentMapper;
+import com.example.wms.mapper.erp.ErpPaymentMethodMapper;
 import com.example.wms.mapper.erp.ErpPaymentPayableMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderItemMapper;
@@ -32,16 +40,29 @@ import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpReceiptMapper;
 import com.example.wms.mapper.erp.ErpReceiptReceivableMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
+import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
+import com.example.wms.mapper.erp.ErpSupplierImportBatchMapper;
+import com.example.wms.mapper.erp.ErpSupplierImportItemMapper;
+import com.example.wms.mapper.erp.ErpSupplierTypeMapper;
+import com.example.wms.service.TenantSettingService;
+import com.example.wms.service.erp.ErpSupplierService;
 import com.example.wms.service.erp.impl.ErpFinanceServiceImpl;
 import com.example.wms.service.erp.impl.ErpPaymentServiceImpl;
 import com.example.wms.service.erp.impl.ErpPurchaseOrderServiceImpl;
 import com.example.wms.service.erp.impl.ErpPurchaseReturnServiceImpl;
 import com.example.wms.service.erp.impl.ErpReceiptServiceImpl;
+import com.example.wms.service.erp.impl.ErpSupplierServiceImpl;
+import com.example.wms.service.erp.support.ExcelImportParser;
 import com.example.wms.service.erp.support.ErpCostService;
+import com.example.wms.service.erp.support.ErpCounterpartyGuardRules;
 import com.example.wms.tenant.TenantContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,16 +72,30 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -81,6 +116,12 @@ class ErpFinanceWorkflowTests {
     private ErpOrderSequenceMapper orderSequenceMapper;
     @Mock
     private SystemConfigMapper systemConfigMapper;
+    @Mock
+    private ErpSettlementMethodMapper settlementMethodMapper;
+    @Mock
+    private ErpPaymentMethodMapper paymentMethodMapper;
+    @Mock
+    private TenantSettingService tenantSettingService;
 
     @Mock
     private ErpPaymentMapper paymentMapper;
@@ -107,6 +148,14 @@ class ErpFinanceWorkflowTests {
     private ErpStockBalanceMapper stockBalanceMapper;
     @Mock
     private ErpStockTxnMapper stockTxnMapper;
+    @Mock
+    private ErpSupplierImportBatchMapper supplierImportBatchMapper;
+    @Mock
+    private ErpSupplierImportItemMapper supplierImportItemMapper;
+    @Mock
+    private ErpSupplierTypeMapper supplierTypeMapper;
+    @Mock
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
@@ -574,6 +623,392 @@ class ErpFinanceWorkflowTests {
         });
     }
 
+    @Test
+    void counterpartySubjectDetailUsesTenantScopedDetailQuery() {
+        ErpFinanceServiceImpl service = financeService();
+        ErpCounterpartyFinanceDetailRow detail = new ErpCounterpartyFinanceDetailRow(
+            "RECEIVABLE",
+            901L,
+            "AR-901",
+            11L,
+            "CU001",
+            "昆明坤润汽车维修服务有限公司",
+            new BigDecimal("1200.50"),
+            new BigDecimal("300.25"),
+            "OPEN",
+            Instant.parse("2026-05-28T08:00:00Z")
+        );
+        when(counterpartySubjectMapper.listFinanceDetailRows(1L, 501L)).thenReturn(List.of(detail));
+
+        List<ErpCounterpartyFinanceDetailRow> result = service.listCounterpartySubjectDetails(501L);
+
+        assertThat(result).containsExactly(detail);
+        verify(counterpartySubjectMapper).listFinanceDetailRows(1L, 501L);
+    }
+
+    @Test
+    void financeSummaryExcludesRedFlushedRowsWhenAggregatingReceivableAndPayable() {
+        ErpFinanceServiceImpl service = financeService();
+        when(receivableMapper.selectObjs(any())).thenReturn(List.of(new BigDecimal("120")));
+        when(payableMapper.selectObjs(any())).thenReturn(List.of(new BigDecimal("35")));
+
+        ErpFinanceSummary result = service.getSummary();
+
+        assertThat(result.getCustomerDebtTotal()).isEqualByComparingTo("120");
+        assertThat(result.getSupplierDebtTotal()).isEqualByComparingTo("35");
+    }
+
+    @Test
+    void importSuppliersFallsBackToBuiltinUncategorizedTypeAndRecordsWarning() throws Exception {
+        ErpSupplierServiceImpl service = supplierService();
+        ErpSupplierType uncategorized = new ErpSupplierType();
+        uncategorized.setId(88L);
+        uncategorized.setCode(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE);
+        uncategorized.setName(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_NAME);
+        when(supplierTypeMapper.selectList(any())).thenReturn(List.of());
+        when(supplierTypeMapper.findByCode(1L, ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE)).thenReturn(uncategorized);
+        when(settlementMethodMapper.selectList(any())).thenReturn(List.of());
+        when(supplierMapper.findByCode(1L, "SU001")).thenReturn(null);
+
+        var result = service.importSuppliers(
+            new MockMultipartFile(
+                "file",
+                "supplier.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                supplierImportWorkbookBytes("不存在的类型")
+            ),
+            "历史供应商表"
+        );
+
+        assertThat(result.status()).isEqualTo("PROCESSING");
+        verify(supplierImportItemMapper, timeout(3_000)).insertBatch(any());
+    }
+
+    @Test
+    void listImportBatchesReturnsBatchSummaryWithManualFollowUpCounters() {
+        ErpSupplierServiceImpl service = supplierService();
+        ErpSupplierImportBatch batch = new ErpSupplierImportBatch();
+        batch.setId(1L);
+        batch.setBatchNo("SI20260529010101");
+        batch.setSourceName("历史供应商表");
+        batch.setImportMode("PASTE_TABLE");
+        batch.setTotalCount(10);
+        batch.setSuccessCount(8);
+        batch.setFailedCount(2);
+        batch.setUncategorizedCount(3);
+        batch.setSettlementUnmatchedCount(1);
+        batch.setPendingSubjectMergeCount(4);
+        batch.setStatus("DONE");
+        batch.setSummary("成功 8 行，失败 2 行");
+        batch.setCreatedBy("system");
+        batch.setCreatedAt(Instant.parse("2026-05-29T01:00:00Z"));
+        when(supplierImportBatchMapper.selectList(any())).thenReturn(List.of(batch));
+
+        var result = service.listImportBatches();
+
+        assertThat(result).singleElement().satisfies(item -> {
+            assertThat(item.uncategorizedCount()).isEqualTo(3);
+            assertThat(item.settlementUnmatchedCount()).isEqualTo(1);
+            assertThat(item.pendingSubjectMergeCount()).isEqualTo(4);
+        });
+    }
+
+    @Test
+    void listImportBatchItemsRejectsCrossTenantBatchLookup() {
+        ErpSupplierServiceImpl service = supplierService();
+        when(supplierImportBatchMapper.selectOne(any())).thenReturn(null);
+
+        assertThatThrownBy(() -> service.listImportBatchItems(999L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("导入批次不存在");
+    }
+
+    @Test
+    void supplierImportEndpointUsesMultipartExcelUploadContract() throws Exception {
+        Method controllerMethod = ErpSupplierController.class.getMethod("importSuppliers", MultipartFile.class, String.class);
+        PostMapping postMapping = controllerMethod.getAnnotation(PostMapping.class);
+        Parameter[] controllerParameters = controllerMethod.getParameters();
+
+        assertThat(postMapping).isNotNull();
+        assertThat(postMapping.value()).containsExactly("/import");
+        assertThat(postMapping.consumes()).contains(MediaType.MULTIPART_FORM_DATA_VALUE);
+        assertThat(controllerParameters).hasSize(2);
+        assertThat(controllerParameters[0].getType()).isEqualTo(MultipartFile.class);
+        assertThat(controllerParameters[0].getAnnotation(RequestParam.class)).isNotNull();
+        assertThat(controllerParameters[0].getAnnotation(RequestParam.class).value()).isEqualTo("file");
+        assertThat(controllerParameters[1].getType()).isEqualTo(String.class);
+        assertThat(controllerParameters[1].getAnnotation(RequestParam.class)).isNotNull();
+        assertThat(controllerParameters[1].getAnnotation(RequestParam.class).value()).isEqualTo("sourceName");
+        assertThat(controllerParameters[1].getAnnotation(RequestParam.class).required()).isFalse();
+
+        Method serviceMethod = ErpSupplierService.class.getMethod("importSuppliers", MultipartFile.class, String.class);
+        assertThat(serviceMethod.getReturnType().getSimpleName()).isEqualTo("ErpSupplierImportResult");
+    }
+
+    @Test
+    void importSuppliersParsesExcelUploadAndRecordsExcelBatchMode() throws Exception {
+        ErpSupplierServiceImpl service = supplierService();
+        when(supplierTypeMapper.selectList(any())).thenReturn(List.of());
+        when(supplierTypeMapper.findByCode(1L, ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE)).thenReturn(null);
+        when(settlementMethodMapper.selectList(any())).thenReturn(List.of());
+        when(supplierMapper.findByCode(1L, "SU001")).thenReturn(null);
+
+        Method importMethod = ErpSupplierServiceImpl.class.getMethod("importSuppliers", MultipartFile.class, String.class);
+        MockMultipartFile file = new MockMultipartFile(
+            "file",
+            "supplier.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            supplierImportWorkbookBytes()
+        );
+
+        Object rawResult = importMethod.invoke(service, file, "历史供应商表");
+
+        assertThat(rawResult).isNotNull();
+        ArgumentCaptor<ErpSupplierImportBatch> batchCaptor = ArgumentCaptor.forClass(ErpSupplierImportBatch.class);
+        verify(supplierImportBatchMapper).insert(batchCaptor.capture());
+        assertThat(batchCaptor.getValue().getSourceName()).isEqualTo("历史供应商表");
+        assertThat(batchCaptor.getValue().getImportMode()).isEqualTo("EXCEL_UPLOAD");
+        assertThat(batchCaptor.getValue().getRawPayload().toString()).contains("supplier.xlsx");
+        verify(supplierImportItemMapper, never()).insert(any(ErpSupplierImportItem.class));
+        verify(supplierImportItemMapper, never()).insertBatch(any());
+    }
+
+    @Test
+    void importSuppliersReturnsProcessingBatchBeforeRowUpsertWorkCompletes() throws Exception {
+        List<Runnable> queuedTasks = new ArrayList<>();
+        ErpSupplierServiceImpl service = supplierService(queuedTasks::add, null);
+        doAnswer(invocation -> {
+            ErpSupplierImportBatch batch = invocation.getArgument(0);
+            batch.setId(77L);
+            return 1;
+        }).when(supplierImportBatchMapper).insert(any(ErpSupplierImportBatch.class));
+
+        var result = service.importSuppliers(
+            new MockMultipartFile(
+                "file",
+                "supplier.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                supplierImportWorkbookBytesForTwoRows()
+            ),
+            "历史供应商表"
+        );
+
+        assertThat(result.batchId()).isEqualTo(77L);
+        assertThat(result.status()).isEqualTo("PROCESSING");
+        assertThat(result.totalCount()).isEqualTo(2);
+        assertThat(result.successCount()).isZero();
+        assertThat(result.failedCount()).isZero();
+        assertThat(queuedTasks).hasSize(1);
+        verify(supplierMapper, never()).insert(any(ErpSupplier.class));
+        verify(supplierImportItemMapper, never()).insert(any(ErpSupplierImportItem.class));
+        verify(supplierImportItemMapper, never()).insertBatch(any());
+    }
+
+    @Test
+    void importSuppliersDoesNotFailWhenSettlementMethodIsUnmatched() throws Exception {
+        ErpSupplierServiceImpl service = supplierService();
+        ErpSupplierType uncategorized = new ErpSupplierType();
+        uncategorized.setId(88L);
+        uncategorized.setCode(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE);
+        uncategorized.setName(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_NAME);
+        when(supplierTypeMapper.selectList(any())).thenReturn(List.of());
+        when(supplierTypeMapper.findByCode(1L, ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE)).thenReturn(uncategorized);
+        when(settlementMethodMapper.selectList(any())).thenReturn(List.of());
+        when(supplierMapper.findByCode(1L, "SU001")).thenReturn(null);
+
+        var result = service.importSuppliers(
+            new MockMultipartFile(
+                "file",
+                "supplier.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                supplierImportWorkbookBytesWithSettlement("月结")
+            ),
+            "历史供应商表"
+        );
+
+        assertThat(result.status()).isEqualTo("PROCESSING");
+        ArgumentCaptor<List<ErpSupplierImportItem>> itemCaptor = ArgumentCaptor.forClass(List.class);
+        verify(supplierImportItemMapper, timeout(3_000)).insertBatch(itemCaptor.capture());
+        assertThat(itemCaptor.getValue()).singleElement().satisfies(item -> {
+            assertThat(item.getStatus()).isEqualTo("SUCCESS");
+            assertThat(item.getWarningMessage()).contains("默认结算方式未匹配");
+        });
+    }
+
+    @Test
+    void importSuppliersBuildsMultipleContactsFromExpandedExcelColumns() throws Exception {
+        ErpSupplierServiceImpl service = supplierService();
+        ErpSupplierType uncategorized = new ErpSupplierType();
+        uncategorized.setId(88L);
+        uncategorized.setCode(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE);
+        uncategorized.setName(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_NAME);
+        when(supplierTypeMapper.selectList(any())).thenReturn(List.of());
+        when(supplierTypeMapper.findByCode(1L, ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE)).thenReturn(uncategorized);
+        when(settlementMethodMapper.selectList(any())).thenReturn(List.of());
+        when(supplierMapper.findByCode(1L, "SU001")).thenReturn(null);
+
+        var result = service.importSuppliers(
+            new MockMultipartFile(
+                "file",
+                "supplier.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                supplierImportWorkbookBytesWithExpandedContacts()
+            ),
+            "历史供应商表"
+        );
+
+        assertThat(result.status()).isEqualTo("PROCESSING");
+        ArgumentCaptor<ErpSupplier> captor = ArgumentCaptor.forClass(ErpSupplier.class);
+        verify(supplierMapper, timeout(3_000)).insert(captor.capture());
+        ErpSupplier inserted = captor.getValue();
+
+        assertThat(inserted.getContact()).isEqualTo("张三");
+        assertThat(inserted.getMobile()).isEqualTo("13800138000");
+        assertThat(inserted.getPhone()).isEqualTo("0871-6666666");
+        assertThat(inserted.getContacts()).isNotNull();
+        assertThat(inserted.getContacts().toString()).contains("\"name\":\"张三\"");
+        assertThat(inserted.getContacts().toString()).contains("\"mobile\":\"13800138000\"");
+        assertThat(inserted.getContacts().toString()).contains("\"phone\":\"0871-6666666\"");
+        assertThat(inserted.getContacts().toString()).contains("\"phone\":\"0871-7777777\"");
+        assertThat(inserted.getContacts().toString()).contains("\"name\":\"李四\"");
+        assertThat(inserted.getContactInfo()).contains("张三");
+        assertThat(inserted.getContactInfo()).contains("李四");
+    }
+
+    @Test
+    void importSuppliersSplitsLegacyContactInfoIntoMultipleContacts() throws Exception {
+        ErpSupplierServiceImpl service = supplierService();
+        ErpSupplierType uncategorized = new ErpSupplierType();
+        uncategorized.setId(88L);
+        uncategorized.setCode(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE);
+        uncategorized.setName(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_NAME);
+        when(supplierTypeMapper.selectList(any())).thenReturn(List.of());
+        when(supplierTypeMapper.findByCode(1L, ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE)).thenReturn(uncategorized);
+        when(settlementMethodMapper.selectList(any())).thenReturn(List.of());
+        when(supplierMapper.findByCode(1L, "SU001")).thenReturn(null);
+
+        var result = service.importSuppliers(
+            new MockMultipartFile(
+                "file",
+                "supplier.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                supplierImportWorkbookBytesWithLegacyContactInfo("67268918/13700651938")
+            ),
+            "历史供应商表"
+        );
+
+        assertThat(result.status()).isEqualTo("PROCESSING");
+        ArgumentCaptor<ErpSupplier> captor = ArgumentCaptor.forClass(ErpSupplier.class);
+        verify(supplierMapper, timeout(3_000)).insert(captor.capture());
+        ErpSupplier inserted = captor.getValue();
+
+        assertThat(inserted.getContact()).isEqualTo("鑫泰中原");
+        assertThat(inserted.getPhone()).isEqualTo("67268918");
+        assertThat(inserted.getMobile()).isEqualTo("13700651938");
+        assertThat(inserted.getContacts()).isNotNull();
+        assertThat(inserted.getContacts().toString()).contains("\"phone\":\"67268918\"");
+        assertThat(inserted.getContacts().toString()).contains("\"mobile\":\"13700651938\"");
+    }
+
+    @Test
+    void importSuppliersKeepsMultipleMobilesFromLegacyContactInfo() throws Exception {
+        ErpSupplierServiceImpl service = supplierService();
+        ErpSupplierType uncategorized = new ErpSupplierType();
+        uncategorized.setId(88L);
+        uncategorized.setCode(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE);
+        uncategorized.setName(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_NAME);
+        when(supplierTypeMapper.selectList(any())).thenReturn(List.of());
+        when(supplierTypeMapper.findByCode(1L, ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE)).thenReturn(uncategorized);
+        when(settlementMethodMapper.selectList(any())).thenReturn(List.of());
+        when(supplierMapper.findByCode(1L, "SU001")).thenReturn(null);
+
+        var result = service.importSuppliers(
+            new MockMultipartFile(
+                "file",
+                "supplier.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                supplierImportWorkbookBytesWithLegacyContactInfo("15825267218/15825267219")
+            ),
+            "历史供应商表"
+        );
+
+        assertThat(result.status()).isEqualTo("PROCESSING");
+        ArgumentCaptor<ErpSupplier> captor = ArgumentCaptor.forClass(ErpSupplier.class);
+        verify(supplierMapper, timeout(3_000)).insert(captor.capture());
+        ErpSupplier inserted = captor.getValue();
+
+        assertThat(inserted.getContacts()).isNotNull();
+        assertThat(inserted.getContacts().toString()).contains("\"mobile\":\"15825267218\"");
+        assertThat(inserted.getContacts().toString()).contains("\"mobile\":\"15825267219\"");
+        assertThat(inserted.getPhone()).isNull();
+        assertThat(inserted.getMobile()).isEqualTo("15825267218");
+        assertThat(inserted.getContactInfo()).contains("15825267218");
+        assertThat(inserted.getContactInfo()).contains("15825267219");
+    }
+
+    @Test
+    void importSuppliersKeepsDuplicateMobilesFromLegacyContactInfoWithoutFallingBackToPhone() throws Exception {
+        ErpSupplierServiceImpl service = supplierService();
+        ErpSupplierType uncategorized = new ErpSupplierType();
+        uncategorized.setId(88L);
+        uncategorized.setCode(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE);
+        uncategorized.setName(ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_NAME);
+        when(supplierTypeMapper.selectList(any())).thenReturn(List.of());
+        when(supplierTypeMapper.findByCode(1L, ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE)).thenReturn(uncategorized);
+        when(settlementMethodMapper.selectList(any())).thenReturn(List.of());
+        when(supplierMapper.findByCode(1L, "SU001")).thenReturn(null);
+
+        var result = service.importSuppliers(
+            new MockMultipartFile(
+                "file",
+                "supplier.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                supplierImportWorkbookBytesWithLegacyContactInfo("15368088819/15368088819")
+            ),
+            "历史供应商表"
+        );
+
+        assertThat(result.status()).isEqualTo("PROCESSING");
+        ArgumentCaptor<ErpSupplier> captor = ArgumentCaptor.forClass(ErpSupplier.class);
+        verify(supplierMapper, timeout(3_000)).insert(captor.capture());
+        ErpSupplier inserted = captor.getValue();
+
+        assertThat(inserted.getPhone()).isNull();
+        assertThat(inserted.getMobile()).isEqualTo("15368088819");
+        assertThat(inserted.getContacts()).isNotNull();
+        assertThat(inserted.getContacts().toString()).doesNotContain("\"phone\":\"15368088819\"");
+        assertThat(inserted.getContacts().toString()).contains("\"mobile\":\"15368088819\"");
+    }
+
+    @Test
+    void importSuppliersPrefetchesReferenceDataAndExistingSuppliersInsteadOfQueryingEachRow() throws Exception {
+        ErpSupplierServiceImpl service = supplierService();
+        ErpSupplierType typed = new ErpSupplierType();
+        typed.setId(9L);
+        typed.setName("挂账");
+        when(supplierTypeMapper.selectList(any())).thenReturn(List.of(typed));
+
+        when(settlementMethodMapper.selectList(any())).thenReturn(List.of());
+        when(supplierMapper.selectList(any())).thenReturn(List.of());
+
+        var result = service.importSuppliers(
+            new MockMultipartFile(
+                "file",
+                "supplier.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                supplierImportWorkbookBytesForTwoRows()
+            ),
+            "历史供应商表"
+        );
+
+        assertThat(result.status()).isEqualTo("PROCESSING");
+        verify(supplierMapper, timeout(3_000).times(2)).insert(any(ErpSupplier.class));
+        verify(settlementMethodMapper, timeout(3_000).times(1)).selectList(any());
+        verify(supplierTypeMapper, timeout(3_000).times(1)).selectList(any());
+        verify(supplierMapper, timeout(3_000).times(1)).selectList(any());
+        verify(supplierMapper, never()).findByCode(any(), any());
+    }
+
     private ErpReceiptServiceImpl receiptService() {
         return new ErpReceiptServiceImpl(
             receiptMapper,
@@ -581,6 +1016,7 @@ class ErpFinanceWorkflowTests {
             customerMapper,
             receivableMapper,
             saleOrderMapper,
+            settlementMethodMapper,
             orderSequenceMapper,
             systemConfigMapper
         );
@@ -593,6 +1029,7 @@ class ErpFinanceWorkflowTests {
             supplierMapper,
             payableMapper,
             purchaseOrderMapper,
+            settlementMethodMapper,
             orderSequenceMapper,
             systemConfigMapper
         );
@@ -603,6 +1040,33 @@ class ErpFinanceWorkflowTests {
             receivableMapper,
             payableMapper,
             counterpartySubjectMapper
+        );
+    }
+
+    private ErpSupplierServiceImpl supplierService() {
+        return supplierService(Runnable::run, null);
+    }
+
+    private ErpSupplierServiceImpl supplierService(Executor importExecutor,
+                                                   org.springframework.transaction.support.TransactionOperations transactionOperations) {
+        return new ErpSupplierServiceImpl(
+            supplierMapper,
+            purchaseOrderMapper,
+            purchaseReturnMapper,
+            paymentMapper,
+            payableMapper,
+            settlementMethodMapper,
+            paymentMethodMapper,
+            orderSequenceMapper,
+            systemConfigMapper,
+            supplierTypeMapper,
+            supplierImportBatchMapper,
+            supplierImportItemMapper,
+            null,
+            new ObjectMapper(),
+            new ExcelImportParser(),
+            importExecutor,
+            transactionOperations
         );
     }
 
@@ -617,9 +1081,13 @@ class ErpFinanceWorkflowTests {
             systemConfigMapper,
             payableMapper,
             paymentMapper,
+            paymentMethodMapper,
             paymentPayableMapper,
             purchaseReturnMapper,
-            costService()
+            settlementMethodMapper,
+            supplierMapper,
+            costService(),
+            tenantSettingService
         );
     }
 
@@ -635,13 +1103,145 @@ class ErpFinanceWorkflowTests {
             orderSequenceMapper,
             payableMapper,
             paymentMapper,
+            paymentMethodMapper,
             paymentPayableMapper,
+            settlementMethodMapper,
+            supplierMapper,
             systemConfigMapper,
-            costService()
+            costService(),
+            tenantSettingService
         );
     }
 
     private ErpCostService costService() {
         return new ErpCostService(productMapper, stockBalanceMapper);
+    }
+
+    private byte[] supplierImportWorkbookBytes() throws IOException {
+        return supplierImportWorkbookBytes("");
+    }
+
+    private byte[] supplierImportWorkbookBytes(String supplierTypeName) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Row header = workbook.createSheet("Sheet1").createRow(0);
+            header.createCell(0).setCellValue("编码");
+            header.createCell(1).setCellValue("名称");
+            header.createCell(2).setCellValue("默认结算方式");
+            header.createCell(3).setCellValue("客户类型");
+            header.createCell(4).setCellValue("联系方式");
+
+            Row row = workbook.getSheetAt(0).createRow(1);
+            row.createCell(0).setCellValue("SU001");
+            row.createCell(1).setCellValue("昆明坤润汽车维修服务有限公司");
+            row.createCell(2).setCellValue("");
+            row.createCell(3).setCellValue(supplierTypeName);
+            row.createCell(4).setCellValue("13800138000");
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
+    private byte[] supplierImportWorkbookBytesWithSettlement(String settlementName) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Row header = workbook.createSheet("Sheet1").createRow(0);
+            header.createCell(0).setCellValue("编码");
+            header.createCell(1).setCellValue("名称");
+            header.createCell(2).setCellValue("默认结算方式");
+            header.createCell(3).setCellValue("客户类型");
+            header.createCell(4).setCellValue("联系方式");
+
+            Row row = workbook.getSheetAt(0).createRow(1);
+            row.createCell(0).setCellValue("SU001");
+            row.createCell(1).setCellValue("昆明坤润汽车维修服务有限公司");
+            row.createCell(2).setCellValue(settlementName);
+            row.createCell(3).setCellValue("");
+            row.createCell(4).setCellValue("13800138000");
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
+    private byte[] supplierImportWorkbookBytesWithExpandedContacts() throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Row header = workbook.createSheet("Sheet1").createRow(0);
+            header.createCell(0).setCellValue("编码");
+            header.createCell(1).setCellValue("名称");
+            header.createCell(2).setCellValue("默认结算方式");
+            header.createCell(3).setCellValue("客户类型");
+            header.createCell(4).setCellValue("联系人1");
+            header.createCell(5).setCellValue("手机1");
+            header.createCell(6).setCellValue("电话1");
+            header.createCell(7).setCellValue("电话1-2");
+            header.createCell(8).setCellValue("联系人2");
+            header.createCell(9).setCellValue("手机2");
+
+            Row row = workbook.getSheetAt(0).createRow(1);
+            row.createCell(0).setCellValue("SU001");
+            row.createCell(1).setCellValue("昆明坤润汽车维修服务有限公司");
+            row.createCell(2).setCellValue("");
+            row.createCell(3).setCellValue("");
+            row.createCell(4).setCellValue("张三");
+            row.createCell(5).setCellValue("13800138000");
+            row.createCell(6).setCellValue("0871-6666666");
+            row.createCell(7).setCellValue("0871-7777777");
+            row.createCell(8).setCellValue("李四");
+            row.createCell(9).setCellValue("13900139000");
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
+    private byte[] supplierImportWorkbookBytesWithLegacyContactInfo(String contactInfo) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Row header = workbook.createSheet("Sheet1").createRow(0);
+            header.createCell(0).setCellValue("编码");
+            header.createCell(1).setCellValue("名称");
+            header.createCell(2).setCellValue("默认结算方式");
+            header.createCell(3).setCellValue("客户类型");
+            header.createCell(4).setCellValue("联系方式");
+            header.createCell(5).setCellValue("联系人");
+
+            Row row = workbook.getSheetAt(0).createRow(1);
+            row.createCell(0).setCellValue("SU001");
+            row.createCell(1).setCellValue("昆明坤润汽车维修服务有限公司");
+            row.createCell(2).setCellValue("");
+            row.createCell(3).setCellValue("");
+            row.createCell(4).setCellValue(contactInfo);
+            row.createCell(5).setCellValue("鑫泰中原");
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
+    private byte[] supplierImportWorkbookBytesForTwoRows() throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Row header = workbook.createSheet("Sheet1").createRow(0);
+            header.createCell(0).setCellValue("编码");
+            header.createCell(1).setCellValue("名称");
+            header.createCell(2).setCellValue("默认结算方式");
+            header.createCell(3).setCellValue("客户类型");
+            header.createCell(4).setCellValue("联系方式");
+
+            Row firstRow = workbook.getSheetAt(0).createRow(1);
+            firstRow.createCell(0).setCellValue("SU001");
+            firstRow.createCell(1).setCellValue("供应商一");
+            firstRow.createCell(2).setCellValue("");
+            firstRow.createCell(3).setCellValue("挂账");
+            firstRow.createCell(4).setCellValue("13800138000");
+
+            Row secondRow = workbook.getSheetAt(0).createRow(2);
+            secondRow.createCell(0).setCellValue("SU002");
+            secondRow.createCell(1).setCellValue("供应商二");
+            secondRow.createCell(2).setCellValue("");
+            secondRow.createCell(3).setCellValue("挂账");
+            secondRow.createCell(4).setCellValue("13900139000");
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
     }
 }

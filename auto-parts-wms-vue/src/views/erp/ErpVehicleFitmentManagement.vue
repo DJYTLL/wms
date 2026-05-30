@@ -5,7 +5,7 @@
       <div class="page-toolbar-card page-toolbar-card--tabs">
         <el-tabs v-model="activeTab" class="vehicle-tabs">
           <el-tab-pane :label="$t('field.vehicleBrand')" name="brands">
-            <div class="erp-basic-toolbar vehicle-tab-toolbar">
+            <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions vehicle-tab-toolbar">
               <div class="erp-basic-filters erp-basic-filters--3">
             <el-input
               v-model="brandNameQuery"
@@ -80,7 +80,7 @@
         </div>
           </el-tab-pane>
           <el-tab-pane :label="$t('field.vehicleSeries')" name="series">
-            <div class="erp-basic-toolbar vehicle-tab-toolbar">
+            <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions vehicle-tab-toolbar">
               <div class="erp-basic-filters erp-basic-filters--4">
             <el-input
               v-model="seriesNameQuery"
@@ -163,7 +163,7 @@
         </div>
           </el-tab-pane>
           <el-tab-pane :label="$t('field.vehicleModel')" name="models">
-            <div class="erp-basic-toolbar vehicle-tab-toolbar">
+            <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions vehicle-tab-toolbar">
               <div class="erp-basic-filters erp-basic-filters--4">
             <el-input
               v-model="modelNameQuery"
@@ -263,7 +263,7 @@
         </div>
           </el-tab-pane>
           <el-tab-pane :label="$t('field.productFitment')" name="fitments">
-            <div class="erp-basic-toolbar vehicle-tab-toolbar">
+            <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions vehicle-tab-toolbar">
               <div class="erp-basic-filters erp-basic-filters--2">
             <el-select v-model="fitmentProductFilter" :placeholder="$t('field.product')" class="table-search erp-basic-field--wide" clearable @change="fetchFitmentList">
               <el-option

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="page-title">{{ $t('page.erpReceiptMethodManagement') }}</div>
       <div class="page-toolbar-card">
-        <div class="erp-basic-toolbar">
+        <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions">
           <div class="erp-basic-filters erp-basic-filters--3">
             <el-input
               v-model="nameQuery"

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="page-title">{{ $t('page.erpWarehouseManagement') }}</div>
       <div class="page-toolbar-card">
-        <div class="erp-basic-toolbar">
+        <div class="erp-basic-toolbar erp-basic-toolbar--fixed-actions">
           <div class="erp-basic-filters erp-basic-filters--5">
           <el-input
             v-model="nameQuery"
@@ -60,6 +60,12 @@
           <ErpDataTableColumn v-if="canShow('address')" prop="address" :label="$t('field.address')" min-width="200" />
           <ErpDataTableColumn v-if="canShow('manager')" prop="manager" :label="$t('field.manager')" min-width="120" />
           <ErpDataTableColumn v-if="canShow('phone')" prop="phone" :label="$t('field.phone')" min-width="130" />
+          <ErpDataTableColumn v-if="canShow('default')" :label="$t('field.default')" width="100" column-key="default">
+            <template #default="{ row }">
+              <el-tag v-if="row.isDefault" type="warning" size="small">{{ $t('field.default') }}</el-tag>
+              <span v-else>-</span>
+            </template>
+          </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('status')" prop="enabled" :label="$t('field.status')" width="110">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
@@ -109,6 +115,9 @@
         <el-form-item :label="$t('field.status')">
           <el-switch v-model="formData.enabled" />
         </el-form-item>
+        <el-form-item :label="$t('field.default')">
+          <el-switch v-model="formData.isDefault" />
+        </el-form-item>
         <el-form-item :label="$t('field.remark')">
           <el-input v-model="formData.remark" type="textarea" />
         </el-form-item>
@@ -140,6 +149,7 @@ interface ErpWarehouse {
   manager?: string;
   phone?: string;
   enabled: boolean;
+  isDefault?: boolean;
   remark?: string;
 }
 
@@ -165,7 +175,7 @@ const showModal = ref(false);
 const isEditing = ref(false);
 const currentId = ref<number | null>(null);
 
-const defaultColumns = ['code', 'name', 'address', 'manager', 'phone', 'status'];
+const defaultColumns = ['code', 'name', 'address', 'manager', 'phone', 'default', 'status'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-warehouse', defaultColumns);
 
 const formData = reactive({
@@ -175,6 +185,7 @@ const formData = reactive({
   manager: '',
   phone: '',
   enabled: true,
+  isDefault: false,
   remark: ''
 });
 
@@ -251,6 +262,7 @@ const openEditModal = (row: ErpWarehouse) => {
   formData.manager = row.manager || '';
   formData.phone = row.phone || '';
   formData.enabled = row.enabled;
+  formData.isDefault = Boolean(row.isDefault);
   formData.remark = row.remark || '';
   showModal.value = true;
 };
@@ -262,6 +274,7 @@ const resetForm = () => {
   formData.manager = '';
   formData.phone = '';
   formData.enabled = true;
+  formData.isDefault = false;
   formData.remark = '';
 };
 

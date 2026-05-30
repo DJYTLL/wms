@@ -24,6 +24,44 @@ const toPinyinTokens = (value: string) => {
   }
 };
 
+const normalizeDigits = (value: string) => value.replace(/\D+/g, '');
+
+const isNumericLikeQuery = (value: string) => {
+  const trimmed = value.trim();
+  return !!trimmed && /^[\d\s()+\-\\/]+$/.test(trimmed) && /\d/.test(trimmed);
+};
+
+type SearchQuery = {
+  value: string;
+  allowUnordered: boolean;
+};
+
+const hasCjk = (value: string) => /[\u4e00-\u9fff]/.test(value);
+
+const toSearchQuery = (value: string): SearchQuery => ({
+  value,
+  allowUnordered: hasCjk(value),
+});
+
+const splitCompactAlphaNumericQuery = (value: string) => {
+  if (!/^[a-z0-9]+$/.test(value) || !/[a-z]/.test(value) || !/\d/.test(value)) {
+    return [value];
+  }
+  return value.match(/[a-z]+|\d+/g) || [value];
+};
+
+const toSearchQueries = (keyword: string) => {
+  const query = keyword.trim().toLowerCase();
+  if (!query) return [];
+  if (isNumericLikeQuery(query)) return [toSearchQuery(query)];
+  const parts = query
+    .split(/\s+/)
+    .flatMap(part => splitCompactAlphaNumericQuery(part))
+    .filter(Boolean);
+  const uniqueParts = Array.from(new Set(parts));
+  return uniqueParts.map(toSearchQuery);
+};
+
 export const buildFuzzySearchSources = (...values: Array<string | number | null | undefined>) => {
   const text = values
     .filter(value => value !== null && value !== undefined)
@@ -36,10 +74,27 @@ export const buildFuzzySearchSources = (...values: Array<string | number | null 
   return [text, fullPinyin, initials].filter(Boolean);
 };
 
+const fuzzyIncludesQuery = (sources: string[], query: SearchQuery) => {
+  if (isNumericLikeQuery(query.value)) {
+    const normalizedQuery = normalizeDigits(query.value);
+    if (!normalizedQuery) return true;
+    return sources.some((source) => normalizeDigits(source).includes(normalizedQuery));
+  }
+  return sources.some(
+    source => source.includes(query.value) || (query.allowUnordered && isUnorderedMatch(source, query.value))
+  );
+};
+
 export const fuzzyIncludes = (sources: string[], keyword: string) => {
-  const query = keyword.trim().toLowerCase();
-  if (!query) return true;
-  return sources.some(source => source.includes(query) || isUnorderedMatch(source, query));
+  const queries = toSearchQueries(keyword);
+  if (!queries.length) return true;
+  return queries.some(query => fuzzyIncludesQuery(sources, query));
+};
+
+export const countFuzzyKeywordMatches = (sources: string[], keyword: string) => {
+  const queries = toSearchQueries(keyword);
+  if (!queries.length) return 0;
+  return queries.reduce((count, query) => count + (fuzzyIncludesQuery(sources, query) ? 1 : 0), 0);
 };
 
 export const filterByFuzzyKeyword = <T>(
@@ -48,5 +103,13 @@ export const filterByFuzzyKeyword = <T>(
   getSearchValues: (item: T) => Array<string | number | null | undefined>
 ) => {
   if (!keyword.trim()) return items;
-  return items.filter(item => fuzzyIncludes(buildFuzzySearchSources(...getSearchValues(item)), keyword));
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      score: countFuzzyKeywordMatches(buildFuzzySearchSources(...getSearchValues(item)), keyword),
+    }))
+    .filter(result => result.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map(result => result.item);
 };

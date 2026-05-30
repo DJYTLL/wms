@@ -1,6 +1,7 @@
 package com.example.wms.service.erp;
 
 import com.example.wms.dto.erp.ErpCounterpartyFinanceSummaryView;
+import com.example.wms.dto.erp.ErpCounterpartyFinanceDetailRow;
 import com.example.wms.dto.erp.ErpFinanceSummary;
 import com.example.wms.dto.erp.ErpCustomerDebtView;
 import com.example.wms.dto.erp.ErpSupplierDebtView;
@@ -16,4 +17,6 @@ public interface ErpFinanceService {
     List<ErpSupplierDebtView> listSupplierDebts(String keyword);
 
     List<ErpCounterpartyFinanceSummaryView> listCounterpartySubjectSummaries();
+
+    List<ErpCounterpartyFinanceDetailRow> listCounterpartySubjectDetails(Long subjectId);
 }

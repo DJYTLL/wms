@@ -4,16 +4,21 @@ import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpProductImportBatchSummary;
 import com.example.wms.dto.erp.ErpProductCreateRequest;
+import com.example.wms.dto.erp.ErpProductImportItemView;
+import com.example.wms.dto.erp.ErpProductImportResult;
 import com.example.wms.dto.erp.ErpProductUpdateRequest;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.service.erp.ErpProductService;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -83,6 +88,25 @@ public class ErpProductController {
         ErpProduct product = erpProductService.create(request);
         stripCostPriceIfNeeded(product);
         return ResponseEntity.ok(ApiResponse.ok(product));
+    }
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('PERM_erp-product:import')")
+    public ResponseEntity<ApiResponse<ErpProductImportResult>> importProducts(@RequestParam("file") MultipartFile file,
+                                                                              @RequestParam(value = "sourceName", required = false) String sourceName) {
+        return ResponseEntity.ok(ApiResponse.ok(erpProductService.importProducts(file, sourceName)));
+    }
+
+    @GetMapping("/import-batches")
+    @PreAuthorize("hasAuthority('PERM_erp-product:import')")
+    public ResponseEntity<ApiResponse<List<ErpProductImportBatchSummary>>> listImportBatches() {
+        return ResponseEntity.ok(ApiResponse.ok(erpProductService.listImportBatches()));
+    }
+
+    @GetMapping("/import-batches/{batchId}/items")
+    @PreAuthorize("hasAuthority('PERM_erp-product:import')")
+    public ResponseEntity<ApiResponse<List<ErpProductImportItemView>>> listImportBatchItems(@PathVariable("batchId") Long batchId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpProductService.listImportBatchItems(batchId)));
     }
 
     // 更新商品

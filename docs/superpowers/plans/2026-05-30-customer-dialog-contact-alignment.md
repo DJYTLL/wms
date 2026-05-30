@@ -1,0 +1,495 @@
+# 客户弹窗与联系方式对齐供应商 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 将客户管理弹窗改造成与供应商弹窗一致的独立组件和联系方式交互，同时保持现有客户后端字段、搜索与导入兼容。
+
+**Architecture:** 前端新增独立 `ErpCustomerEditDialog.vue` 组件，复用供应商弹窗的拖拽缩放骨架与联系人标签交互模型；客户管理页改为只负责列表、搜索、导入与弹窗挂载。数据层继续使用 `contact/phone/mobile/email/contacts` 兼容旧后端接口，搜索同时覆盖旧字段与 `contacts` JSON。
+
+**Tech Stack:** Vue 3、TypeScript、Element Plus、Node 原生 `--test`、`vue-tsc`
+
+---
+
+## 文件结构
+
+### 新增文件
+
+- `D:/project/auto-parts-wms-vue/src/components/ErpCustomerEditDialog.vue`
+  - 客户独立弹窗组件
+  - 承载拖拽缩放、表单分区、联系方式标签输入、payload 组装
+
+- `D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs`
+  - 锁定客户弹窗重构后的结构与搜索兼容行为
+
+### 修改文件
+
+- `D:/project/auto-parts-wms-vue/src/views/erp/ErpCustomerManagement.vue`
+  - 移除内联弹窗
+  - 挂载 `ErpCustomerEditDialog`
+  - 保留列表、分页、导入逻辑
+  - 搜索兼容 `contacts`
+
+- `D:/project/auto-parts-wms-vue/src/styles/table.css`
+  - 抽取或补充客户弹窗所需公共样式
+  - 复用供应商弹窗与联系人标签视觉规范
+
+## Task 1: 为客户弹窗重构补失败测试
+
+**Files:**
+- Create: `D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs`
+- Reference: `D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpSupplierDialogRedesign.test.mjs`
+- Reference: `D:/project/auto-parts-wms-vue/src/views/erp/ErpCustomerManagement.vue`
+
+- [ ] **Step 1: 写失败测试，锁定客户页将改为独立弹窗和标签联系方式**
+
+```js
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { test } from 'node:test';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const viewsRoot = join(__dirname, '..');
+
+const readView = (relativePath) => readFileSync(join(viewsRoot, relativePath), 'utf8');
+const readComponent = (relativePath) => readFileSync(join(viewsRoot, '..', '..', 'components', relativePath), 'utf8');
+
+test('customer management uses independent customer edit dialog with supplier-like contact tags', () => {
+  const pageSource = readView('ErpCustomerManagement.vue');
+
+  assert.match(pageSource, /import ErpCustomerEditDialog from '@\/components\/ErpCustomerEditDialog\.vue'/);
+  assert.match(pageSource, /<ErpCustomerEditDialog/);
+  assert.doesNotMatch(pageSource, /<el-dialog[\s\S]*v-model="showModal"/);
+});
+
+test('customer edit dialog supports draggable resize shell and contact tag input', () => {
+  const componentSource = readComponent('ErpCustomerEditDialog.vue');
+
+  assert.match(componentSource, /class="customer-dialog"/);
+  assert.match(componentSource, /draggable/);
+  assert.match(componentSource, /overflow/);
+  assert.match(componentSource, /supplier-contact-card|customer-contact-card/);
+  assert.match(componentSource, /placeholder="输入联系方式后回车，或粘贴多个号码"/);
+  assert.match(componentSource, /设为主号码/);
+});
+
+test('customer management search still covers contacts payload', () => {
+  const pageSource = readView('ErpCustomerManagement.vue');
+
+  assert.match(pageSource, /contacts/);
+  assert.match(pageSource, /phoneQuery/);
+  assert.match(pageSource, /contactQuery/);
+});
+```
+
+- [ ] **Step 2: 运行测试，确认它先失败**
+
+Run:
+
+```bash
+node --test D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs
+```
+
+Expected:
+
+```text
+FAIL because ErpCustomerEditDialog.vue does not exist yet and customer page still contains inline dialog
+```
+
+- [ ] **Step 3: 提交失败测试基线**
+
+```bash
+git add D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs
+git commit -m "test: lock customer dialog redesign contract"
+```
+
+## Task 2: 新增独立客户弹窗组件骨架
+
+**Files:**
+- Create: `D:/project/auto-parts-wms-vue/src/components/ErpCustomerEditDialog.vue`
+- Reference: `D:/project/auto-parts-wms-vue/src/components/ErpSupplierEditDialog.vue`
+- Modify: `D:/project/auto-parts-wms-vue/src/styles/table.css`
+
+- [ ] **Step 1: 从供应商弹窗抽取客户弹窗骨架，先不接完整业务**
+
+```vue
+<template>
+  <el-dialog
+    v-model="dialogVisible"
+    class="customer-dialog"
+    :style="dialogStyle"
+    draggable
+    overflow
+    @closed="handleDialogClosed"
+  >
+    <template #header>
+      <div class="customer-dialog__header">
+        <div class="customer-dialog__header-main">
+          <div class="customer-dialog__title-block">
+            <div class="customer-dialog__title">
+              {{ isEditing ? $t('action.edit') : $t('action.add') }}
+            </div>
+            <div class="customer-dialog__subtitle">统一维护客户资料、联系方式和往来设置</div>
+          </div>
+        </div>
+        <div class="customer-dialog__drag-hint">拖动标题栏移动，拖动四角调整大小</div>
+      </div>
+    </template>
+
+    <div class="customer-dialog__content">
+      <div class="customer-dialog__intro">
+        <span class="customer-dialog__intro-tag">{{ $t('placeholder.autoGenerated') }}</span>
+        <span class="customer-dialog__intro-text">名称必填，其余资料按业务需要补充。</span>
+      </div>
+
+      <el-form :model="formData" label-position="top" class="customer-dialog__form">
+        <!-- 基础信息 -->
+        <!-- 联系人与沟通 -->
+        <!-- 业务信息 -->
+        <!-- 财务与附加信息 -->
+      </el-form>
+    </div>
+
+    <Teleport :to="resizeHandleTeleportTarget" :disabled="!resizeHandleTeleportTarget">
+      <button type="button" class="customer-dialog__resize-handle customer-dialog__resize-handle--nw" @pointerdown="startResize('nw', $event)" />
+      <button type="button" class="customer-dialog__resize-handle customer-dialog__resize-handle--ne" @pointerdown="startResize('ne', $event)" />
+      <button type="button" class="customer-dialog__resize-handle customer-dialog__resize-handle--sw" @pointerdown="startResize('sw', $event)" />
+      <button type="button" class="customer-dialog__resize-handle customer-dialog__resize-handle--se" @pointerdown="startResize('se', $event)" />
+    </Teleport>
+  </el-dialog>
+</template>
+```
+
+- [ ] **Step 2: 在样式文件补客户弹窗公共样式**
+
+```css
+.customer-dialog__header,
+.customer-dialog__content,
+.customer-dialog__intro,
+.customer-dialog__resize-handle {
+  /* 参考 supplier-dialog 对应样式组织，保持客户与供应商一致 */
+}
+```
+
+- [ ] **Step 3: 运行客户弹窗测试，确认骨架相关断言转绿**
+
+Run:
+
+```bash
+node --test D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs
+```
+
+Expected:
+
+```text
+Partial PASS on dialog skeleton assertions, remaining failures should point to inline dialog or contact behavior not yet migrated
+```
+
+- [ ] **Step 4: 提交客户弹窗骨架**
+
+```bash
+git add D:/project/auto-parts-wms-vue/src/components/ErpCustomerEditDialog.vue D:/project/auto-parts-wms-vue/src/styles/table.css
+git commit -m "feat: add customer edit dialog shell"
+```
+
+## Task 3: 将客户页内联弹窗替换为独立组件
+
+**Files:**
+- Modify: `D:/project/auto-parts-wms-vue/src/views/erp/ErpCustomerManagement.vue`
+- Reference: `D:/project/auto-parts-wms-vue/src/components/ErpCustomerEditDialog.vue`
+
+- [ ] **Step 1: 移除客户页中的内联 `<el-dialog>`，改为挂载独立组件**
+
+```vue
+<ErpCustomerEditDialog
+  v-model="showModal"
+  :mode="isEditing ? 'edit' : 'create'"
+  :initial-value="selectedCustomer"
+  :category-options="categoryOptions"
+  :settlement-method-options="settlementMethodOptions"
+  :receipt-method-options="receiptMethodOptions"
+  :delivery-method-options="deliveryMethodOptions"
+  :counterparty-subject-options="counterpartySubjectOptions"
+  :next-code="nextCustomerCode"
+  @submit="handleCustomerDialogSubmit"
+  @closed="handleCustomerDialogClosed"
+/>
+```
+
+- [ ] **Step 2: 新增客户弹窗挂载所需状态，并收口页内表单状态**
+
+```ts
+const selectedCustomer = ref<ErpCustomer | null>(null);
+const nextCustomerCode = ref('');
+
+const openAddModal = () => {
+  isEditing.value = false;
+  currentId.value = null;
+  selectedCustomer.value = null;
+  showModal.value = true;
+  fetchNextCustomerCode();
+};
+
+const openEditModal = (row: ErpCustomer) => {
+  isEditing.value = true;
+  currentId.value = row.id;
+  selectedCustomer.value = { ...row };
+  showModal.value = true;
+};
+```
+
+- [ ] **Step 3: 运行客户弹窗测试，确认“客户页使用独立组件”断言通过**
+
+Run:
+
+```bash
+node --test D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs
+```
+
+Expected:
+
+```text
+PASS for independent dialog usage assertions
+```
+
+- [ ] **Step 4: 提交页面替换**
+
+```bash
+git add D:/project/auto-parts-wms-vue/src/views/erp/ErpCustomerManagement.vue
+git commit -m "refactor: move customer dialog into standalone component"
+```
+
+## Task 4: 实现客户联系方式标签交互与旧数据回填
+
+**Files:**
+- Modify: `D:/project/auto-parts-wms-vue/src/components/ErpCustomerEditDialog.vue`
+- Reference: `D:/project/auto-parts-wms-vue/src/components/ErpSupplierEditDialog.vue`
+
+- [ ] **Step 1: 为客户弹窗实现联系人卡片与联系方式标签模型**
+
+```ts
+interface CustomerContactMethod {
+  value?: string;
+  isPrimary?: boolean;
+}
+
+interface CustomerContactGroup {
+  name?: string;
+  email?: string;
+  remark?: string;
+  isPrimary?: boolean;
+  methods: CustomerContactMethod[];
+  draftMethod?: string;
+}
+```
+
+- [ ] **Step 2: 实现旧字段回填与新 `contacts` 回填**
+
+```ts
+const buildInitialContacts = (row: CustomerFormValue): CustomerContactGroup[] => {
+  const parsed = parseContacts(row.contacts);
+  if (parsed.length) {
+    return mapParsedContactsToGroups(parsed);
+  }
+  if (row.contact || row.phone || row.mobile || row.email) {
+    return [{
+      name: row.contact || '',
+      email: row.email || '',
+      remark: '',
+      isPrimary: true,
+      methods: [{
+        value: row.mobile || row.phone || '',
+        isPrimary: true
+      }],
+      draftMethod: ''
+    }];
+  }
+  return [{ isPrimary: true, methods: [], draftMethod: '' }];
+};
+```
+
+- [ ] **Step 3: 实现保存前 payload 映射**
+
+```ts
+const buildPayload = (): CustomerSubmitPayload => {
+  const primaryContact = getPrimaryContact();
+  return {
+    code: formData.code,
+    name: formData.name,
+    categoryId: formData.categoryId || undefined,
+    defaultSettlementMethodCode: formData.defaultSettlementMethodCode || undefined,
+    defaultReceiptMethodCode: formData.defaultReceiptMethodCode || undefined,
+    deliveryMethodCode: formData.deliveryMethodCode || undefined,
+    counterpartySubjectId: formData.counterpartySubjectId || undefined,
+    contact: primaryContact?.name || undefined,
+    phone: primaryContact?.phone || undefined,
+    mobile: primaryContact?.mobile || undefined,
+    email: formData.email || primaryContact?.email || undefined,
+    address: formData.address || undefined,
+    contacts: buildContactsPayload(),
+    enabled: formData.enabled,
+    remark: formData.remark || undefined
+  };
+};
+```
+
+- [ ] **Step 4: 运行客户弹窗测试，确认联系方式标签交互断言通过**
+
+Run:
+
+```bash
+node --test D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs
+```
+
+Expected:
+
+```text
+PASS for contact tag input and payload-structure assertions
+```
+
+- [ ] **Step 5: 提交联系方式统一改造**
+
+```bash
+git add D:/project/auto-parts-wms-vue/src/components/ErpCustomerEditDialog.vue
+git commit -m "feat: align customer contact editing with supplier dialog"
+```
+
+## Task 5: 调整客户页搜索兼容 `contacts`
+
+**Files:**
+- Modify: `D:/project/auto-parts-wms-vue/src/views/erp/ErpCustomerManagement.vue`
+
+- [ ] **Step 1: 更新联系人与电话搜索逻辑，覆盖旧字段和 `contacts`**
+
+```ts
+filtered = filterByFuzzyKeyword(filtered, contactQuery.value, row => [
+  row.contact,
+  ...getCustomerContacts(row).map(item => item.name)
+]);
+
+filtered = filterByFuzzyKeyword(filtered, phoneQuery.value, row => [
+  row.phone,
+  row.mobile,
+  ...getCustomerContacts(row).flatMap(item => [item.phone, item.mobile])
+]);
+```
+
+- [ ] **Step 2: 如果客户页没有统一的解析函数，补一个 `getCustomerContacts`**
+
+```ts
+const parseContacts = (raw?: unknown) => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as ContactItem[];
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+```
+
+- [ ] **Step 3: 运行客户弹窗测试，确认搜索兼容断言通过**
+
+Run:
+
+```bash
+node --test D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs
+```
+
+Expected:
+
+```text
+PASS for search compatibility assertions
+```
+
+- [ ] **Step 4: 提交搜索兼容修复**
+
+```bash
+git add D:/project/auto-parts-wms-vue/src/views/erp/ErpCustomerManagement.vue
+git commit -m "fix: keep customer search compatible with contacts payload"
+```
+
+## Task 6: 完整验证与收尾
+
+**Files:**
+- Verify: `D:/project/auto-parts-wms-vue/src/components/ErpCustomerEditDialog.vue`
+- Verify: `D:/project/auto-parts-wms-vue/src/views/erp/ErpCustomerManagement.vue`
+- Verify: `D:/project/auto-parts-wms-vue/src/styles/table.css`
+- Verify: `D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs`
+
+- [ ] **Step 1: 运行客户弹窗重构测试**
+
+Run:
+
+```bash
+node --test D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs
+```
+
+Expected:
+
+```text
+All customer dialog redesign tests PASS
+```
+
+- [ ] **Step 2: 运行现有供应商弹窗回归，确认没有误伤统一样式**
+
+Run:
+
+```bash
+node --test D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpSupplierDialogRedesign.test.mjs
+```
+
+Expected:
+
+```text
+All supplier dialog redesign tests PASS
+```
+
+- [ ] **Step 3: 运行前端类型检查**
+
+Run:
+
+```bash
+npm run type-check
+```
+
+Workdir:
+
+```bash
+D:/project/auto-parts-wms-vue
+```
+
+Expected:
+
+```text
+vue-tsc --build exits with code 0
+```
+
+- [ ] **Step 4: 提交最终收尾**
+
+```bash
+git add D:/project/auto-parts-wms-vue/src/components/ErpCustomerEditDialog.vue D:/project/auto-parts-wms-vue/src/views/erp/ErpCustomerManagement.vue D:/project/auto-parts-wms-vue/src/styles/table.css D:/project/auto-parts-wms-vue/src/views/erp/__tests__/erpCustomerDialogRedesign.test.mjs
+git commit -m "feat: align customer dialog and contacts with supplier experience"
+```
+
+## 自检
+
+- spec 覆盖检查：
+  - 独立客户弹窗组件：Task 2、Task 3
+  - 联系方式标签输入：Task 4
+  - 旧字段与 `contacts` 兼容：Task 4、Task 5
+  - 搜索兼容：Task 5
+  - 类型检查与回归测试：Task 6
+
+- 占位符检查：
+  - 计划中未使用 TBD/TODO
+  - 每个任务都包含具体文件、命令和预期结果
+
+- 一致性检查：
+  - `ErpCustomerEditDialog.vue` 是唯一新增组件名
+  - 联系方式统一使用 `contacts`、`contact`、`phone`、`mobile`、`email` 这些现有字段名

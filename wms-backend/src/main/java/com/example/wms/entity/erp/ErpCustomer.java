@@ -95,6 +95,10 @@ public class ErpCustomer {
     @TableField(value = "contacts", typeHandler = JsonbTypeHandler.class)
     private JsonNode contacts;
 
+    // 往来主体ID
+    @TableField("counterparty_subject_id")
+    private Long counterpartySubjectId;
+
     // 是否启用
     @TableField("is_enabled")
     private Boolean enabled;
@@ -280,6 +284,14 @@ public class ErpCustomer {
 
     public void setContacts(JsonNode contacts) {
         this.contacts = contacts;
+    }
+
+    public Long getCounterpartySubjectId() {
+        return counterpartySubjectId;
+    }
+
+    public void setCounterpartySubjectId(Long counterpartySubjectId) {
+        this.counterpartySubjectId = counterpartySubjectId;
     }
 
     public Boolean getEnabled() {

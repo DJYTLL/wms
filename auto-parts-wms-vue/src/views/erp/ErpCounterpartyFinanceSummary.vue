@@ -34,9 +34,31 @@
               </span>
             </template>
           </ErpDataTableColumn>
+          <ErpDataTableColumn :label="$t('table.actions')" width="120">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="openDetail(row)">查看明细</el-button>
+            </template>
+          </ErpDataTableColumn>
         </ErpDataTable>
       </div>
     </div>
+
+    <el-drawer v-model="detailVisible" title="往来明细" size="60%">
+      <ErpDataTable :data="detailRows" stripe v-loading="detailLoading" :empty-text="$t('table.empty')" table-key="erp-counterparty-finance-detail">
+        <ErpDataTableColumn prop="detailType" label="类型" min-width="100" />
+        <ErpDataTableColumn prop="bizNo" label="单号" min-width="150" />
+        <ErpDataTableColumn prop="targetName" :label="$t('field.name')" min-width="180" />
+        <ErpDataTableColumn prop="targetCode" :label="$t('field.code')" min-width="140" />
+        <ErpDataTableColumn prop="totalAmount" :label="$t('field.totalAmount')" min-width="120">
+          <template #default="{ row }">{{ formatAmount(row.totalAmount) }}</template>
+        </ErpDataTableColumn>
+        <ErpDataTableColumn prop="unpaidAmount" label="未结金额" min-width="120">
+          <template #default="{ row }">{{ formatAmount(row.unpaidAmount) }}</template>
+        </ErpDataTableColumn>
+        <ErpDataTableColumn prop="status" :label="$t('field.status')" min-width="120" />
+        <ErpDataTableColumn prop="createdAt" :label="$t('field.createdTime')" min-width="180" />
+      </ErpDataTable>
+    </el-drawer>
   </div>
 </template>
 
@@ -57,6 +79,17 @@ interface CounterpartyFinanceSummaryRow {
   supplierCount: number;
 }
 
+interface CounterpartyFinanceDetailRow {
+  detailType: string;
+  bizNo: string;
+  targetName: string;
+  targetCode: string;
+  totalAmount: number | string;
+  unpaidAmount: number | string;
+  status: string;
+  createdAt: string;
+}
+
 const { notifyError } = useApiError();
 const defaultColumns = ['subjectName', 'customerCount', 'supplierCount', 'receivableTotal', 'payableTotal', 'netAmount'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-finance-counterparty-subject', defaultColumns);
@@ -66,6 +99,9 @@ const tableData = ref<CounterpartyFinanceSummaryRow[]>([]);
 const allTableData = ref<CounterpartyFinanceSummaryRow[]>([]);
 const loading = ref(false);
 const searchQuery = ref('');
+const detailVisible = ref(false);
+const detailLoading = ref(false);
+const detailRows = ref<CounterpartyFinanceDetailRow[]>([]);
 
 const formatAmount = (value: number | string) => {
   const num = Number(value || 0);
@@ -94,6 +130,21 @@ const applySearch = () => {
 
 const handleSearch = () => {
   applySearch();
+};
+
+const openDetail = async (row: CounterpartyFinanceSummaryRow) => {
+  detailVisible.value = true;
+  detailLoading.value = true;
+  try {
+    const res: any = await request.get(`/erp/finance/counterparty-subjects/${row.subjectId}/details`);
+    if (res.data.code === 200) {
+      detailRows.value = res.data.data || [];
+    }
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    detailLoading.value = false;
+  }
 };
 
 onMounted(() => {

@@ -4,13 +4,16 @@ import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpStockCountCreateRequest;
 import com.example.wms.dto.erp.ErpStockCountDetail;
+import com.example.wms.dto.erp.ErpStockInitImportResult;
 import com.example.wms.dto.erp.ErpStockCountUpdateRequest;
 import com.example.wms.entity.erp.ErpStockCount;
 import com.example.wms.service.erp.ErpStockCountService;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -61,6 +64,13 @@ public class ErpStockInitController {
     @PreAuthorize("hasAuthority('PERM_erp-stock-init:add')")
     public ResponseEntity<ApiResponse<ErpStockCountDetail>> create(@Valid @RequestBody ErpStockCountCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.create(request, "INIT")));
+    }
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('PERM_erp-stock-init:add')")
+    public ResponseEntity<ApiResponse<ErpStockInitImportResult>> importInitStocks(@RequestParam("file") MultipartFile file,
+                                                                                   @RequestParam(value = "sourceName", required = false) String sourceName) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.importInitStocks(file, sourceName)));
     }
 
     // 更新初始库存

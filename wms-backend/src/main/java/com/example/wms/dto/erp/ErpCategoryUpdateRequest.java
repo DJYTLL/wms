@@ -33,6 +33,10 @@ public record ErpCategoryUpdateRequest(
      */
     Boolean enabled,
     /**
+     * 表示是否默认。
+     */
+    Boolean isDefault,
+    /**
      * 表示备注说明。
      */
     String remark

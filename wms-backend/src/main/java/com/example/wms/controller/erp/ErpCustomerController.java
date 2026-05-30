@@ -4,14 +4,20 @@ import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpCounterpartyUnbindCheck;
+import com.example.wms.dto.erp.ErpCustomerImportBatchSummary;
+import com.example.wms.dto.erp.ErpCustomerImportItemView;
+import com.example.wms.dto.erp.ErpCustomerImportResult;
 import com.example.wms.dto.erp.ErpCustomerCreateRequest;
 import com.example.wms.dto.erp.ErpCustomerUpdateRequest;
 import com.example.wms.entity.erp.ErpCustomer;
 import com.example.wms.service.erp.ErpCustomerService;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -56,6 +62,13 @@ public class ErpCustomerController {
         return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.getById(id)));
     }
 
+    @GetMapping("/{id}/counterparty-subject-check")
+    @PreAuthorize("hasAuthority('PERM_erp-customer:edit')")
+    public ResponseEntity<ApiResponse<ErpCounterpartyUnbindCheck>> checkRebind(@PathVariable Long id,
+                                                                               @RequestParam(required = false) Long targetSubjectId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.checkRebind(id, targetSubjectId)));
+    }
+
     // 获取下一个客户编码
     @GetMapping("/next-code")
     @PreAuthorize("hasAuthority('PERM_erp-customer:add')")
@@ -68,6 +81,25 @@ public class ErpCustomerController {
     @PreAuthorize("hasAuthority('PERM_erp-customer:add')")
     public ResponseEntity<ApiResponse<ErpCustomer>> create(@Valid @RequestBody ErpCustomerCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.create(request)));
+    }
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('PERM_erp-customer:import')")
+    public ResponseEntity<ApiResponse<ErpCustomerImportResult>> importCustomers(@RequestParam("file") MultipartFile file,
+                                                                                @RequestParam(value = "sourceName", required = false) String sourceName) {
+        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.importCustomers(file, sourceName)));
+    }
+
+    @GetMapping("/import-batches")
+    @PreAuthorize("hasAuthority('PERM_erp-customer:import')")
+    public ResponseEntity<ApiResponse<List<ErpCustomerImportBatchSummary>>> listImportBatches() {
+        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.listImportBatches()));
+    }
+
+    @GetMapping("/import-batches/{batchId}/items")
+    @PreAuthorize("hasAuthority('PERM_erp-customer:import')")
+    public ResponseEntity<ApiResponse<List<ErpCustomerImportItemView>>> listImportBatchItems(@PathVariable("batchId") Long batchId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.listImportBatchItems(batchId)));
     }
 
     // 更新客户

@@ -1,5 +1,6 @@
 package com.example.wms;
 
+import com.example.wms.controller.erp.ErpStockInitController;
 import com.example.wms.dto.erp.ErpAssemblyOrderCreateRequest;
 import com.example.wms.dto.erp.ErpAssemblyOrderItemRequest;
 import com.example.wms.dto.erp.ErpAssemblyOrderUpdateRequest;
@@ -24,11 +25,16 @@ import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockCountItemMapper;
 import com.example.wms.mapper.erp.ErpStockCountMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
+import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.impl.ErpAssemblyOrderServiceImpl;
 import com.example.wms.service.erp.impl.ErpStockCountServiceImpl;
+import com.example.wms.service.erp.support.ExcelImportParser;
 import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +42,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -80,6 +95,8 @@ class ErpInventoryWorkflowTests {
     private ErpSaleOrderItemMapper saleOrderItemMapper;
     @Mock
     private ErpCustomerMapper customerMapper;
+    @Mock
+    private ErpSupplierMapper supplierMapper;
 
     @BeforeEach
     void setUp() {
@@ -201,6 +218,82 @@ class ErpInventoryWorkflowTests {
         assertThatThrownBy(() -> service.getDetail(10L, "INIT"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("初始库存单不存在");
+    }
+
+    @Test
+    void stockInitImportEndpointUsesMultipartExcelUploadContract() throws Exception {
+        Method controllerMethod = ErpStockInitController.class.getMethod("importInitStocks", MultipartFile.class, String.class);
+        PostMapping postMapping = controllerMethod.getAnnotation(PostMapping.class);
+        Parameter[] parameters = controllerMethod.getParameters();
+
+        assertThat(postMapping).isNotNull();
+        assertThat(postMapping.value()).containsExactly("/import");
+        assertThat(postMapping.consumes()).contains(MediaType.MULTIPART_FORM_DATA_VALUE);
+        assertThat(parameters).hasSize(2);
+        assertThat(parameters[0].getType()).isEqualTo(MultipartFile.class);
+        assertThat(parameters[0].getAnnotation(RequestParam.class).value()).isEqualTo("file");
+        assertThat(parameters[1].getType()).isEqualTo(String.class);
+        assertThat(parameters[1].getAnnotation(RequestParam.class).value()).isEqualTo("sourceName");
+        assertThat(parameters[1].getAnnotation(RequestParam.class).required()).isFalse();
+    }
+
+    @Test
+    void stockInitImportCreatesDraftDocumentAndIgnoresUnknownWarehouse() throws Exception {
+        ErpStockCountServiceImpl service = stockCountService();
+        when(stockCountMapper.selectCount(any())).thenReturn(0L);
+        when(orderSequenceMapper.incrementAndGet(anyLong(), eq("STOCK_INIT"), any())).thenReturn(1L);
+        doAnswer(invocation -> {
+            ErpStockCount count = invocation.getArgument(0);
+            count.setId(501L);
+            return 1;
+        }).when(stockCountMapper).insert(any(ErpStockCount.class));
+        doAnswer(invocation -> {
+            ErpStockCountItem item = invocation.getArgument(0);
+            item.setId(701L);
+            return 1;
+        }).when(stockCountItemMapper).insert(any(ErpStockCountItem.class));
+        when(productMapper.findByCode(1L, "PR001")).thenReturn(product(100L));
+        when(productMapper.selectOne(any())).thenReturn(product(100L));
+        when(stockBalanceMapper.findByKey(1L, 100L, null, null)).thenReturn(null);
+        when(warehouseMapper.selectOne(any())).thenReturn(null);
+        when(supplierMapper.selectOne(any())).thenReturn(null);
+
+        var result = service.importInitStocks(
+            new MockMultipartFile(
+                "file",
+                "stock-init.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                stockInitWorkbookBytes("未知仓库")
+            ),
+            "库存明细浏览表"
+        );
+
+        assertThat(result.countId()).isEqualTo(501L);
+        assertThat(result.totalCount()).isEqualTo(1);
+        assertThat(result.warningCount()).isGreaterThanOrEqualTo(1);
+        ArgumentCaptor<ErpStockCountItem> itemCaptor = ArgumentCaptor.forClass(ErpStockCountItem.class);
+        verify(stockCountItemMapper).insert(itemCaptor.capture());
+        assertThat(itemCaptor.getValue().getWarehouseId()).isNull();
+        assertThat(itemCaptor.getValue().getCountedQty()).isEqualByComparingTo("6");
+        assertThat(itemCaptor.getValue().getInitUnitCost()).isEqualByComparingTo("18.5000");
+    }
+
+    @Test
+    void stockInitImportRejectsMissingLocalProduct() throws Exception {
+        ErpStockCountServiceImpl service = stockCountService();
+        when(productMapper.findByCode(1L, "PR404")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.importInitStocks(
+            new MockMultipartFile(
+                "file",
+                "stock-init.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                stockInitWorkbookBytes("主仓", "PR404")
+            ),
+            null
+        ))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("商品编码 PR404 不存在");
     }
 
     @Test
@@ -583,7 +676,9 @@ class ErpInventoryWorkflowTests {
             productMapper,
             warehouseMapper,
             locationMapper,
-            costService()
+            supplierMapper,
+            costService(),
+            new ExcelImportParser()
         );
     }
 
@@ -643,6 +738,39 @@ class ErpInventoryWorkflowTests {
         location.setWarehouseId(warehouseId);
         location.setEnabled(true);
         return location;
+    }
+
+    private byte[] stockInitWorkbookBytes(String warehouseName) throws IOException {
+        return stockInitWorkbookBytes(warehouseName, "PR001");
+    }
+
+    private byte[] stockInitWorkbookBytes(String warehouseName, String code) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Row header = workbook.createSheet("Sheet1").createRow(0);
+            header.createCell(0).setCellValue("仓库");
+            header.createCell(1).setCellValue("编码");
+            header.createCell(2).setCellValue("产品名称");
+            header.createCell(3).setCellValue("规格");
+            header.createCell(4).setCellValue("品牌");
+            header.createCell(5).setCellValue("库存数");
+            header.createCell(6).setCellValue("库存成本价");
+            header.createCell(7).setCellValue("金额");
+            header.createCell(8).setCellValue("来源供应商");
+
+            Row row = workbook.getSheetAt(0).createRow(1);
+            row.createCell(0).setCellValue(warehouseName);
+            row.createCell(1).setCellValue(code);
+            row.createCell(2).setCellValue("PR001".equals(code) ? "Product-100" : code);
+            row.createCell(3).setCellValue("S1");
+            row.createCell(4).setCellValue("B1");
+            row.createCell(5).setCellValue("6");
+            row.createCell(6).setCellValue("18.5");
+            row.createCell(7).setCellValue("111");
+            row.createCell(8).setCellValue("未匹配供应商");
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
     }
 
     private com.example.wms.entity.erp.ErpAssemblyOrder draftAssemblyOrder(Long id, Long finishedProductId) {

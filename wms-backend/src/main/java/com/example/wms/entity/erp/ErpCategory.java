@@ -44,6 +44,9 @@ public class ErpCategory {
     @TableField("is_enabled")
     private Boolean enabled;
 
+    @TableField("is_default")
+    private Boolean isDefault;
+
     // 备注
     @TableField("remark")
     private String remark;
@@ -129,6 +132,14 @@ public class ErpCategory {
 
     public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public Boolean getIsDefault() {
+        return isDefault;
+    }
+
+    public void setIsDefault(Boolean isDefault) {
+        this.isDefault = isDefault;
     }
 
     public String getRemark() {

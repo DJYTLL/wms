@@ -33,8 +33,21 @@ public record ErpWarehouseUpdateRequest(
      */
     Boolean enabled,
     /**
+     * 表示是否默认仓库。
+     */
+    Boolean isDefault,
+    /**
      * 表示备注说明。
      */
     String remark
 ) {
+    public ErpWarehouseUpdateRequest(String code,
+                                     String name,
+                                     String address,
+                                     String manager,
+                                     String phone,
+                                     Boolean enabled,
+                                     String remark) {
+        this(code, name, address, manager, phone, enabled, null, remark);
+    }
 }

@@ -26,7 +26,7 @@ test('supplier type management component exists and calls the expected API', () 
   assert.match(componentSource, /request\.get\('\/erp\/supplier-types'\)/);
   assert.match(componentSource, /request\.post\('\/erp\/supplier-types', payload\)/);
   assert.match(componentSource, /request\.put\(`\/erp\/supplier-types\/\$\{currentId\.value\}`,\s*payload\)/);
-  assert.match(componentSource, /request\.delete\(`\/erp\/supplier-types\/\$\{row\.id\}`\)/);
+  assert.match(componentSource, /request\.delete\(`\/erp\/supplier-types\/\$\{row\.id\}`[\s\S]*?\)/);
   assert.match(componentSource, /v-permission="'erp-supplier-type:add'"/);
   assert.match(componentSource, /v-permission="'erp-supplier-type:edit'"/);
   assert.match(componentSource, /v-permission="'erp-supplier-type:delete'"/);
@@ -70,6 +70,10 @@ test('counterparty subject components exist and call the expected APIs', () => {
   assert.match(subjectComponentSource, /request\.post\('\/erp\/counterparty-subjects', payload\)/);
   assert.match(subjectComponentSource, /request\.put\(`\/erp\/counterparty-subjects\/\$\{currentId\.value\}`,\s*payload\)/);
   assert.match(subjectComponentSource, /request\.delete\(`\/erp\/counterparty-subjects\/\$\{row\.id\}`/);
+  assert.match(subjectComponentSource, /request\.get\(checkUrl\)/);
+  assert.match(subjectComponentSource, /\/bind-supplier\/\$\{member\.id\}\/check/);
+  assert.match(subjectComponentSource, /\/bind-customer\/\$\{member\.id\}\/check/);
+  assert.match(subjectComponentSource, /router\.push\(\{ name: doc\.routeKey, params: \{ id: doc\.docId \} \}\)/);
   assert.match(subjectComponentSource, /v-permission="'erp-counterparty-subject:add'"/);
   assert.match(subjectComponentSource, /v-permission="'erp-counterparty-subject:edit'"/);
   assert.match(subjectComponentSource, /v-permission="'erp-counterparty-subject:delete'"/);

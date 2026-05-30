@@ -61,6 +61,12 @@ public class ErpCounterpartySubject {
     @TableField("deleted_at")
     private Instant deletedAt;
 
+    @TableField(exist = false)
+    private Integer customerCount;
+
+    @TableField(exist = false)
+    private Integer supplierCount;
+
     public Long getId() {
         return id;
     }
@@ -155,5 +161,21 @@ public class ErpCounterpartySubject {
 
     public void setDeletedAt(Instant deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    public Integer getCustomerCount() {
+        return customerCount;
+    }
+
+    public void setCustomerCount(Integer customerCount) {
+        this.customerCount = customerCount;
+    }
+
+    public Integer getSupplierCount() {
+        return supplierCount;
+    }
+
+    public void setSupplierCount(Integer supplierCount) {
+        this.supplierCount = supplierCount;
     }
 }

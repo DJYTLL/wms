@@ -3,8 +3,10 @@ package com.example.wms.service.erp;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpStockCountCreateRequest;
 import com.example.wms.dto.erp.ErpStockCountDetail;
+import com.example.wms.dto.erp.ErpStockInitImportResult;
 import com.example.wms.dto.erp.ErpStockCountUpdateRequest;
 import com.example.wms.entity.erp.ErpStockCount;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -19,6 +21,8 @@ public interface ErpStockCountService {
     String nextCountNo(String countType);
 
     ErpStockCountDetail create(ErpStockCountCreateRequest request, String countType);
+
+    ErpStockInitImportResult importInitStocks(MultipartFile file, String sourceName);
 
     ErpStockCountDetail update(Long id, ErpStockCountUpdateRequest request, String countType);
 

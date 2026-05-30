@@ -291,6 +291,7 @@ import {
 interface OptionItem {
   id: number;
   name: string;
+  isDefault?: boolean;
 }
 
 interface LocationOption extends OptionItem {

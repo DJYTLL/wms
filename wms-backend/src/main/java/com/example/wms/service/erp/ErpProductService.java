@@ -1,9 +1,13 @@
 package com.example.wms.service.erp;
 
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpProductImportBatchSummary;
 import com.example.wms.dto.erp.ErpProductCreateRequest;
+import com.example.wms.dto.erp.ErpProductImportItemView;
+import com.example.wms.dto.erp.ErpProductImportResult;
 import com.example.wms.dto.erp.ErpProductUpdateRequest;
 import com.example.wms.entity.erp.ErpProduct;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -18,6 +22,12 @@ public interface ErpProductService {
     String nextCode();
 
     ErpProduct create(ErpProductCreateRequest request);
+
+    ErpProductImportResult importProducts(MultipartFile file, String sourceName);
+
+    List<ErpProductImportBatchSummary> listImportBatches();
+
+    List<ErpProductImportItemView> listImportBatchItems(Long batchId);
 
     ErpProduct update(Long id, ErpProductUpdateRequest request);
 

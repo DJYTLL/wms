@@ -180,6 +180,35 @@ class ErpMasterDataGovernanceTests {
     }
 
     @Test
+    void warehouseCreateClearsOtherDefaultWarehouses() throws Exception {
+        ErpWarehouseServiceImpl service = warehouseServiceImpl();
+        when(warehouseMapper.findByCode(TENANT_ID, "WH-DEFAULT")).thenReturn(null);
+
+        service.create(newWarehouseCreateRequest("WH-DEFAULT", true));
+
+        ArgumentCaptor<ErpWarehouse> captor = ArgumentCaptor.forClass(ErpWarehouse.class);
+        verify(warehouseMapper).clearDefault(TENANT_ID, null);
+        verify(warehouseMapper).insert(captor.capture());
+        assertThat(captor.getValue().getIsDefault()).isTrue();
+    }
+
+    @Test
+    void warehouseUpdateClearsOtherDefaultWarehouses() throws Exception {
+        ErpWarehouseServiceImpl service = warehouseServiceImpl();
+        ErpWarehouse existing = warehouse(1L, "WH-001", true);
+        existing.setIsDefault(false);
+        when(warehouseMapper.selectOne(any())).thenReturn(existing);
+        when(warehouseMapper.findByCode(TENANT_ID, "WH-001")).thenReturn(existing);
+
+        service.update(1L, newWarehouseUpdateRequest("WH-001", true));
+
+        ArgumentCaptor<ErpWarehouse> captor = ArgumentCaptor.forClass(ErpWarehouse.class);
+        verify(warehouseMapper).clearDefault(TENANT_ID, 1L);
+        verify(warehouseMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getIsDefault()).isTrue();
+    }
+
+    @Test
     void warehouseCreateRejectsDuplicateAfterNormalization() {
         ErpWarehouseServiceImpl service = warehouseServiceImpl();
         when(warehouseMapper.findByCode(TENANT_ID, "WH-001")).thenReturn(warehouse(9L, "WH-001", true));
@@ -248,6 +277,37 @@ class ErpMasterDataGovernanceTests {
         assertThat(saved.getBin()).isEqualTo("B01");
         assertThat(saved.getRemark()).isEqualTo("备注");
         assertThat(saved.getEnabled()).isTrue();
+    }
+
+    @Test
+    void locationCreateClearsOtherDefaultLocationsInSameWarehouse() throws Exception {
+        ErpLocationServiceImpl service = locationServiceImpl();
+        when(warehouseMapper.selectOne(any())).thenReturn(warehouse(8L, "WH-001", true));
+        when(locationMapper.findByCode(TENANT_ID, 8L, "LOC-DEFAULT")).thenReturn(null);
+
+        service.create(newLocationCreateRequest(8L, "LOC-DEFAULT", true));
+
+        ArgumentCaptor<ErpLocation> captor = ArgumentCaptor.forClass(ErpLocation.class);
+        verify(locationMapper).clearDefault(TENANT_ID, 8L, null);
+        verify(locationMapper).insert(captor.capture());
+        assertThat(captor.getValue().getIsDefault()).isTrue();
+    }
+
+    @Test
+    void locationUpdateClearsOtherDefaultLocationsInSameWarehouse() throws Exception {
+        ErpLocationServiceImpl service = locationServiceImpl();
+        ErpLocation existing = location(2L, 8L, "LOC-001", true);
+        existing.setIsDefault(false);
+        when(locationMapper.selectOne(any())).thenReturn(existing);
+        when(warehouseMapper.selectOne(any())).thenReturn(warehouse(8L, "WH-001", true));
+        when(locationMapper.findByCode(TENANT_ID, 8L, "LOC-001")).thenReturn(existing);
+
+        service.update(2L, newLocationUpdateRequest(8L, "LOC-001", true));
+
+        ArgumentCaptor<ErpLocation> captor = ArgumentCaptor.forClass(ErpLocation.class);
+        verify(locationMapper).clearDefault(TENANT_ID, 8L, 2L);
+        verify(locationMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getIsDefault()).isTrue();
     }
 
     @Test
@@ -404,5 +464,29 @@ class ErpMasterDataGovernanceTests {
         product.setEnabled(enabled);
         product.setTenantId(TENANT_ID);
         return product;
+    }
+
+    private static ErpWarehouseCreateRequest newWarehouseCreateRequest(String code, Boolean isDefault) throws Exception {
+        return ErpWarehouseCreateRequest.class
+            .getConstructor(String.class, String.class, String.class, String.class, String.class, Boolean.class, Boolean.class, String.class)
+            .newInstance(code, "总仓", null, null, null, true, isDefault, null);
+    }
+
+    private static ErpWarehouseUpdateRequest newWarehouseUpdateRequest(String code, Boolean isDefault) throws Exception {
+        return ErpWarehouseUpdateRequest.class
+            .getConstructor(String.class, String.class, String.class, String.class, String.class, Boolean.class, Boolean.class, String.class)
+            .newInstance(code, "总仓", null, null, null, true, isDefault, null);
+    }
+
+    private static ErpLocationCreateRequest newLocationCreateRequest(Long warehouseId, String code, Boolean isDefault) throws Exception {
+        return ErpLocationCreateRequest.class
+            .getConstructor(Long.class, String.class, String.class, String.class, String.class, String.class, Boolean.class, Boolean.class, String.class)
+            .newInstance(warehouseId, code, "库位", null, null, null, true, isDefault, null);
+    }
+
+    private static ErpLocationUpdateRequest newLocationUpdateRequest(Long warehouseId, String code, Boolean isDefault) throws Exception {
+        return ErpLocationUpdateRequest.class
+            .getConstructor(Long.class, String.class, String.class, String.class, String.class, String.class, Boolean.class, Boolean.class, String.class)
+            .newInstance(warehouseId, code, "库位", null, null, null, true, isDefault, null);
     }
 }

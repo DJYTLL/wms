@@ -25,8 +25,9 @@
           <div class="table-actions inventory-actions">
             <el-button v-if="countType === 'COUNT'" @click="exportTemplate">{{ $t('action.export') }}</el-button>
             <el-button v-if="countType === 'COUNT'" @click="triggerImport">{{ $t('action.import') }}</el-button>
+            <el-button v-if="countType === 'INIT'" v-permission="permAdd" @click="triggerImport">导入期初库存</el-button>
             <el-button type="primary" v-permission="permAdd" @click="openAddModal">{{ $t('action.add') }}</el-button>
-            <input ref="importInputRef" type="file" accept=".csv,text/csv" class="stock-count-import-input" @change="handleImportFile" />
+            <input ref="importInputRef" type="file" :accept="countType === 'INIT' ? '.xls,.xlsx' : '.csv,text/csv'" class="stock-count-import-input" @change="handleImportFile" />
           </div>
         </div>
       </div>
@@ -352,7 +353,7 @@
         </el-button>
       </template>
     </el-dialog>
-    <input ref="importInputRef" type="file" accept=".csv,text/csv" class="stock-count-import-input" @change="handleImportFile" />
+    <input ref="importInputRef" type="file" :accept="countType === 'INIT' ? '.xls,.xlsx' : '.csv,text/csv'" class="stock-count-import-input" @change="handleImportFile" />
   </div>
 </template>
 
@@ -401,6 +402,14 @@ interface StockCount {
   countAt?: string;
   remark?: string;
   createdAt?: string;
+}
+
+interface StockInitImportResult {
+  countId: number;
+  countNo: string;
+  totalCount: number;
+  warningCount: number;
+  warnings: string[];
 }
 
 const route = useRoute();
@@ -1251,6 +1260,10 @@ const exportTemplate = () => {
 };
 
 const triggerImport = async () => {
+  if (countType.value === 'INIT') {
+    importInputRef.value?.click();
+    return;
+  }
   if (!isFormPage.value) {
     await router.push({
       path: '/erp/stock-counts/create',
@@ -1290,6 +1303,19 @@ const handleImportFile = async (event: Event) => {
   const file = input.files?.[0];
   if (!file) return;
   try {
+    if (countType.value === 'INIT') {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res: any = await request.post('/erp/stock-inits/import', formData);
+      const result = res.data.data as StockInitImportResult;
+      if (result.warningCount > 0) {
+        notifySuccess(`导入完成：生成单据 ${result.countNo}，共 ${result.totalCount} 行，告警 ${result.warningCount} 条`);
+      } else {
+        notifySuccess(`导入完成：生成单据 ${result.countNo}，共 ${result.totalCount} 行`);
+      }
+      await fetchList();
+      return;
+    }
     const content = await file.text();
     const lines = content.split(/\r?\n/).filter((line) => line.trim());
     if (lines.length < 2) {

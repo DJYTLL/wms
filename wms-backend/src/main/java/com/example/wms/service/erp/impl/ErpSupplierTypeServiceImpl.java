@@ -11,6 +11,7 @@ import com.example.wms.entity.erp.ErpSupplierType;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.mapper.erp.ErpSupplierTypeMapper;
 import com.example.wms.service.erp.ErpSupplierTypeService;
+import com.example.wms.service.erp.support.ErpCounterpartyGuardRules;
 import com.example.wms.tenant.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -108,6 +109,9 @@ public class ErpSupplierTypeServiceImpl implements ErpSupplierTypeService {
             .eq("id", id));
         if (supplierType == null) {
             throw new IllegalArgumentException("供应商类型不存在");
+        }
+        if (ErpCounterpartyGuardRules.UNCATEGORIZED_SUPPLIER_TYPE_CODE.equals(supplierType.getCode())) {
+            throw new IllegalArgumentException("系统内置“未分类”供应商类型不允许删除");
         }
         if (erpSupplierMapper.selectCount(new QueryWrapper<ErpSupplier>()
             .eq("tenant_id", tenantId)

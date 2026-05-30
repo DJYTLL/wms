@@ -1,6 +1,8 @@
 package com.example.wms.service.erp;
 
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpCounterpartyUnbindCheck;
+import com.example.wms.dto.erp.ErpCounterpartySubjectDetail;
 import com.example.wms.dto.erp.ErpCounterpartySubjectCreateRequest;
 import com.example.wms.dto.erp.ErpCounterpartySubjectUpdateRequest;
 import com.example.wms.entity.erp.ErpCounterpartySubject;
@@ -25,4 +27,14 @@ public interface ErpCounterpartySubjectService {
     ErpCounterpartySubjectLink bindSupplier(Long id, Long supplierId, Boolean primary, String remark);
 
     ErpCounterpartySubjectLink bindCustomer(Long id, Long customerId, Boolean primary, String remark);
+
+    void unbindSupplier(Long id, Long supplierId);
+
+    void unbindCustomer(Long id, Long customerId);
+
+    ErpCounterpartySubjectDetail getDetail(Long id);
+
+    ErpCounterpartyUnbindCheck checkUnbindSupplier(Long id, Long supplierId);
+
+    ErpCounterpartyUnbindCheck checkUnbindCustomer(Long id, Long customerId);
 }

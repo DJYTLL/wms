@@ -1,9 +1,14 @@
 package com.example.wms.service.erp;
 
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpCounterpartyUnbindCheck;
+import com.example.wms.dto.erp.ErpSupplierImportBatchSummary;
+import com.example.wms.dto.erp.ErpSupplierImportItemView;
 import com.example.wms.dto.erp.ErpSupplierCreateRequest;
+import com.example.wms.dto.erp.ErpSupplierImportResult;
 import com.example.wms.dto.erp.ErpSupplierUpdateRequest;
 import com.example.wms.entity.erp.ErpSupplier;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -27,6 +32,15 @@ public interface ErpSupplierService {
     // 更新供应商
     ErpSupplier update(Long id, ErpSupplierUpdateRequest request);
 
+    // 改绑往来主体前校验
+    ErpCounterpartyUnbindCheck checkRebind(Long id, Long targetSubjectId);
+
     // 删除供应商
     void delete(Long id);
+
+    ErpSupplierImportResult importSuppliers(MultipartFile file, String sourceName);
+
+    List<ErpSupplierImportBatchSummary> listImportBatches();
+
+    List<ErpSupplierImportItemView> listImportBatchItems(Long batchId);
 }

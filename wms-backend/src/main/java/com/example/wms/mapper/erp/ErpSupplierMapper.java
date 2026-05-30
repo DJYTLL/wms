@@ -1,6 +1,7 @@
 package com.example.wms.mapper.erp;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.example.wms.dto.erp.ErpCounterpartySubjectMember;
 import com.example.wms.entity.erp.ErpSupplier;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -86,4 +87,20 @@ public interface ErpSupplierMapper extends BaseMapper<ErpSupplier> {
         </script>
         """)
     List<ErpSupplier> findRecentTransactionRows(@Param("tenantId") Long tenantId, @Param("supplierIds") List<Long> supplierIds);
+
+    @Select("""
+        SELECT id,
+               code,
+               name,
+               contact,
+               phone,
+               mobile,
+               'SUPPLIER' AS role_type
+        FROM erp_supplier
+        WHERE tenant_id = #{tenantId}
+          AND counterparty_subject_id = #{subjectId}
+          AND deleted_at IS NULL
+        ORDER BY id
+        """)
+    List<ErpCounterpartySubjectMember> listBySubjectId(@Param("tenantId") Long tenantId, @Param("subjectId") Long subjectId);
 }

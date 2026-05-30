@@ -21,6 +21,7 @@ import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
+import com.example.wms.service.TenantSettingService;
 import com.example.wms.service.erp.impl.ErpSaleOrderServiceImpl;
 import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
@@ -60,6 +61,7 @@ class ErpSaleOrderServiceImplTest {
     @Mock private ErpSaleReturnMapper erpSaleReturnMapper;
     @Mock private SystemConfigMapper systemConfigMapper;
     @Mock private ErpCostService erpCostService;
+    @Mock private TenantSettingService tenantSettingService;
 
     @AfterEach
     void tearDown() {
@@ -98,7 +100,8 @@ class ErpSaleOrderServiceImplTest {
             erpReceiptReceivableMapper,
             erpSaleReturnMapper,
             systemConfigMapper,
-            erpCostService
+            erpCostService,
+            tenantSettingService
         );
 
         PageResponse<ErpSaleOrder> response = service.page(1, 20, null, null, null, null, null);

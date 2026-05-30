@@ -4,7 +4,9 @@ import com.example.wms.audit.DeleteAuditScope;
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.DeleteRequest;
 import com.example.wms.dto.PageResponse;
+import com.example.wms.dto.erp.ErpCounterpartySubjectDetail;
 import com.example.wms.dto.erp.ErpCounterpartySubjectCreateRequest;
+import com.example.wms.dto.erp.ErpCounterpartyUnbindCheck;
 import com.example.wms.dto.erp.ErpCounterpartySubjectUpdateRequest;
 import com.example.wms.entity.erp.ErpCounterpartySubject;
 import com.example.wms.entity.erp.ErpCounterpartySubjectLink;
@@ -59,6 +61,12 @@ public class ErpCounterpartySubjectController {
         return ResponseEntity.ok(ApiResponse.ok(counterpartySubjectService.getById(id)));
     }
 
+    @GetMapping("/{id}/detail")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_erp-counterparty-subject:view')")
+    public ResponseEntity<ApiResponse<ErpCounterpartySubjectDetail>> detail(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(counterpartySubjectService.getDetail(id)));
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_erp-counterparty-subject:add')")
     public ResponseEntity<ApiResponse<ErpCounterpartySubject>> create(@Valid @RequestBody ErpCounterpartySubjectCreateRequest request) {
@@ -98,6 +106,36 @@ public class ErpCounterpartySubjectController {
         return ResponseEntity.ok(ApiResponse.ok(
             counterpartySubjectService.bindCustomer(id, request.targetId(), request.primary(), request.remark())
         ));
+    }
+
+    @DeleteMapping("/{id}/bind-supplier/{supplierId}")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_erp-counterparty-subject:edit')")
+    public ResponseEntity<ApiResponse<Void>> unbindSupplier(@PathVariable Long id,
+                                                            @PathVariable Long supplierId) {
+        counterpartySubjectService.unbindSupplier(id, supplierId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/{id}/bind-supplier/{supplierId}/check")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_erp-counterparty-subject:edit')")
+    public ResponseEntity<ApiResponse<ErpCounterpartyUnbindCheck>> checkUnbindSupplier(@PathVariable Long id,
+                                                                                        @PathVariable Long supplierId) {
+        return ResponseEntity.ok(ApiResponse.ok(counterpartySubjectService.checkUnbindSupplier(id, supplierId)));
+    }
+
+    @DeleteMapping("/{id}/bind-customer/{customerId}")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_erp-counterparty-subject:edit')")
+    public ResponseEntity<ApiResponse<Void>> unbindCustomer(@PathVariable Long id,
+                                                            @PathVariable Long customerId) {
+        counterpartySubjectService.unbindCustomer(id, customerId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/{id}/bind-customer/{customerId}/check")
+    @PreAuthorize("hasRole('super_admin') or hasAuthority('PERM_erp-counterparty-subject:edit')")
+    public ResponseEntity<ApiResponse<ErpCounterpartyUnbindCheck>> checkUnbindCustomer(@PathVariable Long id,
+                                                                                        @PathVariable Long customerId) {
+        return ResponseEntity.ok(ApiResponse.ok(counterpartySubjectService.checkUnbindCustomer(id, customerId)));
     }
 
     // 往来主体绑定请求

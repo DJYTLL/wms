@@ -38,8 +38,22 @@ public record ErpLocationCreateRequest(
      */
     Boolean enabled,
     /**
+     * 表示是否默认库位。
+     */
+    Boolean isDefault,
+    /**
      * 表示备注说明。
      */
     String remark
 ) {
+    public ErpLocationCreateRequest(Long warehouseId,
+                                    String code,
+                                    String name,
+                                    String aisle,
+                                    String rack,
+                                    String bin,
+                                    Boolean enabled,
+                                    String remark) {
+        this(warehouseId, code, name, aisle, rack, bin, enabled, false, remark);
+    }
 }

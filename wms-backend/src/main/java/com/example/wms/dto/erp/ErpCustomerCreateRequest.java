@@ -83,6 +83,10 @@ public record ErpCustomerCreateRequest(
      */
     String contacts,
     /**
+     * 表示往来主体ID。
+     */
+    Long counterpartySubjectId,
+    /**
      * 表示是否启用。
      */
     Boolean enabled,

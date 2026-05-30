@@ -8,11 +8,13 @@ import com.example.wms.dto.erp.ErpStockCountCreateRequest;
 import com.example.wms.dto.erp.ErpStockCountDetail;
 import com.example.wms.dto.erp.ErpStockCountItemRequest;
 import com.example.wms.dto.erp.ErpStockCountUpdateRequest;
+import com.example.wms.dto.erp.ErpStockInitImportResult;
 import com.example.wms.entity.SystemConfig;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockCount;
 import com.example.wms.entity.erp.ErpStockCountItem;
 import com.example.wms.entity.erp.ErpLocation;
+import com.example.wms.entity.erp.ErpSupplier;
 import com.example.wms.entity.erp.ErpStockTxn;
 import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpWarehouse;
@@ -24,15 +26,21 @@ import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockCountItemMapper;
 import com.example.wms.mapper.erp.ErpStockCountMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
+import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
 import com.example.wms.service.erp.ErpStockCountService;
+import com.example.wms.service.erp.support.ExcelImportParser;
+import com.example.wms.service.erp.support.ExcelImportSheet;
 import com.example.wms.service.erp.support.ErpCostService;
 import com.example.wms.tenant.TenantContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -43,6 +51,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -66,7 +76,9 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
     private final ErpProductMapper erpProductMapper;
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpLocationMapper erpLocationMapper;
+    private final ErpSupplierMapper erpSupplierMapper;
     private final ErpCostService erpCostService;
+    private final ExcelImportParser excelImportParser;
 
     public ErpStockCountServiceImpl(ErpStockCountMapper erpStockCountMapper,
                                     ErpStockCountItemMapper erpStockCountItemMapper,
@@ -77,7 +89,9 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
                                     ErpProductMapper erpProductMapper,
                                     ErpWarehouseMapper erpWarehouseMapper,
                                     ErpLocationMapper erpLocationMapper,
-                                    ErpCostService erpCostService) {
+                                    ErpSupplierMapper erpSupplierMapper,
+                                    ErpCostService erpCostService,
+                                    ExcelImportParser excelImportParser) {
         this.erpStockCountMapper = erpStockCountMapper;
         this.erpStockCountItemMapper = erpStockCountItemMapper;
         this.erpStockBalanceMapper = erpStockBalanceMapper;
@@ -87,7 +101,37 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         this.erpProductMapper = erpProductMapper;
         this.erpWarehouseMapper = erpWarehouseMapper;
         this.erpLocationMapper = erpLocationMapper;
+        this.erpSupplierMapper = erpSupplierMapper;
         this.erpCostService = erpCostService;
+        this.excelImportParser = excelImportParser;
+    }
+
+    @Autowired
+    public ErpStockCountServiceImpl(ErpStockCountMapper erpStockCountMapper,
+                                    ErpStockCountItemMapper erpStockCountItemMapper,
+                                    ErpStockBalanceMapper erpStockBalanceMapper,
+                                    ErpStockTxnMapper erpStockTxnMapper,
+                                    ErpOrderSequenceMapper erpOrderSequenceMapper,
+                                    SystemConfigMapper systemConfigMapper,
+                                    ErpProductMapper erpProductMapper,
+                                    ErpWarehouseMapper erpWarehouseMapper,
+                                    ErpLocationMapper erpLocationMapper,
+                                    ErpSupplierMapper erpSupplierMapper,
+                                    ErpCostService erpCostService) {
+        this(
+            erpStockCountMapper,
+            erpStockCountItemMapper,
+            erpStockBalanceMapper,
+            erpStockTxnMapper,
+            erpOrderSequenceMapper,
+            systemConfigMapper,
+            erpProductMapper,
+            erpWarehouseMapper,
+            erpLocationMapper,
+            erpSupplierMapper,
+            erpCostService,
+            new ExcelImportParser()
+        );
     }
 
     @Override
@@ -156,6 +200,56 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
             erpStockCountItemMapper.insert(item);
         }
         return new ErpStockCountDetail(count, items);
+    }
+
+    @Override
+    @Transactional
+    public ErpStockInitImportResult importInitStocks(MultipartFile file, String sourceName) {
+        Long tenantId = TenantContext.requireTenantId();
+        String uploadedFileName = file == null ? null : trimToNull(file.getOriginalFilename());
+        String resolvedSourceName = trimToNull(sourceName);
+        if (resolvedSourceName == null) {
+            resolvedSourceName = uploadedFileName == null ? "库存明细浏览表" : uploadedFileName;
+        }
+        ExcelImportSheet sheet = parseImportSheet(file, uploadedFileName);
+        if (sheet.rows().isEmpty()) {
+            throw new IllegalArgumentException("导入内容没有有效数据行");
+        }
+
+        List<String> errors = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        List<ErpStockCountItemRequest> requests = new ArrayList<>();
+        int rowNo = 2;
+        for (Map<String, String> row : sheet.rows()) {
+            try {
+                requests.add(buildInitImportItem(tenantId, rowNo, row, warnings));
+            } catch (IllegalArgumentException ex) {
+                errors.add("第" + rowNo + "行：" + ex.getMessage());
+            }
+            rowNo++;
+        }
+        if (!errors.isEmpty()) {
+            throw new IllegalArgumentException(String.join("；", errors));
+        }
+
+        String remark = buildInitImportRemark(resolvedSourceName, warnings);
+        ErpStockCountDetail detail = create(new ErpStockCountCreateRequest(
+            null,
+            TYPE_INIT,
+            null,
+            null,
+            null,
+            null,
+            requests,
+            remark
+        ), TYPE_INIT);
+        return new ErpStockInitImportResult(
+            detail.count().getId(),
+            detail.count().getCountNo(),
+            requests.size(),
+            warnings.size(),
+            List.copyOf(warnings)
+        );
     }
 
     @Override
@@ -308,6 +402,95 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         count.setUpdatedAt(Instant.now());
         count.setUpdatedBy(operator);
         erpStockCountMapper.updateById(count);
+    }
+
+    private ErpStockCountItemRequest buildInitImportItem(Long tenantId,
+                                                         int rowNo,
+                                                         Map<String, String> row,
+                                                         List<String> warnings) {
+        String code = trimToNull(firstNonBlank(row, "编码"));
+        if (code == null) {
+            throw new IllegalArgumentException("编码不能为空");
+        }
+        ErpProduct product = erpProductMapper.findByCode(tenantId, code);
+        if (product == null) {
+            throw new IllegalArgumentException("商品编码 " + code + " 不存在，请先导入配件档案");
+        }
+        String warehouseName = trimToNull(firstNonBlank(row, "仓库"));
+        Long warehouseId = resolveImportWarehouseId(tenantId, warehouseName, rowNo, warnings);
+        warnIfProductFieldDiffers(product.getName(), firstNonBlank(row, "产品名称"), rowNo, "产品名称", warnings);
+        warnIfProductFieldDiffers(product.getSpec(), firstNonBlank(row, "规格"), rowNo, "规格", warnings);
+        warnIfProductFieldDiffers(product.getBrand(), firstNonBlank(row, "品牌"), rowNo, "品牌", warnings);
+        warnIfProductFieldDiffers(product.getManufacturerCode(), firstNonBlank(row, "厂家编码"), rowNo, "厂家编码", warnings);
+        warnIfSupplierUnmatched(tenantId, firstNonBlank(row, "来源供应商"), rowNo, warnings);
+
+        BigDecimal countedQty = parseRequiredDecimal(firstNonBlank(row, "库存数"), "库存数");
+        BigDecimal unitCost = parseOptionalDecimal(firstNonBlank(row, "库存成本价"));
+        BigDecimal totalAmount = parseOptionalDecimal(firstNonBlank(row, "金额"));
+        if (unitCost == null && totalAmount == null) {
+            throw new IllegalArgumentException("库存成本价或金额至少填写一个");
+        }
+        if (unitCost == null) {
+            unitCost = countedQty.compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : totalAmount.divide(countedQty, 4, RoundingMode.HALF_UP);
+        }
+        return new ErpStockCountItemRequest(
+            product.getId(),
+            warehouseId,
+            null,
+            countedQty,
+            unitCost,
+            totalAmount,
+            null,
+            trimToNull(firstNonBlank(row, "备注"))
+        );
+    }
+
+    private Long resolveImportWarehouseId(Long tenantId, String warehouseName, int rowNo, List<String> warnings) {
+        if (warehouseName == null) {
+            warnings.add("第" + rowNo + "行：仓库为空，已按无仓库导入");
+            return null;
+        }
+        ErpWarehouse warehouse = erpWarehouseMapper.selectOne(new QueryWrapper<ErpWarehouse>()
+            .eq("tenant_id", tenantId)
+            .eq("name", warehouseName)
+            .isNull("deleted_at"));
+        if (warehouse == null) {
+            warnings.add("第" + rowNo + "行：仓库“" + warehouseName + "”不存在，已按无仓库导入");
+            return null;
+        }
+        return warehouse.getId();
+    }
+
+    private void warnIfSupplierUnmatched(Long tenantId, String supplierName, int rowNo, List<String> warnings) {
+        if (supplierName == null) {
+            return;
+        }
+        ErpSupplier supplier = erpSupplierMapper.selectOne(new QueryWrapper<ErpSupplier>()
+            .eq("tenant_id", tenantId)
+            .eq("name", supplierName)
+            .isNull("deleted_at"));
+        if (supplier == null) {
+            warnings.add("第" + rowNo + "行：来源供应商“" + supplierName + "”未匹配，已忽略");
+        }
+    }
+
+    private void warnIfProductFieldDiffers(String systemValue, String importedValue, int rowNo, String fieldName, List<String> warnings) {
+        String left = trimToNull(systemValue);
+        String right = trimToNull(importedValue);
+        if (right == null || Objects.equals(left, right)) {
+            return;
+        }
+        warnings.add("第" + rowNo + "行：" + fieldName + "与商品档案不一致，已按现有商品档案为准");
+    }
+
+    private String buildInitImportRemark(String sourceName, List<String> warnings) {
+        StringBuilder builder = new StringBuilder("Excel导入：").append(sourceName);
+        if (!warnings.isEmpty()) {
+            builder.append("；告警 ").append(warnings.size()).append(" 条");
+        }
+        return builder.toString();
     }
 
     private QueryWrapper<ErpStockCount> baseWrapper(String keyword, String status, String countType) {
@@ -686,6 +869,14 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
         return erpCostService.getProductCost(tenantId, productId);
     }
 
+    private ExcelImportSheet parseImportSheet(MultipartFile file, String uploadedFileName) {
+        try {
+            return excelImportParser.parse(uploadedFileName, file == null ? null : file.getBytes());
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("读取导入文件失败", ex);
+        }
+    }
+
     private String ensureCountNo(Long tenantId, String provided, String countType) {
         String trimmed = provided == null ? "" : provided.trim();
         if (!trimmed.isEmpty()) {
@@ -768,6 +959,44 @@ public class ErpStockCountServiceImpl implements ErpStockCountService {
             return base;
         }
         return base + "；" + append;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String firstNonBlank(Map<String, String> row, String... headers) {
+        for (String header : headers) {
+            String value = trimToNull(row.get(header));
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal parseRequiredDecimal(String value, String fieldName) {
+        BigDecimal parsed = parseOptionalDecimal(value);
+        if (parsed == null) {
+            throw new IllegalArgumentException(fieldName + "不能为空");
+        }
+        return parsed;
+    }
+
+    private BigDecimal parseOptionalDecimal(String value) {
+        String normalized = trimToNull(value);
+        if (normalized == null) {
+            return null;
+        }
+        try {
+            return new BigDecimal(normalized.replace(",", ""));
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("数字格式不正确: " + normalized);
+        }
     }
 
     private int readIntConfig(String key, int fallback) {

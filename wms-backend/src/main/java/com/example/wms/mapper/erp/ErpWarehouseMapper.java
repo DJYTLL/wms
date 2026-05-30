@@ -5,6 +5,7 @@ import com.example.wms.entity.erp.ErpWarehouse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 // 仓库 Mapper（ERP进销存）
 @Mapper
@@ -15,4 +16,17 @@ public interface ErpWarehouseMapper extends BaseMapper<ErpWarehouse> {
 
     @Select("SELECT * FROM erp_warehouse WHERE tenant_id = #{tenantId} AND id = #{id} AND deleted_at IS NULL")
     ErpWarehouse findActiveById(@Param("tenantId") Long tenantId, @Param("id") Long id);
+
+    @Select("SELECT * FROM erp_warehouse WHERE tenant_id = #{tenantId} AND is_default = TRUE AND deleted_at IS NULL ORDER BY id LIMIT 1")
+    ErpWarehouse findDefault(@Param("tenantId") Long tenantId);
+
+    @Update("""
+        UPDATE erp_warehouse
+        SET is_default = FALSE, updated_at = NOW()
+        WHERE tenant_id = #{tenantId}
+          AND (#{warehouseId} IS NULL OR id <> #{warehouseId})
+          AND is_default = TRUE
+          AND deleted_at IS NULL
+        """)
+    int clearDefault(@Param("tenantId") Long tenantId, @Param("warehouseId") Long warehouseId);
 }

@@ -103,7 +103,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
     @Override
     public List<ErpWarehouse> listAll(String keyword, Boolean enabled) {
         QueryWrapper<ErpWarehouse> wrapper = baseWrapper(keyword, enabled);
-        wrapper.orderByAsc("id");
+        wrapper.orderByDesc("is_default").orderByAsc("id");
         return erpWarehouseMapper.selectList(wrapper);
     }
 
@@ -111,7 +111,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
     public PageResponse<ErpWarehouse> page(long page, long size, String keyword, Boolean enabled) {
         Page<ErpWarehouse> pageReq = Page.of(page, size);
         QueryWrapper<ErpWarehouse> wrapper = baseWrapper(keyword, enabled);
-        wrapper.orderByAsc("id");
+        wrapper.orderByDesc("is_default").orderByAsc("id");
         Page<ErpWarehouse> result = erpWarehouseMapper.selectPage(pageReq, wrapper);
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
     }
@@ -149,6 +149,9 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         warehouse.setEnabled(request.enabled() == null || request.enabled());
         warehouse.setCreatedAt(Instant.now());
         warehouse.setUpdatedAt(Instant.now());
+        if (Boolean.TRUE.equals(request.isDefault())) {
+            erpWarehouseMapper.clearDefault(tenantId, null);
+        }
         erpWarehouseMapper.insert(warehouse);
         return warehouse;
     }
@@ -177,6 +180,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
             warehouse.setEnabled(request.enabled());
         }
         warehouse.setUpdatedAt(Instant.now());
+        handleDefault(tenantId, warehouse.getId(), request.isDefault());
         erpWarehouseMapper.updateById(warehouse);
         return warehouse;
     }
@@ -218,6 +222,7 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         warehouse.setAddress(ErpMasterDataRules.normalizeOptionalText(request.address()));
         warehouse.setManager(ErpMasterDataRules.normalizeOptionalText(request.manager()));
         warehouse.setPhone(ErpMasterDataRules.normalizeOptionalText(request.phone()));
+        warehouse.setIsDefault(Boolean.TRUE.equals(request.isDefault()));
         warehouse.setRemark(ErpMasterDataRules.normalizeOptionalText(request.remark()));
     }
 
@@ -227,7 +232,16 @@ public class ErpWarehouseServiceImpl implements ErpWarehouseService {
         warehouse.setAddress(ErpMasterDataRules.normalizeOptionalText(request.address()));
         warehouse.setManager(ErpMasterDataRules.normalizeOptionalText(request.manager()));
         warehouse.setPhone(ErpMasterDataRules.normalizeOptionalText(request.phone()));
+        if (request.isDefault() != null) {
+            warehouse.setIsDefault(request.isDefault());
+        }
         warehouse.setRemark(ErpMasterDataRules.normalizeOptionalText(request.remark()));
+    }
+
+    private void handleDefault(Long tenantId, Long warehouseId, Boolean isDefault) {
+        if (Boolean.TRUE.equals(isDefault)) {
+            erpWarehouseMapper.clearDefault(tenantId, warehouseId);
+        }
     }
 
     private void ensureWarehouseNotReferenced(Long tenantId, Long warehouseId) {

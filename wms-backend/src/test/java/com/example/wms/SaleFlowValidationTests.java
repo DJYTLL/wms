@@ -36,6 +36,7 @@ import com.example.wms.mapper.erp.ErpSettlementMethodMapper;
 import com.example.wms.mapper.erp.ErpStockBalanceMapper;
 import com.example.wms.mapper.erp.ErpStockTxnMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
+import com.example.wms.service.TenantSettingService;
 import com.example.wms.service.erp.impl.ErpSaleOrderServiceImpl;
 import com.example.wms.service.erp.impl.ErpSaleReturnServiceImpl;
 import com.example.wms.service.erp.support.ErpCostService;
@@ -96,6 +97,8 @@ class SaleFlowValidationTests {
     private ErpSaleReturnMapper saleReturnMapper;
     @Mock
     private ErpSaleReturnItemMapper saleReturnItemMapper;
+    @Mock
+    private TenantSettingService tenantSettingService;
 
     @BeforeEach
     void setUp() {
@@ -627,7 +630,8 @@ class SaleFlowValidationTests {
             receiptReceivableMapper,
             saleReturnMapper,
             systemConfigMapper,
-            costService()
+            costService(),
+            tenantSettingService
         );
     }
 
@@ -650,7 +654,8 @@ class SaleFlowValidationTests {
             saleOrderItemMapper,
             saleOrderMapper,
             systemConfigMapper,
-            costService()
+            costService(),
+            tenantSettingService
         );
     }
 
