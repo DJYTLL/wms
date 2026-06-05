@@ -3,6 +3,7 @@ package com.example.wms.mapper.erp;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.example.wms.dto.erp.ErpAssemblySourceSaleOrderItem;
 import com.example.wms.dto.erp.ErpAssemblySourceSaleOrderOption;
+import com.example.wms.dto.erp.ErpStockOccupancyView;
 import com.example.wms.entity.erp.ErpAssemblyOrder;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -119,4 +120,51 @@ public interface ErpAssemblyOrderMapper extends BaseMapper<ErpAssemblyOrder> {
     @Select("SELECT COALESCE(SUM(finished_qty), 0) FROM erp_assembly_order WHERE tenant_id = #{tenantId} AND source_sale_order_item_id = #{saleOrderItemId} AND deleted_at IS NULL")
     BigDecimal sumFinishedQtyBySourceSaleOrderItem(@Param("tenantId") Long tenantId,
                                                    @Param("saleOrderItemId") Long saleOrderItemId);
+
+    @Select("""
+        <script>
+        SELECT 'ASSEMBLE' AS docType,
+               o.order_no AS docNo,
+               o.id AS docId,
+               SUM(
+                   CASE
+                       WHEN o.order_type = 'ASSEMBLE' THEN i.qty
+                       ELSE o.finished_qty
+                   END
+               ) AS qty,
+               o.order_at AS orderAt,
+               'erp-assemble-order-edit' AS routeName
+        FROM erp_assembly_order o
+        LEFT JOIN erp_assembly_order_item i
+          ON i.order_id = o.id
+         AND i.tenant_id = o.tenant_id
+         AND i.deleted_at IS NULL
+        WHERE o.tenant_id = #{tenantId}
+          AND o.deleted_at IS NULL
+          AND o.status = 'DRAFT'
+          AND o.inventory_reserved = TRUE
+          AND (
+                (o.order_type = 'ASSEMBLE'
+                 AND i.product_id = #{productId}
+                 AND i.warehouse_id IS NOT DISTINCT FROM #{warehouseId}
+                 AND i.location_id IS NOT DISTINCT FROM #{locationId})
+             OR (o.order_type = 'DISASSEMBLE'
+                 AND o.finished_product_id = #{productId}
+                 AND o.warehouse_id IS NOT DISTINCT FROM #{warehouseId}
+                 AND o.location_id IS NOT DISTINCT FROM #{locationId})
+          )
+        GROUP BY o.id, o.order_no, o.order_at
+        HAVING SUM(
+            CASE
+                WHEN o.order_type = 'ASSEMBLE' THEN COALESCE(i.qty, 0)
+                ELSE COALESCE(o.finished_qty, 0)
+            END
+        ) > 0
+        ORDER BY o.order_at DESC NULLS LAST, o.id DESC
+        </script>
+        """)
+    List<ErpStockOccupancyView> findStockOccupancy(@Param("tenantId") Long tenantId,
+                                                   @Param("productId") Long productId,
+                                                   @Param("warehouseId") Long warehouseId,
+                                                   @Param("locationId") Long locationId);
 }

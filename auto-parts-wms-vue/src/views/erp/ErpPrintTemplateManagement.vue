@@ -301,6 +301,7 @@ import { usePageSizePreference } from '@/composables/pageSizePreference';
 import DecimalInput from '@/components/DecimalInput.vue';
 import { normalizeColumnWidths as normalizeTemplateColumnWidths, parsePrintTemplateConfig, savePrintTemplatePreview } from '@/utils/printTemplate';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
+import { waitForErpFirstPaint } from './erpFirstPaint';
 
 interface PrintTemplate {
   id: number;
@@ -373,6 +374,7 @@ const total = ref(0);
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
+const firstPaintReady = ref(false);
 const tableData = ref<PrintTemplate[]>([]);
 const allTableData = ref<PrintTemplate[]>([]);
 
@@ -1204,14 +1206,16 @@ bindPageSizeSync(size, fetchList, {
   reloadOnInitialSync: false,
   onInitialSyncComplete: () => {
     pageSizeSyncReady.value = true;
-    if (pendingInitialLoad.value) {
+    if (pendingInitialLoad.value && firstPaintReady.value) {
       pendingInitialLoad.value = false;
       fetchList();
     }
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForErpFirstPaint();
+  firstPaintReady.value = true;
   fetchTenantKeys();
   if (pageSizeSyncReady.value) {
     fetchList();

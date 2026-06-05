@@ -224,14 +224,27 @@
                 <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
                   <template #default="{ row }">
                     <div v-if="viewMode" class="readonly-cell">{{ resolveProductLabel(row.productId) }}</div>
-                    <FuzzyProductSelect
+                    <el-select
                       v-else
                       v-model="row.productId"
-                      :options="getSelectableProductOptions(row.productId)"
+                      filterable
+                      remote
+                      clearable
+                      reserve-keyword
                       :placeholder="$t('placeholder.selectProduct')"
                       style="width: 100%"
+                      :remote-method="searchProducts"
+                      :loading="productSearchLoading"
+                      @visible-change="handleProductDropdownVisibleChange"
                       @change="() => handleProductChange(row)"
-                    />
+                    >
+                      <el-option
+                        v-for="item in getSelectableProductOptions(row.productId)"
+                        :key="item.id"
+                        :label="item.name"
+                        :value="item.id"
+                      />
+                    </el-select>
                   </template>
                 </ErpDataTableColumn>
                 <ErpDataTableColumn :label="sourceWarehouseLocationLabel" min-width="220" column-key="sourceWarehouseLocation">
@@ -354,7 +367,6 @@ import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { getCachedLocationOptions, getCachedProductOptions, getCachedWarehouseOptions } from '@/composables/erpBaseDataCache';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
-import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
@@ -420,6 +432,9 @@ const endAt = ref('');
 const dateRange = ref<[string, string] | []>([]);
 
 const productOptions = ref<OptionItem[]>([]);
+const productSearchOptions = ref<OptionItem[]>([]);
+const productSearchLoading = ref(false);
+const productSearchTimer = ref<number | null>(null);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 
@@ -448,6 +463,9 @@ const formData = reactive({
 
 const isFormPage = computed(() => route.meta.pageMode === 'form');
 const formMode = computed(() => String(route.meta.formMode || 'create'));
+const warningSource = typeof route.query.warningSource === 'string' ? route.query.warningSource : '';
+const contextProductId = Number(route.query.productId);
+const contextWarehouseId = Number(route.query.warehouseId);
 const formPageTitle = computed(() => {
   if (formMode.value === 'edit') return t('action.edit');
   if (formMode.value === 'view') return t('action.view');
@@ -488,8 +506,16 @@ const createItem = (): StockTransferRow => ({
   remark: ''
 });
 
-const getSelectableProductOptions = (currentProductId?: number | null) =>
-  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+const getSelectableProductOptions = (currentProductId?: number | null) => {
+  const options = productSearchOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  if (currentProductId != null && !options.some(item => Number(item.id) === Number(currentProductId))) {
+    const current = productOptions.value.find(item => Number(item.id) === Number(currentProductId));
+    if (current) {
+      options.push(current);
+    }
+  }
+  return options;
+};
 
 const sourceWarehouseLocationLabel = computed(() => `${t('field.fromWarehouse')}/${t('field.location')}`);
 const targetWarehouseLocationLabel = computed(() => `${t('field.toWarehouse')}/${t('field.location')}`);
@@ -551,17 +577,63 @@ const queryQtyAvailable = async (productId: number, warehouseId: number, locatio
 
 const fetchOptions = async () => {
   try {
-    const [products, warehouses, locations] = await Promise.all([
-      getCachedProductOptions(tenantCacheKey.value),
+    const [warehouses, locations] = await Promise.all([
       getCachedWarehouseOptions(tenantCacheKey.value),
       getCachedLocationOptions(tenantCacheKey.value)
     ]);
-    productOptions.value = products;
     warehouseOptions.value = warehouses;
     locationOptions.value = locations;
   } catch (error) {
     notifyError(error);
   }
+};
+
+const rememberProductOptions = (products: OptionItem[]) => {
+  for (const product of products) {
+    productOptions.value = mergeOptionById(productOptions.value, product);
+  }
+};
+
+const searchProductsNow = async (keyword = '') => {
+  productSearchLoading.value = true;
+  try {
+    const res: any = await request.get('/erp/products/page', {
+      params: {
+        page: 1,
+        size: 20,
+        keyword: keyword.trim() || undefined,
+        enabled: true
+      }
+    });
+    const products = (res.data?.data?.items || []) as OptionItem[];
+    rememberProductOptions(products);
+    productSearchOptions.value = products;
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    productSearchLoading.value = false;
+  }
+};
+
+const searchProducts = (keyword = '') => {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword && productSearchOptions.value.length > 0) return;
+  if (productSearchTimer.value != null && typeof window !== 'undefined') {
+    window.clearTimeout(productSearchTimer.value);
+  }
+  if (typeof window === 'undefined') {
+    void searchProductsNow(keyword);
+    return;
+  }
+  productSearchTimer.value = window.setTimeout(() => {
+    productSearchTimer.value = null;
+    void searchProductsNow(keyword);
+  }, 250);
+};
+
+const handleProductDropdownVisibleChange = (visible: boolean) => {
+  if (!visible || productSearchOptions.value.length > 0 || productSearchLoading.value) return;
+  void searchProductsNow('');
 };
 
 const ensureProductOption = async (productId?: number | null) => {
@@ -571,6 +643,14 @@ const ensureProductOption = async (productId?: number | null) => {
     const product = res.data.data;
     if (product) {
       productOptions.value = mergeOptionById(productOptions.value, {
+        id: product.id,
+        name: product.name,
+        code: product.code,
+        defaultWarehouseId: product.defaultWarehouseId,
+        defaultLocationId: product.defaultLocationId,
+        enabled: product.enabled
+      });
+      productSearchOptions.value = mergeOptionById(productSearchOptions.value, {
         id: product.id,
         name: product.name,
         code: product.code,
@@ -781,6 +861,16 @@ const initializeFormPage = async () => {
     if (formMode.value === 'create') {
       formData.transferAt = getCurrentDateTimeString();
       addItem();
+      const firstItem = formData.items[0];
+      if (warningSource === 'stock-warning' && firstItem) {
+        firstItem.productId = Number.isFinite(contextProductId) && contextProductId > 0 ? contextProductId : null;
+        firstItem.toWarehouseId = Number.isFinite(contextWarehouseId) && contextWarehouseId > 0 ? contextWarehouseId : null;
+        firstItem.targetStockKey = buildStockKey(firstItem.toWarehouseId, null);
+        await Promise.all([
+          ensureProductOption(firstItem.productId),
+          ensureWarehouseOption(firstItem.toWarehouseId)
+        ]);
+      }
       await fetchNextTransferNo();
       initializedFormPath.value = route.fullPath;
       return;

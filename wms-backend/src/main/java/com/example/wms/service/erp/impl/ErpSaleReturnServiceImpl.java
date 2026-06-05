@@ -1432,6 +1432,7 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
         if (returns == null || returns.isEmpty()) {
             return;
         }
+        enrichCustomerNames(tenantId, returns);
         List<Long> returnIds = returns.stream()
             .map(ErpSaleReturn::getId)
             .filter(Objects::nonNull)
@@ -1451,6 +1452,32 @@ public class ErpSaleReturnServiceImpl implements ErpSaleReturnService {
                 order.setRefundUnpaidAmount(snapshot.refundUnpaidAmount());
             } else if (!STATUS_RED_FLUSHED.equals(order.getStatus())) {
                 applyDraftRefundPreview(order);
+            }
+        }
+    }
+
+    private void enrichCustomerNames(Long tenantId, List<ErpSaleReturn> returns) {
+        List<Long> customerIds = returns.stream()
+            .map(ErpSaleReturn::getCustomerId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        if (customerIds.isEmpty()) {
+            return;
+        }
+        Map<Long, String> customerNameById = erpCustomerMapper.selectList(new QueryWrapper<ErpCustomer>()
+                .eq("tenant_id", tenantId)
+                .in("id", customerIds))
+            .stream()
+            .filter(customer -> customer != null && customer.getId() != null)
+            .collect(Collectors.toMap(
+                ErpCustomer::getId,
+                customer -> customer.getName() == null ? "" : customer.getName(),
+                (left, right) -> left
+            ));
+        for (ErpSaleReturn order : returns) {
+            if (order != null && order.getCustomerId() != null) {
+                order.setCustomerName(customerNameById.get(order.getCustomerId()));
             }
         }
     }

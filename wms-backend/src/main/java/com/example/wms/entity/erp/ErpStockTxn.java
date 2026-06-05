@@ -91,6 +91,18 @@ public class ErpStockTxn {
     @TableField(exist = false)
     private String adjustmentReason;
 
+    // 商品名称（非数据库字段，用于库存流水展示）
+    @TableField(exist = false)
+    private String productName;
+
+    // 仓库名称（非数据库字段，用于库存流水展示）
+    @TableField(exist = false)
+    private String warehouseName;
+
+    // 库位名称（非数据库字段，用于库存流水展示）
+    @TableField(exist = false)
+    private String locationName;
+
     public Long getId() {
         return id;
     }
@@ -249,5 +261,29 @@ public class ErpStockTxn {
 
     public void setAdjustmentReason(String adjustmentReason) {
         this.adjustmentReason = adjustmentReason;
+    }
+
+    public String getProductName() {
+        return productName;
+    }
+
+    public void setProductName(String productName) {
+        this.productName = productName;
+    }
+
+    public String getWarehouseName() {
+        return warehouseName;
+    }
+
+    public void setWarehouseName(String warehouseName) {
+        this.warehouseName = warehouseName;
+    }
+
+    public String getLocationName() {
+        return locationName;
+    }
+
+    public void setLocationName(String locationName) {
+        this.locationName = locationName;
     }
 }

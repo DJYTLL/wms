@@ -57,17 +57,17 @@
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('product')" :label="$t('field.product')" min-width="180" column-key="product">
             <template #default="{ row }">
-              {{ getProductName(row.productId) }}
+              {{ row.productName || '-' }}
             </template>
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('warehouse')" :label="$t('field.warehouse')" min-width="160" column-key="warehouse">
             <template #default="{ row }">
-              {{ getWarehouseName(row.warehouseId) }}
+              {{ row.warehouseName || '-' }}
             </template>
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('location')" :label="$t('field.location')" min-width="160" column-key="location">
             <template #default="{ row }">
-              {{ getLocationName(row.locationId) }}
+              {{ row.locationName || getLocationName(row.locationId) }}
             </template>
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('adjustmentReason')" :label="$t('field.adjustmentReason')" min-width="140" column-key="adjustmentReason">
@@ -147,8 +147,11 @@ interface StockTxn {
   bizType?: string;
   bizId?: number;
   productId?: number;
+  productName?: string;
   warehouseId?: number;
+  warehouseName?: string;
   locationId?: number;
+  locationName?: string;
   qtyDelta?: number;
   qtyBefore?: number;
   qtyAfter?: number;
@@ -232,8 +235,6 @@ const formatAdjustmentReason = (value?: string) => {
   return translated === key ? value : translated;
 };
 
-const getProductName = (id?: number) => productOptions.value.find(item => item.id === id)?.name || '-';
-const getWarehouseName = (id?: number) => warehouseOptions.value.find(item => item.id === id)?.name || '-';
 const getLocationName = (id?: number) => {
   if (id == null) return t('field.unassignedLocation');
   return locationOptions.value.find(item => item.id === id)?.name || t('field.unassignedLocation');

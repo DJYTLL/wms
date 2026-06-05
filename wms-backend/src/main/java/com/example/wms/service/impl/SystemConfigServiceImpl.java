@@ -21,7 +21,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     private static final Set<String> PLATFORM_ALLOWED_KEYS = Set.of(
         "audit.retention.days",
         "login.max.retry",
-        "password.min.length"
+        "password.min.length",
+        "wms.monitor.sql-timing-enabled",
+        "wms.monitor.sql-timing-log-params"
     );
     private static final Set<String> TENANT_MANAGED_KEYS = Set.of("default.page.size");
     private final SystemConfigMapper systemConfigMapper;

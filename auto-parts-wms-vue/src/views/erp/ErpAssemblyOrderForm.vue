@@ -151,14 +151,27 @@
             </div>
             <div class="form-group">
               <el-form-item :label="$t('field.finishedProduct')" required>
-                <FuzzyProductSelect
+                <el-select
                   v-model="formData.finishedProductId"
-                  :options="getSelectableProductOptions(formData.finishedProductId)"
-                  :placeholder="$t('field.product')"
+                  filterable
+                  remote
+                  clearable
+                  reserve-keyword
                   style="width: 100%"
+                  :placeholder="$t('field.product')"
                   :disabled="isReadOnly"
+                  :remote-method="searchProducts"
+                  :loading="productSearchLoading"
+                  @visible-change="handleProductDropdownVisibleChange"
                   @change="handleFinishedProductChange"
-                />
+                >
+                  <el-option
+                    v-for="item in getSelectableProductOptions(formData.finishedProductId)"
+                    :key="item.id"
+                    :label="item.name"
+                    :value="item.id"
+                  />
+                </el-select>
               </el-form-item>
             </div>
             <div class="form-group">
@@ -209,14 +222,27 @@
             <ErpDataTable :data="formData.items" style="width: 100%" border stripe :empty-text="$t('table.empty')" table-key="erp-assembly-order-form">
               <ErpDataTableColumn v-if="canShow('product')" :label="$t('field.product')" min-width="220" column-key="product">
                 <template #default="{ row }">
-                  <FuzzyProductSelect
+                  <el-select
                     v-model="row.productId"
-                    :options="getSelectableProductOptions(row.productId)"
-                    :placeholder="$t('field.product')"
+                    filterable
+                    remote
+                    clearable
+                    reserve-keyword
                     style="width: 100%"
+                    :placeholder="$t('field.product')"
                     :disabled="isReadOnly"
+                    :remote-method="searchProducts"
+                    :loading="productSearchLoading"
+                    @visible-change="handleProductDropdownVisibleChange"
                     @change="() => handleProductChange(row)"
-                  />
+                  >
+                    <el-option
+                      v-for="item in getSelectableProductOptions(row.productId)"
+                      :key="item.id"
+                      :label="item.name"
+                      :value="item.id"
+                    />
+                  </el-select>
                 </template>
               </ErpDataTableColumn>
               <ErpDataTableColumn v-if="canShow('warehouseLocation')" :label="$t('field.warehouseLocation')" min-width="240" column-key="warehouseLocation">
@@ -338,7 +364,6 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { useAuthStore } from '@/stores/auth';
 import DecimalInput from '@/components/DecimalInput.vue';
-import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
 import ProductStockSelect from '@/components/ProductStockSelect.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
 
@@ -412,6 +437,9 @@ const authStore = useAuthStore();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 
 const productOptions = ref<OptionItem[]>([]);
+const productSearchOptions = ref<OptionItem[]>([]);
+const productSearchLoading = ref(false);
+const productSearchTimer = ref<number | null>(null);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const productStockMap = ref<Record<number, StockOption[]>>({});
@@ -777,19 +805,65 @@ const loadNextOrderNo = async () => {
 
 const fetchOptions = async () => {
   try {
-    const [productsRes, warehousesRes, locationsRes, templatesRes] = await Promise.all([
-      request.get('/erp/products/options'),
+    const [warehousesRes, locationsRes, templatesRes] = await Promise.all([
       request.get('/erp/warehouses/options'),
       request.get('/erp/locations/options'),
       request.get('/erp/assembly-templates', { params: { orderType: formData.orderType } })
     ]);
-    productOptions.value = productsRes.data.data || [];
     warehouseOptions.value = warehousesRes.data.data || [];
     locationOptions.value = locationsRes.data.data || [];
     templateOptions.value = templatesRes.data.data || [];
   } catch (error) {
     notifyError(error);
   }
+};
+
+const rememberProductOptions = (products: OptionItem[]) => {
+  for (const product of products) {
+    productOptions.value = mergeOptionById(productOptions.value, product);
+  }
+};
+
+const searchProductsNow = async (keyword = '') => {
+  productSearchLoading.value = true;
+  try {
+    const res: any = await request.get('/erp/products/page', {
+      params: {
+        page: 1,
+        size: 20,
+        keyword: keyword.trim() || undefined,
+        enabled: true
+      }
+    });
+    const products = (res.data?.data?.items || []) as OptionItem[];
+    rememberProductOptions(products);
+    productSearchOptions.value = products;
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    productSearchLoading.value = false;
+  }
+};
+
+const searchProducts = (keyword = '') => {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword && productSearchOptions.value.length > 0) return;
+  if (productSearchTimer.value != null && typeof window !== 'undefined') {
+    window.clearTimeout(productSearchTimer.value);
+  }
+  if (typeof window === 'undefined') {
+    void searchProductsNow(keyword);
+    return;
+  }
+  productSearchTimer.value = window.setTimeout(() => {
+    productSearchTimer.value = null;
+    void searchProductsNow(keyword);
+  }, 250);
+};
+
+const handleProductDropdownVisibleChange = (visible: boolean) => {
+  if (!visible || productSearchOptions.value.length > 0 || productSearchLoading.value) return;
+  void searchProductsNow('');
 };
 
 const searchSourceSaleOrders = async (keyword = '') => {
@@ -893,14 +967,30 @@ const ensureProductOption = async (productId?: number | null) => {
         defaultLocationId: product.defaultLocationId,
         enabled: product.enabled
       });
+      productSearchOptions.value = mergeOptionById(productSearchOptions.value, {
+        id: product.id,
+        name: product.name,
+        costPrice: product.costPrice,
+        defaultWarehouseId: product.defaultWarehouseId,
+        defaultLocationId: product.defaultLocationId,
+        enabled: product.enabled
+      });
     }
   } catch (error) {
     notifyError(error);
   }
 };
 
-const getSelectableProductOptions = (currentProductId?: number | null) =>
-  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+const getSelectableProductOptions = (currentProductId?: number | null) => {
+  const options = productSearchOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  if (currentProductId != null && !options.some(item => Number(item.id) === Number(currentProductId))) {
+    const current = productOptions.value.find(item => Number(item.id) === Number(currentProductId));
+    if (current) {
+      options.push(current);
+    }
+  }
+  return options;
+};
 
 const ensureWarehouseOption = async (warehouseId?: number | null) => {
   if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;

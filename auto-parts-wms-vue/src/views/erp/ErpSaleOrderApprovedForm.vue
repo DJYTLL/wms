@@ -1,7 +1,9 @@
 <template>
-  <ErpSaleOrderForm workspace="approved" />
+  <ErpSaleOrderApprovedFormPage />
 </template>
 
 <script setup lang="ts">
-import ErpSaleOrderForm from './ErpSaleOrderForm.vue';
+import { defineAsyncComponent } from 'vue';
+
+const ErpSaleOrderApprovedFormPage = defineAsyncComponent(() => import('./ErpSaleOrderApprovedFormPage.vue'));
 </script>

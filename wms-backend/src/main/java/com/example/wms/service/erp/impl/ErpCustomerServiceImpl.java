@@ -56,6 +56,11 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import net.sourceforge.pinyin4j.PinyinHelper;
+import net.sourceforge.pinyin4j.format.HanyuPinyinCaseType;
+import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
+import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
+import net.sourceforge.pinyin4j.format.exception.BadHanyuPinyinOutputFormatCombination;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -64,6 +69,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -271,6 +277,15 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
         wrapper.orderByAsc("id");
         Page<ErpCustomer> result = erpCustomerMapper.selectPage(pageReq, wrapper);
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+    }
+
+    @Override
+    public List<ErpCustomer> searchOptions(String keyword, int size) {
+        String normalizedKeyword = trimToNull(keyword);
+        if (normalizedKeyword == null) {
+            return List.of();
+        }
+        return rankedSearchOptions(normalizedKeyword, size);
     }
 
     @Override
@@ -681,6 +696,118 @@ public class ErpCustomerServiceImpl implements ErpCustomerService {
             wrapper.eq("category_id", categoryId);
         }
         return wrapper;
+    }
+
+    private List<ErpCustomer> rankedSearchOptions(String keyword, int size) {
+        QueryWrapper<ErpCustomer> wrapper = baseEnabledCustomerWrapper();
+        List<ErpCustomer> candidates = erpCustomerMapper.selectList(wrapper);
+        int safeSize = Math.max(1, Math.min(size, 20));
+        return candidates.stream()
+            .map(customer -> new CustomerSearchHit(customer, scoreCustomer(customer, keyword)))
+            .filter(hit -> hit.score() > 0)
+            .sorted(Comparator
+                .comparingInt(CustomerSearchHit::score).reversed()
+                .thenComparing(hit -> hit.customer().getId(), Comparator.nullsLast(Long::compareTo)))
+            .map(CustomerSearchHit::customer)
+            .limit(safeSize)
+            .toList();
+    }
+
+    private QueryWrapper<ErpCustomer> baseEnabledCustomerWrapper() {
+        return new QueryWrapper<ErpCustomer>()
+            .eq("tenant_id", TenantContext.requireTenantId())
+            .eq("is_enabled", true)
+            .orderByAsc("id");
+    }
+
+    private int scoreCustomer(ErpCustomer customer, String rawKeyword) {
+        String keyword = normalizeSearchText(rawKeyword);
+        if (keyword.isEmpty()) return 0;
+        int score = 0;
+        score = Math.max(score, scoreText(customer.getName(), keyword, 900));
+        score = Math.max(score, scoreText(customer.getShortName(), keyword, 850));
+        score = Math.max(score, scoreText(customer.getContact(), keyword, 760));
+        score = Math.max(score, scoreText(customer.getPhone(), keyword, 720));
+        score = Math.max(score, scoreText(customer.getMobile(), keyword, 720));
+        score = Math.max(score, scoreText(customer.getContacts() == null ? null : customer.getContacts().toString(), keyword, 680));
+        score = Math.max(score, scorePinyin(customer.getName(), keyword, 820));
+        score = Math.max(score, scorePinyin(customer.getShortName(), keyword, 780));
+        score = Math.max(score, scorePinyin(customer.getContact(), keyword, 700));
+        return score;
+    }
+
+    private int scoreText(String value, String keyword, int exactScore) {
+        String normalized = normalizeSearchText(value);
+        if (normalized.isEmpty()) return 0;
+        if (normalized.equals(keyword)) return exactScore;
+        if (normalized.startsWith(keyword)) return exactScore - 80;
+        if (normalized.contains(keyword)) return exactScore - 220;
+        if (isSubsequence(normalized, keyword)) return exactScore - 420;
+        return 0;
+    }
+
+    private int scorePinyin(String value, String keyword, int exactScore) {
+        PinyinText pinyin = toPinyinText(value);
+        int score = 0;
+        score = Math.max(score, scoreText(pinyin.full(), keyword, exactScore));
+        score = Math.max(score, scoreText(pinyin.initials(), keyword, exactScore - 40));
+        return score;
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) return "";
+        return value.trim().toLowerCase().replaceAll("\\s+", "");
+    }
+
+    private boolean isSubsequence(String source, String query) {
+        if (query.isEmpty()) return true;
+        int index = 0;
+        for (int i = 0; i < source.length() && index < query.length(); i++) {
+            if (source.charAt(i) == query.charAt(index)) {
+                index++;
+            }
+        }
+        return index == query.length();
+    }
+
+    private PinyinText toPinyinText(String value) {
+        if (value == null || value.isBlank()) {
+            return new PinyinText("", "");
+        }
+        HanyuPinyinOutputFormat format = new HanyuPinyinOutputFormat();
+        format.setCaseType(HanyuPinyinCaseType.LOWERCASE);
+        format.setToneType(HanyuPinyinToneType.WITHOUT_TONE);
+        StringBuilder full = new StringBuilder();
+        StringBuilder initials = new StringBuilder();
+        for (char ch : value.toCharArray()) {
+            String token = toPinyinToken(ch, format);
+            if (token.isEmpty()) {
+                continue;
+            }
+            full.append(token);
+            initials.append(token.charAt(0));
+        }
+        return new PinyinText(full.toString(), initials.toString());
+    }
+
+    private String toPinyinToken(char ch, HanyuPinyinOutputFormat format) {
+        if (Character.isWhitespace(ch)) return "";
+        if (ch < 128) return String.valueOf(Character.toLowerCase(ch));
+        try {
+            String[] values = PinyinHelper.toHanyuPinyinStringArray(ch, format);
+            if (values != null && values.length > 0) {
+                return values[0];
+            }
+        } catch (BadHanyuPinyinOutputFormatCombination ignored) {
+            return "";
+        }
+        return String.valueOf(ch);
+    }
+
+    private record CustomerSearchHit(ErpCustomer customer, int score) {
+    }
+
+    private record PinyinText(String full, String initials) {
     }
 
     private byte[] readImportBytes(MultipartFile file) {

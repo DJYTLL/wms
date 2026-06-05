@@ -3,6 +3,7 @@ package com.example.wms.controller.erp;
 import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpStockBalanceOption;
+import com.example.wms.dto.erp.ErpStockOccupancyView;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockTxn;
 import com.example.wms.service.erp.ErpStockService;
@@ -39,6 +40,13 @@ public class ErpStockController {
     @PreAuthorize("hasAuthority('PERM_erp-stock:view')")
     public ResponseEntity<ApiResponse<List<ErpStockBalanceOption>>> listBalancesByProduct(@RequestParam Long productId) {
         return ResponseEntity.ok(ApiResponse.ok(erpStockService.listBalancesByProduct(productId)));
+    }
+
+    // 查询库存台账行的占用明细
+    @GetMapping("/balances/{balanceId}/occupancy")
+    @PreAuthorize("hasAuthority('PERM_erp-stock:view')")
+    public ResponseEntity<ApiResponse<List<ErpStockOccupancyView>>> listOccupancy(@PathVariable Long balanceId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockService.listOccupancy(balanceId)));
     }
 
     // 查询指定范围的现存量

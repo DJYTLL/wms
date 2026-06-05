@@ -136,7 +136,10 @@ import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { invalidateErpBaseDataResourceCache } from '@/composables/erpBaseDataCache';
+import { useAuthStore } from '@/stores/auth';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
+import { waitForErpFirstPaint } from './erpFirstPaint';
 
 interface OptionItem {
   id: number;
@@ -158,6 +161,8 @@ interface ErpCategory {
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
+const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const nameQuery = ref('');
 const codeQuery = ref('');
@@ -170,6 +175,7 @@ const total = ref(0);
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
+const firstPaintReady = ref(false);
 const tableData = ref<ErpCategory[]>([]);
 const allTableData = ref<ErpCategory[]>([]);
 const showModal = ref(false);
@@ -296,6 +302,7 @@ const saveData = async () => {
       : await request.post('/erp/categories', payload);
 
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('categories', tenantCacheKey.value);
       notifySuccess();
       showModal.value = false;
       fetchList();
@@ -320,6 +327,7 @@ const fetchNextCategoryCode = async () => {
 const handleDelete = async (row: ErpCategory) => {
   try {
     await request.delete(`/erp/categories/${row.id}`);
+    invalidateErpBaseDataResourceCache('categories', tenantCacheKey.value);
     notifySuccess();
     fetchList();
     fetchCategories();
@@ -332,14 +340,16 @@ bindPageSizeSync(size, fetchList, {
   reloadOnInitialSync: false,
   onInitialSyncComplete: () => {
     pageSizeSyncReady.value = true;
-    if (pendingInitialLoad.value) {
+    if (pendingInitialLoad.value && firstPaintReady.value) {
       pendingInitialLoad.value = false;
       fetchList();
     }
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForErpFirstPaint();
+  firstPaintReady.value = true;
   fetchCategories();
   fetchTenantKeys();
   if (pageSizeSyncReady.value) {

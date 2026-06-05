@@ -144,6 +144,7 @@
     </div>
 
     <el-dialog
+      v-if="showModal"
       v-model="showModal"
       class="product-dialog"
       :style="productDialogStyle"
@@ -292,99 +293,6 @@
               </el-col>
             </el-row>
 
-            <el-form-item :label="$t('field.status')">
-              <el-switch
-                v-model="formData.enabled"
-                :active-text="$t('status.active')"
-                :inactive-text="$t('status.inactive')"
-                inline-prompt
-              />
-            </el-form-item>
-          </div>
-
-          <div class="form-section module-card">
-            <div class="section-title">{{ $t('section.inventoryInfo') }}</div>
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item :label="$t('field.defaultWarehouse')">
-                  <el-select
-                    v-model="formData.defaultWarehouseId"
-                    clearable
-                    filterable
-                    style="width: 100%"
-                    :placeholder="$t('field.defaultWarehouse')"
-                    @change="formData.defaultLocationId = null"
-                  >
-                    <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item :label="$t('field.defaultLocation')">
-                  <el-select
-                    v-model="formData.defaultLocationId"
-                    clearable
-                    filterable
-                    style="width: 100%"
-                    :placeholder="$t('field.defaultLocation')"
-                    :disabled="!formData.defaultWarehouseId"
-                  >
-                    <el-option
-                      v-for="item in getLocationOptions(formData.defaultWarehouseId)"
-                      :key="item.id"
-                      :label="item.name"
-                      :value="item.id"
-                    />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item :label="$t('field.safetyStock')">
-                  <DecimalInput v-model="formData.safetyStock" :scale="4" :placeholder="$t('field.safetyStock')" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item :label="$t('field.minStock')">
-                  <DecimalInput v-model="formData.minStock" :scale="4" :placeholder="$t('field.minStock')" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item :label="$t('field.maxStock')">
-                  <DecimalInput v-model="formData.maxStock" :scale="4" :placeholder="$t('field.maxStock')" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item :label="$t('field.shelfLifeDays')">
-                  <el-input v-model="formData.shelfLifeDays" type="number" :placeholder="$t('field.shelfLifeDays')" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item :label="$t('field.batch')">
-              <el-switch v-model="formData.batch" />
-            </el-form-item>
-          </div>
-
-          <div class="form-section module-card">
-            <div class="section-title">{{ $t('section.priceInfo') }}</div>
-            <el-form-item v-if="canViewCostPrice" :label="$t('field.costPrice')">
-              <DecimalInput
-                v-model="formData.costPrice"
-                :scale="4"
-                :placeholder="$t('field.costPrice')"
-                :disabled="!canEditCostPrice"
-              />
-            </el-form-item>
-            <el-form-item :label="$t('field.price')">
-              <el-input v-model="formData.salePrice" type="number" :placeholder="$t('field.price')" />
-            </el-form-item>
-            <el-form-item :label="$t('field.taxRate')">
-              <DecimalInput v-model="formData.taxRate" :scale="4" :placeholder="$t('field.taxRate')" />
-            </el-form-item>
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item :label="$t('field.weight')">
@@ -398,13 +306,158 @@
               </el-col>
             </el-row>
 
-            <div class="section-title">{{ $t('field.customerCategoryPrice') }}</div>
-            <div class="price-list-container">
-              <div v-for="item in priceItems" :key="item.categoryId" class="price-item">
-                <span class="price-label">{{ item.categoryName }}</span>
-                <DecimalInput v-model="item.salePrice" :scale="2" class="price-input" />
+            <el-form-item :label="$t('field.status')">
+              <el-switch
+                v-model="formData.enabled"
+                :active-text="$t('status.active')"
+                :inactive-text="$t('status.inactive')"
+                inline-prompt
+              />
+            </el-form-item>
+          </div>
+
+          <div class="form-section module-card inventory-policy-card">
+            <div class="section-title">{{ $t('section.inventoryInfo') }}</div>
+            <div class="inventory-policy-card__header">
+              <div class="inventory-policy-card__hint">仓库覆盖策略：为指定仓库单独配置时，将优先覆盖商品默认策略。</div>
+              <el-button type="primary" plain @click="addStockPolicy">新增仓库策略</el-button>
+            </div>
+            <div class="inventory-policy-card__section-label">默认出入库指向</div>
+            <div class="inventory-default-location-row">
+              <div class="inventory-policy-row__field inventory-policy-row__field--warehouse">
+                <el-form-item :label="$t('field.defaultWarehouse')">
+                  <el-select
+                    v-model="formData.defaultWarehouseId"
+                    clearable
+                    filterable
+                    :placeholder="$t('field.defaultWarehouse')"
+                    @change="formData.defaultLocationId = null"
+                  >
+                    <el-option v-for="item in warehouseOptions" :key="item.id" :label="item.name" :value="item.id" />
+                  </el-select>
+                </el-form-item>
+              </div>
+              <div class="inventory-policy-row__field inventory-policy-row__field--location">
+                <el-form-item :label="$t('field.defaultLocation')">
+                  <el-select
+                    v-model="formData.defaultLocationId"
+                    clearable
+                    filterable
+                    :placeholder="$t('field.defaultLocation')"
+                    :disabled="!formData.defaultWarehouseId"
+                  >
+                    <el-option
+                      v-for="item in getLocationOptions(formData.defaultWarehouseId)"
+                      :key="item.id"
+                      :label="item.name"
+                      :value="item.id"
+                    />
+                  </el-select>
+                </el-form-item>
               </div>
             </div>
+            <div class="inventory-policy-card__section-label">商品默认策略</div>
+            <div class="inventory-policy-card__subhint">以下安全库存、最低库存、最高库存属于商品级默认策略，对无单独仓库策略的场景生效，不是上方默认仓库的专属阈值。</div>
+            <div class="inventory-policy-row inventory-policy-row--default inventory-default-policy-row">
+              <div class="inventory-policy-row__field">
+                <el-form-item :label="$t('field.safetyStock')">
+                  <DecimalInput v-model="formData.safetyStock" :scale="4" :placeholder="$t('field.safetyStock')" />
+                </el-form-item>
+              </div>
+              <div class="inventory-policy-row__field">
+                <el-form-item :label="$t('field.minStock')">
+                  <DecimalInput v-model="formData.minStock" :scale="4" :placeholder="$t('field.minStock')" />
+                </el-form-item>
+              </div>
+              <div class="inventory-policy-row__field">
+                <el-form-item :label="$t('field.maxStock')">
+                  <DecimalInput v-model="formData.maxStock" :scale="4" :placeholder="$t('field.maxStock')" />
+                </el-form-item>
+              </div>
+            </div>
+            <div
+              v-for="(item, index) in formData.stockPolicies"
+              :key="`stock-policy-${index}`"
+              class="inventory-policy-row"
+            >
+              <div class="inventory-policy-row__field inventory-policy-row__field--warehouse">
+                <el-form-item :label="index === 0 ? $t('field.warehouse') : ' '">
+                  <el-select
+                    v-model="item.warehouseId"
+                    clearable
+                    filterable
+                    :placeholder="$t('field.warehouse')"
+                  >
+                    <el-option v-for="option in warehouseOptions" :key="option.id" :label="option.name" :value="option.id" />
+                  </el-select>
+                </el-form-item>
+              </div>
+              <div class="inventory-policy-row__field">
+                <el-form-item :label="index === 0 ? $t('field.safetyStock') : ' '">
+                  <DecimalInput v-model="item.safetyStock" :scale="4" :placeholder="$t('field.safetyStock')" />
+                </el-form-item>
+              </div>
+              <div class="inventory-policy-row__field">
+                <el-form-item :label="index === 0 ? $t('field.minStock') : ' '">
+                  <DecimalInput v-model="item.minStock" :scale="4" :placeholder="$t('field.minStock')" />
+                </el-form-item>
+              </div>
+              <div class="inventory-policy-row__field">
+                <el-form-item :label="index === 0 ? $t('field.maxStock') : ' '">
+                  <DecimalInput v-model="item.maxStock" :scale="4" :placeholder="$t('field.maxStock')" />
+                </el-form-item>
+              </div>
+              <div class="inventory-policy-row__actions">
+                <el-button link type="danger" @click="removeStockPolicy(index)">删除</el-button>
+              </div>
+            </div>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item :label="$t('field.shelfLifeDays')">
+                  <DecimalInput v-model="formData.shelfLifeDays" :scale="0" :placeholder="$t('field.shelfLifeDays')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item :label="$t('field.batch')">
+              <el-switch v-model="formData.batch" />
+            </el-form-item>
+          </div>
+
+          <div class="form-section module-card product-price-card">
+            <div class="section-title">{{ $t('section.priceInfo') }}</div>
+            <el-row :gutter="16">
+              <el-col v-if="canViewCostPrice" :span="12">
+                <el-form-item :label="$t('field.costPrice')">
+                  <DecimalInput
+                    v-model="formData.costPrice"
+                    :scale="4"
+                    :placeholder="$t('field.costPrice')"
+                    :disabled="!canEditCostPrice"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="$t('field.price')">
+                  <el-input v-model="formData.salePrice" type="number" :placeholder="$t('field.price')" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12" :class="{ 'product-price-card__span-offset': !canViewCostPrice }">
+                <el-form-item :label="$t('field.taxRate')">
+                  <DecimalInput v-model="formData.taxRate" :scale="4" :placeholder="$t('field.taxRate')" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </div>
+
+          <div class="form-section module-card customer-category-price-card">
+            <div class="section-title">{{ $t('field.customerCategoryPrice') }}</div>
+            <el-row :gutter="16">
+              <el-col v-for="item in priceItems" :key="item.categoryId" :span="8">
+                <el-form-item :label="item.categoryName">
+                  <DecimalInput v-model="item.salePrice" :scale="2" />
+                </el-form-item>
+              </el-col>
+            </el-row>
           </div>
 
           <div class="form-section module-card">
@@ -435,7 +488,7 @@
       </el-form>
       </div>
 
-      <Teleport :to="productDialogResizeHandleTeleportTarget" :disabled="!productDialogResizeHandleTeleportTarget">
+      <Teleport v-if="showModal" :to="productDialogResizeHandleTeleportTarget" :disabled="!productDialogResizeHandleTeleportTarget">
         <button
           type="button"
           class="product-dialog__resize-handle product-dialog__resize-handle--nw"
@@ -473,6 +526,7 @@
     </el-dialog>
 
     <el-dialog
+      v-if="purchaseHistoryDialogVisible"
       v-model="purchaseHistoryDialogVisible"
       :title="$t('field.purchaseHistory')"
       width="980px"
@@ -550,6 +604,7 @@
     </el-dialog>
 
     <el-dialog
+      v-if="purchaseOrderDetailDialogVisible"
       v-model="purchaseOrderDetailDialogVisible"
       :title="purchaseOrderDetailTitle"
       width="1080px"
@@ -637,7 +692,7 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="showProductImportDialog" title="导入配件档案" width="720px">
+    <el-dialog v-if="showProductImportDialog" v-model="showProductImportDialog" title="导入配件档案" width="720px">
       <el-form label-position="top">
         <el-form-item label="来源名称">
           <el-input v-model="productImportSourceName" placeholder="例如：2026-05-配件档案列表" />
@@ -653,14 +708,54 @@
             {{ productImportFile?.name || '请选择 .xls 或 .xlsx 文件' }}
           </div>
         </el-form-item>
+        <el-form-item v-if="productImportPreview" label="字段映射">
+          <el-table :data="productImportMappings" v-loading="productImportPreviewLoading" size="small" border style="width: 100%">
+            <el-table-column prop="excelHeader" label="Excel表头" min-width="140" />
+            <el-table-column prop="sampleValue" label="示例值" min-width="140" />
+            <el-table-column label="系统字段" min-width="220">
+              <template #default="{ row }">
+                <el-select v-model="row.fieldKey" clearable filterable placeholder="选择系统字段" style="width: 100%" @change="handleProductImportMappingChange(row)">
+                  <el-option
+                    v-for="field in productImportFieldOptions"
+                    :key="field.key"
+                    :label="field.required ? `${field.label} *` : field.label"
+                    :value="field.key"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.fieldKey ? (row.matchType === 'AUTO' ? 'success' : 'warning') : 'info'">
+                  {{ row.fieldKey ? (row.matchType === 'AUTO' ? '自动匹配' : '手动选择') : '未匹配' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showProductImportDialog = false">{{ $t('action.cancel') }}</el-button>
-        <el-button type="primary" :loading="productImportSubmitting" @click="submitProductImport">{{ $t('action.import') }}</el-button>
+        <el-button
+          v-if="productImportPreview && !productImportMappingConfirmed"
+          type="primary"
+          :loading="productImportPreviewLoading"
+          @click="confirmProductImportMapping"
+        >
+          确认字段映射
+        </el-button>
+        <el-button
+          v-else
+          type="primary"
+          :loading="productImportSubmitting"
+          @click="submitProductImport"
+        >
+          {{ $t('action.import') }}
+        </el-button>
       </template>
     </el-dialog>
 
-    <el-drawer v-model="showProductImportHistoryDrawer" title="配件导入结果" size="70%">
+    <el-drawer v-if="showProductImportHistoryDrawer" v-model="showProductImportHistoryDrawer" title="配件导入结果" size="70%">
       <div class="supplier-import-drawer">
         <div class="supplier-import-drawer__toolbar">
           <el-button v-permission="'erp-product:import'" @click="loadProductImportBatches">刷新批次</el-button>
@@ -708,10 +803,11 @@ import { useApiError } from '@/composables/useApiError';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useAuthStore } from '@/stores/auth';
-import { getCachedCategories, getCachedCustomerCategories, getCachedLocationOptions, getCachedSuppliers, getCachedUnits, getCachedWarehouseOptions } from '@/composables/erpBaseDataCache';
+import { getCachedCategories, getCachedCustomerCategories, getCachedLocationOptions, getCachedSuppliers, getCachedUnits, getCachedWarehouseOptions, invalidateErpBaseDataResourceCache } from '@/composables/erpBaseDataCache';
 import DecimalInput from '@/components/DecimalInput.vue';
 import { mergeOptionById } from '@/utils/erpMasterData';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
+import { waitForErpFirstPaint } from './erpFirstPaint';
 
 interface OptionItem {
   id: number;
@@ -751,6 +847,7 @@ interface ErpProduct {
   safetyStock?: number;
   minStock?: number;
   maxStock?: number;
+  stockPolicies?: ProductStockPolicy[];
   batch?: boolean;
   shelfLifeDays?: number;
   enabled: boolean;
@@ -762,6 +859,13 @@ interface ProductPriceItem {
   categoryId: number;
   categoryName: string;
   salePrice: string;
+}
+
+interface ProductStockPolicy {
+  warehouseId: number | null;
+  safetyStock: string;
+  minStock: string;
+  maxStock: string;
 }
 
 interface CustomField {
@@ -840,6 +944,29 @@ interface ProductImportItemView {
   matchedStrategy?: string;
 }
 
+interface ProductImportFieldOption {
+  key: string;
+  label: string;
+  required: boolean;
+  customerCategoryId?: number | null;
+}
+
+interface ProductImportHeaderMapping {
+  excelHeader: string;
+  fieldKey?: string | null;
+  fieldLabel?: string | null;
+  matchType: 'AUTO' | 'MANUAL' | 'UNMATCHED' | string;
+  sampleValue?: string | null;
+}
+
+interface ProductImportPreview {
+  headers: string[];
+  fields: ProductImportFieldOption[];
+  mappings: ProductImportHeaderMapping[];
+  sampleRows: Record<string, string>[];
+  totalRows: number;
+}
+
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
@@ -859,6 +986,7 @@ const total = ref(0);
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
+const firstPaintReady = ref(false);
 const tableData = ref<ErpProduct[]>([]);
 const allTableData = ref<ErpProduct[]>([]);
 const showModal = ref(false);
@@ -883,6 +1011,11 @@ const showProductImportDialog = ref(false);
 const showProductImportHistoryDrawer = ref(false);
 const productImportSourceName = ref('');
 const productImportFile = ref<File | null>(null);
+const productImportPreview = ref<ProductImportPreview | null>(null);
+const productImportFieldOptions = ref<ProductImportFieldOption[]>([]);
+const productImportMappings = ref<ProductImportHeaderMapping[]>([]);
+const productImportPreviewLoading = ref(false);
+const productImportMappingConfirmed = ref(false);
 const productImportSubmitting = ref(false);
 const productImportHistoryLoading = ref(false);
 const productImportItemsLoading = ref(false);
@@ -949,6 +1082,7 @@ const formData = reactive({
   safetyStock: '' as string,
   minStock: '' as string,
   maxStock: '' as string,
+  stockPolicies: [] as ProductStockPolicy[],
   batch: false,
   shelfLifeDays: '' as string,
   enabled: true,
@@ -996,6 +1130,13 @@ const getLocationOptions = (warehouseId?: number | null) => {
   if (!warehouseId) return locationOptions.value;
   return locationOptions.value.filter(item => item.warehouseId === warehouseId);
 };
+
+const createEmptyStockPolicy = (): ProductStockPolicy => ({
+  warehouseId: null,
+  safetyStock: '',
+  minStock: '',
+  maxStock: ''
+});
 
 interface ProductDialogViewportBounds {
   minWidth: number;
@@ -1604,6 +1745,14 @@ const openAddModal = () => {
   showModal.value = true;
 };
 
+const addStockPolicy = () => {
+  formData.stockPolicies.push(createEmptyStockPolicy());
+};
+
+const removeStockPolicy = (index: number) => {
+  formData.stockPolicies.splice(index, 1);
+};
+
 const applyProductDetail = (row: ErpProduct) => {
   formData.code = row.code;
   formData.name = row.name;
@@ -1631,6 +1780,12 @@ const applyProductDetail = (row: ErpProduct) => {
   formData.safetyStock = row.safetyStock == null ? '' : String(row.safetyStock);
   formData.minStock = row.minStock == null ? '' : String(row.minStock);
   formData.maxStock = row.maxStock == null ? '' : String(row.maxStock);
+  formData.stockPolicies = (row.stockPolicies || []).map(item => ({
+    warehouseId: item.warehouseId ?? null,
+    safetyStock: item.safetyStock == null ? '' : String(item.safetyStock),
+    minStock: item.minStock == null ? '' : String(item.minStock),
+    maxStock: item.maxStock == null ? '' : String(item.maxStock)
+  }));
   formData.batch = !!row.batch;
   formData.shelfLifeDays = row.shelfLifeDays == null ? '' : String(row.shelfLifeDays);
   formData.enabled = row.enabled;
@@ -1686,6 +1841,7 @@ const resetForm = () => {
   formData.safetyStock = '';
   formData.minStock = '';
   formData.maxStock = '';
+  formData.stockPolicies = [];
   formData.batch = false;
   formData.shelfLifeDays = '';
   formData.enabled = true;
@@ -1706,9 +1862,34 @@ const normalizeNumber = (value: string | number | null | undefined) => {
   return parsed;
 };
 
+const validateStockPolicies = () => {
+  const seenWarehouseIds = new Set<number>();
+  for (const item of formData.stockPolicies) {
+    if (!item.warehouseId) {
+      notifyWarning('仓库策略必须选择仓库');
+      return false;
+    }
+    if (seenWarehouseIds.has(item.warehouseId)) {
+      notifyWarning('仓库策略中不能重复选择同一个仓库');
+      return false;
+    }
+    const minStock = normalizeNumber(item.minStock);
+    const maxStock = normalizeNumber(item.maxStock);
+    if (minStock != null && maxStock != null && minStock > maxStock) {
+      notifyWarning(t('message.stockLimitInvalid'));
+      return false;
+    }
+    seenWarehouseIds.add(item.warehouseId);
+  }
+  return true;
+};
+
 const saveData = async () => {
   if (!formData.code || !formData.name) {
     notifyWarning(t('message.required'));
+    return;
+  }
+  if (!validateStockPolicies()) {
     return;
   }
   try {
@@ -1721,6 +1902,12 @@ const saveData = async () => {
       safetyStock: normalizeNumber(formData.safetyStock),
       minStock: normalizeNumber(formData.minStock),
       maxStock: normalizeNumber(formData.maxStock),
+      stockPolicies: formData.stockPolicies.map(item => ({
+        warehouseId: item.warehouseId,
+        safetyStock: normalizeNumber(item.safetyStock),
+        minStock: normalizeNumber(item.minStock),
+        maxStock: normalizeNumber(item.maxStock)
+      })),
       shelfLifeDays: normalizeNumber(formData.shelfLifeDays),
       extAttrs: buildExtAttrsPayload(),
       priceItems: priceItems.value
@@ -1735,6 +1922,7 @@ const saveData = async () => {
       : await request.post('/erp/products', payload);
 
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('productOptions', tenantCacheKey.value);
       notifySuccess();
       showModal.value = false;
       fetchList();
@@ -1747,6 +1935,7 @@ const saveData = async () => {
 const handleDelete = async (row: ErpProduct) => {
   try {
     await request.delete(`/erp/products/${row.id}`);
+    invalidateErpBaseDataResourceCache('productOptions', tenantCacheKey.value);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -1757,6 +1946,10 @@ const handleDelete = async (row: ErpProduct) => {
 const resetProductImportForm = () => {
   productImportSourceName.value = '';
   productImportFile.value = null;
+  productImportPreview.value = null;
+  productImportFieldOptions.value = [];
+  productImportMappings.value = [];
+  productImportMappingConfirmed.value = false;
   if (productImportInputRef.value) {
     productImportInputRef.value.value = '';
   }
@@ -1775,6 +1968,72 @@ const openProductImportHistoryDrawer = async () => {
 const handleProductImportFile = async (event: Event) => {
   const input = event.target as HTMLInputElement;
   productImportFile.value = input.files?.[0] || null;
+  productImportPreview.value = null;
+  productImportFieldOptions.value = [];
+  productImportMappings.value = [];
+  productImportMappingConfirmed.value = false;
+  if (productImportFile.value) {
+    await loadProductImportPreview();
+  }
+};
+
+const loadProductImportPreview = async () => {
+  if (!productImportFile.value) return;
+  productImportPreviewLoading.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', productImportFile.value);
+    const res: any = await request.post('/erp/products/import/preview', formData);
+    if (res.data.code === 200) {
+      productImportPreview.value = res.data.data as ProductImportPreview;
+      productImportFieldOptions.value = productImportPreview.value.fields || [];
+      productImportMappings.value = (productImportPreview.value.mappings || []).map(item => ({ ...item }));
+      productImportMappingConfirmed.value = false;
+    }
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    productImportPreviewLoading.value = false;
+  }
+};
+
+const buildProductImportFieldMapping = () => {
+  const mapping: Record<string, string> = {};
+  productImportMappings.value.forEach(item => {
+    if (item.excelHeader && item.fieldKey) {
+      mapping[item.excelHeader] = item.fieldKey;
+    }
+  });
+  return mapping;
+};
+
+const validateProductImportRequiredMappings = () => {
+  const selectedFields = new Set(productImportMappings.value.map(item => item.fieldKey).filter(Boolean));
+  const missing = productImportFieldOptions.value
+    .filter(item => item.required && !selectedFields.has(item.key))
+    .map(item => item.label);
+  if (missing.length) {
+    notifyError(`请先完成必填字段映射：${missing.join('、')}`);
+    return false;
+  }
+  return true;
+};
+
+const handleProductImportMappingChange = (row: ProductImportHeaderMapping) => {
+  row.matchType = row.fieldKey ? 'MANUAL' : 'UNMATCHED';
+  productImportMappingConfirmed.value = false;
+};
+
+const confirmProductImportMapping = () => {
+  if (!productImportFile.value) {
+    notifyError('请先选择要导入的 Excel 文件');
+    return;
+  }
+  if (!validateProductImportRequiredMappings()) {
+    return;
+  }
+  productImportMappingConfirmed.value = true;
+  notifySuccess('字段映射已确认');
 };
 
 const loadProductImportBatches = async () => {
@@ -1847,10 +2106,18 @@ const submitProductImport = async () => {
     notifyError('请先选择要导入的 Excel 文件');
     return;
   }
+  if (!productImportMappingConfirmed.value) {
+    notifyError('请先确认字段映射');
+    return;
+  }
+  if (!validateProductImportRequiredMappings()) {
+    return;
+  }
   productImportSubmitting.value = true;
   try {
     const formData = new FormData();
     formData.append('file', productImportFile.value);
+    formData.append('fieldMapping', JSON.stringify(buildProductImportFieldMapping()));
     const trimmedSourceName = productImportSourceName.value.trim();
     if (trimmedSourceName) {
       formData.append('sourceName', trimmedSourceName);
@@ -1893,14 +2160,16 @@ bindPageSizeSync(size, fetchList, {
   reloadOnInitialSync: false,
   onInitialSyncComplete: () => {
     pageSizeSyncReady.value = true;
-    if (pendingInitialLoad.value) {
+    if (pendingInitialLoad.value && firstPaintReady.value) {
       pendingInitialLoad.value = false;
       fetchList();
     }
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForErpFirstPaint();
+  firstPaintReady.value = true;
   fetchCategories();
   fetchCustomerCategories();
   fetchSuppliers();
@@ -2007,24 +2276,6 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-.price-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.price-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.price-label {
-  width: 120px;
-  color: #606266;
-}
-
 .drawer-form {
   padding-right: 16px;
 }
@@ -2056,54 +2307,8 @@ onBeforeUnmount(() => {
   margin-top: 0;
 }
 
-.price-list-container {
-  container-type: inline-size;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 12px;
-  padding: 12px;
-  border: 1px solid #e5eaf3;
-  border-radius: 10px;
-  background: #f8fafc;
-}
-
-.price-item {
-  display: grid;
-  grid-template-columns: minmax(72px, auto) minmax(120px, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid #edf1f7;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.price-item .price-label {
-  min-width: 0;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 20px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.price-item .price-input {
-  width: 100%;
-}
-
-@container (max-width: 840px) {
-  .price-list-container {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@container (max-width: 560px) {
-  .price-list-container {
-    grid-template-columns: 1fr;
-  }
+.product-price-card__span-offset {
+  margin-left: auto;
 }
 
 .drawer-footer {

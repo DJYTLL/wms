@@ -20,10 +20,13 @@ test('role permission tree maps registered system pages to menu nodes', () => {
 
   assertContains(source, "{ prefix: 'tenant-setting:', pageKeys: ['tenant-setting'] }");
   assertContains(source, "{ prefix: 'api-latency-monitor:', pageKeys: ['api-latency-monitor'] }");
+  assertContains(source, "{ prefix: 'sql-latency-monitor:', pageKeys: ['sql-latency-monitor'] }");
   assertContains(source, "'tenant-setting': ['tenant-setting']");
   assertContains(source, "'api-latency-monitor': ['api-latency-monitor']");
+  assertContains(source, "'sql-latency-monitor': ['sql-latency-monitor']");
   assertContains(source, "'/tenant-settings': 'tenant-setting'");
   assertContains(source, "'/api-latency-monitor': 'api-latency-monitor'");
+  assertContains(source, "'/sql-latency-monitor': 'sql-latency-monitor'");
 });
 
 test('permission maintenance tree maps registered system pages to menu nodes', () => {
@@ -31,4 +34,5 @@ test('permission maintenance tree maps registered system pages to menu nodes', (
 
   assertContains(source, "'tenant-setting': ['tenant-setting']");
   assertContains(source, "'api-latency-monitor': ['api-latency-monitor']");
+  assertContains(source, "'sql-latency-monitor': ['sql-latency-monitor']");
 });

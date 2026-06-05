@@ -31,6 +31,9 @@ public class ErpSaleReturn {
     @TableField("customer_id")
     private Long customerId;
 
+    @TableField(exist = false)
+    private String customerName;
+
     @TableField("sale_order_id")
     private Long saleOrderId;
 
@@ -162,6 +165,14 @@ public class ErpSaleReturn {
 
     public void setCustomerId(Long customerId) {
         this.customerId = customerId;
+    }
+
+    public String getCustomerName() {
+        return customerName;
+    }
+
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
     }
 
     public Long getSaleOrderId() {

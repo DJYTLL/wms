@@ -5,5 +5,17 @@ import com.example.wms.dto.erp.ErpStockWarningView;
 
 // Stock warning service
 public interface ErpStockWarningService {
-    PageResponse<ErpStockWarningView> page(long page, long size, String keyword);
+    PageResponse<ErpStockWarningView> page(long page,
+                                          long size,
+                                          String keyword,
+                                          Long warehouseId,
+                                          String status,
+                                          String policySource,
+                                          Boolean hasPolicyAnomaly);
+
+    PageResponse<ErpStockWarningView> pageAnomalies(long page,
+                                                    long size,
+                                                    String keyword,
+                                                    Long warehouseId,
+                                                    String anomalyType);
 }

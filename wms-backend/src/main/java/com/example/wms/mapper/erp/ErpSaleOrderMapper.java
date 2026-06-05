@@ -1,6 +1,7 @@
 package com.example.wms.mapper.erp;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.example.wms.dto.erp.ErpStockOccupancyView;
 import com.example.wms.dto.erp.ErpSaleOrderFlowSnapshot;
 import com.example.wms.dto.erp.ErpSaleReturnSourceSaleOrderOption;
 import com.example.wms.entity.erp.ErpSaleOrder;
@@ -290,4 +291,32 @@ public interface ErpSaleOrderMapper extends BaseMapper<ErpSaleOrder> {
                                                                             @Param("currentReturnId") Long currentReturnId,
                                                                             @Param("size") int size,
                                                                             @Param("offset") long offset);
+
+    @Select("""
+        SELECT 'SALE_ORDER' AS docType,
+               o.order_no AS docNo,
+               o.id AS docId,
+               SUM(i.qty) AS qty,
+               o.order_at AS orderAt,
+               'erp-sale-orders-draft-edit' AS routeName
+        FROM erp_sale_order o
+        JOIN erp_sale_order_item i
+          ON i.order_id = o.id
+         AND i.tenant_id = o.tenant_id
+         AND i.deleted_at IS NULL
+        WHERE o.tenant_id = #{tenantId}
+          AND o.deleted_at IS NULL
+          AND o.status = 'DRAFT'
+          AND o.inventory_reserved = TRUE
+          AND i.product_id = #{productId}
+          AND i.warehouse_id IS NOT DISTINCT FROM #{warehouseId}
+          AND i.location_id IS NOT DISTINCT FROM #{locationId}
+        GROUP BY o.id, o.order_no, o.order_at
+        HAVING SUM(i.qty) > 0
+        ORDER BY o.order_at DESC NULLS LAST, o.id DESC
+        """)
+    List<ErpStockOccupancyView> findStockOccupancy(@Param("tenantId") Long tenantId,
+                                                   @Param("productId") Long productId,
+                                                   @Param("warehouseId") Long warehouseId,
+                                                   @Param("locationId") Long locationId);
 }

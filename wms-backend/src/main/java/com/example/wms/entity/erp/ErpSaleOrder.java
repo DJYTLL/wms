@@ -33,6 +33,9 @@ public class ErpSaleOrder {
     @TableField("customer_id")
     private Long customerId;
 
+    @TableField(exist = false)
+    private String customerName;
+
     // 单据时间
     @TableField("order_at")
     private Instant orderAt;
@@ -212,6 +215,14 @@ public class ErpSaleOrder {
 
     public void setCustomerId(Long customerId) {
         this.customerId = customerId;
+    }
+
+    public String getCustomerName() {
+        return customerName;
+    }
+
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
     }
 
     public Instant getOrderAt() {

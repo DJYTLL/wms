@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 // 商品实体（ERP进销存）
 @TableName(value = "erp_product", autoResultMap = true)
@@ -126,6 +127,9 @@ public class ErpProduct {
     // 最高库存
     @TableField("max_stock")
     private BigDecimal maxStock;
+
+    @TableField(exist = false)
+    private List<ErpProductStockPolicy> stockPolicies;
 
     // 是否批次管理
     @TableField("is_batch")
@@ -388,6 +392,14 @@ public class ErpProduct {
 
     public void setMaxStock(BigDecimal maxStock) {
         this.maxStock = maxStock;
+    }
+
+    public List<ErpProductStockPolicy> getStockPolicies() {
+        return stockPolicies;
+    }
+
+    public void setStockPolicies(List<ErpProductStockPolicy> stockPolicies) {
+        this.stockPolicies = stockPolicies;
     }
 
     public Boolean getBatch() {

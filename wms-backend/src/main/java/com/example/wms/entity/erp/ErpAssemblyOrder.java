@@ -52,6 +52,9 @@ public class ErpAssemblyOrder {
     @TableField("finished_product_id")
     private Long finishedProductId;
 
+    @TableField(exist = false)
+    private String finishedProductName;
+
     @TableField("finished_qty")
     private BigDecimal finishedQty;
 
@@ -206,6 +209,14 @@ public class ErpAssemblyOrder {
 
     public void setFinishedProductId(Long finishedProductId) {
         this.finishedProductId = finishedProductId;
+    }
+
+    public String getFinishedProductName() {
+        return finishedProductName;
+    }
+
+    public void setFinishedProductName(String finishedProductName) {
+        this.finishedProductName = finishedProductName;
     }
 
     public BigDecimal getFinishedQty() {

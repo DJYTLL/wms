@@ -1,0 +1,9 @@
+﻿{
+    "input_data_rows":  2724,
+    "output_data_rows":  2706,
+    "removed_rows":  18,
+    "duplicate_product_name_groups":  18,
+    "product_name_column_index":  3,
+    "last_inbound_time_column_index":  34,
+    "output_path":  "D:\\project\\outputs\\inventory_dedup_product_name_20260602\\inventory_dedup_by_product_name.xlsx"
+}

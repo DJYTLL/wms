@@ -563,6 +563,7 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
         if (orders == null || orders.isEmpty()) {
             return;
         }
+        enrichCustomerNames(tenantId, orders);
         List<Long> orderIds = orders.stream()
             .map(ErpSaleOrder::getId)
             .filter(java.util.Objects::nonNull)
@@ -599,6 +600,32 @@ public class ErpSaleOrderServiceImpl implements ErpSaleOrderService {
             order.setNetSaleAmount(netSaleAmount);
             order.setNetGrossProfit(netSaleAmount.subtract(netCost));
             order.setRedFlushTrace(resolveRedFlushTrace(order, approvedReturnCount));
+        }
+    }
+
+    private void enrichCustomerNames(Long tenantId, List<ErpSaleOrder> orders) {
+        List<Long> customerIds = orders.stream()
+            .map(ErpSaleOrder::getCustomerId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        if (customerIds.isEmpty()) {
+            return;
+        }
+        Map<Long, String> customerNameById = erpCustomerMapper.selectList(new QueryWrapper<ErpCustomer>()
+                .eq("tenant_id", tenantId)
+                .in("id", customerIds))
+            .stream()
+            .filter(customer -> customer != null && customer.getId() != null)
+            .collect(Collectors.toMap(
+                ErpCustomer::getId,
+                customer -> customer.getName() == null ? "" : customer.getName(),
+                (left, right) -> left
+            ));
+        for (ErpSaleOrder order : orders) {
+            if (order != null && order.getCustomerId() != null) {
+                order.setCustomerName(customerNameById.get(order.getCustomerId()));
+            }
         }
     }
 

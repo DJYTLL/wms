@@ -1,7 +1,9 @@
 <template>
-  <ErpSaleReturnManagement workspace="draft" />
+  <AsyncErpRouteShell title="销售退货（草稿）" :loader="loadView" />
 </template>
 
 <script setup lang="ts">
-import ErpSaleReturnManagement from './ErpSaleReturnManagement.vue';
+import AsyncErpRouteShell from './AsyncErpRouteShell.vue';
+
+const loadView = () => import('./ErpSaleReturnDraftManagement.vue');
 </script>

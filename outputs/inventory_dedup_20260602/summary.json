@@ -1,0 +1,9 @@
+{
+  "input_rows": 3521,
+  "output_rows": 2653,
+  "removed_rows": 868,
+  "duplicate_rows": 1735,
+  "duplicate_name_count": 867,
+  "name_column": "产品名称",
+  "time_column": "最后一次入库时间"
+}

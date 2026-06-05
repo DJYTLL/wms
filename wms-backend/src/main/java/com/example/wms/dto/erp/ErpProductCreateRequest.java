@@ -136,6 +136,10 @@ public record ErpProductCreateRequest(
      */
     String remark,
     /**
+     * 表示仓库级库存策略。
+     */
+    List<ErpProductStockPolicyRequest> stockPolicies,
+    /**
      * 表示价格Items。
      */
     List<ErpProductPriceItemRequest> priceItems

@@ -7,6 +7,7 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpProductImportBatchSummary;
 import com.example.wms.dto.erp.ErpProductCreateRequest;
 import com.example.wms.dto.erp.ErpProductImportItemView;
+import com.example.wms.dto.erp.ErpProductImportPreview;
 import com.example.wms.dto.erp.ErpProductImportResult;
 import com.example.wms.dto.erp.ErpProductUpdateRequest;
 import com.example.wms.entity.erp.ErpProduct;
@@ -93,8 +94,15 @@ public class ErpProductController {
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('PERM_erp-product:import')")
     public ResponseEntity<ApiResponse<ErpProductImportResult>> importProducts(@RequestParam("file") MultipartFile file,
-                                                                              @RequestParam(value = "sourceName", required = false) String sourceName) {
-        return ResponseEntity.ok(ApiResponse.ok(erpProductService.importProducts(file, sourceName)));
+                                                                              @RequestParam(value = "sourceName", required = false) String sourceName,
+                                                                              @RequestParam(value = "fieldMapping", required = false) String fieldMapping) {
+        return ResponseEntity.ok(ApiResponse.ok(erpProductService.importProducts(file, sourceName, fieldMapping)));
+    }
+
+    @PostMapping(value = "/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('PERM_erp-product:import')")
+    public ResponseEntity<ApiResponse<ErpProductImportPreview>> previewImport(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(ApiResponse.ok(erpProductService.previewImport(file)));
     }
 
     @GetMapping("/import-batches")

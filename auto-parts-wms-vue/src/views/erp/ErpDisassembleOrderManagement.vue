@@ -60,7 +60,7 @@
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('finishedProduct')" :label="$t('field.finishedProduct')" min-width="180" column-key="finishedProduct">
             <template #default="{ row }">
-              {{ getProductName(row.finishedProductId) }}
+              {{ row.finishedProductName || '-' }}
             </template>
           </ErpDataTableColumn>
           <ErpDataTableColumn v-if="canShow('finishedQty')" prop="finishedQty" :label="$t('field.finishedQty')" min-width="140" />
@@ -157,6 +157,7 @@ interface AssemblyOrder {
   orderNo: string;
   orderType: string;
   finishedProductId?: number;
+  finishedProductName?: string;
   finishedQty?: number;
   totalCost?: number;
   status?: string;
@@ -181,8 +182,6 @@ const searchQuery = ref('');
 const statusFilter = ref('');
 const orderTypeFilter = ref('DISASSEMBLE');
 const dateRange = ref<[string, string] | null>(null);
-
-const productOptions = ref<OptionItem[]>([]);
 
 const defaultColumns = ['orderNo', 'orderType', 'finishedProduct', 'finishedQty', 'totalCost', 'status', 'orderAt'];
 const { isVisible, fetchTenantKeys } = useColumnSettings('erp-disassemble-order', defaultColumns);
@@ -212,17 +211,6 @@ const formatDateTime = (value?: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('zh-CN', { hour12: false });
-};
-
-const getProductName = (id?: number) => productOptions.value.find(item => item.id === id)?.name || '-';
-
-const fetchProducts = async () => {
-  try {
-    const res: any = await request.get('/erp/products');
-    productOptions.value = res.data.data || [];
-  } catch (error) {
-    notifyError(error);
-  }
 };
 
 const fetchList = async () => {
@@ -322,7 +310,6 @@ const handleDelete = async (row: AssemblyOrder) => {
 };
 
 onMounted(() => {
-  fetchProducts();
   if (pageSizeSyncReady.value) {
     fetchList();
   } else {
@@ -336,7 +323,6 @@ onActivated(() => {
     hasActivatedOnce.value = true;
     return;
   }
-  fetchProducts();
   fetchList();
 });
 

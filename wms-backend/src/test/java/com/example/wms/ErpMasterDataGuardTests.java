@@ -113,6 +113,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
+import java.util.Map;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -231,6 +232,7 @@ class ErpMasterDataGuardTests {
             true,
             null,
             null,
+            null,
             null
         );
 
@@ -275,6 +277,7 @@ class ErpMasterDataGuardTests {
             null,
             null,
             true,
+            null,
             null,
             null,
             List.of(
@@ -324,6 +327,7 @@ class ErpMasterDataGuardTests {
             null,
             null,
             true,
+            null,
             null,
             null,
             null
@@ -619,7 +623,7 @@ class ErpMasterDataGuardTests {
 
     @Test
     void productImportEndpointUsesMultipartExcelUploadContract() throws Exception {
-        Method controllerMethod = ErpProductController.class.getMethod("importProducts", MultipartFile.class, String.class);
+        Method controllerMethod = ErpProductController.class.getMethod("importProducts", MultipartFile.class, String.class, String.class);
         PostMapping postMapping = controllerMethod.getAnnotation(PostMapping.class);
         Parameter[] parameters = controllerMethod.getParameters();
 
@@ -629,11 +633,27 @@ class ErpMasterDataGuardTests {
         assertThat(parameters[0].getAnnotation(RequestParam.class).value()).isEqualTo("file");
         assertThat(parameters[1].getAnnotation(RequestParam.class).value()).isEqualTo("sourceName");
         assertThat(parameters[1].getAnnotation(RequestParam.class).required()).isFalse();
+        assertThat(parameters[2].getAnnotation(RequestParam.class).value()).isEqualTo("fieldMapping");
+        assertThat(parameters[2].getAnnotation(RequestParam.class).required()).isFalse();
+    }
+
+    @Test
+    void productImportPreviewEndpointReturnsHeaderMappingContract() throws Exception {
+        Method controllerMethod = ErpProductController.class.getMethod("previewImport", MultipartFile.class);
+        PostMapping postMapping = controllerMethod.getAnnotation(PostMapping.class);
+        Parameter[] parameters = controllerMethod.getParameters();
+
+        assertThat(postMapping).isNotNull();
+        assertThat(postMapping.value()).containsExactly("/import/preview");
+        assertThat(postMapping.consumes()).contains(MediaType.MULTIPART_FORM_DATA_VALUE);
+        assertThat(parameters[0].getAnnotation(RequestParam.class).value()).isEqualTo("file");
+        assertThat(controllerMethod.getGenericReturnType().getTypeName())
+            .contains("ErpProductImportPreview");
     }
 
     @Test
     void productImportEndpointReturnsAsyncBatchResultContract() throws Exception {
-        Method controllerMethod = ErpProductController.class.getMethod("importProducts", MultipartFile.class, String.class);
+        Method controllerMethod = ErpProductController.class.getMethod("importProducts", MultipartFile.class, String.class, String.class);
 
         assertThat(controllerMethod.getGenericReturnType().getTypeName())
             .contains("ErpProductImportResult");
@@ -652,6 +672,118 @@ class ErpMasterDataGuardTests {
         assertThat(batchItemsMapping).isNotNull();
         assertThat(batchItemsMapping.value()).containsExactly("/import-batches/{batchId}/items");
         assertThat(batchItemsParameters[0].getAnnotation(PathVariable.class).value()).isEqualTo("batchId");
+    }
+
+    @Test
+    void productImportPreviewAutoMatchesHeadersAndReturnsSampleRows() throws Exception {
+        ErpProductServiceImpl service = productService();
+        when(customerCategoryMapper.selectList(any())).thenReturn(List.of(customerCategory(201L, "A客户")));
+
+        var preview = service.previewImport(new MockMultipartFile(
+            "file",
+            "product-price.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            productWorkbookWithPricesBytes()
+        ));
+
+        assertThat(preview.headers()).contains("编码", "配件名称", "参考价", "零售价", "批发价");
+        assertThat(preview.fields()).anySatisfy(field -> {
+            assertThat(field.key()).isEqualTo("code");
+            assertThat(field.required()).isTrue();
+        });
+        assertThat(preview.mappings()).anySatisfy(mapping -> {
+            assertThat(mapping.excelHeader()).isEqualTo("编码");
+            assertThat(mapping.fieldKey()).isEqualTo("code");
+            assertThat(mapping.matchType()).isEqualTo("AUTO");
+            assertThat(mapping.sampleValue()).isEqualTo("PR002");
+        });
+        assertThat(preview.mappings()).anySatisfy(mapping -> {
+            assertThat(mapping.excelHeader()).isEqualTo("批发价");
+            assertThat(mapping.fieldKey()).isEqualTo("wholesalePrice");
+        });
+        assertThat(preview.fields()).anySatisfy(field -> {
+            assertThat(field.key()).isEqualTo("customerCategoryPrice:201");
+            assertThat(field.label()).isEqualTo("A客户售价");
+            assertThat(field.customerCategoryId()).isEqualTo(201L);
+        });
+        assertThat(preview.sampleRows()).hasSize(1);
+    }
+
+    @Test
+    void productImportManualMappingWritesCustomerCategoryPriceField() throws Exception {
+        ErpProductServiceImpl service = productService();
+        doAnswer(invocation -> {
+            com.example.wms.entity.erp.ErpProductImportBatch batch = invocation.getArgument(0);
+            batch.setId(93L);
+            return 1;
+        }).when(productImportBatchMapper).insert(any(com.example.wms.entity.erp.ErpProductImportBatch.class));
+        when(productImportBatchMapper.selectOne(any())).thenReturn(productImportBatch(93L));
+        when(productMapper.findByCodes(1L, List.of("CP-001"))).thenReturn(List.of());
+        when(productMapper.findByCode(1L, "CP-001")).thenReturn(null);
+        when(categoryMapper.selectOne(any())).thenReturn(category(14L, null));
+        when(unitMapper.selectOne(any())).thenReturn(unit(24L, "个"));
+        doAnswer(invocation -> {
+            ErpProduct product = invocation.getArgument(0);
+            product.setId(34L);
+            return 1;
+        }).when(productMapper).insert(org.mockito.ArgumentMatchers.<ErpProduct>any());
+        when(objectMapper.readValue(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(Map.class)))
+            .thenAnswer(invocation -> new ObjectMapper().readValue(invocation.getArgument(0, String.class), Map.class));
+        when(objectMapper.valueToTree(any())).thenAnswer(invocation -> new ObjectMapper().valueToTree(invocation.getArgument(0)));
+
+        service.importProducts(
+            new MockMultipartFile(
+                "file",
+                "customer-price.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                productWorkbookWithCustomerCategoryPriceBytes()
+            ),
+            null,
+            "{\"物料编号\":\"code\",\"物料名称\":\"name\",\"计量\":\"unitName\",\"A客户\":\"customerCategoryPrice:201\"}"
+        );
+
+        verify(productPriceMapper).upsertActivePrice(1L, 34L, 201L, new BigDecimal("123.45"));
+        verify(productImportItemMapper).insertBatch(argThat(items ->
+            items.size() == 1
+                && "SUCCESS".equals(items.get(0).getStatus())
+                && items.get(0).getNormalizedPayload() != null
+                && items.get(0).getNormalizedPayload().has("customerCategoryPrices")
+        ));
+    }
+
+    @Test
+    void productImportPreviewPrefersCustomerCategoryPriceWhenHeaderMatchesCategoryPriceAlias() throws Exception {
+        ErpProductServiceImpl service = productService();
+        when(customerCategoryMapper.selectList(any())).thenReturn(List.of(
+            customerCategory(301L, "零售客户"),
+            customerCategory(302L, "批发客户"),
+            customerCategory(303L, "参考客户"),
+            customerCategory(304L, "备用客户1")
+        ));
+
+        var preview = service.previewImport(new MockMultipartFile(
+            "file",
+            "product-price.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            productWorkbookWithPricesBytes()
+        ));
+
+        assertThat(preview.mappings()).anySatisfy(mapping -> {
+            assertThat(mapping.excelHeader()).isEqualTo("零售价");
+            assertThat(mapping.fieldKey()).isEqualTo("customerCategoryPrice:301");
+        });
+        assertThat(preview.mappings()).anySatisfy(mapping -> {
+            assertThat(mapping.excelHeader()).isEqualTo("批发价");
+            assertThat(mapping.fieldKey()).isEqualTo("customerCategoryPrice:302");
+        });
+        assertThat(preview.mappings()).anySatisfy(mapping -> {
+            assertThat(mapping.excelHeader()).isEqualTo("参考价");
+            assertThat(mapping.fieldKey()).isEqualTo("customerCategoryPrice:303");
+        });
+        assertThat(preview.mappings()).anySatisfy(mapping -> {
+            assertThat(mapping.excelHeader()).isEqualTo("备用价1");
+            assertThat(mapping.fieldKey()).isEqualTo("customerCategoryPrice:304");
+        });
     }
 
     @Test
@@ -726,6 +858,42 @@ class ErpMasterDataGuardTests {
                 && "SUCCESS".equals(items.get(0).getStatus())
                 && items.get(0).getWarningMessage() != null
                 && items.get(0).getWarningMessage().contains("类别“未知类别”未匹配，已使用默认类别")
+        ));
+    }
+
+    @Test
+    void productImportUsesManualFieldMappingWhenExcelHeadersDoNotMatchSystemAliases() throws Exception {
+        ErpProductServiceImpl service = productService();
+        doAnswer(invocation -> {
+            com.example.wms.entity.erp.ErpProductImportBatch batch = invocation.getArgument(0);
+            batch.setId(92L);
+            return 1;
+        }).when(productImportBatchMapper).insert(any(com.example.wms.entity.erp.ErpProductImportBatch.class));
+        when(productImportBatchMapper.selectOne(any())).thenReturn(productImportBatch(92L));
+        when(productMapper.findByCodes(1L, List.of("M-001"))).thenReturn(List.of());
+        when(productMapper.findByCode(1L, "M-001")).thenReturn(null);
+        when(categoryMapper.selectOne(any())).thenReturn(category(13L, null));
+        when(unitMapper.selectOne(any())).thenReturn(unit(23L, "个"));
+        doAnswer(invocation -> {
+            ErpProduct product = invocation.getArgument(0);
+            product.setId(33L);
+            return 1;
+        }).when(productMapper).insert(org.mockito.ArgumentMatchers.<ErpProduct>any());
+        when(objectMapper.readValue(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(Map.class)))
+            .thenAnswer(invocation -> new ObjectMapper().readValue(invocation.getArgument(0, String.class), Map.class));
+        when(objectMapper.valueToTree(any())).thenAnswer(invocation -> new ObjectMapper().valueToTree(invocation.getArgument(0)));
+
+        service.importProducts(
+            new MockMultipartFile("file", "mapped-product.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", productWorkbookWithCustomHeadersBytes()),
+            null,
+            "{\"物料编号\":\"code\",\"物料名称\":\"name\",\"计量\":\"unitName\",\"分组\":\"categoryName\"}"
+        );
+
+        verify(productMapper).insert(org.mockito.ArgumentMatchers.<ErpProduct>argThat(product ->
+            "M-001".equals(product.getCode())
+                && "映射机滤".equals(product.getName())
+                && Long.valueOf(13L).equals(product.getCategoryId())
+                && Long.valueOf(23L).equals(product.getUnitId())
         ));
     }
 
@@ -1397,6 +1565,44 @@ class ErpMasterDataGuardTests {
             row.createCell(5).setCellValue(0);
             row.createCell(6).setCellValue(88);
             row.createCell(7).setCellValue(0);
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
+    private byte[] productWorkbookWithCustomHeadersBytes() throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Row header = workbook.createSheet("Sheet1").createRow(0);
+            header.createCell(0).setCellValue("物料编号");
+            header.createCell(1).setCellValue("物料名称");
+            header.createCell(2).setCellValue("分组");
+            header.createCell(3).setCellValue("计量");
+
+            Row row = workbook.getSheetAt(0).createRow(1);
+            row.createCell(0).setCellValue("M-001");
+            row.createCell(1).setCellValue("映射机滤");
+            row.createCell(2).setCellValue("滤清器");
+            row.createCell(3).setCellValue("个");
+
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
+    private byte[] productWorkbookWithCustomerCategoryPriceBytes() throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Row header = workbook.createSheet("Sheet1").createRow(0);
+            header.createCell(0).setCellValue("物料编号");
+            header.createCell(1).setCellValue("物料名称");
+            header.createCell(2).setCellValue("计量");
+            header.createCell(3).setCellValue("A客户");
+
+            Row row = workbook.getSheetAt(0).createRow(1);
+            row.createCell(0).setCellValue("CP-001");
+            row.createCell(1).setCellValue("客户价机滤");
+            row.createCell(2).setCellValue("个");
+            row.createCell(3).setCellValue(123.45);
 
             workbook.write(outputStream);
             return outputStream.toByteArray();

@@ -3,11 +3,12 @@
     <div class="page-header">
       <div class="page-title">{{ $t('page.erpCounterpartyFinanceSummary') }}</div>
       <div class="page-toolbar-card">
-        <div class="table-toolbar finance-toolbar">
+        <div class="table-toolbar finance-toolbar finance-toolbar--fixed-actions">
           <div class="table-filters finance-filters finance-filters--summary">
             <el-input v-model="searchQuery" :placeholder="$t('field.counterpartySubject')" class="table-search finance-field--wide" clearable @clear="handleSearch" @keyup.enter="handleSearch" />
           </div>
           <div class="finance-actions">
+            <el-button @click="handleRefresh">{{ $t('action.refresh') }}</el-button>
             <el-button type="primary" @click="handleSearch">{{ $t('action.search') }}</el-button>
           </div>
         </div>
@@ -130,6 +131,10 @@ const applySearch = () => {
 
 const handleSearch = () => {
   applySearch();
+};
+
+const handleRefresh = () => {
+  fetchData();
 };
 
 const openDetail = async (row: CounterpartyFinanceSummaryRow) => {

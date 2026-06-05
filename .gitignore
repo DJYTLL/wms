@@ -15,3 +15,6 @@ wms-backend/target/
 
 # OS / logs
 *.log
+
+# Office temporary lock files
+~$*

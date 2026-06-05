@@ -152,15 +152,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated } from 'vue';
+import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { invalidateErpBaseDataResourceCache } from '@/composables/erpBaseDataCache';
+import { useAuthStore } from '@/stores/auth';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 import { MASTER_DATA_CODE_HINT, isValidMasterCode, normalizeMasterCode } from '@/utils/erpMasterData';
+import { waitForErpFirstPaint } from './erpFirstPaint';
 
 interface OptionItem {
   id: number;
@@ -183,6 +186,8 @@ interface ErpLocation {
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
+const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const nameQuery = ref('');
 const codeQuery = ref('');
@@ -198,6 +203,7 @@ const total = ref(0);
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
+const firstPaintReady = ref(false);
 const tableData = ref<ErpLocation[]>([]);
 const allTableData = ref<ErpLocation[]>([]);
 const showModal = ref(false);
@@ -351,6 +357,7 @@ const saveData = async () => {
       : await request.post('/erp/locations', payload);
 
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('locations', tenantCacheKey.value);
       notifySuccess();
       showModal.value = false;
       fetchList();
@@ -372,6 +379,7 @@ const handleDelete = async (row: ErpLocation) => {
       }
     );
     await request.delete(`/erp/locations/${row.id}`);
+    invalidateErpBaseDataResourceCache('locations', tenantCacheKey.value);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -385,14 +393,16 @@ bindPageSizeSync(size, fetchList, {
   reloadOnInitialSync: false,
   onInitialSyncComplete: () => {
     pageSizeSyncReady.value = true;
-    if (pendingInitialLoad.value) {
+    if (pendingInitialLoad.value && firstPaintReady.value) {
       pendingInitialLoad.value = false;
       fetchList();
     }
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForErpFirstPaint();
+  firstPaintReady.value = true;
   fetchWarehouses();
   fetchTenantKeys();
   if (pageSizeSyncReady.value) {

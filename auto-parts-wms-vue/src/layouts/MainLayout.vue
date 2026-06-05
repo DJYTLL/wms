@@ -35,7 +35,7 @@
                 <ul v-if="hasChildren(item) && item.isOpen" class="submenu-l2">
                   <li v-for="subItem in item.children" :key="subItem.id">
 
-                    <div class="menu-label l2" @click="handleMenuClick(subItem)" :class="{ 'is-active': isMenuItemActive(subItem) }">
+                    <div class="menu-label l2" @click="handleMenuClick(subItem)" @mouseenter="prefetchMenuTarget(subItem)" @focusin="prefetchMenuTarget(subItem)" :class="{ 'is-active': isMenuItemActive(subItem) }">
                       <span class="dot" v-if="!hasChildren(subItem)"></span>
                       <span class="label-text">{{ menuLabel(subItem) }}</span>
                       <svg v-if="hasChildren(subItem)" class="chevron" :class="{ 'rotated': subItem.isOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -44,7 +44,7 @@
                     <transition name="slide-down">
                       <ul v-if="hasChildren(subItem) && subItem.isOpen" class="submenu-l3">
                         <li v-for="leaf in subItem.children" :key="leaf.id">
-                          <div class="menu-label l3" @click="handleMenuClick(leaf)" :class="{ 'is-active': isMenuItemActive(leaf) }">
+                          <div class="menu-label l3" @click="handleMenuClick(leaf)" @mouseenter="prefetchMenuTarget(leaf)" @focusin="prefetchMenuTarget(leaf)" :class="{ 'is-active': isMenuItemActive(leaf) }">
                             <span class="label-text">{{ menuLabel(leaf) }}</span>
                           </div>
                         </li>
@@ -252,6 +252,8 @@ import { useApiError } from '@/composables/useApiError';
 import request, { setTokens } from '@/utils/request';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { normalizeMenuKey } from '@/utils/i18n';
+import { markErpNavigationPerf, resetErpNavigationPerfTrace } from '@/utils/erpNavigationPerfTrace';
+import { preloadRouteComponents } from '../router';
 import { createPageRefreshTargetBinder, isListRefreshRoute } from './pageRefresh';
 import { resetTabsForTenantSwitch } from './tenantSwitchTabs';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
@@ -305,6 +307,7 @@ interface MenuItem {
   key?: string;
   title?: string;
   path?: string;
+  resolvedPath?: string;
   icon?: string;
   isOpen?: boolean;
   children?: MenuItem[];
@@ -397,7 +400,7 @@ const menuRouteFallbackMap: Record<string, string> = {
   'erp-stock-transfer': '/erp/stock-transfers',
 };
 
-const resolveMenuPath = (item: MenuItem): string | undefined => {
+const normalizeMenuPath = (item: MenuItem): string | undefined => {
   const candidate = item.path?.trim();
   if (candidate) {
     const resolved = router.resolve(candidate);
@@ -411,9 +414,51 @@ const resolveMenuPath = (item: MenuItem): string | undefined => {
   return candidate || undefined;
 };
 
+const resolveMenuPath = (item: MenuItem): string | undefined => {
+  return item.resolvedPath || undefined;
+};
+
+const primarySaleRouteWarmupPaths = [
+  '/erp/sale-orders/draft',
+  '/erp/sale-orders/approved',
+  '/erp/sale-returns/draft',
+  '/erp/sale-returns/approved'
+];
+
+const heavyBasicRouteWarmupPaths = [
+  '/erp/products',
+  '/erp/vehicle-fitments',
+  '/erp/customers',
+  '/erp/suppliers',
+  '/erp/print-templates'
+];
+
+const scheduleIdleWork = (work: () => void) => {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    (window as Window & { requestIdleCallback: (callback: IdleRequestCallback) => number }).requestIdleCallback(() => work());
+    return;
+  }
+  globalThis.setTimeout(work, 0);
+};
+
+const warmupPrimarySaleRoutes = () => {
+  for (const path of primarySaleRouteWarmupPaths) {
+    void preloadRouteComponents(path);
+  }
+};
+
+const warmupHeavyBasicRoutes = () => {
+  scheduleIdleWork(() => {
+    for (const path of heavyBasicRouteWarmupPaths) {
+      void preloadRouteComponents(path);
+    }
+  });
+};
+
 const decorateMenus = (items: MenuItem[]): MenuItem[] => {
   return items.map((item) => ({
     ...item,
+    resolvedPath: normalizeMenuPath(item),
     isOpen: false,
     children: item.children && item.children.length ? decorateMenus(item.children) : undefined
   }));
@@ -424,6 +469,8 @@ const refreshMenus = async (force = false) => {
     await menuStore.fetchMenus(force);
     menuData.value = decorateMenus(menuStore.menus);
     findAndExpand(menuData.value);
+    warmupHeavyBasicRoutes();
+    warmupPrimarySaleRoutes();
   } catch (error) {
     notifyError(error);
   }
@@ -566,9 +613,31 @@ const handleMenuClick = (item: MenuItem) => {
   } else {
     const targetPath = resolveMenuPath(item);
     if (targetPath) {
+      resetErpNavigationPerfTrace();
+      markErpNavigationPerf('menu:click', {
+        path: targetPath,
+        key: item.key,
+        title: menuLabel(item)
+      });
+      prefetchMenuTarget(item);
       router.push(targetPath);
     }
   }
+};
+
+const prefetchMenuTarget = (item: MenuItem) => {
+  if (hasChildren(item)) {
+    return;
+  }
+  const targetPath = resolveMenuPath(item);
+  if (!targetPath) {
+    return;
+  }
+  if (primarySaleRouteWarmupPaths.includes(targetPath)) {
+    warmupPrimarySaleRoutes();
+    return;
+  }
+  void preloadRouteComponents(targetPath);
 };
 
 const isMenuItemActive = (item: MenuItem): boolean => {

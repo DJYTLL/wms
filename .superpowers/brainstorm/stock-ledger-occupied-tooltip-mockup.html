@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>库存台账占用明细交互草图</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --card: #fffdf8;
+      --line: #d7cfbf;
+      --text: #2f2a22;
+      --muted: #7a7264;
+      --blue: #1f6fd6;
+      --blue-soft: #eaf2ff;
+      --green: #2c8f5b;
+      --shadow: 0 18px 40px rgba(84, 68, 36, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(214, 190, 149, 0.22), transparent 28%),
+        linear-gradient(180deg, #f8f5ef 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+
+    .panel p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .table-shell {
+      border: 1px solid #e6dfd3;
+      border-radius: 16px;
+      overflow: hidden;
+      background: white;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead {
+      background: #f7f4ee;
+    }
+
+    th, td {
+      padding: 14px 12px;
+      border-bottom: 1px solid #efe8db;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #5c5346;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .qty {
+      font-weight: 700;
+    }
+
+    .occupied-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--blue);
+      background: var(--blue-soft);
+      border: 1px solid #cfe0ff;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-weight: 700;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .popover {
+      margin-top: 14px;
+      background: #fffefa;
+      border: 1px solid #d9d1c2;
+      border-radius: 16px;
+      box-shadow: 0 18px 36px rgba(62, 54, 38, 0.15);
+      overflow: hidden;
+    }
+
+    .popover-header {
+      padding: 12px 14px;
+      background: #f8f4ea;
+      border-bottom: 1px solid #ece3d2;
+      font-size: 13px;
+      color: #6a604f;
+    }
+
+    .detail-row {
+      display: grid;
+      grid-template-columns: 92px 1fr 84px;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #f1ebdf;
+      align-items: center;
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .doc-type {
+      font-weight: 600;
+    }
+
+    .doc-link {
+      color: var(--blue);
+      text-decoration: underline;
+      font-weight: 600;
+    }
+
+    .count {
+      text-align: right;
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      background: #eef8f2;
+      color: #287248;
+    }
+
+    .foot {
+      margin-top: 22px;
+      padding: 16px 18px;
+      border-radius: 16px;
+      background: rgba(255, 253, 248, 0.88);
+      border: 1px dashed #d1c6b2;
+      color: #5d5446;
+      line-height: 1.7;
+    }
+
+    @media (max-width: 960px) {
+      .compare { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="title">库存台账占用数量交互草图</div>
+    <div class="subtitle">对比两个方案，区别主要在于“占用数量”是否只作为触发器，还是直接做成更强提示的标签。两边的悬浮内容结构一致：单据类型、单号（蓝字可跳）、占用个数。</div>
+
+    <div class="compare">
+      <section class="panel">
+        <h2>方案 A：数字蓝字 + 悬浮明细</h2>
+        <p>更贴近现有 ERP 表格风格，信息密度高，改动轻，适合先快速落地。</p>
+        <div class="table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>商品</th>
+                <th>仓库</th>
+                <th>库存数量</th>
+                <th>当前占用数量</th>
+                <th>可用库存</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>前保险杠总成</td>
+                <td>成品仓-A01</td>
+                <td class="qty">128</td>
+                <td>
+                  <span class="occupied-trigger">32</span>
+                  <div class="hint">鼠标悬浮显示占用明细</div>
+                  <div class="popover">
+                    <div class="popover-header">当前共 3 张单据占用，合计 32</div>
+                    <div class="detail-row">
+                      <div class="doc-type">销售单</div>
+                      <div><span class="doc-link">SO-20260603-018</span></div>
+                      <div class="count">12</div>
+                    </div>
+                    <div class="detail-row">
+                      <div class="doc-type">组装单</div>
+                      <div><span class="doc-link">ASM-20260603-005</span></div>
+                      <div class="count">8</div>
+                    </div>
+                    <div class="detail-row">
+                      <div class="doc-type">销售单</div>
+                      <div><span class="doc-link">SO-20260602-107</span></div>
+                      <div class="count">12</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="qty">96</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="badge">推荐度：高</div>
+      </section>
+
+      <section class="panel">
+        <h2>方案 B：占用胶囊标签 + 悬浮明细</h2>
+        <p>占用态更醒目，用户更容易意识到“这里可展开看明细”，但表格视觉会更重一点。</p>
+        <div class="table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>商品</th>
+                <th>仓库</th>
+                <th>库存数量</th>
+                <th>当前占用数量</th>
+                <th>可用库存</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>前保险杠总成</td>
+                <td>成品仓-A01</td>
+                <td class="qty">128</td>
+                <td>
+                  <span class="occupied-trigger">占用 32</span>
+                  <div class="hint">悬浮后出现同样的明细弹层</div>
+                  <div class="popover">
+                    <div class="popover-header">占用明细</div>
+                    <div class="detail-row">
+                      <div class="doc-type">销售单</div>
+                      <div><span class="doc-link">SO-20260603-018</span></div>
+                      <div class="count">12</div>
+                    </div>
+                    <div class="detail-row">
+                      <div class="doc-type">组装单</div>
+                      <div><span class="doc-link">ASM-20260603-005</span></div>
+                      <div class="count">8</div>
+                    </div>
+                    <div class="detail-row">
+                      <div class="doc-type">销售单</div>
+                      <div><span class="doc-link">SO-20260602-107</span></div>
+                      <div class="count">12</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="qty">96</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="badge">推荐度：中</div>
+      </section>
+    </div>
+
+    <div class="foot">
+      我当前更推荐方案 A：它和现有库存台账的数值列最一致，也更容易和“库存数量 / 可用库存”一起阅读。
+      如果你想要更强调“这里可以看占用明细”，就选方案 B。
+    </div>
+  </div>
+</body>
+</html>

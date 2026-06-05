@@ -2,9 +2,8 @@
   <div class="page-shell page-shell--system">
     <div class="page-header">
       <div class="page-title">{{ pageTitle }}</div>
-      <div class="erp-toolbar">
-        <div class="table-toolbar">
-          <div class="table-filters">
+      <ErpSaleListToolbar>
+        <template #filters>
           <el-input
             v-model="searchQuery"
             :placeholder="$t('action.search')"
@@ -34,8 +33,8 @@
             class="erp-toolbar__date-range table-date-range table-date-range--compact"
             @change="handleSearch"
           />
-          </div>
-          <div class="table-actions">
+        </template>
+        <template #actions>
             <el-button
               v-if="canCreate"
               type="primary"
@@ -43,9 +42,8 @@
             >
               {{ $t('action.add') }}
             </el-button>
-          </div>
-        </div>
-      </div>
+        </template>
+      </ErpSaleListToolbar>
     </div>
 
     <div class="table-card" :class="{ 'sale-approved-card': isApprovedPage }">
@@ -194,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { defineAsyncComponent, ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import request from '@/utils/request';
@@ -204,10 +202,12 @@ import { useColumnSettings } from '@/composables/useColumnSettings';
 import { useRouter } from 'vue-router';
 import { ElMessageBox } from 'element-plus';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
-import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { getCachedCustomers, invalidateErpBaseDataCache } from '@/composables/erpBaseDataCache';
 import { createInflightRequestDeduper } from '@/composables/inflightRequestDeduperCore';
 import { useAuthStore } from '@/stores/auth';
+import ErpSaleListToolbar from './ErpSaleListToolbar.vue';
+
+const PrintPreviewDialog = defineAsyncComponent(() => import('@/components/PrintPreviewDialog.vue'));
 
 interface OptionItem {
   id: number;
@@ -475,13 +475,8 @@ const runRouteRefresh = () => {
   if (!isCurrentWorkspaceRoute.value) {
     return;
   }
-  const isFirstInitForCurrentPath = initializedRoutePath.value !== route.fullPath;
   initializedRoutePath.value = route.fullPath;
   applyRouteStatus();
-  if (isFirstInitForCurrentPath) {
-    tableData.value = [];
-    total.value = 0;
-  }
   void fetchCustomers();
   void fetchCurrentTenantKeys();
   handleSearch();
@@ -657,27 +652,6 @@ watch(
 </script>
 
 <style scoped>
-:deep(.erp-toolbar__search--wide) {
-  width: 220px;
-}
-
-:deep(.erp-toolbar__date-range) {
-  width: 380px;
-}
-
-:deep(.table-date-range--compact) {
-  flex: 0 0 380px;
-}
-
-:deep(.table-date-range--compact.el-range-editor) {
-  width: 380px !important;
-  min-width: 380px !important;
-}
-
-:deep(.table-date-range--compact .el-range-input) {
-  width: 132px;
-}
-
 :deep(.row-red-flushed > td) {
   background-color: #fff1f0 !important;
 }
@@ -691,96 +665,4 @@ watch(
   overflow: auto;
 }
 
-.erp-toolbar {
-  width: 100%;
-  padding: 16px 18px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-sizing: border-box;
-}
-
-.table-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-}
-
-.table-filters {
-  display: grid;
-  grid-template-columns: 220px 220px 380px;
-  align-items: center;
-  justify-content: start;
-  gap: 12px;
-  min-width: 0;
-}
-
-.table-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: nowrap;
-}
-
-@media (max-width: 1280px) {
-  .erp-toolbar {
-    padding: 14px;
-  }
-
-  .table-toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .table-filters {
-    grid-template-columns: 200px 200px 360px;
-  }
-
-  .table-actions {
-    justify-content: flex-start;
-  }
-
-  :deep(.erp-toolbar__search--wide) {
-    width: 200px;
-  }
-
-  :deep(.erp-toolbar__date-range) {
-    width: 360px;
-  }
-
-  :deep(.table-date-range--compact) {
-    flex-basis: 360px;
-  }
-
-  :deep(.table-date-range--compact.el-range-editor) {
-    width: 360px !important;
-    min-width: 360px !important;
-  }
-}
-
-@media (max-width: 768px) {
-  .table-filters {
-    grid-template-columns: 1fr;
-  }
-
-  .table-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  :deep(.erp-toolbar__search--wide),
-  :deep(.erp-toolbar__date-range) {
-    width: 100%;
-  }
-
-  :deep(.table-date-range--compact) {
-    flex-basis: 100%;
-  }
-
-  :deep(.table-date-range--compact.el-range-editor) {
-    width: 100% !important;
-    min-width: 0 !important;
-  }
-}
 </style>

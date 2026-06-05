@@ -20,6 +20,9 @@ public interface ErpCustomerService {
     // 分页查询客户列表
     PageResponse<ErpCustomer> page(long page, long size, String keyword, String contact, String phone, Boolean enabled, Long categoryId);
 
+    // 销售单客户筛选远程搜索
+    List<ErpCustomer> searchOptions(String keyword, int size);
+
     // 查询客户详情
     ErpCustomer getById(Long id);
 

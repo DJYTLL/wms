@@ -218,10 +218,15 @@
                       :ref="(el: any) => setProductSelectRef(el, $index)"
                       v-model="row.productId"
                       filterable
+                      remote
                       clearable
+                      reserve-keyword
                       class="product-cell__select"
                       :placeholder="productSelectPlaceholder"
                       :disabled="!canSelectProduct"
+                      :remote-method="searchProducts"
+                      :loading="productSearchLoading"
+                      @visible-change="handleProductDropdownVisibleChange"
                       @change="handleProductChange(row)"
                     >
                       <el-option v-for="item in getSelectableProductOptions(row.productId)" :key="item.id" :label="item.name" :value="item.id" />
@@ -439,6 +444,7 @@
     </div>
 
     <el-dialog
+      v-if="saleOrderPreviewDialogVisible"
       v-model="saleOrderPreviewDialogVisible"
       :title="saleOrderPreviewDialogTitle"
       width="960px"
@@ -500,6 +506,7 @@
     </el-dialog>
 
     <el-dialog
+      v-if="showSaleOrderDialog"
       v-model="showSaleOrderDialog"
       :title="$t('message.selectSaleReturnItems')"
       width="780px"
@@ -546,6 +553,7 @@
     </el-dialog>
 
     <el-dialog
+      v-if="showSaleOrderReturnedDialog"
       v-model="showSaleOrderReturnedDialog"
       :title="saleOrderReturnedDialogTitle"
       width="520px"
@@ -575,6 +583,7 @@
     </el-dialog>
 
     <el-dialog
+      v-if="showRecentSaleDialog"
       v-model="showRecentSaleDialog"
       :title="$t('message.selectSourceSaleOrder')"
       width="960px"
@@ -645,6 +654,7 @@
     </el-dialog>
 
     <el-dialog
+      v-if="showCustomerChangeDialog"
       v-model="showCustomerChangeDialog"
       :title="$t('message.confirmCustomerChangeTitle')"
       width="420px"
@@ -660,6 +670,7 @@
     </el-dialog>
 
     <el-dialog
+      v-if="saveSuccessDialogVisible"
       v-model="saveSuccessDialogVisible"
       :title="successDialogTitle"
       width="420px"
@@ -683,6 +694,7 @@
     </el-dialog>
 
     <PrintPreviewDialog
+      v-if="printDialogVisible"
       v-model="printDialogVisible"
       :doc-type="printDocType"
       :doc-id="printDocId"
@@ -692,7 +704,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated, reactive, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import request from '@/utils/request';
@@ -700,12 +712,17 @@ import { useApiError } from '@/composables/useApiError';
 import { useValidationMessage } from '@/composables/useValidationMessage';
 import DecimalInput from '@/components/DecimalInput.vue';
 import FuzzyProductSelect from '@/components/FuzzyProductSelect.vue';
-import PrintPreviewDialog from '@/components/PrintPreviewDialog.vue';
 import { ElMessageBox } from 'element-plus';
 import { Delete, Plus } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import { getCachedEnabledReceiptMethods, getCachedEnabledSettlementMethods } from '@/composables/erpBaseDataCache';
 import { mergeOptionById } from '@/utils/erpMasterData';
+
+const PrintPreviewDialog = defineAsyncComponent(() => import('@/components/PrintPreviewDialog.vue'));
+
+const props = defineProps<{
+  workspace?: 'draft' | 'approved';
+}>();
 
 interface OptionItem {
   id: number;
@@ -867,6 +884,9 @@ const pageTitle = computed(() => {
 const customerOptions = ref<OptionItem[]>([]);
 const saleOrderOptions = ref<SaleOrderOption[]>([]);
 const productOptions = ref<ProductOption[]>([]);
+const productSearchOptions = ref<ProductOption[]>([]);
+const productSearchLoading = ref(false);
+const productSearchTimer = ref<number | null>(null);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const settlementMethodOptions = ref<CodeOptionItem[]>([]);
@@ -938,7 +958,7 @@ const hasPermission = (code: string) => {
   return authStore.hasPermission(code) || authStore.hasPermission(`PERM_${code}`);
 };
 
-const isApprovedWorkspace = computed(() => route.meta.workspace === 'approved' || route.path.includes('/erp/sale-returns/approved/'));
+const isApprovedWorkspace = computed(() => props.workspace === 'approved' || route.meta.workspace === 'approved' || route.path.includes('/erp/sale-returns/approved/'));
 const printDocType = computed(() => isApprovedWorkspace.value || formData.status !== 'DRAFT' ? 'SALE_RETURN_APPROVED' : 'SALE_RETURN_DRAFT');
 const detailEndpoint = (id: string | number) => isApprovedWorkspace.value
   ? `/erp/sale-returns/approved/${id}`
@@ -2343,18 +2363,57 @@ const fetchSaleOrders = async (customerId?: number | null) => {
   }
 };
 
-const fetchProducts = async () => {
+const rememberProductOptions = (products: ProductOption[]) => {
+  for (const product of products) {
+    productOptions.value = mergeOptionById(productOptions.value, product);
+  }
+};
+
+const searchProductsNow = async (keyword = '') => {
+  productSearchLoading.value = true;
   try {
-    const res: any = await request.get('/erp/products/options');
-    productOptions.value = res.data.data || [];
-    for (const item of formData.items) {
-      await fetchStockOptions(item.productId);
-      applyProductDefaults(item, false);
-      syncStockKey(item);
-    }
+    const res: any = await request.get('/erp/products/page', {
+      params: {
+        page: 1,
+        size: 20,
+        keyword: keyword.trim() || undefined,
+        enabled: true
+      }
+    });
+    const products = (res.data?.data?.items || []) as ProductOption[];
+    rememberProductOptions(products);
+    productSearchOptions.value = products;
   } catch (error) {
     notifyError(error);
+  } finally {
+    productSearchLoading.value = false;
   }
+};
+
+const searchProducts = (keyword = '') => {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword && productSearchOptions.value.length > 0) return;
+  if (productSearchTimer.value != null && typeof window !== 'undefined') {
+    window.clearTimeout(productSearchTimer.value);
+  }
+  if (typeof window === 'undefined') {
+    void searchProductsNow(keyword);
+    return;
+  }
+  productSearchTimer.value = window.setTimeout(() => {
+    productSearchTimer.value = null;
+    void searchProductsNow(keyword);
+  }, 250);
+};
+
+const warmupProductDropdownOptions = async () => {
+  if (!formData.customerId || productSearchOptions.value.length > 0 || productSearchLoading.value) return;
+  await searchProductsNow('');
+};
+
+const handleProductDropdownVisibleChange = (visible: boolean) => {
+  if (!visible) return;
+  void warmupProductDropdownOptions();
 };
 
 const fetchWarehouses = async () => {
@@ -2399,6 +2458,15 @@ const ensureProductOption = async (productId?: number | null) => {
         costPrice: product.costPrice,
         enabled: product.enabled
       });
+      productSearchOptions.value = mergeOptionById(productSearchOptions.value, {
+        id: product.id,
+        name: product.name,
+        defaultWarehouseId: product.defaultWarehouseId,
+        defaultLocationId: product.defaultLocationId,
+        salePrice: product.salePrice,
+        costPrice: product.costPrice,
+        enabled: product.enabled
+      });
     }
   } catch (error) {
     notifyError(error);
@@ -2406,7 +2474,13 @@ const ensureProductOption = async (productId?: number | null) => {
 };
 
 const getSelectableProductOptions = (currentProductId?: number | null) => {
-  const baseOptions = productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  const baseOptions = productSearchOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  if (currentProductId != null && !baseOptions.some(item => Number(item.id) === Number(currentProductId))) {
+    const current = productOptions.value.find(item => Number(item.id) === Number(currentProductId));
+    if (current) {
+      baseOptions.push(current);
+    }
+  }
   if (formData.returnSource !== 'BY_SALE_ORDER') {
     return baseOptions;
   }
@@ -2928,7 +3002,6 @@ onMounted(() => {
   pagePath.value = route.path;
   fetchCustomers();
   fetchSaleOrders();
-  fetchProducts();
   fetchWarehouses();
   fetchLocations();
   fetchSettlementMethods();

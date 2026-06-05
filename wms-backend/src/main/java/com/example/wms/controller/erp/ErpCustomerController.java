@@ -55,6 +55,13 @@ public class ErpCustomerController {
         return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.page(page, size, keyword, contact, phone, enabled, categoryId)));
     }
 
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('PERM_erp-customer:view')")
+    public ResponseEntity<ApiResponse<List<ErpCustomer>>> search(@RequestParam String keyword,
+                                                                 @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(erpCustomerService.searchOptions(keyword, size)));
+    }
+
     // 查询客户详情
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-customer:view')")

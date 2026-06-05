@@ -192,6 +192,22 @@
   width: 100%;
 }
 
+.finance-toolbar--fixed-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.finance-toolbar--fixed-actions .finance-filters {
+  display: grid;
+  min-width: 0;
+}
+
+.finance-toolbar--fixed-actions .finance-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
 .finance-filters {
   display: grid;
   align-items: center;
@@ -853,6 +869,85 @@
   color: #1f2937;
 }
 
+.inventory-policy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inventory-policy-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inventory-policy-card__hint {
+  font-size: 12px;
+  line-height: 18px;
+  color: #64748b;
+}
+
+.inventory-policy-card__section-label {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.inventory-policy-card__subhint {
+  margin-top: -4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+  line-height: 18px;
+  color: #475569;
+}
+
+.inventory-default-location-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.inventory-default-policy-row {
+  margin-top: -2px;
+}
+
+.inventory-policy-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.15fr) minmax(180px, 1.15fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding-top: 10px;
+  border-top: 1px solid #edf2f7;
+}
+
+.inventory-policy-row--default {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  padding-top: 0;
+  border-top: 0;
+}
+
+.inventory-policy-row__field {
+  min-width: 0;
+}
+
+.inventory-policy-row__field .el-form-item {
+  margin-bottom: 0;
+}
+
+.inventory-policy-row__actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  min-height: 64px;
+  padding-bottom: 2px;
+}
+
 .product-dialog__resize-handle {
   position: absolute;
   z-index: 10;
@@ -1106,6 +1201,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .finance-toolbar--fixed-actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .finance-actions {
     justify-content: flex-start;
   }
@@ -1192,6 +1291,10 @@
 
   .finance-filters--summary,
   .finance-filters--management {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-toolbar--fixed-actions {
     grid-template-columns: 1fr;
   }
 
@@ -1308,6 +1411,26 @@
   .product-dialog__footer-actions {
     justify-content: flex-end;
     width: 100%;
+  }
+
+  .inventory-policy-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventory-default-location-row,
+  .inventory-default-policy-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventory-policy-row__actions {
+    min-height: auto;
+    justify-content: flex-start;
+    padding-bottom: 0;
+  }
+
+  .inventory-policy-card__header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

@@ -4,6 +4,7 @@ import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpProductImportBatchSummary;
 import com.example.wms.dto.erp.ErpProductCreateRequest;
 import com.example.wms.dto.erp.ErpProductImportItemView;
+import com.example.wms.dto.erp.ErpProductImportPreview;
 import com.example.wms.dto.erp.ErpProductImportResult;
 import com.example.wms.dto.erp.ErpProductUpdateRequest;
 import com.example.wms.entity.erp.ErpProduct;
@@ -23,7 +24,11 @@ public interface ErpProductService {
 
     ErpProduct create(ErpProductCreateRequest request);
 
+    ErpProductImportPreview previewImport(MultipartFile file);
+
     ErpProductImportResult importProducts(MultipartFile file, String sourceName);
+
+    ErpProductImportResult importProducts(MultipartFile file, String sourceName, String fieldMapping);
 
     List<ErpProductImportBatchSummary> listImportBatches();
 

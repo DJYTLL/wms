@@ -25,6 +25,29 @@ const toSafeConfig = (value: unknown): UserTableConfig => {
 
 const userTableSettingsCache = createRequestStateCache()
 
+const buildUserTableSettingsCacheKey = (
+  pageKey: string,
+  user: { id?: number | string; username?: string; name?: string } | null | undefined,
+  tenantId?: number | string | null,
+  tenantCode?: string | null
+) => {
+  const userScope = user?.id
+    ?? user?.username
+    ?? user?.name
+    ?? 'anonymous'
+  const tenantScope = tenantId ?? tenantCode ?? 'default'
+  return `user-table::${pageKey}::${tenantScope}::${userScope}`
+}
+
+export const warmupUserTableSettings = async (pageKey: string) => {
+  const authStore = useAuthStore()
+  const cacheKey = buildUserTableSettingsCacheKey(pageKey, authStore.user, authStore.tenantId, authStore.tenantCode)
+  await userTableSettingsCache.getOrLoad(cacheKey, async () => {
+    const res: any = await request.get(`/user-table-settings/${pageKey}`)
+    return toSafeConfig(res.data.data?.config)
+  })
+}
+
 export const useUserTableSettings = (pageKey: string | Ref<string>) => {
   const { notifyError } = useApiError()
   const authStore = useAuthStore()
@@ -32,12 +55,7 @@ export const useUserTableSettings = (pageKey: string | Ref<string>) => {
   const loaded = ref(false)
   const currentPageKey = computed(() => unref(pageKey))
   const cacheKey = computed(() => {
-    const userScope = authStore.user?.id
-      ?? authStore.user?.username
-      ?? authStore.user?.name
-      ?? 'anonymous'
-    const tenantScope = authStore.tenantId ?? authStore.tenantCode ?? 'default'
-    return `user-table::${currentPageKey.value}::${tenantScope}::${userScope}`
+    return buildUserTableSettingsCacheKey(currentPageKey.value, authStore.user, authStore.tenantId, authStore.tenantCode)
   })
 
   const fetchConfig = async () => {

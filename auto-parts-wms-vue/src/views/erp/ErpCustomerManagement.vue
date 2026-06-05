@@ -106,6 +106,7 @@
     </div>
 
     <ErpCustomerEditDialog
+      v-if="showModal"
       v-model="showModal"
       :mode="customerDialogMode"
       :initial-value="selectedCustomer"
@@ -120,7 +121,7 @@
       @closed="handleCustomerDialogClosed"
     />
 
-    <el-dialog v-model="showCustomerImportDialog" title="导入客户档案" width="720px">
+    <el-dialog v-if="showCustomerImportDialog" v-model="showCustomerImportDialog" title="导入客户档案" width="720px">
       <el-form label-position="top">
         <el-form-item label="来源名称">
           <el-input v-model="customerImportSourceName" placeholder="例如：2026-05-客户档案表" />
@@ -143,7 +144,7 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="showCustomerImportHistoryDrawer" title="客户导入结果" size="70%">
+    <el-drawer v-if="showCustomerImportHistoryDrawer" v-model="showCustomerImportHistoryDrawer" title="客户导入结果" size="70%">
       <div class="supplier-import-drawer">
         <div class="supplier-import-drawer__toolbar">
           <el-button v-permission="'erp-customer:import'" @click="loadCustomerImportBatches">刷新批次</el-button>
@@ -191,10 +192,11 @@ import request from '@/utils/request';
 import ErpCustomerEditDialog from '@/components/ErpCustomerEditDialog.vue';
 import { useApiError } from '@/composables/useApiError';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
-import { getCachedCustomerCategories, getCachedEnabledDeliveryMethods, getCachedEnabledReceiptMethods, getCachedEnabledSettlementMethods } from '@/composables/erpBaseDataCache';
+import { getCachedCustomerCategories, getCachedEnabledDeliveryMethods, getCachedEnabledReceiptMethods, getCachedEnabledSettlementMethods, invalidateErpBaseDataResourceCache } from '@/composables/erpBaseDataCache';
 import { useAuthStore } from '@/stores/auth';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
+import { waitForErpFirstPaint } from './erpFirstPaint';
 
 interface ErpCustomer {
   id: number;
@@ -329,6 +331,7 @@ const total = ref(0);
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
+const firstPaintReady = ref(false);
 const tableData = ref<ErpCustomer[]>([]);
 const allTableData = ref<ErpCustomer[]>([]);
 const showModal = ref(false);
@@ -672,6 +675,7 @@ const handleCustomerDialogSubmit = async (payload: CustomerDialogSubmitPayload) 
       : await request.post('/erp/customers', normalizedPayload);
 
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('customers', tenantCacheKey.value);
       notifySuccess();
       showModal.value = false;
       handleCustomerDialogClosed();
@@ -692,6 +696,7 @@ const handleCustomerDialogSubmit = async (payload: CustomerDialogSubmitPayload) 
 const handleDelete = async (row: ErpCustomer) => {
   try {
     await request.delete(`/erp/customers/${row.id}`);
+    invalidateErpBaseDataResourceCache('customers', tenantCacheKey.value);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -820,14 +825,16 @@ bindPageSizeSync(size, fetchList, {
   reloadOnInitialSync: false,
   onInitialSyncComplete: () => {
     pageSizeSyncReady.value = true;
-    if (pendingInitialLoad.value) {
+    if (pendingInitialLoad.value && firstPaintReady.value) {
       pendingInitialLoad.value = false;
       fetchList();
     }
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForErpFirstPaint();
+  firstPaintReady.value = true;
   fetchCategories();
   fetchSettlementMethods();
   fetchReceiptMethods();

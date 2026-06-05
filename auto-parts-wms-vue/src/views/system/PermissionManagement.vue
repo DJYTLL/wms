@@ -377,6 +377,7 @@ const menuResourceKeyMap: Record<string, string[]> = {
   'system-config': ['system-config'],
   'tenant-setting': ['tenant-setting'],
   'api-latency-monitor': ['api-latency-monitor'],
+  'sql-latency-monitor': ['sql-latency-monitor'],
   tenant: ['tenant'],
   tenants: ['tenant'],
   erp: [],
@@ -446,6 +447,7 @@ const normalizePermissionResource = (resource: string) => {
 const extractPermissionResource = (code: string) => {
   if (!code) return ''
   if (code.startsWith('column:')) return 'column'
+  if (code.startsWith('system-config:sql-timing:')) return 'sql-latency-monitor'
   return normalizePermissionResource(code.split(':')[0]?.trim().toLowerCase() || '')
 }
 

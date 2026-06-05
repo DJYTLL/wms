@@ -71,6 +71,9 @@ public class ErpStockCount extends TenantAuditableSoftDeleteEntity {
     @TableField("cancelled_at")
     private Instant cancelledAt;
 
+    @TableField(exist = false)
+    private String approvalErrorMessage;
+
     public String getCountNo() {
         return countNo;
     }
@@ -197,6 +200,14 @@ public class ErpStockCount extends TenantAuditableSoftDeleteEntity {
 
     public void setCancelledAt(Instant cancelledAt) {
         this.cancelledAt = cancelledAt;
+    }
+
+    public String getApprovalErrorMessage() {
+        return approvalErrorMessage;
+    }
+
+    public void setApprovalErrorMessage(String approvalErrorMessage) {
+        this.approvalErrorMessage = approvalErrorMessage;
     }
 
 }

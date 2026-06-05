@@ -43,6 +43,18 @@ public class ErpStockBalance {
     @TableField(exist = false)
     private BigDecimal qtyAvailable;
 
+    // 商品名称（非持久化）
+    @TableField(exist = false)
+    private String productName;
+
+    // 仓库名称（非持久化）
+    @TableField(exist = false)
+    private String warehouseName;
+
+    // 库位名称（非持久化）
+    @TableField(exist = false)
+    private String locationName;
+
     // 更新人
     @TableField("updated_by")
     private String updatedBy;
@@ -113,6 +125,30 @@ public class ErpStockBalance {
 
     public void setQtyAvailable(BigDecimal qtyAvailable) {
         this.qtyAvailable = qtyAvailable;
+    }
+
+    public String getProductName() {
+        return productName;
+    }
+
+    public void setProductName(String productName) {
+        this.productName = productName;
+    }
+
+    public String getWarehouseName() {
+        return warehouseName;
+    }
+
+    public void setWarehouseName(String warehouseName) {
+        this.warehouseName = warehouseName;
+    }
+
+    public String getLocationName() {
+        return locationName;
+    }
+
+    public void setLocationName(String locationName) {
+        this.locationName = locationName;
     }
 
     public String getUpdatedBy() {

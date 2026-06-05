@@ -7,6 +7,21 @@ import { createRequestStateCache } from '@/composables/requestStateCacheCore'
 const buildStorageKey = (key: string) => `table-columns:${key}`
 const columnSettingsCache = createRequestStateCache()
 
+const buildColumnSettingsCacheKey = (
+  key: string,
+  tenantId?: number | string | null,
+  tenantCode?: string | null
+) => `tenant-columns::${key}::${tenantId ?? tenantCode ?? 'default'}`
+
+export const warmupColumnSettings = async (key: string) => {
+  const authStore = useAuthStore()
+  const cacheKey = buildColumnSettingsCacheKey(key, authStore.tenantId, authStore.tenantCode)
+  await columnSettingsCache.getOrLoad(cacheKey, async () => {
+    const res: any = await request.get(`/tenant-columns/${key}`)
+    return res.data.data
+  })
+}
+
 export const useColumnSettings = (key: string, defaultKeys: string[]) => {
   const { notifyError } = useApiError()
   const authStore = useAuthStore()
@@ -20,7 +35,7 @@ export const useColumnSettings = (key: string, defaultKeys: string[]) => {
     return authStore.hasPermission(permission) || authStore.hasPermission(`PERM_${permission}`)
   }
 
-  const cacheKey = computed(() => `tenant-columns::${key}::${authStore.tenantId ?? authStore.tenantCode ?? 'default'}`)
+  const cacheKey = computed(() => buildColumnSettingsCacheKey(key, authStore.tenantId, authStore.tenantCode))
 
   const effectiveKeys = computed(() => {
     // 租户/角色权限永远优先于当前用户的列偏好；用户设置只能在允许的列集合内生效。

@@ -4,7 +4,11 @@ import com.example.wms.dto.ApiResponse;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpStockCountCreateRequest;
 import com.example.wms.dto.erp.ErpStockCountDetail;
+import com.example.wms.dto.erp.ErpStockInitImportBatchSummary;
+import com.example.wms.dto.erp.ErpStockInitImportItemView;
 import com.example.wms.dto.erp.ErpStockInitImportResult;
+import com.example.wms.dto.erp.ErpStockInitImportPreview;
+import com.example.wms.dto.erp.ErpStockCountItemView;
 import com.example.wms.dto.erp.ErpStockCountUpdateRequest;
 import com.example.wms.entity.erp.ErpStockCount;
 import com.example.wms.service.erp.ErpStockCountService;
@@ -48,8 +52,17 @@ public class ErpStockInitController {
     // 查询初始库存详情
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_erp-stock-init:view')")
-    public ResponseEntity<ApiResponse<ErpStockCountDetail>> get(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.getDetail(id, "INIT")));
+    public ResponseEntity<ApiResponse<ErpStockCountDetail>> get(@PathVariable Long id,
+                                                                @RequestParam(defaultValue = "true") boolean includeItems) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.getDetail(id, "INIT", includeItems)));
+    }
+
+    @GetMapping("/{id}/items")
+    @PreAuthorize("hasAuthority('PERM_erp-stock-init:view')")
+    public ResponseEntity<ApiResponse<PageResponse<ErpStockCountItemView>>> pageItems(@PathVariable Long id,
+                                                                                      @RequestParam(defaultValue = "1") long page,
+                                                                                      @RequestParam(defaultValue = "20") long size) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.pageDetailItems(id, page, size, "INIT")));
     }
 
     // 预生成初始库存单号
@@ -69,8 +82,28 @@ public class ErpStockInitController {
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('PERM_erp-stock-init:add')")
     public ResponseEntity<ApiResponse<ErpStockInitImportResult>> importInitStocks(@RequestParam("file") MultipartFile file,
-                                                                                   @RequestParam(value = "sourceName", required = false) String sourceName) {
-        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.importInitStocks(file, sourceName)));
+                                                                                   @RequestParam(value = "sourceName", required = false) String sourceName,
+                                                                                   @RequestParam(value = "fieldMapping", required = false) String fieldMapping,
+                                                                                   @RequestParam(value = "strategyMode", required = false) String strategyMode) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.importInitStocks(file, sourceName, fieldMapping, strategyMode)));
+    }
+
+    @PostMapping(value = "/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('PERM_erp-stock-init:add')")
+    public ResponseEntity<ApiResponse<ErpStockInitImportPreview>> previewImport(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.previewInitStockImport(file)));
+    }
+
+    @GetMapping("/import-batches")
+    @PreAuthorize("hasAuthority('PERM_erp-stock-init:add')")
+    public ResponseEntity<ApiResponse<List<ErpStockInitImportBatchSummary>>> listImportBatches() {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.listInitImportBatches()));
+    }
+
+    @GetMapping("/import-batches/{batchId}/items")
+    @PreAuthorize("hasAuthority('PERM_erp-stock-init:add')")
+    public ResponseEntity<ApiResponse<List<ErpStockInitImportItemView>>> listImportBatchItems(@PathVariable("batchId") Long batchId) {
+        return ResponseEntity.ok(ApiResponse.ok(erpStockCountService.listInitImportBatchItems(batchId)));
     }
 
     // 更新初始库存

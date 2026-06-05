@@ -1,5 +1,7 @@
 package com.example.wms.audit;
 
+import com.example.wms.monitor.RequestSqlTraceContext;
+
 // 请求级审计上下文：为审计日志补充 requestId、IP、UA 与耗时
 public final class RequestAuditContext {
     private static final ThreadLocal<RequestAuditContext> HOLDER = new ThreadLocal<>();
@@ -14,6 +16,7 @@ public final class RequestAuditContext {
     private Boolean crossTenant;
     private String deleteReason;
     private long startNanos;
+    private RequestSqlTraceContext sqlTraceContext;
 
     public static void set(RequestAuditContext context) {
         HOLDER.set(context);
@@ -105,5 +108,20 @@ public final class RequestAuditContext {
 
     public void setStartNanos(long startNanos) {
         this.startNanos = startNanos;
+    }
+
+    public RequestSqlTraceContext getSqlTraceContext() {
+        return sqlTraceContext;
+    }
+
+    public void setSqlTraceContext(RequestSqlTraceContext sqlTraceContext) {
+        this.sqlTraceContext = sqlTraceContext;
+    }
+
+    public RequestSqlTraceContext getOrCreateSqlTraceContext() {
+        if (sqlTraceContext == null) {
+            sqlTraceContext = new RequestSqlTraceContext();
+        }
+        return sqlTraceContext;
     }
 }

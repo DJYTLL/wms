@@ -99,6 +99,10 @@ class AuthPermissionIntegrationTests {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String CUSTOMER_PRODUCT_IMPORT_MIGRATION =
         "db/migration/V126__seed_customer_product_import_permissions.sql";
+    private static final String SQL_TIMING_MANAGE_PERMISSION_MIGRATION =
+        "db/migration/V136__seed_sql_timing_manage_permissions.sql";
+    private static final String ERP_STOCK_INIT_IMPORT_PERMISSION_MIGRATION =
+        "db/migration/V137__seed_erp_stock_init_import_permission.sql";
 
     @Mock
     private AuthenticationManager authenticationManager;
@@ -253,6 +257,24 @@ class AuthPermissionIntegrationTests {
     }
 
     @Test
+    void permissionSeedProviderIncludesStockInitImportPermission() {
+        assertThat(PermissionSeedProvider.permissionSeeds())
+            .filteredOn(seed -> "erp-stock-init:import".equals(seed.code()))
+            .extracting(
+                PermissionSeedProvider.PermissionSeed::code,
+                PermissionSeedProvider.PermissionSeed::name,
+                PermissionSeedProvider.PermissionSeed::description
+            )
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple(
+                    "erp-stock-init:import",
+                    "导入初始库存(ERP)",
+                    "导入ERP初始库存"
+                )
+            );
+    }
+
+    @Test
     void customerProductImportMigrationIsIdempotentAndDoesNotDuplicateAdminRoleAssignments() throws Exception {
         String jdbcUrl = "jdbc:h2:mem:customer_product_import_permissions;MODE=PostgreSQL;DB_CLOSE_DELAY=-1";
         try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
@@ -294,6 +316,94 @@ class AuthPermissionIntegrationTests {
             assertDuplicatePermissionCodeRejected(connection);
             assertDuplicateActiveRolePermissionRejected(connection);
             assertSoftDeletedRolePermissionCanBeRecreated(connection);
+        }
+    }
+
+    @Test
+    void sqlTimingManagePermissionMigrationIsIdempotentAndBackfillsAdminRoleAssignments() throws Exception {
+        String jdbcUrl = "jdbc:h2:mem:sql_timing_manage_permissions;MODE=PostgreSQL;DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
+            connection.setAutoCommit(false);
+            initializeSqlTimingManagePermissionMigrationSchema(connection);
+            executeSqlTimingManagePermissionMigration(connection);
+            connection.commit();
+        }
+
+        try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
+            connection.setAutoCommit(false);
+            executeSqlTimingManagePermissionMigration(connection);
+            connection.commit();
+
+            assertThat(queryForLong(connection, """
+                SELECT COUNT(*)
+                FROM app_permission
+                WHERE code IN ('system-config:sql-timing:view', 'system-config:sql-timing:edit')
+                """)).isEqualTo(2L);
+            assertThat(queryForLong(connection, """
+                SELECT COUNT(*)
+                FROM app_role_permission rp
+                JOIN app_role r ON r.id = rp.role_id
+                JOIN app_permission p ON p.id = rp.permission_id
+                WHERE rp.deleted_at IS NULL
+                  AND r.code = 'admin'
+                  AND p.code = 'system-config:sql-timing:view'
+                """)).isEqualTo(1L);
+            assertThat(queryForLong(connection, """
+                SELECT COUNT(*)
+                FROM app_role_permission rp
+                JOIN app_role r ON r.id = rp.role_id
+                JOIN app_permission p ON p.id = rp.permission_id
+                WHERE rp.deleted_at IS NULL
+                  AND r.code = 'admin'
+                  AND p.code = 'system-config:sql-timing:edit'
+                """)).isEqualTo(1L);
+            assertThat(loadSqlTimingManagePermissionMigrationSql())
+                .contains("system-config:sql-timing:view", "system-config:sql-timing:edit")
+                .contains("WHERE role.code = 'admin'");
+        }
+    }
+
+    @Test
+    void erpStockInitImportPermissionMigrationIsIdempotentAndBackfillsAdminRoleAssignments() throws Exception {
+        String jdbcUrl = "jdbc:h2:mem:erp_stock_init_import_permissions;MODE=PostgreSQL;DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
+            connection.setAutoCommit(false);
+            initializeErpStockInitImportMigrationSchema(connection);
+            executeErpStockInitImportMigration(connection);
+            connection.commit();
+        }
+
+        try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
+            connection.setAutoCommit(false);
+            executeErpStockInitImportMigration(connection);
+            connection.commit();
+
+            assertThat(queryForLong(connection, """
+                SELECT COUNT(*)
+                FROM app_permission
+                WHERE code = 'erp-stock-init:import'
+                """)).isEqualTo(1L);
+            assertThat(queryForLong(connection, """
+                SELECT COUNT(*)
+                FROM app_role_permission rp
+                JOIN app_role r ON r.id = rp.role_id
+                JOIN app_permission p ON p.id = rp.permission_id
+                WHERE rp.deleted_at IS NULL
+                  AND r.code = 'admin'
+                  AND p.code = 'erp-stock-init:import'
+                """)).isEqualTo(1L);
+            assertThat(queryForLong(connection, """
+                SELECT COUNT(*)
+                FROM app_role_permission rp
+                JOIN app_role r ON r.id = rp.role_id
+                JOIN app_permission p ON p.id = rp.permission_id
+                WHERE rp.deleted_at IS NULL
+                  AND r.code = 'super_admin'
+                  AND p.code = 'erp-stock-init:import'
+                """)).isEqualTo(1L);
+            assertThat(loadErpStockInitImportPermissionMigrationSql())
+                .contains("erp-stock-init:import")
+                .contains("WHERE role.code IN ('admin', 'super_admin')");
         }
     }
 
@@ -1010,6 +1120,20 @@ class AuthPermissionIntegrationTests {
         );
     }
 
+    @Test
+    void systemConfigControllerSqlTimingKeysAllowDedicatedPermissions() throws Exception {
+        assertSystemConfigPreAuthorize(
+            "getByKey",
+            new Class<?>[] {String.class},
+            "hasRole('super_admin') or @systemConfigPermissionEvaluator.canView(#key)"
+        );
+        assertSystemConfigPreAuthorize(
+            "update",
+            new Class<?>[] {String.class, com.example.wms.dto.SystemConfigRequest.class},
+            "hasRole('super_admin') or @systemConfigPermissionEvaluator.canEdit(#key)"
+        );
+    }
+
     private TenantServiceImpl tenantService() {
         return new TenantServiceImpl(
             tenantMapper,
@@ -1031,6 +1155,19 @@ class AuthPermissionIntegrationTests {
                                                        Class<?>[] parameterTypes,
                                                        String expectedExpression) throws Exception {
         Method method = com.example.wms.controller.erp.ErpCounterpartySubjectController.class.getMethod(
+            methodName,
+            parameterTypes
+        );
+        PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value()).isEqualTo(expectedExpression);
+    }
+
+    private void assertSystemConfigPreAuthorize(String methodName,
+                                                Class<?>[] parameterTypes,
+                                                String expectedExpression) throws Exception {
+        Method method = com.example.wms.controller.SystemConfigController.class.getMethod(
             methodName,
             parameterTypes
         );
@@ -1110,6 +1247,145 @@ class AuthPermissionIntegrationTests {
     private String loadCustomerProductImportMigrationSql() throws Exception {
         try (var input = Thread.currentThread().getContextClassLoader()
             .getResourceAsStream(CUSTOMER_PRODUCT_IMPORT_MIGRATION)) {
+            assertThat(input).isNotNull();
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private void initializeSqlTimingManagePermissionMigrationSchema(Connection connection) throws Exception {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TABLE app_permission (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    code VARCHAR(128) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    description VARCHAR(255),
+                    is_enabled BOOLEAN NOT NULL,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    deleted_at TIMESTAMP,
+                    CONSTRAINT uk_app_permission_code UNIQUE (code)
+                )
+                """);
+            statement.execute("""
+                CREATE TABLE app_role (
+                    id BIGINT PRIMARY KEY,
+                    tenant_id BIGINT NOT NULL,
+                    code VARCHAR(128) NOT NULL,
+                    deleted_at TIMESTAMP
+                )
+                """);
+            statement.execute("""
+                CREATE TABLE app_role_permission (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    tenant_id BIGINT NOT NULL,
+                    role_id BIGINT NOT NULL,
+                    permission_id BIGINT NOT NULL,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    deleted_at TIMESTAMP,
+                    active_unique_key VARCHAR(255) AS (
+                        CASE
+                            WHEN deleted_at IS NULL
+                            THEN CAST(tenant_id AS VARCHAR) || ':' || CAST(role_id AS VARCHAR) || ':' || CAST(permission_id AS VARCHAR)
+                            ELSE NULL
+                        END
+                    ),
+                    CONSTRAINT uk_app_role_permission_active UNIQUE (active_unique_key)
+                )
+                """);
+            statement.execute("""
+                INSERT INTO app_role (id, tenant_id, code, deleted_at)
+                VALUES (16, 6, 'admin', NULL), (17, 6, 'ops', NULL)
+                """);
+        }
+    }
+
+    private void executeSqlTimingManagePermissionMigration(Connection connection) throws Exception {
+        try (InputStreamReader reader = new InputStreamReader(
+            java.util.Objects.requireNonNull(
+                Thread.currentThread().getContextClassLoader().getResourceAsStream(SQL_TIMING_MANAGE_PERMISSION_MIGRATION)
+            ),
+            StandardCharsets.UTF_8
+        )) {
+            org.h2.tools.RunScript.execute(connection, reader);
+        }
+    }
+
+    private void initializeErpStockInitImportMigrationSchema(Connection connection) throws Exception {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TABLE app_permission (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    code VARCHAR(128) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    description VARCHAR(255),
+                    is_enabled BOOLEAN NOT NULL,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    deleted_at TIMESTAMP,
+                    CONSTRAINT uk_app_permission_code UNIQUE (code)
+                )
+                """);
+            statement.execute("""
+                CREATE TABLE app_role (
+                    id BIGINT PRIMARY KEY,
+                    tenant_id BIGINT NOT NULL,
+                    code VARCHAR(128) NOT NULL,
+                    deleted_at TIMESTAMP
+                )
+                """);
+            statement.execute("""
+                CREATE TABLE app_role_permission (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    tenant_id BIGINT NOT NULL,
+                    role_id BIGINT NOT NULL,
+                    permission_id BIGINT NOT NULL,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    deleted_at TIMESTAMP,
+                    active_unique_key VARCHAR(255) AS (
+                        CASE
+                            WHEN deleted_at IS NULL
+                            THEN CAST(tenant_id AS VARCHAR) || ':' || CAST(role_id AS VARCHAR) || ':' || CAST(permission_id AS VARCHAR)
+                            ELSE NULL
+                        END
+                    ),
+                    CONSTRAINT uk_app_role_permission_active UNIQUE (active_unique_key)
+                )
+                """);
+            statement.execute("""
+                INSERT INTO app_role (id, tenant_id, code, deleted_at)
+                VALUES (21, 8, 'admin', NULL), (22, 8, 'super_admin', NULL)
+                """);
+        }
+    }
+
+    private void executeErpStockInitImportMigration(Connection connection) throws Exception {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS tmp_erp_stock_init_import_permission");
+        }
+        try (InputStreamReader reader = new InputStreamReader(
+            java.util.Objects.requireNonNull(
+                Thread.currentThread().getContextClassLoader().getResourceAsStream(ERP_STOCK_INIT_IMPORT_PERMISSION_MIGRATION)
+            ),
+            StandardCharsets.UTF_8
+        )) {
+            org.h2.tools.RunScript.execute(connection, reader);
+        }
+    }
+
+    private String loadErpStockInitImportPermissionMigrationSql() throws Exception {
+        try (var input = Thread.currentThread().getContextClassLoader()
+            .getResourceAsStream(ERP_STOCK_INIT_IMPORT_PERMISSION_MIGRATION)) {
+            assertThat(input).isNotNull();
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private String loadSqlTimingManagePermissionMigrationSql() throws Exception {
+        try (var input = Thread.currentThread().getContextClassLoader()
+            .getResourceAsStream(SQL_TIMING_MANAGE_PERMISSION_MIGRATION)) {
             assertThat(input).isNotNull();
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }

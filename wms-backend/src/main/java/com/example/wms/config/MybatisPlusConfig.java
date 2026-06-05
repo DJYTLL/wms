@@ -2,6 +2,8 @@ package com.example.wms.config;
 
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import com.example.wms.monitor.SlowQueryInterceptor;
+import com.example.wms.monitor.SqlTimingSettingsProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,5 +16,10 @@ public class MybatisPlusConfig {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
         interceptor.addInnerInterceptor(new PaginationInnerInterceptor());
         return interceptor;
+    }
+
+    @Bean
+    public SlowQueryInterceptor slowQueryInterceptor(SqlTimingSettingsProvider sqlTimingSettingsProvider) {
+        return new SlowQueryInterceptor(sqlTimingSettingsProvider);
     }
 }

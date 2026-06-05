@@ -180,10 +180,15 @@
                       :key="formData.supplierId ?? 'no-supplier'"
                       v-model="row.productId"
                       filterable
+                      remote
                       clearable
+                      reserve-keyword
                       class="product-cell__select"
                       :placeholder="$t('placeholder.selectProduct')"
                       :disabled="!formData.supplierId"
+                      :remote-method="searchProducts"
+                      :loading="productSearchLoading"
+                      @visible-change="handleProductDropdownVisibleChange"
                       @change="handleProductChange(row)"
                     >
                       <el-option
@@ -521,6 +526,9 @@ const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode
 
 const supplierOptions = ref<OptionItem[]>([]);
 const productOptions = ref<ProductOption[]>([]);
+const productSearchOptions = ref<ProductOption[]>([]);
+const productSearchLoading = ref(false);
+const productSearchTimer = ref<number | null>(null);
 const customerCategoryOptions = ref<OptionItem[]>([]);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
@@ -586,6 +594,9 @@ const draftApiBase = '/erp/purchase-orders/draft';
 const approvedApiBase = '/erp/purchase-orders/approved';
 const detailApiBase = computed(() => isApprovedWorkspace.value ? approvedApiBase : draftApiBase);
 const printDocType = computed(() => isApprovedWorkspace.value ? 'PURCHASE_ORDER_APPROVED' : 'PURCHASE_ORDER_DRAFT');
+const warningSource = typeof route.query.warningSource === 'string' ? route.query.warningSource : '';
+const contextProductId = Number(route.query.productId);
+const contextWarehouseId = Number(route.query.warehouseId);
 const isReadOnly = computed(() => {
   if (isApprovedWorkspace.value) return true;
   if (route.query.mode === 'view') return true;
@@ -847,8 +858,22 @@ const buildStockKey = (warehouseId: number | null | undefined, locationId: numbe
   return `${w}:${l}`;
 };
 
-const getSelectableProductOptions = (currentProductId?: number | null) =>
-  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+const rememberProductOptions = (products: ProductOption[]) => {
+  for (const product of products) {
+    productOptions.value = mergeOptionById(productOptions.value, product);
+  }
+};
+
+const getSelectableProductOptions = (currentProductId?: number | null) => {
+  const visibleOptions = productSearchOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  if (currentProductId && !visibleOptions.some(item => item.id === currentProductId)) {
+    const current = productOptions.value.find(item => item.id === currentProductId);
+    if (current) {
+      return [...visibleOptions, current];
+    }
+  }
+  return visibleOptions;
+};
 
 const getLocationOptions = (warehouseId?: number) => {
   if (!warehouseId) return [];
@@ -1087,20 +1112,58 @@ const fetchSuppliers = async () => {
   }
 };
 
-const fetchProducts = async () => {
+const searchProductsNow = async (keyword = '') => {
+  productSearchLoading.value = true;
   try {
-    const products = await getCachedProductOptions(tenantCacheKey.value);
-    productOptions.value = (products || []).map((product) => ({
+    const res: any = await request.get('/erp/products/page', {
+      params: {
+        page: 1,
+        size: 20,
+        keyword: keyword.trim() || undefined,
+        enabled: true
+      }
+    });
+    const products = ((res.data?.data?.items || []) as any[]).map((product) => ({
       id: product.id,
       name: product.name,
       defaultWarehouseId: product.defaultWarehouseId,
       defaultLocationId: product.defaultLocationId,
       costPrice: product.costPrice,
       enabled: product.enabled
-    }));
+    })) as ProductOption[];
+    rememberProductOptions(products);
+    productSearchOptions.value = products;
   } catch (error) {
     notifyError(error);
+  } finally {
+    productSearchLoading.value = false;
   }
+};
+
+const searchProducts = (keyword = '') => {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword && productSearchOptions.value.length > 0) return;
+  if (productSearchTimer.value != null && typeof window !== 'undefined') {
+    window.clearTimeout(productSearchTimer.value);
+  }
+  if (typeof window === 'undefined') {
+    void searchProductsNow(keyword);
+    return;
+  }
+  productSearchTimer.value = window.setTimeout(() => {
+    productSearchTimer.value = null;
+    void searchProductsNow(keyword);
+  }, 250);
+};
+
+const warmupProductDropdownOptions = async () => {
+  if (!formData.supplierId || productSearchOptions.value.length > 0 || productSearchLoading.value) return;
+  await searchProductsNow('');
+};
+
+const handleProductDropdownVisibleChange = (visible: boolean) => {
+  if (!visible) return;
+  void warmupProductDropdownOptions();
 };
 
 const fetchCustomerCategories = async () => {
@@ -1160,6 +1223,14 @@ const ensureProductOption = async (productId?: number | null) => {
     const product = res.data.data;
     if (product) {
       productOptions.value = mergeOptionById(productOptions.value, {
+        id: product.id,
+        name: product.name,
+        defaultWarehouseId: product.defaultWarehouseId,
+        defaultLocationId: product.defaultLocationId,
+        costPrice: product.costPrice,
+        enabled: product.enabled
+      });
+      productSearchOptions.value = mergeOptionById(productSearchOptions.value, {
         id: product.id,
         name: product.name,
         defaultWarehouseId: product.defaultWarehouseId,
@@ -1231,6 +1302,16 @@ const loadDetail = async () => {
       formData.status = 'DRAFT';
       applyDefaultMethods();
       addItem();
+      const firstItem = formData.items[0];
+      if (warningSource === 'stock-warning' && firstItem) {
+        firstItem.productId = Number.isFinite(contextProductId) && contextProductId > 0 ? contextProductId : undefined;
+        firstItem.warehouseId = Number.isFinite(contextWarehouseId) && contextWarehouseId > 0 ? contextWarehouseId : firstItem.warehouseId;
+        firstItem.stockKey = buildStockKey(firstItem.warehouseId ?? null, firstItem.locationId ?? null);
+        await Promise.all([
+          ensureProductOption(firstItem.productId),
+          ensureWarehouseOption(firstItem.warehouseId)
+        ]);
+      }
       return;
     }
 
@@ -1913,7 +1994,6 @@ onMounted(() => {
   isPageActive.value = true;
   pagePath.value = route.path;
   fetchSuppliers();
-  fetchProducts();
   fetchCustomerCategories();
   fetchWarehouses();
   fetchLocations();

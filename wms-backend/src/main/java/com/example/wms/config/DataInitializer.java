@@ -105,6 +105,8 @@ public class DataInitializer {
             ensureSystemConfig(systemConfigMapper, "audit.retention.days", "180", "int", "审计日志保留天数", false);
             ensureSystemConfig(systemConfigMapper, "password.min.length", "8", "int", "密码最小长度", false);
             ensureSystemConfig(systemConfigMapper, "login.max.retry", "5", "int", "登录失败最大次数", false);
+            ensureSystemConfig(systemConfigMapper, "wms.monitor.sql-timing-enabled", "false", "bool", "SQL耗时采集开关", false);
+            ensureSystemConfig(systemConfigMapper, "wms.monitor.sql-timing-log-params", "false", "bool", "SQL耗时参数摘要开关", false);
             ensureSystemConfig(systemConfigMapper, "erp.order.no.purchase.prefix", "PO", "string", "ERP采购单号前缀", false);
             ensureSystemConfig(systemConfigMapper, "erp.order.no.purchase-return.prefix", "PR", "string", "ERP采购退货单号前缀", false);
             ensureSystemConfig(systemConfigMapper, "erp.order.no.sale.prefix", "SO", "string", "ERP销售单号前缀", false);

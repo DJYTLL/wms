@@ -50,10 +50,14 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 // Assembly order service implementation
 @Service
@@ -122,7 +126,29 @@ public class ErpAssemblyOrderServiceImpl implements ErpAssemblyOrderService {
         QueryWrapper<ErpAssemblyOrder> wrapper = baseWrapper(keyword, status, orderType, startAt, endAt);
         wrapper.orderByDesc("updated_at");
         Page<ErpAssemblyOrder> result = erpAssemblyOrderMapper.selectPage(pageReq, wrapper);
+        fillFinishedProductNames(result.getRecords());
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+    }
+
+    private void fillFinishedProductNames(List<ErpAssemblyOrder> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return;
+        }
+        Set<Long> productIds = orders.stream()
+            .map(ErpAssemblyOrder::getFinishedProductId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        if (productIds.isEmpty()) {
+            return;
+        }
+        Map<Long, String> productNameMap = new HashMap<>();
+        List<ErpProduct> products = erpProductMapper.selectBatchIds(productIds);
+        for (ErpProduct product : products) {
+            productNameMap.put(product.getId(), product.getName());
+        }
+        for (ErpAssemblyOrder order : orders) {
+            order.setFinishedProductName(productNameMap.getOrDefault(order.getFinishedProductId(), "-"));
+        }
     }
 
     @Override

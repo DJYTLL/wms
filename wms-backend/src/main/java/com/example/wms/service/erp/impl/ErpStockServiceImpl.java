@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpStockBalanceOption;
+import com.example.wms.dto.erp.ErpStockOccupancyView;
 import com.example.wms.entity.erp.ErpAssemblyOrder;
+import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpStockBalance;
 import com.example.wms.entity.erp.ErpStockTxn;
 import com.example.wms.entity.erp.ErpLocation;
@@ -17,6 +19,7 @@ import com.example.wms.entity.erp.ErpStockTransfer;
 import com.example.wms.entity.erp.ErpWarehouse;
 import com.example.wms.mapper.erp.ErpLocationMapper;
 import com.example.wms.mapper.erp.ErpAssemblyOrderMapper;
+import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpPurchaseOrderMapper;
 import com.example.wms.mapper.erp.ErpPurchaseReturnMapper;
 import com.example.wms.mapper.erp.ErpSaleOrderMapper;
@@ -46,6 +49,7 @@ public class ErpStockServiceImpl implements ErpStockService {
     private final ErpStockTxnMapper erpStockTxnMapper;
     private final ErpWarehouseMapper erpWarehouseMapper;
     private final ErpLocationMapper erpLocationMapper;
+    private final ErpProductMapper erpProductMapper;
     private final ErpPurchaseOrderMapper erpPurchaseOrderMapper;
     private final ErpSaleOrderMapper erpSaleOrderMapper;
     private final ErpPurchaseReturnMapper erpPurchaseReturnMapper;
@@ -58,6 +62,7 @@ public class ErpStockServiceImpl implements ErpStockService {
                                ErpStockTxnMapper erpStockTxnMapper,
                                ErpWarehouseMapper erpWarehouseMapper,
                                ErpLocationMapper erpLocationMapper,
+                               ErpProductMapper erpProductMapper,
                                ErpPurchaseOrderMapper erpPurchaseOrderMapper,
                                ErpSaleOrderMapper erpSaleOrderMapper,
                                ErpPurchaseReturnMapper erpPurchaseReturnMapper,
@@ -69,6 +74,7 @@ public class ErpStockServiceImpl implements ErpStockService {
         this.erpStockTxnMapper = erpStockTxnMapper;
         this.erpWarehouseMapper = erpWarehouseMapper;
         this.erpLocationMapper = erpLocationMapper;
+        this.erpProductMapper = erpProductMapper;
         this.erpPurchaseOrderMapper = erpPurchaseOrderMapper;
         this.erpSaleOrderMapper = erpSaleOrderMapper;
         this.erpPurchaseReturnMapper = erpPurchaseReturnMapper;
@@ -98,6 +104,7 @@ public class ErpStockServiceImpl implements ErpStockService {
         }
         wrapper.orderByDesc("updated_at");
         Page<ErpStockBalance> result = erpStockBalanceMapper.selectPage(pageReq, wrapper);
+        fillBalanceNames(result.getRecords());
         for (ErpStockBalance balance : result.getRecords()) {
             BigDecimal onHand = balance.getQtyOnHand() == null ? BigDecimal.ZERO : balance.getQtyOnHand();
             BigDecimal locked = balance.getQtyLocked() == null ? BigDecimal.ZERO : balance.getQtyLocked();
@@ -105,6 +112,56 @@ public class ErpStockServiceImpl implements ErpStockService {
             balance.setQtyAvailable(onHand.subtract(locked));
         }
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+    }
+
+    private void fillBalanceNames(List<ErpStockBalance> balances) {
+        if (balances == null || balances.isEmpty()) {
+            return;
+        }
+        Set<Long> productIds = balances.stream()
+            .map(ErpStockBalance::getProductId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Set<Long> warehouseIds = balances.stream()
+            .map(ErpStockBalance::getWarehouseId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Set<Long> locationIds = balances.stream()
+            .map(ErpStockBalance::getLocationId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+
+        Map<Long, String> productNameMap = new HashMap<>();
+        if (!productIds.isEmpty()) {
+            List<ErpProduct> products = erpProductMapper.selectBatchIds(productIds);
+            for (ErpProduct product : products) {
+                productNameMap.put(product.getId(), product.getName());
+            }
+        }
+
+        Map<Long, String> warehouseNameMap = new HashMap<>();
+        if (!warehouseIds.isEmpty()) {
+            List<ErpWarehouse> warehouses = erpWarehouseMapper.selectBatchIds(warehouseIds);
+            for (ErpWarehouse warehouse : warehouses) {
+                warehouseNameMap.put(warehouse.getId(), warehouse.getName());
+            }
+        }
+
+        Map<Long, String> locationNameMap = new HashMap<>();
+        if (!locationIds.isEmpty()) {
+            List<ErpLocation> locations = erpLocationMapper.selectBatchIds(locationIds);
+            for (ErpLocation location : locations) {
+                locationNameMap.put(location.getId(), location.getName());
+            }
+        }
+
+        for (ErpStockBalance balance : balances) {
+            balance.setProductName(productNameMap.getOrDefault(balance.getProductId(), "-"));
+            balance.setWarehouseName(warehouseNameMap.getOrDefault(balance.getWarehouseId(), "-"));
+            balance.setLocationName(balance.getLocationId() == null
+                ? "未指定库位"
+                : locationNameMap.getOrDefault(balance.getLocationId(), "-"));
+        }
     }
 
     @Override
@@ -123,8 +180,59 @@ public class ErpStockServiceImpl implements ErpStockService {
         }
         wrapper.orderByDesc("created_at");
         Page<ErpStockTxn> result = erpStockTxnMapper.selectPage(pageReq, wrapper);
+        fillTxnNames(result.getRecords());
         fillDocNo(result.getRecords());
         return new PageResponse<>(result.getTotal(), result.getCurrent(), result.getSize(), result.getRecords());
+    }
+
+    private void fillTxnNames(List<ErpStockTxn> txns) {
+        if (txns == null || txns.isEmpty()) {
+            return;
+        }
+        Set<Long> productIds = txns.stream()
+            .map(ErpStockTxn::getProductId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Set<Long> warehouseIds = txns.stream()
+            .map(ErpStockTxn::getWarehouseId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Set<Long> locationIds = txns.stream()
+            .map(ErpStockTxn::getLocationId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+
+        Map<Long, String> productNameMap = new HashMap<>();
+        if (!productIds.isEmpty()) {
+            List<ErpProduct> products = erpProductMapper.selectBatchIds(productIds);
+            for (ErpProduct product : products) {
+                productNameMap.put(product.getId(), product.getName());
+            }
+        }
+
+        Map<Long, String> warehouseNameMap = new HashMap<>();
+        if (!warehouseIds.isEmpty()) {
+            List<ErpWarehouse> warehouses = erpWarehouseMapper.selectBatchIds(warehouseIds);
+            for (ErpWarehouse warehouse : warehouses) {
+                warehouseNameMap.put(warehouse.getId(), warehouse.getName());
+            }
+        }
+
+        Map<Long, String> locationNameMap = new HashMap<>();
+        if (!locationIds.isEmpty()) {
+            List<ErpLocation> locations = erpLocationMapper.selectBatchIds(locationIds);
+            for (ErpLocation location : locations) {
+                locationNameMap.put(location.getId(), location.getName());
+            }
+        }
+
+        for (ErpStockTxn txn : txns) {
+            txn.setProductName(productNameMap.getOrDefault(txn.getProductId(), "-"));
+            txn.setWarehouseName(warehouseNameMap.getOrDefault(txn.getWarehouseId(), "-"));
+            txn.setLocationName(txn.getLocationId() == null
+                ? "未指定库位"
+                : locationNameMap.getOrDefault(txn.getLocationId(), "未指定库位"));
+        }
     }
 
     private void fillDocNo(List<ErpStockTxn> txns) {
@@ -286,6 +394,32 @@ public class ErpStockServiceImpl implements ErpStockService {
     }
 
     @Override
+    public List<ErpStockOccupancyView> listOccupancy(Long balanceId) {
+        if (balanceId == null) {
+            return List.of();
+        }
+        Long tenantId = TenantContext.requireTenantId();
+        ErpStockBalance balance = erpStockBalanceMapper.selectOne(new QueryWrapper<ErpStockBalance>()
+            .eq("tenant_id", tenantId)
+            .eq("id", balanceId));
+        if (balance == null) {
+            return List.of();
+        }
+        List<ErpStockOccupancyView> rows = new ArrayList<>();
+        rows.addAll(loadSaleOccupancy(tenantId, balance));
+        rows.addAll(loadPurchaseReturnOccupancy(tenantId, balance));
+        rows.addAll(loadAssemblyOccupancy(tenantId, balance));
+        rows.sort((left, right) -> {
+            int typeCompare = occupancyRank(left.docType()) - occupancyRank(right.docType());
+            if (typeCompare != 0) return typeCompare;
+            return right.orderAt() == null
+                ? (left.orderAt() == null ? 0 : -1)
+                : left.orderAt() == null ? 1 : right.orderAt().compareTo(left.orderAt());
+        });
+        return rows;
+    }
+
+    @Override
     public BigDecimal getQtyOnHand(Long productId, Long warehouseId, Long locationId) {
         if (productId == null) {
             return BigDecimal.ZERO;
@@ -311,5 +445,39 @@ public class ErpStockServiceImpl implements ErpStockService {
             }
         }
         return total;
+    }
+
+    private List<ErpStockOccupancyView> loadSaleOccupancy(Long tenantId, ErpStockBalance balance) {
+        return erpSaleOrderMapper.findStockOccupancy(
+            tenantId,
+            balance.getProductId(),
+            balance.getWarehouseId(),
+            balance.getLocationId()
+        );
+    }
+
+    private List<ErpStockOccupancyView> loadPurchaseReturnOccupancy(Long tenantId, ErpStockBalance balance) {
+        return erpPurchaseReturnMapper.findStockOccupancy(
+            tenantId,
+            balance.getProductId(),
+            balance.getWarehouseId(),
+            balance.getLocationId()
+        );
+    }
+
+    private List<ErpStockOccupancyView> loadAssemblyOccupancy(Long tenantId, ErpStockBalance balance) {
+        return erpAssemblyOrderMapper.findStockOccupancy(
+            tenantId,
+            balance.getProductId(),
+            balance.getWarehouseId(),
+            balance.getLocationId()
+        );
+    }
+
+    private int occupancyRank(String docType) {
+        if ("SALE_ORDER".equals(docType)) return 1;
+        if ("PURCHASE_RETURN".equals(docType)) return 2;
+        if ("ASSEMBLE".equals(docType)) return 3;
+        return 99;
     }
 }

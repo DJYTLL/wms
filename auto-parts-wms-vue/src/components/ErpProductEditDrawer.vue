@@ -198,7 +198,7 @@
             </el-col>
             <el-col :span="12">
               <el-form-item :label="$t('field.shelfLifeDays')">
-                <el-input v-model="formData.shelfLifeDays" type="number" :placeholder="$t('field.shelfLifeDays')" />
+                <DecimalInput v-model="formData.shelfLifeDays" :scale="0" :placeholder="$t('field.shelfLifeDays')" />
               </el-form-item>
             </el-col>
           </el-row>

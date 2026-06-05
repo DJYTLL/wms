@@ -56,6 +56,26 @@ const RESOURCE_VEHICLE_MODELS = 'vehicle-models';
 
 const cache = createTenantScopedResourceCache();
 
+export const ERP_BASE_DATA_RESOURCE_KEYS = {
+  customers: [RESOURCE_CUSTOMERS],
+  suppliers: [RESOURCE_SUPPLIERS],
+  categories: [RESOURCE_CATEGORIES],
+  customerCategories: [RESOURCE_CUSTOMER_CATEGORIES],
+  units: [RESOURCE_UNITS],
+  settlementMethods: [RESOURCE_SETTLEMENT_METHODS, RESOURCE_SETTLEMENT_METHODS_ENABLED],
+  paymentMethods: [RESOURCE_PAYMENT_METHODS, RESOURCE_PAYMENT_METHODS_ENABLED],
+  receiptMethods: [RESOURCE_RECEIPT_METHODS, RESOURCE_RECEIPT_METHODS_ENABLED],
+  deliveryMethods: [RESOURCE_DELIVERY_METHODS, RESOURCE_DELIVERY_METHODS_ENABLED],
+  warehouses: [RESOURCE_WAREHOUSES, RESOURCE_WAREHOUSES_OPTIONS],
+  locations: [RESOURCE_LOCATIONS, RESOURCE_LOCATIONS_OPTIONS],
+  productOptions: [RESOURCE_PRODUCTS_OPTIONS],
+  vehicleBrands: [RESOURCE_VEHICLE_BRANDS],
+  vehicleSeries: [RESOURCE_VEHICLE_SERIES],
+  vehicleModels: [RESOURCE_VEHICLE_MODELS]
+} as const;
+
+export type ErpBaseDataResourceType = keyof typeof ERP_BASE_DATA_RESOURCE_KEYS;
+
 const loadResource = async <T = BaseOptionItem>(url: string) => {
   const res: any = await request.get(url);
   return (res.data?.data || []) as T[];
@@ -144,6 +164,15 @@ export const getCachedVehicleSeries = (tenantId: number | string): Promise<BaseO
 export const getCachedVehicleModels = (tenantId: number | string): Promise<BaseOptionItem[]> => (
   cache.getOrLoad(RESOURCE_VEHICLE_MODELS, tenantId, () => loadResource<BaseOptionItem>('/erp/vehicle-models'))
 );
+
+export const invalidateErpBaseDataResourceCache = (
+  resourceType: ErpBaseDataResourceType,
+  tenantId?: number | string
+) => {
+  ERP_BASE_DATA_RESOURCE_KEYS[resourceType].forEach((resourceKey) => {
+    cache.invalidate(resourceKey, tenantId);
+  });
+};
 
 export const invalidateErpBaseDataCache = (tenantId?: number | string) => {
   cache.invalidate(undefined, tenantId);

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="page-title">{{ $t('page.erpAccountsPayableManagement') }}</div>
       <div class="page-toolbar-card">
-        <div class="table-toolbar finance-toolbar">
+        <div class="table-toolbar finance-toolbar finance-toolbar--fixed-actions">
           <div class="table-filters finance-filters finance-filters--management">
             <el-input
               v-model="searchQuery"
@@ -34,6 +34,10 @@
               @change="handleSearch"
               class="table-date-range--compact finance-date-range"
             />
+          </div>
+          <div class="finance-actions">
+            <el-button @click="handleRefresh">{{ $t('action.refresh') }}</el-button>
+            <el-button type="primary" @click="handleSearch">{{ $t('action.search') }}</el-button>
           </div>
         </div>
       </div>
@@ -196,6 +200,10 @@ const fetchList = async () => {
 
 const handleSearch = () => {
   page.value = 1;
+  fetchList();
+};
+
+const handleRefresh = () => {
   fetchList();
 };
 

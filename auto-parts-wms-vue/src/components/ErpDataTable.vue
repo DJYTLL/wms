@@ -43,6 +43,7 @@
       </el-popover>
     </div>
     <ElementTable
+      ref="elementTableRef"
       v-if="usesColumnSlots"
       v-bind="elementTableAttrs"
       class="erp-data-table-element"
@@ -113,7 +114,7 @@
 </template>
 
 <script setup lang="ts" generic="T extends Record<string, any>">
-import { computed, defineComponent, nextTick, onBeforeUnmount, provide, ref, useAttrs, useSlots, watch, type PropType, type VNode } from 'vue'
+import { computed, defineComponent, defineExpose, nextTick, onBeforeUnmount, provide, ref, useAttrs, useSlots, watch, type PropType, type VNode } from 'vue'
 import { ElTable as ElementTable } from 'element-plus'
 import 'element-plus/es/components/table/style/css'
 import { useUserTableSettings } from '@/composables/useUserTableSettings'
@@ -195,6 +196,7 @@ const normalizedRows = computed(() => props.rows || props.data || [])
 const normalizedColumns = computed(() => props.columns || [])
 const usesColumnSlots = computed(() => normalizedColumns.value.length === 0 && Boolean(slots.default))
 const nonConfigurableColumnKeys = new Set(['index', 'selection', 'expand', 'actions'])
+const elementTableRef = ref<InstanceType<typeof ElementTable> | null>(null)
 
 const resolveColumnWidth = (column: ErpDataTableColumn) => {
   const fallback = column.width || column.minWidth || 120
@@ -342,6 +344,27 @@ const elementTableAttrs = computed(() => {
     emptyText: props.emptyText,
     rowClassName: elementRowClassName.value
   }
+})
+
+const clearSelection = () => {
+  elementTableRef.value?.clearSelection?.()
+}
+
+const toggleRowSelection = (row: T, selected?: boolean, ignoreSelectable = true) => {
+  elementTableRef.value?.toggleRowSelection?.(row, selected, ignoreSelectable)
+}
+
+const toggleAllSelection = () => {
+  elementTableRef.value?.toggleAllSelection?.()
+}
+
+const getElementTableRef = () => elementTableRef.value
+
+defineExpose({
+  clearSelection,
+  toggleRowSelection,
+  toggleAllSelection,
+  getElementTableRef
 })
 
 const registerColumn = (column: PersistedElementTableColumn) => {

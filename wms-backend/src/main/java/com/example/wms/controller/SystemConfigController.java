@@ -35,7 +35,7 @@ public class SystemConfigController {
 
     // 查询配置详情（仅超级管理员）
     @GetMapping("/{key}")
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or @systemConfigPermissionEvaluator.canView(#key)")
     public ResponseEntity<ApiResponse<SystemConfigResponse>> getByKey(@PathVariable String key) {
         return ResponseEntity.ok(ApiResponse.ok(systemConfigService.getByKey(key)));
     }
@@ -50,7 +50,7 @@ public class SystemConfigController {
 
     // 更新配置（仅超级管理员）
     @PutMapping("/{key}")
-    @PreAuthorize("hasRole('super_admin')")
+    @PreAuthorize("hasRole('super_admin') or @systemConfigPermissionEvaluator.canEdit(#key)")
     public ResponseEntity<ApiResponse<SystemConfigResponse>> update(@PathVariable String key,
                                                                     @RequestBody SystemConfigRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(systemConfigService.update(key, request)));

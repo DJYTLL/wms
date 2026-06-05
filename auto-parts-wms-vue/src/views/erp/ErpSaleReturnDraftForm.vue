@@ -1,7 +1,9 @@
 <template>
-  <ErpSaleReturnForm />
+  <ErpSaleReturnDraftFormPage />
 </template>
 
 <script setup lang="ts">
-import ErpSaleReturnForm from './ErpSaleReturnForm.vue';
+import { defineAsyncComponent } from 'vue';
+
+const ErpSaleReturnDraftFormPage = defineAsyncComponent(() => import('./ErpSaleReturnDraftFormPage.vue'));
 </script>

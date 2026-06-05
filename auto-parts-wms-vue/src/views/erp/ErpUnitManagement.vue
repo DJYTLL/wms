@@ -114,10 +114,13 @@ import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { invalidateErpBaseDataResourceCache } from '@/composables/erpBaseDataCache';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
 import { useColumnSettings } from '@/composables/useColumnSettings';
+import { useAuthStore } from '@/stores/auth';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
 import ErpDataTable, { type ErpDataTableColumn } from '@/components/ErpDataTable.vue';
+import { waitForErpFirstPaint } from './erpFirstPaint';
 
 interface ErpUnit {
   id: number;
@@ -132,6 +135,8 @@ interface ErpUnit {
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
+const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 
 const nameQuery = ref('');
 const codeQuery = ref('');
@@ -144,6 +149,7 @@ const total = ref(0);
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
+const firstPaintReady = ref(false);
 const tableData = ref<ErpUnit[]>([]);
 const allTableData = ref<ErpUnit[]>([]);
 const showModal = ref(false);
@@ -272,6 +278,7 @@ const saveData = async () => {
       : await request.post('/erp/units', payload);
 
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('units', tenantCacheKey.value);
       notifySuccess();
       showModal.value = false;
       fetchList();
@@ -284,6 +291,7 @@ const saveData = async () => {
 const handleDelete = async (row: ErpUnit) => {
   try {
     await request.delete(`/erp/units/${row.id}`);
+    invalidateErpBaseDataResourceCache('units', tenantCacheKey.value);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -295,14 +303,16 @@ bindPageSizeSync(size, fetchList, {
   reloadOnInitialSync: false,
   onInitialSyncComplete: () => {
     pageSizeSyncReady.value = true;
-    if (pendingInitialLoad.value) {
+    if (pendingInitialLoad.value && firstPaintReady.value) {
       pendingInitialLoad.value = false;
       fetchList();
     }
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForErpFirstPaint();
+  firstPaintReady.value = true;
   fetchTenantKeys();
   if (pageSizeSyncReady.value) {
     fetchList();

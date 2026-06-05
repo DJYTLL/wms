@@ -455,9 +455,12 @@ import { computed, ref, reactive, onMounted, onActivated } from 'vue';
 import { useI18n } from 'vue-i18n';
 import request from '@/utils/request';
 import { useApiError } from '@/composables/useApiError';
+import { invalidateErpBaseDataResourceCache } from '@/composables/erpBaseDataCache';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
+import { useAuthStore } from '@/stores/auth';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
+import { waitForErpFirstPaint } from './erpFirstPaint';
 
 interface ProductOption {
   id: number;
@@ -505,6 +508,8 @@ interface Fitment {
 const { t } = useI18n();
 const { notifyError, notifySuccess, notifyWarning } = useApiError();
 const { bindPageSizeSync } = usePageSizePreference();
+const authStore = useAuthStore();
+const tenantCacheKey = computed(() => authStore.tenantId ?? authStore.tenantCode ?? 'default');
 const brandColumns = ['code', 'name', 'enabled', 'remark'];
 const seriesColumns = ['code', 'brand', 'name', 'enabled', 'remark'];
 const modelColumns = ['code', 'series', 'name', 'yearFrom', 'yearTo', 'displacement', 'engine', 'enabled', 'remark'];
@@ -529,6 +534,7 @@ const activeTab = ref('brands');
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReadyCount = ref(0);
 const pendingInitialLoad = ref(false);
+const firstPaintReady = ref(false);
 
 const brandNameQuery = ref('');
 const brandCodeQuery = ref('');
@@ -805,6 +811,7 @@ const saveBrand = async () => {
       ? await request.put(`/erp/vehicle-brands/${currentBrandId.value}`, payload)
       : await request.post('/erp/vehicle-brands', payload);
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('vehicleBrands', tenantCacheKey.value);
       notifySuccess();
       showBrandModal.value = false;
       fetchBootstrapData();
@@ -817,6 +824,7 @@ const saveBrand = async () => {
 const handleBrandDelete = async (row: VehicleBrand) => {
   try {
     await request.delete(`/erp/vehicle-brands/${row.id}`);
+    invalidateErpBaseDataResourceCache('vehicleBrands', tenantCacheKey.value);
     notifySuccess();
     fetchBootstrapData();
   } catch (error) {
@@ -892,6 +900,7 @@ const saveSeries = async () => {
       ? await request.put(`/erp/vehicle-series/${currentSeriesId.value}`, payload)
       : await request.post('/erp/vehicle-series', payload);
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('vehicleSeries', tenantCacheKey.value);
       notifySuccess();
       showSeriesModal.value = false;
       fetchBootstrapData();
@@ -904,6 +913,7 @@ const saveSeries = async () => {
 const handleSeriesDelete = async (row: VehicleSeries) => {
   try {
     await request.delete(`/erp/vehicle-series/${row.id}`);
+    invalidateErpBaseDataResourceCache('vehicleSeries', tenantCacheKey.value);
     notifySuccess();
     fetchBootstrapData();
   } catch (error) {
@@ -997,6 +1007,7 @@ const saveModel = async () => {
       ? await request.put(`/erp/vehicle-models/${currentModelId.value}`, payload)
       : await request.post('/erp/vehicle-models', payload);
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('vehicleModels', tenantCacheKey.value);
       notifySuccess();
       showModelModal.value = false;
       fetchBootstrapData();
@@ -1009,6 +1020,7 @@ const saveModel = async () => {
 const handleModelDelete = async (row: VehicleModel) => {
   try {
     await request.delete(`/erp/vehicle-models/${row.id}`);
+    invalidateErpBaseDataResourceCache('vehicleModels', tenantCacheKey.value);
     notifySuccess();
     fetchBootstrapData();
   } catch (error) {
@@ -1130,7 +1142,7 @@ const initData = () => {
 
 const handlePageSizeSyncReady = () => {
   pageSizeSyncReadyCount.value += 1;
-  if (pageSizeSyncReadyCount.value >= 3 && pendingInitialLoad.value) {
+  if (pageSizeSyncReadyCount.value >= 3 && pendingInitialLoad.value && firstPaintReady.value) {
     pendingInitialLoad.value = false;
     initData();
   }
@@ -1149,7 +1161,9 @@ bindPageSizeSync(modelSize, fetchModelList, {
   onInitialSyncComplete: handlePageSizeSyncReady
 });
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForErpFirstPaint();
+  firstPaintReady.value = true;
   fetchColumnKeys();
   if (pageSizeSyncReadyCount.value >= 3) {
     initData();

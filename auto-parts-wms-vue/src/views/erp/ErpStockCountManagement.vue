@@ -17,6 +17,8 @@
             <el-select v-model="statusFilter" :placeholder="$t('field.status')" class="inventory-field--narrow" @change="handleSearch">
               <el-option :label="$t('filter.all')" value="all" />
               <el-option :label="$t('status.draft')" value="DRAFT" />
+              <el-option label="审核中" value="APPROVING" />
+              <el-option label="审核失败" value="APPROVE_FAILED" />
               <el-option :label="$t('status.approved')" value="APPROVED" />
               <el-option :label="$t('status.cancelled')" value="CANCELLED" />
               <el-option :label="$t('status.redFlushed')" value="RED_FLUSHED" />
@@ -26,6 +28,7 @@
             <el-button v-if="countType === 'COUNT'" @click="exportTemplate">{{ $t('action.export') }}</el-button>
             <el-button v-if="countType === 'COUNT'" @click="triggerImport">{{ $t('action.import') }}</el-button>
             <el-button v-if="countType === 'INIT'" v-permission="permAdd" @click="triggerImport">导入期初库存</el-button>
+            <el-button v-if="countType === 'INIT'" v-permission="permAdd" @click="openStockInitImportHistoryDrawer">导入结果</el-button>
             <el-button type="primary" v-permission="permAdd" @click="openAddModal">{{ $t('action.add') }}</el-button>
             <input ref="importInputRef" type="file" :accept="countType === 'INIT' ? '.xls,.xlsx' : '.csv,text/csv'" class="stock-count-import-input" @change="handleImportFile" />
           </div>
@@ -52,7 +55,7 @@
           <ErpDataTableColumn v-if="canShow('status')" prop="status" :label="$t('field.status')" width="120">
             <template #default="{ row }">
               <el-tag
-                :type="row.status === 'APPROVED' ? 'success' : row.status === 'CANCELLED' ? 'danger' : row.status === 'RED_FLUSHED' ? 'info' : 'warning'"
+                :type="row.status === 'APPROVED' ? 'success' : row.status === 'APPROVING' ? 'info' : row.status === 'APPROVE_FAILED' ? 'danger' : row.status === 'CANCELLED' ? 'danger' : row.status === 'RED_FLUSHED' ? 'info' : 'warning'"
                 size="small"
               >
                 {{ statusLabel(row.status) }}
@@ -91,7 +94,7 @@
                 type="primary"
                 size="small"
                 v-permission="permEdit"
-                :disabled="row.status !== 'DRAFT'"
+                :disabled="row.status !== 'DRAFT' && row.status !== 'APPROVE_FAILED'"
                 @click="openEditModal(row)"
               >
                 {{ $t('action.edit') }}
@@ -101,7 +104,7 @@
                 type="success"
                 size="small"
                 v-permission="permApprove"
-                :disabled="row.status !== 'DRAFT'"
+                :disabled="row.status !== 'DRAFT' && row.status !== 'APPROVE_FAILED'"
                 @click="handleApprove(row)"
               >
                 {{ $t('action.approve') }}
@@ -122,7 +125,7 @@
                 type="danger"
                 size="small"
                 v-permission="permCancel"
-                :disabled="row.status !== 'DRAFT'"
+                :disabled="row.status !== 'DRAFT' && row.status !== 'APPROVE_FAILED'"
                 @click="handleCancel(row)"
               >
                 {{ $t('action.cancel') }}
@@ -237,17 +240,23 @@
               <h4>{{ $t('section.saleDetailInfo') }}</h4>
             </div>
             <div class="detail-table-wrapper">
-              <ErpDataTable :data="formData.items" style="width: 100%" border stripe table-key="erp-stock-count-items">
+              <ErpDataTable :data="formData.items" style="width: 100%" border stripe v-loading="detailItemsLoading" table-key="erp-stock-count-items">
                 <ErpDataTableColumn type="index" :label="$t('table.index')" width="64" align="center" />
                 <ErpDataTableColumn :label="$t('field.product')" min-width="180" column-key="product">
                   <template #default="{ row }">
-                    <div v-if="viewMode" class="readonly-cell">{{ resolveProductLabel(row.productId) }}</div>
+                    <div v-if="viewMode" class="readonly-cell">{{ row.productName || resolveProductLabel(row.productId) }}</div>
                     <el-select
                       v-else
                       v-model="row.productId"
                       filterable
+                      remote
+                      clearable
+                      reserve-keyword
                       :placeholder="$t('placeholder.selectProduct')"
                       style="width: 100%"
+                      :remote-method="searchProducts"
+                      :loading="productSearchLoading"
+                      @visible-change="handleProductDropdownVisibleChange"
                       @change="handleProductChange(row)"
                     >
                       <el-option v-for="p in getSelectableProductOptions(row.productId)" :key="p.id" :label="p.name" :value="p.id" />
@@ -256,7 +265,7 @@
                 </ErpDataTableColumn>
                 <ErpDataTableColumn :label="$t('field.warehouseLocation')" min-width="220" column-key="warehouseLocation">
                   <template #default="{ row }">
-                    <div v-if="viewMode" class="readonly-cell">{{ resolveWarehouseLocation(row.warehouseId, row.locationId) }}</div>
+                    <div v-if="viewMode" class="readonly-cell">{{ resolveRowWarehouseLocation(row) }}</div>
                     <ProductStockSelect
                       v-else
                       v-model="row.stockKey"
@@ -313,6 +322,18 @@
                 </ErpDataTableColumn>
               </ErpDataTable>
             </div>
+            <div v-if="viewMode && countType === 'INIT'" class="table-pagination detail-pagination">
+              <el-pagination
+                background
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="detailItemsTotal"
+                :current-page="detailItemsPage"
+                :page-size="detailItemsSize"
+                :page-sizes="[10, 20, 50, 100, 200]"
+                @size-change="handleDetailItemsSizeChange"
+                @current-change="handleDetailItemsPageChange"
+              />
+            </div>
             <div v-if="!viewMode" class="detail-actions">
               <el-button type="primary" @click="addItem">
                 + {{ $t('action.addItem') }}
@@ -353,12 +374,145 @@
         </el-button>
       </template>
     </el-dialog>
+    <el-dialog v-model="showStockInitImportDialog" title="导入期初库存" width="760px">
+      <el-form label-position="top">
+        <el-form-item label="来源名称">
+          <el-input v-model="stockInitImportSourceName" placeholder="例如：期初库存明细表" />
+        </el-form-item>
+        <el-form-item label="Excel 文件">
+          <input
+            ref="stockInitImportInputRef"
+            type="file"
+            accept=".xls,.xlsx"
+            @change="handleImportFile"
+          />
+          <div style="margin-top: 8px; color: var(--el-text-color-secondary);">
+            {{ stockInitImportFile?.name || '请选择 .xls 或 .xlsx 文件' }}
+          </div>
+        </el-form-item>
+        <el-form-item label="库存策略导入模式">
+          <el-radio-group v-model="stockInitImportStrategyMode" @change="handleStockInitImportStrategyModeChange">
+            <el-radio-button label="WAREHOUSE">按仓库层级导入</el-radio-button>
+            <el-radio-button label="PRODUCT">按商品层级导入</el-radio-button>
+            <el-radio-button label="NONE">不导入策略</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="stockInitImportPreview" label="字段映射">
+          <el-table :data="stockInitImportMappings" v-loading="stockInitImportPreviewLoading" size="small" border style="width: 100%">
+            <el-table-column prop="excelHeader" label="Excel表头" min-width="140" />
+            <el-table-column prop="sampleValue" label="示例值" min-width="140" />
+            <el-table-column label="系统字段" min-width="220">
+              <template #default="{ row }">
+                <el-select v-model="row.fieldKey" clearable filterable placeholder="选择系统字段" style="width: 100%" @change="handleStockInitImportMappingChange(row)">
+                  <el-option
+                    v-for="field in stockInitImportFieldOptions"
+                    :key="field.key"
+                    :label="field.required ? `${field.label} *` : field.label"
+                    :value="field.key"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag size="small" :type="row.fieldKey ? (row.matchType === 'AUTO' ? 'success' : 'warning') : 'info'">
+                  {{ row.fieldKey ? (row.matchType === 'AUTO' ? '自动匹配' : '手动选择') : '未匹配' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showStockInitImportDialog = false">{{ $t('action.cancel') }}</el-button>
+        <el-button
+          v-if="stockInitImportPreview && !stockInitImportMappingConfirmed"
+          type="primary"
+          :loading="stockInitImportPreviewLoading"
+          @click="confirmStockInitImportMapping"
+        >
+          确认字段映射
+        </el-button>
+        <el-button
+          v-else
+          type="primary"
+          :loading="stockInitImportSubmitting"
+          @click="submitStockInitImport"
+        >
+          {{ $t('action.import') }}
+        </el-button>
+      </template>
+    </el-dialog>
+    <el-drawer v-model="showStockInitImportHistoryDrawer" title="期初库存导入结果" size="70%">
+      <div class="supplier-import-drawer">
+        <div class="supplier-import-drawer__toolbar">
+          <el-button v-permission="permAdd" @click="loadStockInitImportBatches">刷新批次</el-button>
+        </div>
+        <el-table :data="stockInitImportBatches" v-loading="stockInitImportHistoryLoading" style="width: 100%">
+          <el-table-column prop="batchNo" label="批次号" min-width="170" />
+          <el-table-column prop="sourceName" label="来源" min-width="150" />
+          <el-table-column prop="strategyMode" label="策略模式" width="120" />
+          <el-table-column prop="totalCount" label="总行数" width="90" />
+          <el-table-column prop="successCount" label="成功" width="90" />
+          <el-table-column prop="failedCount" label="失败" width="90" />
+          <el-table-column prop="warningCount" label="告警" width="90" />
+          <el-table-column prop="status" label="状态" width="130">
+            <template #default="{ row }">
+              <el-tag size="small" :type="stockInitImportBatchStatusType(row.status)">
+                {{ stockInitImportBatchStatusLabel(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="countNo" label="单据号" min-width="150" />
+          <el-table-column prop="summary" label="失败原因" min-width="260" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ stockInitImportBatchSummaryText(row) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="createdAt" label="导入时间" min-width="180">
+            <template #default="{ row }">
+              {{ formatDateTime(row.createdAt) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="viewStockInitImportBatchItems(row)">查看明细</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div v-if="selectedStockInitImportBatch" class="supplier-import-drawer__detail">
+          <div class="supplier-import-drawer__detail-title">
+            当前批次：{{ selectedStockInitImportBatch.batchNo }}
+          </div>
+          <el-table :data="stockInitImportBatchItems" v-loading="stockInitImportItemsLoading" style="width: 100%">
+            <el-table-column prop="rowNo" label="行号" width="80" />
+            <el-table-column prop="sourceCode" label="编码" min-width="120" />
+            <el-table-column prop="sourceName" label="产品名称" min-width="180" />
+            <el-table-column prop="warehouseName" label="仓库" min-width="120" />
+            <el-table-column prop="locationName" label="库位" min-width="120" />
+            <el-table-column prop="countedQty" label="库存数" width="100" />
+            <el-table-column prop="initUnitCost" label="成本价" width="110" />
+            <el-table-column prop="status" label="状态" width="120">
+              <template #default="{ row }">
+                <el-tag size="small" :type="stockInitImportItemStatusType(row.status)">
+                  {{ stockInitImportItemStatusLabel(row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="warningMessage" label="提示" min-width="180" />
+            <el-table-column prop="errorMessage" label="异常原因" min-width="220" />
+            <el-table-column prop="suggestion" label="建议处理" min-width="180" />
+            <el-table-column prop="matchedStrategy" label="识别策略" width="120" />
+          </el-table>
+        </div>
+      </div>
+    </el-drawer>
     <input ref="importInputRef" type="file" :accept="countType === 'INIT' ? '.xls,.xlsx' : '.csv,text/csv'" class="stock-count-import-input" @change="handleImportFile" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onActivated, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onActivated, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ElMessageBox } from 'element-plus';
@@ -384,8 +538,12 @@ interface OptionItem {
 
 interface StockCountItem {
   productId?: number;
+  productCode?: string;
+  productName?: string;
   warehouseId?: number;
+  warehouseName?: string;
   locationId?: number | null;
+  locationName?: string;
   stockKey?: string;
   systemQty?: string;
   countedQty?: string;
@@ -405,11 +563,76 @@ interface StockCount {
 }
 
 interface StockInitImportResult {
+  batchId: number;
+  batchNo: string;
+  status: string;
   countId: number;
   countNo: string;
   totalCount: number;
+  successCount: number;
+  failedCount: number;
   warningCount: number;
   warnings: string[];
+}
+
+interface StockInitImportBatchSummary {
+  id: number;
+  batchNo: string;
+  sourceName?: string;
+  importMode?: string;
+  strategyMode?: string;
+  totalCount: number;
+  successCount: number;
+  failedCount: number;
+  warningCount: number;
+  status: string;
+  summary?: string;
+  countId?: number;
+  countNo?: string;
+  createdBy?: string;
+  createdAt?: string;
+}
+
+interface StockInitImportItemView {
+  id: number;
+  rowNo: number;
+  sourceCode?: string;
+  sourceName?: string;
+  matchedProductId?: number;
+  warehouseName?: string;
+  locationName?: string;
+  countedQty?: number | string;
+  initUnitCost?: number | string;
+  initTotalAmount?: number | string;
+  status: string;
+  errorField?: string;
+  errorMessage?: string;
+  suggestion?: string;
+  warningMessage?: string;
+  matchedStrategy?: string;
+  createdAt?: string;
+}
+
+interface StockInitImportFieldOption {
+  key: string;
+  label: string;
+  required: boolean;
+}
+
+interface StockInitImportHeaderMapping {
+  excelHeader: string;
+  fieldKey?: string | null;
+  fieldLabel?: string | null;
+  matchType: 'AUTO' | 'MANUAL' | 'UNMATCHED' | string;
+  sampleValue?: string | null;
+}
+
+interface StockInitImportPreview {
+  headers: string[];
+  fields: StockInitImportFieldOption[];
+  mappings: StockInitImportHeaderMapping[];
+  sampleRows: Record<string, string>[];
+  totalRows: number;
 }
 
 const route = useRoute();
@@ -462,10 +685,36 @@ const loading = ref(false);
 const page = ref(1);
 const size = ref(20);
 const total = ref(0);
+const detailItemsPage = ref(1);
+const detailItemsSize = ref(20);
+const detailItemsTotal = ref(0);
+const detailItemsLoading = ref(false);
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
 const tableData = ref<StockCount[]>([]);
+const STOCK_INIT_IMPORT_TIMEOUT_MS = 120000;
+const stockInitImportInputRef = ref<HTMLInputElement | null>(null);
+const showStockInitImportDialog = ref(false);
+const stockInitImportSourceName = ref('');
+const stockInitImportFile = ref<File | null>(null);
+const stockInitImportPreview = ref<StockInitImportPreview | null>(null);
+const stockInitImportFieldOptions = ref<StockInitImportFieldOption[]>([]);
+const stockInitImportMappings = ref<StockInitImportHeaderMapping[]>([]);
+const stockInitImportPreviewLoading = ref(false);
+const stockInitImportMappingConfirmed = ref(false);
+const stockInitImportSubmitting = ref(false);
+const stockInitImportStrategyMode = ref<'WAREHOUSE' | 'PRODUCT' | 'NONE'>('WAREHOUSE');
+const showStockInitImportHistoryDrawer = ref(false);
+const stockInitImportBatches = ref<StockInitImportBatchSummary[]>([]);
+const selectedStockInitImportBatch = ref<StockInitImportBatchSummary | null>(null);
+const stockInitImportBatchItems = ref<StockInitImportItemView[]>([]);
+const stockInitImportHistoryLoading = ref(false);
+const stockInitImportItemsLoading = ref(false);
+const stockInitImportPollingTimer = ref<number | null>(null);
+const activeStockInitImportBatchId = ref<number | null>(null);
+const stockInitApprovalPollingTimer = ref<number | null>(null);
+const activeStockInitApprovalId = ref<number | null>(null);
 const printDialogVisible = ref(false);
 const printDocId = ref<number | null>(null);
 const successDialogVisible = ref(false);
@@ -475,9 +724,12 @@ const successDocNo = ref('');
 const pendingPrintAfterSuccess = ref(false);
 
 const searchQuery = ref('');
-const statusFilter = ref<'all' | 'DRAFT' | 'APPROVED' | 'CANCELLED' | 'RED_FLUSHED'>('all');
+const statusFilter = ref<'all' | 'DRAFT' | 'APPROVING' | 'APPROVE_FAILED' | 'APPROVED' | 'CANCELLED' | 'RED_FLUSHED'>('all');
 
 const productOptions = ref<OptionItem[]>([]);
+const productSearchOptions = ref<OptionItem[]>([]);
+const productSearchLoading = ref(false);
+const productSearchTimer = ref<number | null>(null);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const rowBalanceError = ref<Record<number, boolean>>({});
@@ -542,7 +794,19 @@ const resolveWarehouseLocation = (warehouseId?: number | null, locationId?: numb
   return `${warehouseName} / ${locationName}`;
 };
 
+const resolveRowWarehouseLocation = (row: StockCountItem) => {
+  if (!row.warehouseId && !row.warehouseName) return '-';
+  const warehouseName = row.warehouseName || warehouseOptions.value.find(item => item.id === row.warehouseId)?.name || '-';
+  const normalizedLocationId = normalizeLocationId(row.locationId);
+  const locationName = normalizedLocationId == null
+    ? t('field.unassignedLocation')
+    : (row.locationName || locationOptions.value.find(item => item.id === normalizedLocationId)?.name || t('field.unassignedLocation'));
+  return `${warehouseName} / ${locationName}`;
+};
+
 const statusLabel = (status?: string) => {
+  if (status === 'APPROVING') return '审核中';
+  if (status === 'APPROVE_FAILED') return '审核失败';
   if (status === 'APPROVED') return t('status.approved');
   if (status === 'CANCELLED') return t('status.cancelled');
   if (status === 'RED_FLUSHED') return t('status.redFlushed');
@@ -564,22 +828,107 @@ const formatDateTime = (value?: string) => {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('zh-CN', { hour12: false });
+  return date.toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' });
+};
+
+const stockInitImportBatchStatusLabel = (status?: string) => {
+  if (status === 'PROCESSING') return '处理中';
+  if (status === 'DONE') return '完成';
+  if (status === 'DONE_WITH_ERRORS') return '部分失败';
+  if (status === 'FAILED') return '失败';
+  return status || '-';
+};
+
+const stockInitImportBatchStatusType = (status?: string) => {
+  if (status === 'DONE') return 'success';
+  if (status === 'DONE_WITH_ERRORS') return 'warning';
+  if (status === 'FAILED') return 'danger';
+  if (status === 'PROCESSING') return 'info';
+  return 'info';
+};
+
+const stockInitImportBatchSummaryText = (batch: StockInitImportBatchSummary) => {
+  if (!batch.summary) return '-';
+  if (batch.status === 'FAILED' || batch.status === 'DONE_WITH_ERRORS') {
+    return batch.summary;
+  }
+  return '-';
+};
+
+const stockInitImportItemStatusLabel = (status?: string) => {
+  if (status === 'VALIDATED') return '已校验';
+  if (status === 'SUCCESS') return '成功';
+  if (status === 'FAILED') return '失败';
+  if (status === 'PENDING') return '待处理';
+  return status || '-';
+};
+
+const stockInitImportItemStatusType = (status?: string) => {
+  if (status === 'SUCCESS') return 'success';
+  if (status === 'FAILED') return 'danger';
+  if (status === 'VALIDATED') return 'warning';
+  return 'info';
 };
 
 const fetchOptions = async () => {
   try {
-    const [products, warehouses, locations] = await Promise.all([
-      getCachedProductOptions(tenantCacheKey.value),
+    const [warehouses, locations] = await Promise.all([
       getCachedWarehouseOptions(tenantCacheKey.value),
       getCachedLocationOptions(tenantCacheKey.value)
     ]);
-    productOptions.value = products;
     warehouseOptions.value = warehouses;
     locationOptions.value = locations;
   } catch (error) {
     notifyError(error);
   }
+};
+
+const rememberProductOptions = (products: OptionItem[]) => {
+  for (const product of products) {
+    productOptions.value = mergeOptionById(productOptions.value, product);
+  }
+};
+
+const searchProductsNow = async (keyword = '') => {
+  productSearchLoading.value = true;
+  try {
+    const res: any = await request.get('/erp/products/page', {
+      params: {
+        page: 1,
+        size: 20,
+        keyword: keyword.trim() || undefined,
+        enabled: true
+      }
+    });
+    const products = (res.data?.data?.items || []) as OptionItem[];
+    rememberProductOptions(products);
+    productSearchOptions.value = products;
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    productSearchLoading.value = false;
+  }
+};
+
+const searchProducts = (keyword = '') => {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword && productSearchOptions.value.length > 0) return;
+  if (productSearchTimer.value != null && typeof window !== 'undefined') {
+    window.clearTimeout(productSearchTimer.value);
+  }
+  if (typeof window === 'undefined') {
+    void searchProductsNow(keyword);
+    return;
+  }
+  productSearchTimer.value = window.setTimeout(() => {
+    productSearchTimer.value = null;
+    void searchProductsNow(keyword);
+  }, 250);
+};
+
+const handleProductDropdownVisibleChange = (visible: boolean) => {
+  if (!visible || productSearchOptions.value.length > 0 || productSearchLoading.value) return;
+  void searchProductsNow('');
 };
 
 const ensureProductOption = async (productId?: number | null) => {
@@ -593,14 +942,27 @@ const ensureProductOption = async (productId?: number | null) => {
         name: product.name,
         enabled: product.enabled
       });
+      productSearchOptions.value = mergeOptionById(productSearchOptions.value, {
+        id: product.id,
+        name: product.name,
+        enabled: product.enabled
+      });
     }
   } catch (error) {
     notifyError(error);
   }
 };
 
-const getSelectableProductOptions = (currentProductId?: number | null) =>
-  productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+const getSelectableProductOptions = (currentProductId?: number | null) => {
+  const options = productSearchOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  if (currentProductId != null && !options.some(item => Number(item.id) === Number(currentProductId))) {
+    const current = productOptions.value.find(item => Number(item.id) === Number(currentProductId));
+    if (current) {
+      options.push(current);
+    }
+  }
+  return options;
+};
 
 const ensureWarehouseOption = async (warehouseId?: number | null) => {
   if (!warehouseId || warehouseOptions.value.some(item => item.id === warehouseId)) return;
@@ -684,6 +1046,9 @@ const resetForm = () => {
   currentId.value = null;
   rowBalanceError.value = {};
   initializedFormPath.value = '';
+  detailItemsPage.value = 1;
+  detailItemsTotal.value = 0;
+  detailItemsLoading.value = false;
 };
 
 const addItem = () => {
@@ -836,30 +1201,58 @@ const initializeFormPage = async () => {
 };
 
 const loadDetail = async (id: number) => {
-  const res: any = await request.get(`${apiPrefix.value}/${id}`);
+  const res: any = await request.get(`${apiPrefix.value}/${id}`, {
+    params: viewMode.value && countType.value === 'INIT' ? { includeItems: false } : undefined
+  });
   if (res.data.code === 200) {
     const detail = res.data.data;
     formData.countNo = detail.count.countNo;
     formData.adjustmentReason = detail.count.adjustmentReason || '';
     formData.countAt = detail.count.countAt || '';
     formData.remark = detail.count.remark || '';
-    formData.items = (detail.items || []).map((item: any) => ({
-      productId: item.productId,
-      warehouseId: item.warehouseId,
-      locationId: countType.value === 'COUNT' ? (item.locationId ?? -1) : item.locationId,
-      stockKey: buildStockKey(item.warehouseId, countType.value === 'COUNT' ? (item.locationId ?? -1) : item.locationId),
-      systemQty: String(item.systemQty ?? 0),
-      countedQty: String(item.countedQty ?? ''),
-      initUnitCost: item.initUnitCost != null ? String(item.initUnitCost) : '',
-      initTotalAmount: item.initTotalAmount != null ? String(item.initTotalAmount) : '',
-      remark: item.remark || ''
-    }));
-    await Promise.all(formData.items.flatMap(item => [
-      ensureProductOption(item.productId),
-      ensureWarehouseOption(item.warehouseId),
-      ensureLocationOption(item.locationId)
-    ]));
+    if (viewMode.value && countType.value === 'INIT') {
+      formData.items = [];
+      detailItemsPage.value = 1;
+      await loadDetailItemsPage(id);
+      return;
+    }
+    formData.items = (detail.items || []).map(mapDetailItem);
+    await ensureDetailItemOptions(formData.items);
   }
+};
+
+const loadDetailItemsPage = async (id = currentId.value) => {
+  if (!id) return;
+  detailItemsLoading.value = true;
+  try {
+    const res: any = await request.get(`${apiPrefix.value}/${id}/items`, {
+      params: {
+        page: detailItemsPage.value,
+        size: detailItemsSize.value
+      }
+    });
+    if (res.data.code === 200) {
+      const pageData = res.data.data || {};
+      formData.items = (pageData.items || []).map(mapDetailItem);
+      detailItemsTotal.value = pageData.total || 0;
+      await ensureDetailItemOptions(formData.items, { includeProducts: false });
+    }
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    detailItemsLoading.value = false;
+  }
+};
+
+const handleDetailItemsPageChange = (newPage: number) => {
+  detailItemsPage.value = newPage;
+  void loadDetailItemsPage();
+};
+
+const handleDetailItemsSizeChange = (newSize: number) => {
+  detailItemsSize.value = newSize;
+  detailItemsPage.value = 1;
+  void loadDetailItemsPage();
 };
 
 const openEditModal = async (row: StockCount) => {
@@ -890,6 +1283,31 @@ const fetchNextCountNo = async () => {
   } catch (error) {
     notifyError(error);
   }
+};
+
+const mapDetailItem = (item: any): StockCountItem => ({
+  productId: item.productId,
+  productCode: item.productCode,
+  productName: item.productName,
+  warehouseId: item.warehouseId,
+  warehouseName: item.warehouseName,
+  locationId: countType.value === 'COUNT' ? (item.locationId ?? -1) : item.locationId,
+  locationName: item.locationName,
+  stockKey: buildStockKey(item.warehouseId, countType.value === 'COUNT' ? (item.locationId ?? -1) : item.locationId),
+  systemQty: String(item.systemQty ?? 0),
+  countedQty: String(item.countedQty ?? ''),
+  initUnitCost: item.initUnitCost != null ? String(item.initUnitCost) : '',
+  initTotalAmount: item.initTotalAmount != null ? String(item.initTotalAmount) : '',
+  remark: item.remark || ''
+});
+
+const ensureDetailItemOptions = async (items: StockCountItem[], options: { includeProducts?: boolean } = {}) => {
+  const includeProducts = options.includeProducts !== false;
+  await Promise.all(items.flatMap(item => [
+    ...(includeProducts ? [ensureProductOption(item.productId)] : []),
+    ensureWarehouseOption(item.warehouseId),
+    ensureLocationOption(item.locationId)
+  ]));
 };
 
 const validateCountForm = () => {
@@ -1138,6 +1556,16 @@ const handleApprove = async (row: StockCount) => {
       );
     }
     await request.post(`${apiPrefix.value}/${row.id}/approve`);
+    if (countType.value === 'INIT') {
+      notifySuccess('初始库存审核任务已提交，正在后台处理');
+      await fetchList();
+      if (row.status === 'APPROVING') {
+        startStockInitApprovalPolling(row.id);
+      } else {
+        startStockInitApprovalPolling(row.id);
+      }
+      return;
+    }
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -1188,6 +1616,13 @@ bindPageSizeSync(size, fetchList, {
   }
 });
 
+bindPageSizeSync(detailItemsSize, () => {
+  if (viewMode.value && countType.value === 'INIT' && currentId.value) {
+    detailItemsPage.value = 1;
+    void loadDetailItemsPage();
+  }
+});
+
 onMounted(async () => {
   if (isFormPage.value) {
     await initializeFormPage();
@@ -1213,6 +1648,11 @@ onActivated(async () => {
   }
   fetchListColumnKeys();
   fetchList();
+});
+
+onBeforeUnmount(() => {
+  stopStockInitImportPolling();
+  stopStockInitApprovalPolling();
 });
 
 const exportTemplate = () => {
@@ -1261,7 +1701,7 @@ const exportTemplate = () => {
 
 const triggerImport = async () => {
   if (countType.value === 'INIT') {
-    importInputRef.value?.click();
+    openStockInitImportDialog();
     return;
   }
   if (!isFormPage.value) {
@@ -1272,6 +1712,29 @@ const triggerImport = async () => {
     return;
   }
   importInputRef.value?.click();
+};
+
+const resetStockInitImportForm = () => {
+  stockInitImportSourceName.value = '';
+  stockInitImportFile.value = null;
+  stockInitImportPreview.value = null;
+  stockInitImportFieldOptions.value = [];
+  stockInitImportMappings.value = [];
+  stockInitImportMappingConfirmed.value = false;
+  stockInitImportStrategyMode.value = 'WAREHOUSE';
+  if (stockInitImportInputRef.value) {
+    stockInitImportInputRef.value.value = '';
+  }
+};
+
+const openStockInitImportDialog = () => {
+  resetStockInitImportForm();
+  showStockInitImportDialog.value = true;
+};
+
+const openStockInitImportHistoryDrawer = async () => {
+  showStockInitImportHistoryDrawer.value = true;
+  await loadStockInitImportBatches();
 };
 
 const parseCsvLine = (line: string) => {
@@ -1304,16 +1767,12 @@ const handleImportFile = async (event: Event) => {
   if (!file) return;
   try {
     if (countType.value === 'INIT') {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res: any = await request.post('/erp/stock-inits/import', formData);
-      const result = res.data.data as StockInitImportResult;
-      if (result.warningCount > 0) {
-        notifySuccess(`导入完成：生成单据 ${result.countNo}，共 ${result.totalCount} 行，告警 ${result.warningCount} 条`);
-      } else {
-        notifySuccess(`导入完成：生成单据 ${result.countNo}，共 ${result.totalCount} 行`);
-      }
-      await fetchList();
+      stockInitImportFile.value = file;
+      stockInitImportPreview.value = null;
+      stockInitImportFieldOptions.value = [];
+      stockInitImportMappings.value = [];
+      stockInitImportMappingConfirmed.value = false;
+      await loadStockInitImportPreview();
       return;
     }
     const content = await file.text();
@@ -1378,6 +1837,224 @@ const handleImportFile = async (event: Event) => {
     notifyError(error);
   } finally {
     input.value = '';
+  }
+};
+
+const loadStockInitImportPreview = async () => {
+  if (!stockInitImportFile.value) return;
+  stockInitImportPreviewLoading.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', stockInitImportFile.value);
+    const res: any = await request.post('/erp/stock-inits/import/preview', formData, {
+      timeout: STOCK_INIT_IMPORT_TIMEOUT_MS
+    });
+    if (res.data.code === 200) {
+      stockInitImportPreview.value = res.data.data as StockInitImportPreview;
+      stockInitImportFieldOptions.value = stockInitImportPreview.value.fields || [];
+      stockInitImportMappings.value = (stockInitImportPreview.value.mappings || []).map(item => ({ ...item }));
+      stockInitImportMappingConfirmed.value = false;
+    }
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    stockInitImportPreviewLoading.value = false;
+  }
+};
+
+const buildStockInitImportFieldMapping = () => {
+  const mapping: Record<string, string> = {};
+  stockInitImportMappings.value.forEach(item => {
+    if (item.excelHeader && item.fieldKey) {
+      mapping[item.excelHeader] = item.fieldKey;
+    }
+  });
+  return mapping;
+};
+
+const validateStockInitImportRequiredMappings = () => {
+  const selectedFields = new Set(stockInitImportMappings.value.map(item => item.fieldKey).filter(Boolean));
+  const missing = stockInitImportFieldOptions.value
+    .filter(item => item.required && !selectedFields.has(item.key))
+    .map(item => item.label);
+  if (missing.length) {
+    notifyError(`请先完成必填字段映射：${missing.join('、')}`);
+    return false;
+  }
+  return true;
+};
+
+const handleStockInitImportMappingChange = (row: StockInitImportHeaderMapping) => {
+  row.matchType = row.fieldKey ? 'MANUAL' : 'UNMATCHED';
+  stockInitImportMappingConfirmed.value = false;
+};
+
+const handleStockInitImportStrategyModeChange = () => {
+  stockInitImportMappingConfirmed.value = false;
+};
+
+const confirmStockInitImportMapping = () => {
+  if (!stockInitImportFile.value) {
+    notifyError('请先选择要导入的 Excel 文件');
+    return;
+  }
+  if (!validateStockInitImportRequiredMappings()) {
+    return;
+  }
+  stockInitImportMappingConfirmed.value = true;
+  notifySuccess('字段映射已确认');
+};
+
+const loadStockInitImportBatches = async () => {
+  stockInitImportHistoryLoading.value = true;
+  try {
+    const res: any = await request.get('/erp/stock-inits/import-batches');
+    if (res.data.code === 200) {
+      stockInitImportBatches.value = res.data.data || [];
+    }
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    stockInitImportHistoryLoading.value = false;
+  }
+};
+
+const viewStockInitImportBatchItems = async (batch: StockInitImportBatchSummary) => {
+  selectedStockInitImportBatch.value = batch;
+  stockInitImportItemsLoading.value = true;
+  try {
+    const res: any = await request.get(`/erp/stock-inits/import-batches/${batch.id}/items`);
+    if (res.data.code === 200) {
+      stockInitImportBatchItems.value = res.data.data || [];
+    }
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    stockInitImportItemsLoading.value = false;
+  }
+};
+
+const stopStockInitImportPolling = () => {
+  if (stockInitImportPollingTimer.value != null && typeof window !== 'undefined') {
+    window.clearTimeout(stockInitImportPollingTimer.value);
+    stockInitImportPollingTimer.value = null;
+  }
+  activeStockInitImportBatchId.value = null;
+};
+
+const stopStockInitApprovalPolling = () => {
+  if (stockInitApprovalPollingTimer.value != null && typeof window !== 'undefined') {
+    window.clearTimeout(stockInitApprovalPollingTimer.value);
+    stockInitApprovalPollingTimer.value = null;
+  }
+  activeStockInitApprovalId.value = null;
+};
+
+const pollStockInitApproval = async (countId: number) => {
+  await fetchList();
+  const row = tableData.value.find(item => item.id === countId) || null;
+  if (!row) {
+    stopStockInitApprovalPolling();
+    return;
+  }
+  if (row.status === 'APPROVING') {
+    stockInitApprovalPollingTimer.value = window.setTimeout(() => {
+      void pollStockInitApproval(countId);
+    }, 1500);
+    return;
+  }
+  stopStockInitApprovalPolling();
+  if (row.status === 'APPROVED') {
+    notifySuccess('初始库存审核完成');
+    return;
+  }
+  if (row.status === 'APPROVE_FAILED') {
+    notifyError('初始库存审核失败，请检查单据后重试');
+  }
+};
+
+const startStockInitApprovalPolling = (countId: number) => {
+  stopStockInitApprovalPolling();
+  activeStockInitApprovalId.value = countId;
+  stockInitApprovalPollingTimer.value = window.setTimeout(() => {
+    void pollStockInitApproval(countId);
+  }, 1000);
+};
+
+const pollStockInitImportBatch = async (batchId: number) => {
+  await loadStockInitImportBatches();
+  const batch = stockInitImportBatches.value.find(item => item.id === batchId) || null;
+  if (!batch) {
+    stopStockInitImportPolling();
+    return;
+  }
+  selectedStockInitImportBatch.value = batch;
+  await viewStockInitImportBatchItems(batch);
+  if (batch.status === 'PROCESSING') {
+    stockInitImportPollingTimer.value = window.setTimeout(() => {
+      void pollStockInitImportBatch(batchId);
+    }, 1500);
+    return;
+  }
+  stopStockInitImportPolling();
+  notifySuccess(batch.summary || `导入完成：成功 ${batch.successCount} 行，失败 ${batch.failedCount} 行`);
+  await fetchList();
+};
+
+const startStockInitImportPolling = (batchId: number) => {
+  stopStockInitImportPolling();
+  activeStockInitImportBatchId.value = batchId;
+  stockInitImportPollingTimer.value = window.setTimeout(() => {
+    void pollStockInitImportBatch(batchId);
+  }, 1000);
+};
+
+const submitStockInitImport = async () => {
+  if (!stockInitImportFile.value) {
+    notifyError('请先选择要导入的 Excel 文件');
+    return;
+  }
+  if (!stockInitImportMappingConfirmed.value) {
+    notifyError('请先确认字段映射');
+    return;
+  }
+  if (!validateStockInitImportRequiredMappings()) {
+    return;
+  }
+  stockInitImportSubmitting.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', stockInitImportFile.value);
+    formData.append('fieldMapping', JSON.stringify(buildStockInitImportFieldMapping()));
+    formData.append('strategyMode', stockInitImportStrategyMode.value);
+    const trimmedSourceName = stockInitImportSourceName.value.trim();
+    if (trimmedSourceName) {
+      formData.append('sourceName', trimmedSourceName);
+    }
+    const res: any = await request.post('/erp/stock-inits/import', formData, {
+      timeout: STOCK_INIT_IMPORT_TIMEOUT_MS
+    });
+    const result = res.data.data as StockInitImportResult;
+    if (result.status === 'PROCESSING') {
+      notifySuccess(`导入任务已创建：批次 ${result.batchNo || result.batchId}，正在后台处理`);
+    } else if (result.failedCount > 0) {
+      notifyWarning(`导入完成：批次 ${result.batchNo}，失败 ${result.failedCount} 行，请查看导入结果`);
+    } else if (result.warningCount > 0) {
+      notifySuccess(`导入完成：生成单据 ${result.countNo || '-'}，共 ${result.totalCount} 行，告警 ${result.warningCount} 条`);
+    } else {
+      notifySuccess(`导入完成：生成单据 ${result.countNo || '-'}，共 ${result.totalCount} 行`);
+    }
+    showStockInitImportDialog.value = false;
+    await openStockInitImportHistoryDrawer();
+    resetStockInitImportForm();
+    if (result.batchId) {
+      startStockInitImportPolling(result.batchId);
+    }
+    await fetchList();
+  } catch (error) {
+    notifyError(error);
+  } finally {
+    stockInitImportSubmitting.value = false;
   }
 };
 

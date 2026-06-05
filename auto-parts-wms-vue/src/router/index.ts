@@ -1,9 +1,78 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { markErpNavigationPerf, printErpNavigationPerfTrace } from '@/utils/erpNavigationPerfTrace'
+import { openRouteFirstPaintRequestGate } from '@/utils/routeFirstPaintRequestGate'
 
 // 导入布局组件
 import MainLayout from '../layouts/MainLayout.vue'
 import LoginView from '../views/LoginView.vue'
+import ErpSaleOrderDraftManagement from '../views/erp/ErpSaleOrderDraftManagement.vue'
+import ErpSaleOrderApprovedManagement from '../views/erp/ErpSaleOrderApprovedManagement.vue'
+import ErpSaleReturnDraftManagement from '../views/erp/ErpSaleReturnDraftManagement.vue'
+import ErpSaleReturnApprovedManagement from '../views/erp/ErpSaleReturnApprovedManagement.vue'
+
+type RouteComponentLoader = () => Promise<unknown>
+
+const preloadableRouteComponents: Record<string, Array<() => Promise<unknown>>> = {
+  '/erp/products': [
+    () => import('../views/erp/ErpProductManagement.vue')
+  ],
+  '/erp/vehicle-fitments': [
+    () => import('../views/erp/ErpVehicleFitmentManagement.vue')
+  ],
+  '/erp/customers': [
+    () => import('../views/erp/ErpCustomerManagement.vue')
+  ],
+  '/erp/suppliers': [
+    () => import('../views/erp/ErpSupplierManagement.vue')
+  ],
+  '/erp/print-templates': [
+    () => import('../views/erp/ErpPrintTemplateManagement.vue')
+  ],
+  '/erp/purchase-orders/draft': [
+    () => import('../views/erp/ErpPurchaseOrderDraft.vue'),
+    () => import('../views/erp/ErpPurchaseOrderManagement.vue')
+  ],
+  '/erp/purchase-orders/approved': [
+    () => import('../views/erp/ErpPurchaseOrderApproved.vue'),
+    () => import('../views/erp/ErpPurchaseOrderManagement.vue')
+  ],
+  '/erp/stocks': [
+    () => import('../views/erp/ErpStockManagement.vue')
+  ],
+  '/erp/stock-txns': [
+    () => import('../views/erp/ErpStockTxnManagement.vue')
+  ],
+  '/erp/stock-counts': [
+    () => import('../views/erp/ErpStockCountManagement.vue')
+  ],
+  '/erp/stock-transfers': [
+    () => import('../views/erp/ErpStockTransferManagement.vue')
+  ],
+  '/erp/stock-inits': [
+    () => import('../views/erp/ErpStockCountManagement.vue')
+  ],
+  '/erp/stock-warnings': [
+    () => import('../views/erp/ErpStockWarningManagement.vue')
+  ]
+}
+
+const preloadedRouteLoaders = new WeakSet<() => Promise<unknown>>()
+
+export const preloadRouteComponents = (path: string) => {
+  const loaders = resolveRouteComponentLoaders(path)
+  loaders.unshift(...(preloadableRouteComponents[path] || []))
+  if (!loaders.length) {
+    return
+  }
+  loaders.forEach((load) => {
+    if (preloadedRouteLoaders.has(load)) {
+      return
+    }
+    preloadedRouteLoaders.add(load)
+    void load()
+  })
+}
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -17,6 +86,18 @@ const routes: Array<RouteRecordRaw> = [
     name: 'erp-sale-order-print',
     component: () => import('../views/erp/ErpSaleOrderPrintRedirect.vue'),
     meta: { title: '销售单打印', permissionsAny: ['erp-sale-draft:print', 'erp-sale-approved:print'] }
+  },
+  {
+    path: '/erp/sale-orders/draft/:id/print',
+    name: 'erp-sale-orders-draft-print',
+    component: () => import('../views/erp/ErpSaleOrderDraftPrint.vue'),
+    meta: { title: '销售单草稿打印', permission: 'erp-sale-draft:print', titleKey: 'page.erpSaleOrderPrint' }
+  },
+  {
+    path: '/erp/sale-orders/approved/:id/print',
+    name: 'erp-sale-orders-approved-print',
+    component: () => import('../views/erp/ErpSaleOrderApprovedPrint.vue'),
+    meta: { title: '已审核销售单打印', permission: 'erp-sale-approved:print', titleKey: 'page.erpSaleOrderPrint' }
   },
   {
     path: '/erp/purchase-orders/:id/print',
@@ -155,6 +236,12 @@ const routes: Array<RouteRecordRaw> = [
         name: 'api-latency-monitor',
         component: () => import('../views/system/ApiLatencyMonitorView.vue'),
         meta: { title: '接口耗时查询', permission: 'api-latency-monitor:view' }
+      },
+      {
+        path: 'sql-latency-monitor',
+        name: 'sql-latency-monitor',
+        component: () => import('../views/system/SqlLatencyMonitorView.vue'),
+        meta: { title: 'SQL耗时查询', permission: 'sql-latency-monitor:view', titleKey: 'page.sqlLatencyMonitor' }
       },
       {
         path: 'column-permissions',
@@ -297,7 +384,7 @@ const routes: Array<RouteRecordRaw> = [
           path: 'erp/purchase-orders/draft',
           name: 'erp-purchase-draft',
           component: () => import('../views/erp/ErpPurchaseOrderDraft.vue'),
-          meta: { title: 'ERP采购单（草稿）', permission: 'erp-purchase-draft:view', titleKey: 'page.erpPurchaseOrderDraft' }
+          meta: { title: '采购单（草稿）', permission: 'erp-purchase-draft:view', titleKey: 'page.erpPurchaseOrderDraft' }
         },
         {
           path: 'erp/purchase-orders/draft/create',
@@ -326,7 +413,7 @@ const routes: Array<RouteRecordRaw> = [
           path: 'erp/purchase-orders/approved',
           name: 'erp-purchase-approved',
           component: () => import('../views/erp/ErpPurchaseOrderApproved.vue'),
-          meta: { title: 'ERP采购单（已审核）', permission: 'erp-purchase-approved:view', titleKey: 'page.erpPurchaseOrderApproved' }
+          meta: { title: '采购单（已审核）', permission: 'erp-purchase-approved:view', titleKey: 'page.erpPurchaseOrderApproved' }
         },
         {
           path: 'erp/purchase-orders/approved/:id',
@@ -388,34 +475,13 @@ const routes: Array<RouteRecordRaw> = [
         redirect: '/erp/sale-orders/draft/create'
       },
       {
-        path: 'erp/sale-orders/create-preview',
-        name: 'erp-sale-orders-create-preview',
-        component: () => import('../views/erp/ErpSaleOrderFormPreview.vue'),
-        meta: { title: '新增销售单(预览)', permission: 'erp-sale-draft:add', titleKey: 'page.erpSaleOrderCreatePreview' }
-      },
-      {
-        path: 'erp/sale-orders/create-preview-alt',
-        name: 'erp-sale-orders-create-preview-alt',
-        component: () => import('../views/erp/ErpSaleOrderFormPreviewAlt.vue'),
-        meta: { title: '新增销售单(预览替代)', permission: 'erp-sale-draft:add', titleKey: 'page.erpSaleOrderCreatePreviewAlt' }
-      },
-      {
-        path: 'erp/sale-orders/create-preview-paper',
-        name: 'erp-sale-orders-create-preview-paper',
-        component: () => import('../views/erp/ErpSaleOrderFormPreviewPaper.vue'),
-        meta: { title: '新增销售单(纸质风格)', permission: 'erp-sale-draft:add', titleKey: 'page.erpSaleOrderCreatePreviewPaper' }
-      },
-      {
         path: 'erp/sale-orders/:id/edit',
-        redirect: to => ({
-          path: `/erp/sale-orders/draft/${to.params.id}/edit`,
-          query: to.query
-        })
+        component: () => import('../views/erp/ErpSaleOrderLegacyEditRedirect.vue')
       },
       {
         path: 'erp/sale-orders/draft',
         name: 'erp-sale-orders-draft',
-        component: () => import('../views/erp/ErpSaleOrderDraft.vue'),
+        component: ErpSaleOrderDraftManagement,
         meta: { title: '销售单（草稿）', permission: 'erp-sale-draft:view', titleKey: 'page.erpSaleOrderDraft', defaultStatus: 'DRAFT', lockStatus: true }
       },
       {
@@ -431,15 +497,9 @@ const routes: Array<RouteRecordRaw> = [
         meta: { title: '编辑销售单草稿', permission: 'erp-sale-draft:edit', titleKey: 'page.erpSaleOrderEdit' }
       },
       {
-        path: 'erp/sale-orders/draft/:id/print',
-        name: 'erp-sale-orders-draft-print',
-        component: () => import('../views/erp/ErpSaleOrderDraftPrint.vue'),
-        meta: { title: '销售单草稿打印', permission: 'erp-sale-draft:print', titleKey: 'page.erpSaleOrderPrint' }
-      },
-      {
         path: 'erp/sale-orders/approved',
         name: 'erp-sale-orders-approved',
-        component: () => import('../views/erp/ErpSaleOrderApproved.vue'),
+        component: ErpSaleOrderApprovedManagement,
         meta: { title: '销售单（已审核）', permission: 'erp-sale-approved:view', titleKey: 'page.erpSaleOrderApproved', defaultStatus: 'APPROVED', lockStatus: true }
       },
       {
@@ -447,12 +507,6 @@ const routes: Array<RouteRecordRaw> = [
         name: 'erp-sale-orders-approved-detail',
         component: () => import('../views/erp/ErpSaleOrderApprovedForm.vue'),
         meta: { title: '查看已审核销售单', permission: 'erp-sale-approved:view', titleKey: 'page.erpSaleOrder' }
-      },
-      {
-        path: 'erp/sale-orders/approved/:id/print',
-        name: 'erp-sale-orders-approved-print',
-        component: () => import('../views/erp/ErpSaleOrderApprovedPrint.vue'),
-        meta: { title: '已审核销售单打印', permission: 'erp-sale-approved:print', titleKey: 'page.erpSaleOrderPrint' }
       },
       {
         path: 'erp/sale-returns',
@@ -484,13 +538,13 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'erp/sale-returns/draft',
         name: 'erp-sale-returns-draft',
-        component: () => import('../views/erp/ErpSaleReturnDraft.vue'),
+        component: ErpSaleReturnDraftManagement,
         meta: { title: '销售退货（草稿）', permission: 'erp-sale-return-draft:view', titleKey: 'page.erpSaleReturnDraft', defaultStatus: 'DRAFT', lockStatus: true, workspace: 'draft' }
       },
       {
         path: 'erp/sale-returns/approved',
         name: 'erp-sale-returns-approved',
-        component: () => import('../views/erp/ErpSaleReturnApproved.vue'),
+        component: ErpSaleReturnApprovedManagement,
         meta: { title: '销售退货（已审核）', permission: 'erp-sale-return-approved:view', titleKey: 'page.erpSaleReturnApproved', defaultStatus: 'APPROVED', lockStatus: true, workspace: 'approved' }
       },
       {
@@ -502,19 +556,19 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'erp/stocks',
         name: 'erp-stocks',
-        component: () => import('../views/erp/ErpStockManagement.vue'),
+        component: () => import('../views/erp/ErpStockManagementRoute.vue'),
         meta: { title: 'ERP库存台账', permission: 'erp-stock:view' }
       },
       {
         path: 'erp/stock-txns',
         name: 'erp-stock-txns',
-        component: () => import('../views/erp/ErpStockTxnManagement.vue'),
+        component: () => import('../views/erp/ErpStockTxnManagementRoute.vue'),
         meta: { title: 'ERP库存流水', permission: 'erp-stock-txn:view' }
       },
       {
         path: 'erp/stock-counts',
         name: 'erp-stock-counts',
-        component: () => import('../views/erp/ErpStockCountManagement.vue'),
+        component: () => import('../views/erp/ErpStockCountManagementRoute.vue'),
         meta: { title: '库存调整', permission: 'erp-stock-count:view', titleKey: 'page.erpStockCountManagement', countType: 'COUNT' }
       },
       {
@@ -538,7 +592,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'erp/stock-transfers',
         name: 'erp-stock-transfers',
-        component: () => import('../views/erp/ErpStockTransferManagement.vue'),
+        component: () => import('../views/erp/ErpStockTransferManagementRoute.vue'),
         meta: { title: '库存移库', permission: 'erp-stock-transfer:view', titleKey: 'page.erpStockTransferManagement' }
       },
       {
@@ -562,7 +616,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'erp/stock-inits',
         name: 'erp-stock-inits',
-        component: () => import('../views/erp/ErpStockCountManagement.vue'),
+        component: () => import('../views/erp/ErpStockInitManagementRoute.vue'),
         meta: { title: '初始库存', permission: 'erp-stock-init:view', titleKey: 'page.erpStockInitManagement', countType: 'INIT' }
       },
       {
@@ -586,7 +640,7 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: 'erp/stock-warnings',
         name: 'erp-stock-warnings',
-        component: () => import('../views/erp/ErpStockWarningManagement.vue'),
+        component: () => import('../views/erp/ErpStockWarningManagementRoute.vue'),
         meta: { title: '库存预警', permission: 'erp-stock-warning:view', titleKey: 'page.erpStockWarningManagement' }
       },
       {
@@ -762,6 +816,25 @@ const router = createRouter({
   routes
 })
 
+const isRouteComponentLoader = (component: unknown): component is RouteComponentLoader => {
+  return typeof component === 'function'
+}
+
+const resolveRouteComponentLoaders = (path: string) => {
+  const resolved = router.resolve(path)
+  const loaders: RouteComponentLoader[] = []
+
+  resolved.matched.forEach((record) => {
+    Object.values(record.components || {}).forEach((component) => {
+      if (isRouteComponentLoader(component)) {
+        loaders.push(component)
+      }
+    })
+  })
+
+  return loaders
+}
+
 // --- 路由守卫 ---
 /**
  * 全局导航守卫
@@ -771,6 +844,13 @@ const router = createRouter({
  *  mereka 将被重定向到 /login。
  */
 router.beforeEach(async (to, from, next) => {
+  markErpNavigationPerf('router:beforeEach', {
+    from: from.path,
+    to: to.path
+  });
+  if (!to.path.includes('/print')) {
+    openRouteFirstPaintRequestGate(to.path)
+  }
   const authStore = useAuthStore()
   
   // 设置网页标题
@@ -834,7 +914,18 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
+  markErpNavigationPerf('router:beforeEach:next', {
+    to: to.path
+  });
   next();
+});
+
+router.afterEach((to, from) => {
+  markErpNavigationPerf('router:afterEach', {
+    from: from.path,
+    to: to.path
+  });
+  printErpNavigationPerfTrace();
 });
 
 export default router

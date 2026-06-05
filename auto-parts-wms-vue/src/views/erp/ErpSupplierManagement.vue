@@ -164,6 +164,7 @@
     </div>
 
     <ErpSupplierEditDialog
+      v-if="showModal"
       v-model="showModal"
       :mode="supplierDialogMode"
       :initial-value="selectedSupplier"
@@ -177,7 +178,7 @@
       @closed="handleDialogClosed"
     />
 
-    <el-dialog v-model="showImportDialog" title="导入供应商历史表" width="960px">
+    <el-dialog v-if="showImportDialog" v-model="showImportDialog" title="导入供应商历史表" width="960px">
       <el-form label-position="top">
         <el-form-item label="来源名称">
           <el-input v-model="importSourceName" placeholder="例如：2026-05-供应商历史表" />
@@ -200,7 +201,7 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="showImportHistoryDrawer" title="供应商导入结果" size="70%">
+    <el-drawer v-if="showImportHistoryDrawer" v-model="showImportHistoryDrawer" title="供应商导入结果" size="70%">
       <div class="supplier-import-drawer">
         <div class="supplier-import-drawer__toolbar">
           <el-button v-permission="'erp-supplier:import'" @click="loadImportBatches">刷新批次</el-button>
@@ -255,10 +256,11 @@ import request from '@/utils/request';
 import ErpSupplierEditDialog from '@/components/ErpSupplierEditDialog.vue';
 import { useApiError } from '@/composables/useApiError';
 import { usePageSizePreference } from '@/composables/pageSizePreference';
-import { getCachedEnabledPaymentMethods, getCachedEnabledSettlementMethods } from '@/composables/erpBaseDataCache';
+import { getCachedEnabledPaymentMethods, getCachedEnabledSettlementMethods, invalidateErpBaseDataResourceCache } from '@/composables/erpBaseDataCache';
 import { useAuthStore } from '@/stores/auth';
 import { useColumnSettings } from '@/composables/useColumnSettings';
 import { filterByFuzzyKeyword } from '@/utils/fuzzySearch';
+import { waitForErpFirstPaint } from './erpFirstPaint';
 
 type SupplierStatus = 'enabled' | 'disabled' | 'blacklisted';
 
@@ -410,6 +412,7 @@ const total = ref(0);
 const hasActivatedOnce = ref(false);
 const pageSizeSyncReady = ref(false);
 const pendingInitialLoad = ref(false);
+const firstPaintReady = ref(false);
 const tableData = ref<ErpSupplier[]>([]);
 const allTableData = ref<ErpSupplier[]>([]);
 const showModal = ref(false);
@@ -778,6 +781,7 @@ const handleSupplierDialogSubmit = async (payload: Omit<ErpSupplier, 'id' | 'rec
       : await request.post('/erp/suppliers', payload);
 
     if (res.data.code === 200) {
+      invalidateErpBaseDataResourceCache('suppliers', tenantCacheKey.value);
       notifySuccess();
       showModal.value = false;
       fetchList();
@@ -814,6 +818,7 @@ const handleDelete = async (row: ErpSupplier) => {
       data: { reason: String(value).trim() },
       skipDeleteReasonPrompt: true
     } as any);
+    invalidateErpBaseDataResourceCache('suppliers', tenantCacheKey.value);
     notifySuccess();
     fetchList();
   } catch (error) {
@@ -944,14 +949,16 @@ bindPageSizeSync(size, fetchList, {
   reloadOnInitialSync: false,
   onInitialSyncComplete: () => {
     pageSizeSyncReady.value = true;
-    if (pendingInitialLoad.value) {
+    if (pendingInitialLoad.value && firstPaintReady.value) {
       pendingInitialLoad.value = false;
       fetchList();
     }
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  await waitForErpFirstPaint();
+  firstPaintReady.value = true;
   fetchSettlementMethods();
   fetchPaymentMethods();
   fetchSupplierTypes();

@@ -189,10 +189,14 @@
                       :ref="(el: any) => setProductSelectRef(el, $index)"
                       v-model="row.productId"
                       filterable
+                      remote
                       clearable
+                      reserve-keyword
                       style="width: 100%"
                       :placeholder="$t('placeholder.selectProduct')"
                       :disabled="isProductSelectDisabled"
+                      :remote-method="searchProducts"
+                      :loading="productSearchLoading"
                       @change="handleProductChange(row)"
                       @visible-change="(visible: boolean) => handleProductVisibleChange(row, visible)"
                     >
@@ -745,6 +749,9 @@ const themeMode = ref<'default' | 'paper'>('default');
 const supplierOptions = ref<OptionItem[]>([]);
 const purchaseOrderOptions = ref<PurchaseOrderOption[]>([]);
 const productOptions = ref<ProductOption[]>([]);
+const productSearchOptions = ref<ProductOption[]>([]);
+const productSearchLoading = ref(false);
+const productSearchTimer = ref<number | null>(null);
 const warehouseOptions = ref<OptionItem[]>([]);
 const locationOptions = ref<OptionItem[]>([]);
 const productSelectRefs = ref<any[]>([]);
@@ -1588,7 +1595,11 @@ const handleProductVisibleChange = async (row: PurchaseReturnItem, visible: bool
     notifyWarning(t('message.required'));
     return;
   }
-  if (!visible || !row.productId) return;
+  if (!visible) return;
+  if (!productSearchOptions.value.length && !productSearchLoading.value) {
+    await searchProductsNow('');
+  }
+  if (!row.productId) return;
   await fetchRecentPurchaseItems(row.productId);
 };
 
@@ -2065,18 +2076,47 @@ const fetchPurchaseOrders = async () => {
   }
 };
 
-const fetchProducts = async () => {
+const rememberProductOptions = (products: ProductOption[]) => {
+  for (const product of products) {
+    productOptions.value = mergeOptionById(productOptions.value, product);
+  }
+};
+
+const searchProductsNow = async (keyword = '') => {
+  productSearchLoading.value = true;
   try {
-    const res: any = await request.get('/erp/products/options');
-    productOptions.value = res.data.data || [];
-    for (const item of formData.items) {
-      await fetchStockOptions(item.productId);
-      applyProductDefaults(item, false);
-      syncStockKey(item);
-    }
+    const res: any = await request.get('/erp/products/page', {
+      params: {
+        page: 1,
+        size: 20,
+        keyword: keyword.trim() || undefined,
+        enabled: true
+      }
+    });
+    const products = (res.data?.data?.items || []) as ProductOption[];
+    rememberProductOptions(products);
+    productSearchOptions.value = products;
   } catch (error) {
     notifyError(error);
+  } finally {
+    productSearchLoading.value = false;
   }
+};
+
+const searchProducts = (keyword = '') => {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword && productSearchOptions.value.length > 0) return;
+  if (productSearchTimer.value != null && typeof window !== 'undefined') {
+    window.clearTimeout(productSearchTimer.value);
+  }
+  if (typeof window === 'undefined') {
+    void searchProductsNow(keyword);
+    return;
+  }
+  productSearchTimer.value = window.setTimeout(() => {
+    productSearchTimer.value = null;
+    void searchProductsNow(keyword);
+  }, 250);
 };
 
 const fetchWarehouses = async () => {
@@ -2113,6 +2153,15 @@ const ensureProductOption = async (productId?: number | null) => {
         costPrice: product.costPrice,
         enabled: product.enabled
       });
+      productSearchOptions.value = mergeOptionById(productSearchOptions.value, {
+        id: product.id,
+        name: product.name,
+        defaultWarehouseId: product.defaultWarehouseId,
+        defaultLocationId: product.defaultLocationId,
+        salePrice: product.salePrice,
+        costPrice: product.costPrice,
+        enabled: product.enabled
+      });
     }
   } catch (error) {
     notifyError(error);
@@ -2120,7 +2169,13 @@ const ensureProductOption = async (productId?: number | null) => {
 };
 
 const getSelectableProductOptions = (currentProductId?: number | null) => {
-  const baseOptions = productOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  const baseOptions = productSearchOptions.value.filter(item => item.enabled !== false || item.id === currentProductId);
+  if (currentProductId != null && !baseOptions.some(item => Number(item.id) === Number(currentProductId))) {
+    const current = productOptions.value.find(item => Number(item.id) === Number(currentProductId));
+    if (current) {
+      baseOptions.push(current);
+    }
+  }
   if (!isPurchaseOrderBoundMode.value) {
     return baseOptions;
   }
@@ -2614,7 +2669,6 @@ onMounted(() => {
   pagePath.value = route.path;
   fetchSuppliers();
   fetchPurchaseOrders();
-  fetchProducts();
   fetchWarehouses();
   fetchLocations();
   fetchSettlementMethods();

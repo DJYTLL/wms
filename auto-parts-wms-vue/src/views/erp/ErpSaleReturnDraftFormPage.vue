@@ -1,0 +1,7 @@
+<template>
+  <ErpSaleReturnForm workspace="draft" />
+</template>
+
+<script setup lang="ts">
+import ErpSaleReturnForm from './ErpSaleReturnForm.vue';
+</script>

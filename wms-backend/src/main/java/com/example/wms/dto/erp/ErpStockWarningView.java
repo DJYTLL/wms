@@ -1,6 +1,7 @@
 package com.example.wms.dto.erp;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
 
@@ -31,19 +32,19 @@ public class ErpStockWarningView {
     /**
      * 表示默认仓库 ID。
      */
-    private Long defaultWarehouseId;
+    private Long warehouseId;
     /**
      * 表示默认仓库名称。
      */
-    private String defaultWarehouseName;
+    private String warehouseName;
     /**
      * 表示默认库位 ID。
      */
-    private Long defaultLocationId;
+    private Long locationId;
     /**
      * 表示默认库位名称。
      */
-    private String defaultLocationName;
+    private String locationName;
     /**
      * 表示合计数量。
      */
@@ -56,6 +57,26 @@ public class ErpStockWarningView {
      * 表示max库存。
      */
     private BigDecimal maxStock;
+    /**
+     * 表示安全库存。
+     */
+    private BigDecimal safetyStock;
+    /**
+     * 表示策略来源。
+     */
+    private String policySource;
+    /**
+     * 表示是否存在策略异常。
+     */
+    private Boolean hasPolicyAnomaly;
+    /**
+     * 表示异常类型。
+     */
+    private List<String> anomalyTypes;
+    /**
+     * 表示异常类型原始文本。
+     */
+    private String anomalyTypesText;
     /**
      * 表示状态。
      */
@@ -101,36 +122,36 @@ public class ErpStockWarningView {
         this.unitName = unitName;
     }
 
-    public Long getDefaultWarehouseId() {
-        return defaultWarehouseId;
+    public Long getWarehouseId() {
+        return warehouseId;
     }
 
-    public void setDefaultWarehouseId(Long defaultWarehouseId) {
-        this.defaultWarehouseId = defaultWarehouseId;
+    public void setWarehouseId(Long warehouseId) {
+        this.warehouseId = warehouseId;
     }
 
-    public String getDefaultWarehouseName() {
-        return defaultWarehouseName;
+    public String getWarehouseName() {
+        return warehouseName;
     }
 
-    public void setDefaultWarehouseName(String defaultWarehouseName) {
-        this.defaultWarehouseName = defaultWarehouseName;
+    public void setWarehouseName(String warehouseName) {
+        this.warehouseName = warehouseName;
     }
 
-    public Long getDefaultLocationId() {
-        return defaultLocationId;
+    public Long getLocationId() {
+        return locationId;
     }
 
-    public void setDefaultLocationId(Long defaultLocationId) {
-        this.defaultLocationId = defaultLocationId;
+    public void setLocationId(Long locationId) {
+        this.locationId = locationId;
     }
 
-    public String getDefaultLocationName() {
-        return defaultLocationName;
+    public String getLocationName() {
+        return locationName;
     }
 
-    public void setDefaultLocationName(String defaultLocationName) {
-        this.defaultLocationName = defaultLocationName;
+    public void setLocationName(String locationName) {
+        this.locationName = locationName;
     }
 
     public BigDecimal getTotalQty() {
@@ -155,6 +176,46 @@ public class ErpStockWarningView {
 
     public void setMaxStock(BigDecimal maxStock) {
         this.maxStock = maxStock;
+    }
+
+    public BigDecimal getSafetyStock() {
+        return safetyStock;
+    }
+
+    public void setSafetyStock(BigDecimal safetyStock) {
+        this.safetyStock = safetyStock;
+    }
+
+    public String getPolicySource() {
+        return policySource;
+    }
+
+    public void setPolicySource(String policySource) {
+        this.policySource = policySource;
+    }
+
+    public Boolean getHasPolicyAnomaly() {
+        return hasPolicyAnomaly;
+    }
+
+    public void setHasPolicyAnomaly(Boolean hasPolicyAnomaly) {
+        this.hasPolicyAnomaly = hasPolicyAnomaly;
+    }
+
+    public List<String> getAnomalyTypes() {
+        return anomalyTypes;
+    }
+
+    public void setAnomalyTypes(List<String> anomalyTypes) {
+        this.anomalyTypes = anomalyTypes;
+    }
+
+    public String getAnomalyTypesText() {
+        return anomalyTypesText;
+    }
+
+    public void setAnomalyTypesText(String anomalyTypesText) {
+        this.anomalyTypesText = anomalyTypesText;
     }
 
     public String getStatus() {

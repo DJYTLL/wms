@@ -6,9 +6,13 @@ import com.example.wms.aop.AuditLog;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpProductImportBatchSummary;
 import com.example.wms.dto.erp.ErpProductCreateRequest;
+import com.example.wms.dto.erp.ErpProductImportFieldOption;
+import com.example.wms.dto.erp.ErpProductImportHeaderMapping;
 import com.example.wms.dto.erp.ErpProductImportItemView;
+import com.example.wms.dto.erp.ErpProductImportPreview;
 import com.example.wms.dto.erp.ErpProductImportResult;
 import com.example.wms.dto.erp.ErpProductPriceItemRequest;
+import com.example.wms.dto.erp.ErpProductStockPolicyRequest;
 import com.example.wms.dto.erp.ErpProductUpdateRequest;
 import com.example.wms.entity.erp.ErpCategory;
 import com.example.wms.entity.erp.ErpCustomerCategory;
@@ -17,6 +21,7 @@ import com.example.wms.entity.erp.ErpProduct;
 import com.example.wms.entity.erp.ErpProductImportBatch;
 import com.example.wms.entity.erp.ErpProductImportItem;
 import com.example.wms.entity.erp.ErpProductPrice;
+import com.example.wms.entity.erp.ErpProductStockPolicy;
 import com.example.wms.entity.erp.ErpSupplier;
 import com.example.wms.entity.erp.ErpUnit;
 import com.example.wms.entity.erp.ErpWarehouse;
@@ -30,6 +35,7 @@ import com.example.wms.mapper.erp.ErpProductImportBatchMapper;
 import com.example.wms.mapper.erp.ErpProductImportItemMapper;
 import com.example.wms.mapper.erp.ErpProductMapper;
 import com.example.wms.mapper.erp.ErpProductPriceMapper;
+import com.example.wms.mapper.erp.ErpProductStockPolicyMapper;
 import com.example.wms.mapper.erp.ErpSupplierMapper;
 import com.example.wms.mapper.erp.ErpUnitMapper;
 import com.example.wms.mapper.erp.ErpWarehouseMapper;
@@ -41,6 +47,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import net.sourceforge.pinyin4j.PinyinHelper;
+import net.sourceforge.pinyin4j.format.HanyuPinyinCaseType;
+import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
+import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
+import net.sourceforge.pinyin4j.format.exception.BadHanyuPinyinOutputFormatCombination;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.core.Authentication;
@@ -61,9 +72,12 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
@@ -80,12 +94,46 @@ public class ErpProductServiceImpl implements ErpProductService {
     private static final String PRODUCT_TYPE_ASSEMBLY = "ASSEMBLY";
     private static final String RETAIL_CUSTOMER_CATEGORY_CODE = "CUST-RETAIL";
     private static final String WHOLESALE_CUSTOMER_CATEGORY_CODE = "CUST-WHOLE";
+    private static final String CUSTOMER_CATEGORY_PRICE_FIELD_PREFIX = "customerCategoryPrice:";
 
     private static final String PRODUCT_CODE_TYPE = "PRODUCT";
     private static final int IMPORT_CHUNK_SIZE = 100;
+    private static final List<ImportFieldDefinition> PRODUCT_IMPORT_FIELDS = List.of(
+        field("code", "商品编码", true, "编码", "商品编码", "配件编码", "物料编号"),
+        field("name", "商品名称", true, "配件名称", "名称", "商品名称", "物料名称"),
+        field("categoryName", "类别", false, "类别", "分类", "分组"),
+        field("unitName", "单位", true, "单位", "计量单位", "计量"),
+        field("warehouseName", "默认仓库", false, "默认仓库", "仓库"),
+        field("supplierName", "来源供应商", false, "供应商名称", "来源供应商"),
+        field("spec", "规格", false, "规格"),
+        field("model", "特征码/图号", false, "特征码", "图号"),
+        field("barcode", "条形码", false, "条形码", "条码"),
+        field("brand", "品牌", false, "品牌"),
+        field("origin", "产地", false, "产地"),
+        field("manufacturerCode", "厂家编码", false, "厂家编码"),
+        field("manufacturerModel", "厂家型号", false, "厂家型号"),
+        field("manufacturerName", "厂家名称", false, "厂家名称"),
+        field("weight", "重量", false, "重量"),
+        field("volume", "体积", false, "体积"),
+        field("referencePrice", "参考价", false, "参考价", "最后一次采购入库价格"),
+        field("backupPrice1", "备用价1", false, "备用价1"),
+        field("retailPrice", "零售价", false, "零售价"),
+        field("wholesalePrice", "批发价", false, "批发价"),
+        field("safetyStock", "标准库存", false, "标准库存", "标准库存数"),
+        field("minStock", "库存下限", false, "库存下限"),
+        field("maxStock", "库存上限", false, "库存上限"),
+        field("status", "状态", false, "状态"),
+        field("remark", "备注", false, "备注")
+    );
+    private static final Map<String, ImportFieldDefinition> PRODUCT_IMPORT_FIELD_BY_KEY = PRODUCT_IMPORT_FIELDS.stream()
+        .collect(Collectors.toUnmodifiableMap(ImportFieldDefinition::key, Function.identity()));
+    private static final Map<String, ImportFieldDefinition> PRODUCT_IMPORT_FIELD_BY_ALIAS = PRODUCT_IMPORT_FIELDS.stream()
+        .flatMap(field -> field.aliases().stream().map(alias -> Map.entry(normalizeImportHeader(alias), field)))
+        .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue, (left, right) -> left));
 
     private final ErpProductMapper erpProductMapper;
     private final ErpProductPriceMapper erpProductPriceMapper;
+    private final ErpProductStockPolicyMapper erpProductStockPolicyMapper;
     private final ErpOrderSequenceMapper erpOrderSequenceMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final ErpCategoryMapper erpCategoryMapper;
@@ -104,6 +152,7 @@ public class ErpProductServiceImpl implements ErpProductService {
     @Autowired
     public ErpProductServiceImpl(ErpProductMapper erpProductMapper,
                                  ErpProductPriceMapper erpProductPriceMapper,
+                                 ErpProductStockPolicyMapper erpProductStockPolicyMapper,
                                  ErpOrderSequenceMapper erpOrderSequenceMapper,
                                  SystemConfigMapper systemConfigMapper,
                                  ErpCategoryMapper erpCategoryMapper,
@@ -121,6 +170,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         this(
             erpProductMapper,
             erpProductPriceMapper,
+            erpProductStockPolicyMapper,
             erpOrderSequenceMapper,
             systemConfigMapper,
             erpCategoryMapper,
@@ -140,6 +190,7 @@ public class ErpProductServiceImpl implements ErpProductService {
 
     public ErpProductServiceImpl(ErpProductMapper erpProductMapper,
                                  ErpProductPriceMapper erpProductPriceMapper,
+                                 ErpProductStockPolicyMapper erpProductStockPolicyMapper,
                                  ErpOrderSequenceMapper erpOrderSequenceMapper,
                                  SystemConfigMapper systemConfigMapper,
                                  ErpCategoryMapper erpCategoryMapper,
@@ -155,6 +206,78 @@ public class ErpProductServiceImpl implements ErpProductService {
         this(
             erpProductMapper,
             erpProductPriceMapper,
+            erpProductStockPolicyMapper,
+            erpOrderSequenceMapper,
+            systemConfigMapper,
+            erpCategoryMapper,
+            erpUnitMapper,
+            erpWarehouseMapper,
+            erpLocationMapper,
+            erpCustomerCategoryMapper,
+            erpSupplierMapper,
+            objectMapper,
+            erpProductImportBatchMapper,
+            erpProductImportItemMapper,
+            excelImportParser,
+            Runnable::run,
+            (TransactionOperations) null
+        );
+    }
+
+    public ErpProductServiceImpl(ErpProductMapper erpProductMapper,
+                                 ErpProductPriceMapper erpProductPriceMapper,
+                                 ErpProductStockPolicyMapper erpProductStockPolicyMapper,
+                                 ErpOrderSequenceMapper erpOrderSequenceMapper,
+                                 SystemConfigMapper systemConfigMapper,
+                                 ErpCategoryMapper erpCategoryMapper,
+                                 ErpUnitMapper erpUnitMapper,
+                                 ErpWarehouseMapper erpWarehouseMapper,
+                                 ErpLocationMapper erpLocationMapper,
+                                 ErpCustomerCategoryMapper erpCustomerCategoryMapper,
+                                 ErpSupplierMapper erpSupplierMapper,
+                                 ObjectMapper objectMapper,
+                                 ErpProductImportBatchMapper erpProductImportBatchMapper,
+                                 ErpProductImportItemMapper erpProductImportItemMapper,
+                                 ExcelImportParser excelImportParser,
+                                 Executor importExecutor,
+                                 TransactionOperations transactionOperations) {
+        this.erpProductMapper = erpProductMapper;
+        this.erpProductPriceMapper = erpProductPriceMapper;
+        this.erpProductStockPolicyMapper = erpProductStockPolicyMapper;
+        this.erpOrderSequenceMapper = erpOrderSequenceMapper;
+        this.systemConfigMapper = systemConfigMapper;
+        this.erpCategoryMapper = erpCategoryMapper;
+        this.erpUnitMapper = erpUnitMapper;
+        this.erpWarehouseMapper = erpWarehouseMapper;
+        this.erpLocationMapper = erpLocationMapper;
+        this.erpCustomerCategoryMapper = erpCustomerCategoryMapper;
+        this.erpSupplierMapper = erpSupplierMapper;
+        this.objectMapper = objectMapper;
+        this.erpProductImportBatchMapper = erpProductImportBatchMapper;
+        this.erpProductImportItemMapper = erpProductImportItemMapper;
+        this.excelImportParser = excelImportParser;
+        this.importExecutor = importExecutor == null ? Runnable::run : importExecutor;
+        this.transactionOperations = transactionOperations;
+    }
+
+    public ErpProductServiceImpl(ErpProductMapper erpProductMapper,
+                                 ErpProductPriceMapper erpProductPriceMapper,
+                                 ErpOrderSequenceMapper erpOrderSequenceMapper,
+                                 SystemConfigMapper systemConfigMapper,
+                                 ErpCategoryMapper erpCategoryMapper,
+                                 ErpUnitMapper erpUnitMapper,
+                                 ErpWarehouseMapper erpWarehouseMapper,
+                                 ErpLocationMapper erpLocationMapper,
+                                 ErpCustomerCategoryMapper erpCustomerCategoryMapper,
+                                 ErpSupplierMapper erpSupplierMapper,
+                                 ObjectMapper objectMapper,
+                                 ErpProductImportBatchMapper erpProductImportBatchMapper,
+                                 ErpProductImportItemMapper erpProductImportItemMapper,
+                                 ExcelImportParser excelImportParser) {
+        this(
+            erpProductMapper,
+            erpProductPriceMapper,
+            null,
             erpOrderSequenceMapper,
             systemConfigMapper,
             erpCategoryMapper,
@@ -188,22 +311,25 @@ public class ErpProductServiceImpl implements ErpProductService {
                                  ExcelImportParser excelImportParser,
                                  Executor importExecutor,
                                  TransactionOperations transactionOperations) {
-        this.erpProductMapper = erpProductMapper;
-        this.erpProductPriceMapper = erpProductPriceMapper;
-        this.erpOrderSequenceMapper = erpOrderSequenceMapper;
-        this.systemConfigMapper = systemConfigMapper;
-        this.erpCategoryMapper = erpCategoryMapper;
-        this.erpUnitMapper = erpUnitMapper;
-        this.erpWarehouseMapper = erpWarehouseMapper;
-        this.erpLocationMapper = erpLocationMapper;
-        this.erpCustomerCategoryMapper = erpCustomerCategoryMapper;
-        this.erpSupplierMapper = erpSupplierMapper;
-        this.objectMapper = objectMapper;
-        this.erpProductImportBatchMapper = erpProductImportBatchMapper;
-        this.erpProductImportItemMapper = erpProductImportItemMapper;
-        this.excelImportParser = excelImportParser;
-        this.importExecutor = importExecutor == null ? Runnable::run : importExecutor;
-        this.transactionOperations = transactionOperations;
+        this(
+            erpProductMapper,
+            erpProductPriceMapper,
+            null,
+            erpOrderSequenceMapper,
+            systemConfigMapper,
+            erpCategoryMapper,
+            erpUnitMapper,
+            erpWarehouseMapper,
+            erpLocationMapper,
+            erpCustomerCategoryMapper,
+            erpSupplierMapper,
+            objectMapper,
+            erpProductImportBatchMapper,
+            erpProductImportItemMapper,
+            excelImportParser,
+            importExecutor,
+            transactionOperations
+        );
     }
 
     public ErpProductServiceImpl(ErpProductMapper erpProductMapper,
@@ -220,6 +346,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         this(
             erpProductMapper,
             erpProductPriceMapper,
+            null,
             erpOrderSequenceMapper,
             systemConfigMapper,
             erpCategoryMapper,
@@ -244,6 +371,10 @@ public class ErpProductServiceImpl implements ErpProductService {
 
     @Override
     public PageResponse<ErpProduct> page(long page, long size, String keyword, Boolean enabled, Long categoryId) {
+        String normalizedKeyword = trimToNull(keyword);
+        if (normalizedKeyword != null) {
+            return rankedSearchPage(page, size, normalizedKeyword, enabled, categoryId);
+        }
         Page<ErpProduct> pageReq = Page.of(page, size);
         QueryWrapper<ErpProduct> wrapper = baseWrapper(keyword, enabled, categoryId);
         wrapper.orderByAsc("id");
@@ -253,12 +384,14 @@ public class ErpProductServiceImpl implements ErpProductService {
 
     @Override
     public ErpProduct getById(Long id) {
+        Long tenantId = TenantContext.requireTenantId();
         ErpProduct product = erpProductMapper.selectOne(new QueryWrapper<ErpProduct>()
-            .eq("tenant_id", TenantContext.requireTenantId())
+            .eq("tenant_id", tenantId)
             .eq("id", id));
         if (product == null) {
             throw new IllegalArgumentException("商品不存在");
         }
+        product.setStockPolicies(listStockPolicies(tenantId, id));
         return product;
     }
 
@@ -277,7 +410,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         if (existing != null) {
             throw new IllegalArgumentException("商品编码已存在");
         }
-        validateAssociations(tenantId, request.categoryId(), request.unitId(), request.defaultWarehouseId(), request.defaultLocationId(), request.sourceSupplierId(), request.priceItems());
+        validateAssociations(tenantId, request.categoryId(), request.unitId(), request.defaultWarehouseId(), request.defaultLocationId(), request.sourceSupplierId(), request.stockPolicies(), request.priceItems());
         ErpProduct product = new ErpProduct();
         product.setTenantId(tenantId);
         applyRequest(product, request);
@@ -285,7 +418,9 @@ public class ErpProductServiceImpl implements ErpProductService {
         product.setCreatedAt(Instant.now());
         product.setUpdatedAt(Instant.now());
         erpProductMapper.insert(product);
+        saveStockPolicies(tenantId, product.getId(), request.stockPolicies());
         saveProductPrices(tenantId, product.getId(), request.priceItems());
+        product.setStockPolicies(listStockPolicies(tenantId, product.getId()));
         return product;
     }
 
@@ -304,14 +439,16 @@ public class ErpProductServiceImpl implements ErpProductService {
         if (existing != null && !existing.getId().equals(id)) {
             throw new IllegalArgumentException("商品编码已存在");
         }
-        validateAssociations(tenantId, request.categoryId(), request.unitId(), request.defaultWarehouseId(), request.defaultLocationId(), request.sourceSupplierId(), request.priceItems());
+        validateAssociations(tenantId, request.categoryId(), request.unitId(), request.defaultWarehouseId(), request.defaultLocationId(), request.sourceSupplierId(), request.stockPolicies(), request.priceItems());
         applyRequest(product, request);
         if (request.enabled() != null) {
             product.setEnabled(request.enabled());
         }
         product.setUpdatedAt(Instant.now());
         erpProductMapper.updateById(product);
+        saveStockPolicies(tenantId, product.getId(), request.stockPolicies());
         saveProductPrices(tenantId, product.getId(), request.priceItems());
+        product.setStockPolicies(listStockPolicies(tenantId, product.getId()));
         return product;
     }
 
@@ -332,6 +469,47 @@ public class ErpProductServiceImpl implements ErpProductService {
     @Override
     @Transactional
     public ErpProductImportResult importProducts(MultipartFile file, String sourceName) {
+        return importProducts(file, sourceName, null);
+    }
+
+    @Override
+    public ErpProductImportPreview previewImport(MultipartFile file) {
+        Long tenantId = TenantContext.requireTenantId();
+        String uploadedFileName = file == null ? null : trimToNull(file.getOriginalFilename());
+        ExcelImportSheet sheet = parseImportSheet(uploadedFileName, readImportBytes(file));
+        List<ErpProductImportFieldOption> fields = new ArrayList<>(PRODUCT_IMPORT_FIELDS.stream()
+            .map(field -> new ErpProductImportFieldOption(field.key(), field.label(), field.required()))
+            .toList());
+        fields.addAll(listCustomerCategoryImportFields(tenantId));
+        List<ErpProductImportHeaderMapping> mappings = sheet.headers().stream()
+            .map(header -> {
+                ImportFieldDefinition field = autoMatchImportField(tenantId, header);
+                String sampleValue = sheet.rows().stream()
+                    .map(row -> trimToNull(row.get(header)))
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+                return new ErpProductImportHeaderMapping(
+                    header,
+                    field == null ? null : field.key(),
+                    field == null ? null : field.label(),
+                    field == null ? "UNMATCHED" : "AUTO",
+                    sampleValue
+                );
+            })
+            .toList();
+        return new ErpProductImportPreview(
+            sheet.headers(),
+            fields,
+            mappings,
+            sheet.rows().stream().limit(3).toList(),
+            sheet.rows().size()
+        );
+    }
+
+    @Override
+    @Transactional
+    public ErpProductImportResult importProducts(MultipartFile file, String sourceName, String fieldMapping) {
         Long tenantId = TenantContext.requireTenantId();
         String uploadedFileName = file == null ? null : trimToNull(file.getOriginalFilename());
         String resolvedSourceName = trimToNull(sourceName);
@@ -344,8 +522,11 @@ public class ErpProductServiceImpl implements ErpProductService {
         if (sheet.rows().isEmpty()) {
             throw new IllegalArgumentException("导入内容没有有效数据行");
         }
-        ErpProductImportBatch batch = createImportBatch(tenantId, uploadedFileName, finalSourceName, sheet);
-        scheduleImportBatch(batch.getId(), tenantId, uploadedFileName, fileBytes, finalSourceName);
+        Map<String, String> resolvedFieldMapping = parseFieldMapping(fieldMapping);
+        ExcelImportSheet normalizedSheet = applyFieldMapping(sheet, resolvedFieldMapping);
+        validateRequiredImportMappings(normalizedSheet);
+        ErpProductImportBatch batch = createImportBatch(tenantId, uploadedFileName, finalSourceName, normalizedSheet);
+        scheduleImportBatch(batch.getId(), tenantId, uploadedFileName, fileBytes, finalSourceName, resolvedFieldMapping);
         return new ErpProductImportResult(batch.getId(), batch.getBatchNo(), batch.getStatus(), batch.getTotalCount(), 0, 0);
     }
 
@@ -474,6 +655,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         BigDecimal backupPrice1 = parseOptionalDecimal(firstNonBlank(row, "备用价1"));
         BigDecimal retailPrice = parseOptionalDecimal(firstNonBlank(row, "零售价"));
         BigDecimal wholesalePrice = parseOptionalDecimal(firstNonBlank(row, "批发价"));
+        Map<Long, BigDecimal> customerCategoryPrices = parseImportedCustomerCategoryPrices(row);
         product.setCostPrice(referencePrice);
         product.setSalePrice(retailPrice);
         applyImportedBackupPrice(product, backupPrice1);
@@ -496,6 +678,7 @@ public class ErpProductServiceImpl implements ErpProductService {
             wholesalePrice,
             warnings
         );
+        priceCategoryUpdates.addAll(saveImportedMappedCustomerCategoryPrices(tenantId, product.getId(), customerCategoryPrices));
         if (!created) {
             warnings.add("第" + rowNo + "行：商品编码 " + code + " 已存在，已按编码更新");
         }
@@ -508,6 +691,7 @@ public class ErpProductServiceImpl implements ErpProductService {
         normalizedPayload.put("backupPrice1", backupPrice1);
         normalizedPayload.put("retailPrice", retailPrice);
         normalizedPayload.put("wholesalePrice", wholesalePrice);
+        normalizedPayload.put("customerCategoryPrices", customerCategoryPrices);
         normalizedPayload.put("priceCategoryUpdates", priceCategoryUpdates);
         return new ImportUpsertOutcome(product, created, warnings.isEmpty() ? null : String.join("；", warnings), valueToTree(normalizedPayload));
     }
@@ -638,6 +822,39 @@ public class ErpProductServiceImpl implements ErpProductService {
         ));
     }
 
+    private Map<Long, BigDecimal> parseImportedCustomerCategoryPrices(Map<String, String> row) {
+        Map<Long, BigDecimal> prices = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : row.entrySet()) {
+            Long customerCategoryId = parseCustomerCategoryPriceFieldKey(entry.getKey());
+            if (customerCategoryId == null) {
+                continue;
+            }
+            BigDecimal salePrice = parseOptionalDecimal(entry.getValue());
+            if (salePrice != null) {
+                prices.put(customerCategoryId, salePrice);
+            }
+        }
+        return prices;
+    }
+
+    private List<Map<String, Object>> saveImportedMappedCustomerCategoryPrices(Long tenantId,
+                                                                               Long productId,
+                                                                               Map<Long, BigDecimal> prices) {
+        if (prices == null || prices.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> updates = new ArrayList<>();
+        for (Map.Entry<Long, BigDecimal> entry : prices.entrySet()) {
+            erpProductPriceMapper.upsertActivePrice(tenantId, productId, entry.getKey(), entry.getValue());
+            updates.add(Map.of(
+                "sourceColumn", CUSTOMER_CATEGORY_PRICE_FIELD_PREFIX + entry.getKey(),
+                "customerCategoryId", entry.getKey(),
+                "salePrice", entry.getValue()
+            ));
+        }
+        return updates;
+    }
+
     private QueryWrapper<ErpProduct> baseWrapper(String keyword, Boolean enabled, Long categoryId) {
         QueryWrapper<ErpProduct> wrapper = new QueryWrapper<ErpProduct>()
             .eq("tenant_id", TenantContext.requireTenantId());
@@ -657,6 +874,134 @@ public class ErpProductServiceImpl implements ErpProductService {
         return wrapper;
     }
 
+    private PageResponse<ErpProduct> rankedSearchPage(long page, long size, String keyword, Boolean enabled, Long categoryId) {
+        QueryWrapper<ErpProduct> wrapper = baseProductScopeWrapper(enabled, categoryId);
+        List<ErpProduct> candidates = erpProductMapper.selectList(wrapper);
+        List<ProductSearchHit> hits = candidates.stream()
+            .map(product -> new ProductSearchHit(product, scoreProduct(product, keyword)))
+            .filter(hit -> hit.score() > 0)
+            .sorted(Comparator
+                .comparingInt(ProductSearchHit::score).reversed()
+                .thenComparing(hit -> hit.product().getId(), Comparator.nullsLast(Long::compareTo)))
+            .toList();
+        long total = hits.size();
+        long safePage = Math.max(1, page);
+        long safeSize = Math.max(1, size);
+        int fromIndex = (int) Math.min((safePage - 1) * safeSize, total);
+        int toIndex = (int) Math.min(fromIndex + safeSize, total);
+        List<ErpProduct> items = hits.subList(fromIndex, toIndex).stream()
+            .map(ProductSearchHit::product)
+            .toList();
+        return new PageResponse<>(total, safePage, safeSize, items);
+    }
+
+    private QueryWrapper<ErpProduct> baseProductScopeWrapper(Boolean enabled, Long categoryId) {
+        QueryWrapper<ErpProduct> wrapper = new QueryWrapper<ErpProduct>()
+            .eq("tenant_id", TenantContext.requireTenantId());
+        if (enabled != null) {
+            wrapper.eq("is_enabled", enabled);
+        }
+        if (categoryId != null) {
+            wrapper.eq("category_id", categoryId);
+        }
+        wrapper.orderByAsc("id");
+        return wrapper;
+    }
+
+    private int scoreProduct(ErpProduct product, String rawKeyword) {
+        String keyword = normalizeSearchText(rawKeyword);
+        if (keyword.isEmpty()) return 0;
+        int score = 0;
+        score = Math.max(score, scoreText(product.getCode(), keyword, 1000));
+        score = Math.max(score, scoreText(product.getName(), keyword, 900));
+        score = Math.max(score, scoreText(product.getShortName(), keyword, 850));
+        score = Math.max(score, scoreText(product.getBarcode(), keyword, 760));
+        score = Math.max(score, scoreText(product.getSku(), keyword, 740));
+        score = Math.max(score, scoreText(product.getSpec(), keyword, 680));
+        score = Math.max(score, scoreText(product.getModel(), keyword, 660));
+        score = Math.max(score, scoreText(product.getBrand(), keyword, 620));
+        score = Math.max(score, scoreText(product.getManufacturerCode(), keyword, 600));
+        score = Math.max(score, scoreText(product.getManufacturerModel(), keyword, 580));
+        score = Math.max(score, scoreText(product.getManufacturerName(), keyword, 560));
+        score = Math.max(score, scorePinyin(product.getName(), keyword, 820));
+        score = Math.max(score, scorePinyin(product.getShortName(), keyword, 780));
+        return score;
+    }
+
+    private int scoreText(String value, String keyword, int exactScore) {
+        String normalized = normalizeSearchText(value);
+        if (normalized.isEmpty()) return 0;
+        if (normalized.equals(keyword)) return exactScore;
+        if (normalized.startsWith(keyword)) return exactScore - 80;
+        if (normalized.contains(keyword)) return exactScore - 220;
+        if (isSubsequence(normalized, keyword)) return exactScore - 420;
+        return 0;
+    }
+
+    private int scorePinyin(String value, String keyword, int exactScore) {
+        PinyinText pinyin = toPinyinText(value);
+        int score = 0;
+        score = Math.max(score, scoreText(pinyin.full(), keyword, exactScore));
+        score = Math.max(score, scoreText(pinyin.initials(), keyword, exactScore - 40));
+        return score;
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) return "";
+        return value.trim().toLowerCase().replaceAll("\\s+", "");
+    }
+
+    private boolean isSubsequence(String source, String query) {
+        if (query.isEmpty()) return true;
+        int index = 0;
+        for (int i = 0; i < source.length() && index < query.length(); i++) {
+            if (source.charAt(i) == query.charAt(index)) {
+                index++;
+            }
+        }
+        return index == query.length();
+    }
+
+    private PinyinText toPinyinText(String value) {
+        if (value == null || value.isBlank()) {
+            return new PinyinText("", "");
+        }
+        HanyuPinyinOutputFormat format = new HanyuPinyinOutputFormat();
+        format.setCaseType(HanyuPinyinCaseType.LOWERCASE);
+        format.setToneType(HanyuPinyinToneType.WITHOUT_TONE);
+        StringBuilder full = new StringBuilder();
+        StringBuilder initials = new StringBuilder();
+        for (char ch : value.toCharArray()) {
+            String token = toPinyinToken(ch, format);
+            if (token.isEmpty()) {
+                continue;
+            }
+            full.append(token);
+            initials.append(token.charAt(0));
+        }
+        return new PinyinText(full.toString(), initials.toString());
+    }
+
+    private String toPinyinToken(char ch, HanyuPinyinOutputFormat format) {
+        if (Character.isWhitespace(ch)) return "";
+        if (ch < 128) return String.valueOf(Character.toLowerCase(ch));
+        try {
+            String[] values = PinyinHelper.toHanyuPinyinStringArray(ch, format);
+            if (values != null && values.length > 0) {
+                return values[0];
+            }
+        } catch (BadHanyuPinyinOutputFormatCombination ignored) {
+            return "";
+        }
+        return String.valueOf(ch);
+    }
+
+    private record ProductSearchHit(ErpProduct product, int score) {
+    }
+
+    private record PinyinText(String full, String initials) {
+    }
+
     private byte[] readImportBytes(MultipartFile file) {
         try {
             return file == null ? null : file.getBytes();
@@ -667,6 +1012,171 @@ public class ErpProductServiceImpl implements ErpProductService {
 
     private ExcelImportSheet parseImportSheet(String uploadedFileName, byte[] fileBytes) {
         return excelImportParser.parse(uploadedFileName, fileBytes);
+    }
+
+    private Map<String, String> parseFieldMapping(String rawFieldMapping) {
+        String normalized = trimToNull(rawFieldMapping);
+        if (normalized == null) {
+            return Map.of();
+        }
+        try {
+            Map<?, ?> raw = objectMapper.readValue(normalized, Map.class);
+            Map<String, String> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                String excelHeader = trimToNull(entry.getKey() == null ? null : String.valueOf(entry.getKey()));
+                String fieldKey = trimToNull(entry.getValue() == null ? null : String.valueOf(entry.getValue()));
+                if (excelHeader == null || fieldKey == null) {
+                    continue;
+                }
+                if (!PRODUCT_IMPORT_FIELD_BY_KEY.containsKey(fieldKey) && !isCustomerCategoryPriceField(fieldKey)) {
+                    throw new IllegalArgumentException("商品导入字段不存在：" + fieldKey);
+                }
+                result.put(excelHeader, fieldKey);
+            }
+            return result;
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("商品导入字段映射格式不正确", ex);
+        }
+    }
+
+    private ExcelImportSheet applyFieldMapping(ExcelImportSheet sheet, Map<String, String> manualMapping) {
+        if (sheet == null) {
+            return null;
+        }
+        Map<String, String> mapping = new LinkedHashMap<>();
+        for (String header : sheet.headers()) {
+            String fieldKey = manualMapping == null ? null : trimToNull(manualMapping.get(header));
+            ImportFieldDefinition autoField = fieldKey == null ? autoMatchImportField(TenantContext.requireTenantId(), header) : null;
+            ImportFieldDefinition field = fieldKey == null ? autoField : resolveImportField(fieldKey);
+            if (field != null) {
+                mapping.put(header, field.key());
+            }
+        }
+        List<Map<String, String>> rows = sheet.rows().stream()
+            .map(row -> normalizeImportRow(row, mapping))
+            .toList();
+        return new ExcelImportSheet(sheet.headers(), rows);
+    }
+
+    private Map<String, String> normalizeImportRow(Map<String, String> row, Map<String, String> mapping) {
+        Map<String, String> normalized = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : mapping.entrySet()) {
+            ImportFieldDefinition field = resolveImportField(entry.getValue());
+            if (field != null) {
+                normalized.put(field.primaryHeader(), row.get(entry.getKey()));
+            }
+        }
+        return normalized;
+    }
+
+    private void validateRequiredImportMappings(ExcelImportSheet sheet) {
+        List<String> missing = PRODUCT_IMPORT_FIELDS.stream()
+            .filter(ImportFieldDefinition::required)
+            .filter(field -> sheet.rows().stream().noneMatch(row -> row.containsKey(field.primaryHeader())))
+            .map(ImportFieldDefinition::label)
+            .toList();
+        if (!missing.isEmpty()) {
+            throw new IllegalArgumentException("商品导入缺少必填字段映射：" + String.join("、", missing));
+        }
+    }
+
+    private ImportFieldDefinition autoMatchImportField(Long tenantId, String header) {
+        String normalized = normalizeImportHeader(header);
+        ImportFieldDefinition customerCategoryPriceField = autoMatchCustomerCategoryPriceField(tenantId, normalized);
+        if (customerCategoryPriceField != null) {
+            return customerCategoryPriceField;
+        }
+        ImportFieldDefinition staticField = PRODUCT_IMPORT_FIELD_BY_ALIAS.get(normalized);
+        if (staticField != null) {
+            return staticField;
+        }
+        return null;
+    }
+
+    private ImportFieldDefinition autoMatchCustomerCategoryPriceField(Long tenantId, String normalizedHeader) {
+        return listCustomerCategoryImportDefinitions(tenantId).stream()
+            .filter(field -> field.aliases().stream().map(ErpProductServiceImpl::normalizeImportHeader).anyMatch(normalizedHeader::equals))
+            .findFirst()
+            .orElse(null);
+    }
+
+    private ImportFieldDefinition resolveImportField(String key) {
+        ImportFieldDefinition staticField = PRODUCT_IMPORT_FIELD_BY_KEY.get(key);
+        if (staticField != null) {
+            return staticField;
+        }
+        Long customerCategoryId = parseCustomerCategoryPriceFieldKey(key);
+        if (customerCategoryId == null) {
+            return null;
+        }
+        return field(key, key, false, key);
+    }
+
+    private List<ErpProductImportFieldOption> listCustomerCategoryImportFields(Long tenantId) {
+        return listCustomerCategoryImportDefinitions(tenantId).stream()
+            .map(field -> new ErpProductImportFieldOption(field.key(), field.label(), false, parseCustomerCategoryPriceFieldKey(field.key())))
+            .toList();
+    }
+
+    private List<ImportFieldDefinition> listCustomerCategoryImportDefinitions(Long tenantId) {
+        if (erpCustomerCategoryMapper == null) {
+            return List.of();
+        }
+        return erpCustomerCategoryMapper.selectList(new QueryWrapper<ErpCustomerCategory>()
+                .eq("tenant_id", tenantId)
+                .eq("is_enabled", true)
+                .isNull("deleted_at")
+                .orderByAsc("sort_no")
+                .orderByAsc("id"))
+            .stream()
+            .filter(category -> category.getId() != null && trimToNull(category.getName()) != null)
+            .map(category -> field(
+                CUSTOMER_CATEGORY_PRICE_FIELD_PREFIX + category.getId(),
+                category.getName() + "售价",
+                false,
+                category.getName(),
+                category.getName() + "售价",
+                category.getName() + "价格",
+                category.getName() + "价",
+                toShortCustomerCategoryPriceAlias(category.getName())
+            ))
+            .toList();
+    }
+
+    private static String toShortCustomerCategoryPriceAlias(String customerCategoryName) {
+        if (customerCategoryName == null || !customerCategoryName.contains("客户")) {
+            return customerCategoryName;
+        }
+        return customerCategoryName.replace("客户", "价");
+    }
+
+    private boolean isCustomerCategoryPriceField(String key) {
+        return parseCustomerCategoryPriceFieldKey(key) != null;
+    }
+
+    private Long parseCustomerCategoryPriceFieldKey(String key) {
+        String normalized = trimToNull(key);
+        if (normalized == null || !normalized.startsWith(CUSTOMER_CATEGORY_PRICE_FIELD_PREFIX)) {
+            return null;
+        }
+        try {
+            return Long.valueOf(normalized.substring(CUSTOMER_CATEGORY_PRICE_FIELD_PREFIX.length()));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private static ImportFieldDefinition field(String key, String label, boolean required, String... aliases) {
+        return new ImportFieldDefinition(key, label, required, List.of(aliases));
+    }
+
+    private static String normalizeImportHeader(String header) {
+        if (header == null) {
+            return "";
+        }
+        return header.replaceAll("[\\s_\\-（）()【】\\[\\]：:]+", "").toLowerCase(Locale.ROOT);
     }
 
     private ErpProductImportBatch createImportBatch(Long tenantId,
@@ -703,10 +1213,11 @@ public class ErpProductServiceImpl implements ErpProductService {
                                     Long tenantId,
                                     String uploadedFileName,
                                     byte[] fileBytes,
-                                    String sourceName) {
+                                    String sourceName,
+                                    Map<String, String> fieldMapping) {
         TenantContext.setTenantId(tenantId);
         try {
-            ExcelImportSheet sheet = parseImportSheet(uploadedFileName, fileBytes);
+            ExcelImportSheet sheet = applyFieldMapping(parseImportSheet(uploadedFileName, fileBytes), fieldMapping);
             int successCount = 0;
             int failedCount = 0;
             for (int start = 0; start < sheet.rows().size(); start += IMPORT_CHUNK_SIZE) {
@@ -739,8 +1250,9 @@ public class ErpProductServiceImpl implements ErpProductService {
                                      Long tenantId,
                                      String uploadedFileName,
                                      byte[] fileBytes,
-                                     String sourceName) {
-        Runnable task = () -> processImportBatch(batchId, tenantId, uploadedFileName, fileBytes, sourceName);
+                                     String sourceName,
+                                     Map<String, String> fieldMapping) {
+        Runnable task = () -> processImportBatch(batchId, tenantId, uploadedFileName, fileBytes, sourceName, fieldMapping);
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
@@ -1082,6 +1594,7 @@ public class ErpProductServiceImpl implements ErpProductService {
                                       Long defaultWarehouseId,
                                       Long defaultLocationId,
                                       Long sourceSupplierId,
+                                      List<ErpProductStockPolicyRequest> stockPolicies,
                                       List<ErpProductPriceItemRequest> priceItems) {
         if (categoryId != null && !existsById(erpCategoryMapper, ErpCategory.class, tenantId, categoryId)) {
             throw new IllegalArgumentException("商品分类不存在");
@@ -1109,7 +1622,32 @@ public class ErpProductServiceImpl implements ErpProductService {
         if (sourceSupplierId != null && !existsById(erpSupplierMapper, ErpSupplier.class, tenantId, sourceSupplierId)) {
             throw new IllegalArgumentException("来源供应商不存在");
         }
+        validateStockPolicies(tenantId, stockPolicies);
         validatePriceItems(tenantId, priceItems);
+    }
+
+    private void validateStockPolicies(Long tenantId, List<ErpProductStockPolicyRequest> stockPolicies) {
+        if (stockPolicies == null || stockPolicies.isEmpty()) {
+            return;
+        }
+        Set<Long> seenWarehouseIds = new HashSet<>();
+        for (ErpProductStockPolicyRequest item : stockPolicies) {
+            if (item == null) {
+                continue;
+            }
+            if (item.warehouseId() == null) {
+                throw new IllegalArgumentException("仓库级库存策略必须选择仓库");
+            }
+            if (!seenWarehouseIds.add(item.warehouseId())) {
+                throw new IllegalArgumentException("仓库级库存策略存在重复仓库");
+            }
+            if (!existsById(erpWarehouseMapper, ErpWarehouse.class, tenantId, item.warehouseId())) {
+                throw new IllegalArgumentException("仓库级库存策略中的仓库不存在");
+            }
+            if (item.minStock() != null && item.maxStock() != null && item.minStock().compareTo(item.maxStock()) > 0) {
+                throw new IllegalArgumentException("仓库级库存策略的最低库存不能大于最高库存");
+            }
+        }
     }
 
     private void validatePriceItems(Long tenantId, List<ErpProductPriceItemRequest> priceItems) {
@@ -1151,6 +1689,39 @@ public class ErpProductServiceImpl implements ErpProductService {
         }
     }
 
+    private void saveStockPolicies(Long tenantId, Long productId, List<ErpProductStockPolicyRequest> stockPolicies) {
+        if (erpProductStockPolicyMapper == null) {
+            return;
+        }
+        erpProductStockPolicyMapper.deleteByProduct(tenantId, productId);
+        if (stockPolicies == null || stockPolicies.isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now();
+        for (ErpProductStockPolicyRequest item : stockPolicies) {
+            if (item == null || item.warehouseId() == null) {
+                continue;
+            }
+            ErpProductStockPolicy policy = new ErpProductStockPolicy();
+            policy.setTenantId(tenantId);
+            policy.setProductId(productId);
+            policy.setWarehouseId(item.warehouseId());
+            policy.setSafetyStock(item.safetyStock());
+            policy.setMinStock(item.minStock());
+            policy.setMaxStock(item.maxStock());
+            policy.setCreatedAt(now);
+            policy.setUpdatedAt(now);
+            erpProductStockPolicyMapper.insert(policy);
+        }
+    }
+
+    private List<ErpProductStockPolicy> listStockPolicies(Long tenantId, Long productId) {
+        if (erpProductStockPolicyMapper == null) {
+            return List.of();
+        }
+        return erpProductStockPolicyMapper.listByProduct(tenantId, productId);
+    }
+
     private <T> boolean existsById(com.baomidou.mybatisplus.core.mapper.BaseMapper<T> mapper,
                                    Class<T> entityClass,
                                    Long tenantId,
@@ -1164,5 +1735,14 @@ public class ErpProductServiceImpl implements ErpProductService {
                                        boolean created,
                                        String warningMessage,
                                        JsonNode normalizedPayload) {
+    }
+
+    private record ImportFieldDefinition(String key,
+                                         String label,
+                                         boolean required,
+                                         List<String> aliases) {
+        private String primaryHeader() {
+            return aliases.get(0);
+        }
     }
 }

@@ -3,6 +3,7 @@ package com.example.wms;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.wms.dto.PageResponse;
 import com.example.wms.dto.erp.ErpSaleOrderFlowSnapshot;
+import com.example.wms.entity.erp.ErpCustomer;
 import com.example.wms.entity.erp.ErpSaleOrder;
 import com.example.wms.mapper.SystemConfigMapper;
 import com.example.wms.mapper.erp.ErpAccountsReceivableMapper;
@@ -72,11 +73,17 @@ class ErpSaleOrderServiceImplTest {
     void pageUsesBatchFlowSnapshotInsteadOfPerRowLookups() {
         TenantContext.setTenantId(9L);
         ErpSaleOrder draftOrder = order(101L, "DRAFT", "SO-DRAFT", "120.00");
+        draftOrder.setCustomerId(201L);
         ErpSaleOrder approvedOrder = order(102L, "APPROVED", "SO-APPROVED", "300.00");
+        approvedOrder.setCustomerId(202L);
         Page<ErpSaleOrder> pageResult = new Page<>(1, 20, 2);
         pageResult.setRecords(List.of(draftOrder, approvedOrder));
 
         when(erpSaleOrderMapper.selectPage(any(Page.class), any())).thenReturn(pageResult);
+        when(erpCustomerMapper.selectList(any())).thenReturn(List.of(
+            customer(201L, "客户A"),
+            customer(202L, "客户B")
+        ));
         when(erpSaleOrderMapper.findFlowSnapshotsByIds(9L, List.of(101L, 102L))).thenReturn(List.of(
             snapshot(101L, null, null, 0L, "0", "40", "0"),
             snapshot(102L, "OPEN", "70", 2L, "50", "210", "15")
@@ -108,12 +115,14 @@ class ErpSaleOrderServiceImplTest {
 
         assertThat(response.items()).hasSize(2);
         ErpSaleOrder first = response.items().get(0);
+        assertThat(first.getCustomerName()).isEqualTo("客户A");
         assertThat(first.getReceivableStatus()).isEqualTo("OPEN");
         assertThat(first.getReceivableUnpaidAmount()).isEqualByComparingTo("120.00");
         assertThat(first.getNetSaleAmount()).isEqualByComparingTo("120.00");
         assertThat(first.getNetGrossProfit()).isEqualByComparingTo("80.00");
 
         ErpSaleOrder second = response.items().get(1);
+        assertThat(second.getCustomerName()).isEqualTo("客户B");
         assertThat(second.getReceivableStatus()).isEqualTo("OPEN");
         assertThat(second.getReceivableUnpaidAmount()).isEqualByComparingTo("70");
         assertThat(second.getApprovedReturnCount()).isEqualTo(2L);
@@ -128,6 +137,13 @@ class ErpSaleOrderServiceImplTest {
         verify(erpSaleReturnMapper, never()).sumApprovedAmountBySaleOrderId(any(), any());
         verify(erpStockTxnMapper, never()).sumSaleIssueCost(any(), any());
         verify(erpStockTxnMapper, never()).sumApprovedSaleReturnCost(any(), any());
+    }
+
+    private ErpCustomer customer(Long id, String name) {
+        ErpCustomer customer = new ErpCustomer();
+        customer.setId(id);
+        customer.setName(name);
+        return customer;
     }
 
     private ErpSaleOrder order(Long id, String status, String orderNo, String totalAmountInclTax) {

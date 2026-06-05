@@ -9,6 +9,8 @@ import {
   type ApiLatencyStatusCategory,
 } from '../composables/apiLatencyMonitorCore'
 import { createRequestRefreshQueue } from './requestRefreshQueueCore'
+import { markErpNavigationPerf } from './erpNavigationPerfTrace'
+import { waitForRouteFirstPaintRequestGate } from './routeFirstPaintRequestGate'
 
 type DeletePromptConfig = {
   skipDeleteReasonPrompt?: boolean
@@ -38,8 +40,6 @@ type LatencyAwareRequestConfig = InternalAxiosRequestConfig & {
   _latencyMeta?: LatencyRequestMeta
   _retry?: boolean
 }
-
-let routerModulePromise: Promise<typeof import('../router')> | null = null
 
 const request: AxiosInstance = axios.create({
   baseURL: '/api',
@@ -167,39 +167,17 @@ const normalizeRequestUrl = (url?: string) => {
   return path.startsWith('/api/') ? path.slice(4) : path
 }
 
-const getRouterModule = async () => {
-  if (!routerModulePromise) {
-    routerModulePromise = import('../router')
-  }
-  return routerModulePromise
-}
-
-const readCurrentRouteContext = async () => {
+const readCurrentRouteContext = () => {
   const fallbackPath = typeof window !== 'undefined' ? window.location.pathname : ''
 
-  try {
-    const routerModule = await getRouterModule()
-    const currentRoute = routerModule.default.currentRoute.value
-    const routePath = String(currentRoute.path || fallbackPath || '')
-    const rawTitle = currentRoute.meta?.title
-    const routeTitle = typeof rawTitle === 'string' && rawTitle.trim()
-      ? rawTitle.trim()
-      : routePath
-
-    return {
-      routePath,
-      routeTitle,
-    }
-  } catch {
-    return {
-      routePath: fallbackPath,
-      routeTitle: fallbackPath,
-    }
+  return {
+    routePath: fallbackPath,
+    routeTitle: fallbackPath,
   }
 }
 
-const buildLatencyMeta = async (config: LatencyAwareRequestConfig): Promise<LatencyRequestMeta> => {
-  const routeContext = await readCurrentRouteContext()
+const buildLatencyMeta = (config: LatencyAwareRequestConfig): LatencyRequestMeta => {
+  const routeContext = readCurrentRouteContext()
   return {
     startedAtMs: performance.now(),
     startedAtIso: new Date().toISOString(),
@@ -303,10 +281,24 @@ const ensureDeleteReason = async (config: LatencyAwareRequestConfig & DeleteProm
   return config
 }
 
+const shouldWaitForRouteFirstPaint = (config: LatencyAwareRequestConfig) => {
+  const method = (config.method || 'get').toLowerCase()
+  return method === 'get'
+    && !isAuthEndpoint(config.url)
+    && config.responseType !== 'blob'
+}
+
 // 请求拦截器：自动带上 token
 request.interceptors.request.use(
   async (config: LatencyAwareRequestConfig) => {
-    config._latencyMeta = await buildLatencyMeta(config)
+    if (shouldWaitForRouteFirstPaint(config)) {
+      await waitForRouteFirstPaintRequestGate()
+    }
+    config._latencyMeta = buildLatencyMeta(config)
+    markErpNavigationPerf('request:start', {
+      method: String(config.method || 'GET').toUpperCase(),
+      url: config.url
+    })
     const token = getToken()
     if (token) {
       config.headers = config.headers || {}
@@ -372,12 +364,24 @@ request.interceptors.response.use(
       httpStatus: response.status,
       responseBytes: estimatePayloadBytes(response.data),
     })
+    markErpNavigationPerf('request:finish', {
+      method: String(responseConfig.method || 'GET').toUpperCase(),
+      url: responseConfig.url,
+      status: response.status,
+      durationMs: buildLatencyDurationMs(latencyMeta)
+    })
 
     return response
   },
   async (error: AxiosError) => {
     const original = error.config as LatencyAwareRequestConfig | undefined
     const status = error.response?.status
+    markErpNavigationPerf('request:error', {
+      method: String(original?.method || 'GET').toUpperCase(),
+      url: original?.url,
+      status,
+      durationMs: buildLatencyDurationMs(original?._latencyMeta)
+    })
 
     if (status === 401 && original && !original._retry && !isAuthEndpoint(original.url)) {
       original._retry = true

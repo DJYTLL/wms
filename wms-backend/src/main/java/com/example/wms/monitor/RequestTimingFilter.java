@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import com.example.wms.audit.RequestAuditContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,9 +18,14 @@ import java.io.IOException;
 @Component
 public class RequestTimingFilter extends OncePerRequestFilter {
     private static final Logger logger = LoggerFactory.getLogger(RequestTimingFilter.class);
+    private final RequestSqlTraceRecorder requestSqlTraceRecorder;
 
     @Value("${wms.monitor.slow-request-ms:1000}")
     private long slowRequestMs;
+
+    public RequestTimingFilter(RequestSqlTraceRecorder requestSqlTraceRecorder) {
+        this.requestSqlTraceRecorder = requestSqlTraceRecorder;
+    }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -38,6 +44,11 @@ public class RequestTimingFilter extends OncePerRequestFilter {
                 logger.warn("Slow request: method={} path={} status={} costMs={}", method, path, status, costMs);
             } else {
                 logger.info("Request: method={} path={} status={} costMs={}", method, path, status, costMs);
+            }
+            try {
+                requestSqlTraceRecorder.record(RequestAuditContext.get(), status, costMs, java.time.Instant.now());
+            } catch (Exception ex) {
+                logger.warn("Failed to persist SQL request trace: method={} path={} status={}", method, path, status, ex);
             }
         }
     }

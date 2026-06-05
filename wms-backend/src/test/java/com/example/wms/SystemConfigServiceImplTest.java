@@ -52,6 +52,23 @@ class SystemConfigServiceImplTest {
     }
 
     @Test
+    void createAllowsSqlTimingPlatformKey() {
+        TenantContext.setTenantId(1L);
+
+        SystemConfigServiceImpl service = new SystemConfigServiceImpl(systemConfigMapper);
+        when(systemConfigMapper.findByKey(1L, "wms.monitor.sql-timing-enabled")).thenReturn(null);
+
+        SystemConfigResponse response = service.create(
+            "wms.monitor.sql-timing-enabled",
+            new SystemConfigRequest("true", "bool", "SQL耗时采集开关", false)
+        );
+
+        assertThat(response.key()).isEqualTo("wms.monitor.sql-timing-enabled");
+        assertThat(response.value()).isEqualTo("true");
+        assertThat(response.valueType()).isEqualTo("bool");
+    }
+
+    @Test
     void listAllExcludesTenantManagedPageSizeAndErpConfigs() {
         TenantContext.setTenantId(1L);
         when(systemConfigMapper.findAll(1L)).thenReturn(List.of(

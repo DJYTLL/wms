@@ -68,10 +68,11 @@ public final class MenuSeedProvider {
             new MenuSeed("audit", "system", "审计日志", "audit", "/audit-logs", null, "audit:view", 35),
             new MenuSeed("column", "system", "列权限配置", "column", "/column-permissions", null, "column:role:manage", 36),
             new MenuSeed("api-latency-monitor", "system", "接口耗时查询", "api-latency-monitor", "/api-latency-monitor", null, "api-latency-monitor:view", 37),
-            new MenuSeed("menu", "system", "菜单管理", "menu", "/menus", null, "menu:view", 38),
-            new MenuSeed("system-config", "system", "系统配置", "system-config", "/system-config", null, "system-config:view", 39),
-            new MenuSeed("tenant-setting", "system", "租户设置", "tenant-setting", "/tenant-settings", null, "tenant-setting:view", 40),
-            new MenuSeed("tenant", "system", "租户管理", "tenant", "/tenants", null, "tenant:view", 41)
+            new MenuSeed("sql-latency-monitor", "system", "SQL耗时查询", "sql-latency-monitor", "/sql-latency-monitor", null, "sql-latency-monitor:view", 38),
+            new MenuSeed("menu", "system", "菜单管理", "menu", "/menus", null, "menu:view", 39),
+            new MenuSeed("system-config", "system", "系统配置", "system-config", "/system-config", null, "system-config:view", 40),
+            new MenuSeed("tenant-setting", "system", "租户设置", "tenant-setting", "/tenant-settings", null, "tenant-setting:view", 41),
+            new MenuSeed("tenant", "system", "租户管理", "tenant", "/tenants", null, "tenant:view", 42)
         );
     }
 

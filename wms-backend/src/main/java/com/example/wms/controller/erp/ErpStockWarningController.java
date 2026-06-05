@@ -25,7 +25,25 @@ public class ErpStockWarningController {
     @GetMapping("/page")
     public ResponseEntity<ApiResponse<PageResponse<ErpStockWarningView>>> page(@RequestParam(defaultValue = "1") long page,
                                                                                @RequestParam(defaultValue = "20") long size,
-                                                                               @RequestParam(required = false) String keyword) {
-        return ResponseEntity.ok(ApiResponse.ok(erpStockWarningService.page(page, size, keyword)));
+                                                                               @RequestParam(required = false) String keyword,
+                                                                               @RequestParam(required = false) Long warehouseId,
+                                                                               @RequestParam(required = false) String status,
+                                                                               @RequestParam(required = false) String policySource,
+                                                                               @RequestParam(required = false) Boolean hasPolicyAnomaly) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            erpStockWarningService.page(page, size, keyword, warehouseId, status, policySource, hasPolicyAnomaly)
+        ));
+    }
+
+    @PreAuthorize("hasAuthority('PERM_erp-stock-warning:view')")
+    @GetMapping("/anomalies/page")
+    public ResponseEntity<ApiResponse<PageResponse<ErpStockWarningView>>> pageAnomalies(@RequestParam(defaultValue = "1") long page,
+                                                                                         @RequestParam(defaultValue = "20") long size,
+                                                                                         @RequestParam(required = false) String keyword,
+                                                                                         @RequestParam(required = false) Long warehouseId,
+                                                                                         @RequestParam(required = false) String anomalyType) {
+        return ResponseEntity.ok(ApiResponse.ok(
+            erpStockWarningService.pageAnomalies(page, size, keyword, warehouseId, anomalyType)
+        ));
     }
 }
